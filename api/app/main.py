@@ -1,0 +1,47 @@
+"""FastAPI app. Four screens' worth of routes will hang off this.
+
+Phase 0 has one route. See docs/plan.md.
+"""
+
+from contextlib import asynccontextmanager
+from pathlib import Path
+
+from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+
+from app.db import init_db
+from app.settings import layout, settings
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    init_db()
+    Path(settings.media_root).mkdir(parents=True, exist_ok=True)
+    yield
+
+
+app = FastAPI(title="Facebook Agent", version="0.1.0", lifespan=lifespan)
+
+app.mount(
+    "/media",
+    StaticFiles(directory=settings.media_root, check_dir=False),
+    name="media",
+)
+
+
+@app.get("/health")
+def health() -> dict:
+    """Boot state, no secret values — only the names of missing ones."""
+    missing = settings.missing_secrets()
+    return {
+        "ok": not missing,
+        "database": settings.database_path,
+        "media_root": settings.media_root,
+        "font_present": layout.font_file.exists(),
+        "image_size": f"{layout.image.width}x{layout.image.height}",
+        "models": {
+            "text": settings.gemini_text_model,
+            "image": settings.gemini_image_model,
+        },
+        "missing_secrets": missing,
+    }

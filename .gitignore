@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+.venv
+.pytest_cache/
+
+# Node
+node_modules/
+.next/
+
+# Local state — never committed
+*.db
+*.db-wal
+*.db-shm
+api/media/
+.env
+.env.local
