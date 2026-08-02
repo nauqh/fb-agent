@@ -30,7 +30,7 @@ whose every intermediate state was public to the next node.
         │              db               │
         └───────────────┬───────────────┘
                         │
-                 fb_agent.db   SQLite, WAL
+                 fb_agent.db   SQLite, one file
 ```
 
 Two processes, one machine. No queue, no worker, no Redis, no cron — see
@@ -76,14 +76,19 @@ Seven, each stated as its interface. Everything else is implementation.
 Persistence is **SQLModel** — the table classes in `models.py` are both the
 schema and the API-facing types, so there is no second set of DTOs to keep in
 sync. There is no migration tool: `create_all` creates missing tables and never
-alters existing ones, so during v1 a schema change means deleting the db file.
-That is honest while there is one operator and nothing worth keeping; the moment
-production rows exist, add Alembic.
+alters existing ones, so during v1 a schema change means **deleting the db file
+and letting it rebuild**. That is the intended workflow while there is one
+operator and nothing worth keeping. Alembic arrives with the move to Supabase.
 
-Two SQLite pragmas are set on **every** connection, not once at startup: `WAL`
-(persisted in the file header anyway) and `foreign_keys=ON`, which is
-per-connection and off by default — without it every foreign key in `models.py`
-is decorative.
+SQLite runs on stock settings — no WAL, no journal tuning. One operator, local
+disk, and a write pattern of single-row updates never justified it; WAL is one
+line if two processes ever contend badly.
+
+Two pragmas are set on **every** connection, and neither is a performance knob:
+`foreign_keys=ON`, which is per-connection and off by default — without it every
+foreign key in `models.py` is decorative — and `busy_timeout=5000`, because the
+default of 0 fails instantly on a locked database instead of waiting, and the
+Phase 1 seed script will run while the dev server is up.
 
 ### `Source` — the one real seam
 

@@ -29,7 +29,7 @@ move off local file storage (see [Deferred](#deferred-to-v2)).
 |---|---|
 | Repo | `fb-agent`, new, `api/` + `web/` |
 | Backend | `uv` + `fastapi[standard]` |
-| Database | SQLite, WAL mode |
+| Database | SQLite via SQLModel, stock settings, `create_all` (Alembic at the Supabase move) |
 | Writer agent | Pydantic AI, `GoogleModel` |
 | Image generation | `google-genai` direct (image output, not a typed agent) |
 | Image compositing | `resvg-py` + `fontTools` + Pillow |

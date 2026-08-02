@@ -1,7 +1,7 @@
 # Data model
 
-SQLite, WAL mode. No `user_id` (ADR-0002). No schedule table (ADR-0001). No
-`brand_key` (ADR-0003).
+SQLite on stock settings, via SQLModel. No `user_id` (ADR-0002). No schedule
+table (ADR-0001). No `brand_key` (ADR-0003).
 
 **Three tables.** The old system had eight, plus a 54-column templates table.
 Everything removed was one of three things: configuration duplicated across
