@@ -15,6 +15,11 @@ uv sync
 uv run fastapi dev app/main.py
 ```
 
+On Windows, set `PYTHONIOENCODING=utf-8` first if you redirect output. The
+`fastapi dev` startup banner contains characters cp1252 cannot encode, and it
+dies with a `UnicodeEncodeError` before the app ever loads. Nothing to do with
+this codebase — it just looks like one.
+
 `GET /health` reports database path, image size, models, and the *names* of any
 missing secrets.
 
