@@ -10,6 +10,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from app.db import init_db
+from app.routes import pages
 from app.settings import layout, settings
 
 
@@ -27,6 +28,8 @@ app.mount(
     StaticFiles(directory=settings.media_root, check_dir=False),
     name="media",
 )
+
+app.include_router(pages.router)
 
 
 @app.get("/health")
