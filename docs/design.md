@@ -232,16 +232,22 @@ regenerating the overlay after an edit does not re-pay for image generation.
 
 ## Configuration
 
-Three tiers, and the split is deliberate:
+Four tiers, and the split is deliberate:
 
 - **[`layout.yml`](../api/config/layout.yml)** — how the image looks. Loaded once
   into a frozen Pydantic model at startup, so a bad value fails the boot, not the
   render. No per-page section, ever.
+- **[`prompts/*.txt`](../api/prompts)** — what the model is told. Read on every
+  call, so an edit needs no restart. Files rather than columns because they are
+  the most-edited thing here and they must be reviewable and revertable
+  ([why](data-model.md#prompts-are-files-not-columns)). `{panel_pct}` and
+  `{highlight_color}` are substituted from `layout.yml` so a prompt cannot
+  contradict the compositor.
 - **env** — secrets and model ids. Model ids belong here because they get retired
   upstream without notice; the old repo shipped
   `fix(gemini): replace retired image fallback model`.
-- **`page` rows** — the twelve things that genuinely differ per Page: quota, the
-  three prompts, the watermark file, identity.
+- **`page` rows** — identity and publishing policy: name, the two external ids,
+  quota, watermark file.
 
 ## Frontend
 

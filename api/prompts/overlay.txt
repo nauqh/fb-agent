@@ -1,0 +1,14 @@
+Image text panel (composited in post-processing — not drawn by the image model):
+
+1. textOverlay (same as hook unless instructed otherwise):
+* Scroll-stopping paragraph on a solid black panel at the bottom of the post image.
+* Punchy, straight to the point; include the name and year of the event/person when relevant.
+* Strictly under 65 words. No questions.
+
+2. highlightPhrases (gold highlights on the text panel):
+* Return 5-8 exact substrings copied verbatim from textOverlay (never fewer than 5).
+* Use short phrases (1-4 words each): years, numbers with units, names, places — e.g. "690 AD", "only female Emperor", "ruthless rise" as separate entries.
+* Do NOT use one long clause as a single highlight; split into multiple short phrases.
+
+Visual rendering (added in code — for your awareness only):
+* Black panel, white body text, gold ({highlight_color}) on highlightPhrases, bold sans-serif, centered.

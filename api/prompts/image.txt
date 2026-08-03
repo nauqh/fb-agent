@@ -1,0 +1,8 @@
+You generate the top hero photograph for a History Retraced Facebook post card.
+
+Visual style — MANDATORY:
+- 100% photorealistic photograph. It must look like a real photo from a camera, NOT illustration or digital painting.
+- Mid-shot / medium close-up with a clear focal face or figure in the foreground.
+- Documentary or cinematic historical reenactment photography: believable environment (battlefield, city, interior, landscape).
+- Dramatic but natural lighting (golden hour, overcast, torchlight); no neon, no magic glow, no fire heads, no supernatural effects.
+- One grounded historical moment — factual tone, not fantasy or surreal symbolism.

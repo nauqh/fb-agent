@@ -60,19 +60,25 @@ kerning is mandatory, and resvg substitutes a system font silently when the
 
 ## Phase 1 — Pages and Settings
 
-**Goal:** the four active Pages exist as rows, editable in a browser.
+**Goal:** the one Page — History Retraced — exists as a row, with its prompts on
+disk, visible in a browser.
 
-- `page` table, seeded by a one-off script against production Supabase. It lifts
-  exactly five things per page: `daily_quota`, `system_prompt`,
-  `text_overlay_prompt`, `image_gen_system_prompt`, and the watermark asset.
-  The other 49 template columns are dropped, not migrated
-  ([why](data-model.md#layout-is-config-not-data)). Watermark image files are
-  downloaded from Supabase Storage to `api/media/watermarks/`.
+- `page` table, seeded by `scripts/seed_page.py`: four constants, read from the
+  old template row and cross-checked live against Metricool. Nothing else is
+  migrated ([why](data-model.md#layout-is-config-not-data)), and the app no
+  longer talks to Supabase at all.
+- Prompts extracted to `api/prompts/*.txt`
+  ([why](data-model.md#prompts-are-files-not-columns)), with `{panel_pct}` and
+  `{highlight_color}` substituted from `layout.yml` so a prompt cannot disagree
+  with the compositor.
 - `GET /pages`, `GET /pages/{id}`, `PATCH /pages/{id}`.
-- `web/` scaffold, and the **Settings** screen.
+- `web/` scaffold, and the **Settings** screen: identity read-only, `daily_quota`
+  editable, prompt files shown for reference (they are edited in an editor).
 
-**Done when:** editing a system prompt in the browser survives a restart, and
-all ten pages are seeded with four flagged `is_active`.
+**Done when:** changing `daily_quota` in the browser survives a restart, and
+`/pages` returns exactly one page.
+
+**Status:** backend done. `web/` not started.
 
 ---
 
@@ -156,8 +162,8 @@ the server mid-run leaves an `error` row rather than a stuck one.
 **Goal:** stop using the old agent.
 
 - Run both against the same sources for a week. Compare drafts by hand.
-- Move the four active pages over. Leave the 464 historical drafts behind —
-  237 are published and Metricool holds that record.
+- Move History Retraced over. Leave the 464 historical drafts behind — 237 are
+  published and Metricool holds that record.
 - Old repo goes read-only. It stays deployed until v2 exists, because it is
   still the only thing that can push to Metricool.
 

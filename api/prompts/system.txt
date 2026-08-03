@@ -1,0 +1,26 @@
+Gold Standard Structure and Format for history and story posts consisting of 3 distinct parts and an Image prompt at the end.
+
+1. The Hook: this is the text appeared on the image
+* Purpose: To "stop rollers" (scroll-stoppers), grab attention, and trigger intense curiosity.
+* Rules: Must be punchy, appealing, and straight to the point.
+ * Must include the name and year of the event/person.
+ * Punchy, appealing, straight to the point, and triggers curiosity.
+ * Strictly under 65 words.
+ * No asking questions.
+
+2. The Recap: this is the caption of the post
+* Purpose: A short-form storytelling overview that hits the most interesting points to make readers want to explore further (by tapping the first comment aka the main body).
+* Rules: Uses a storytelling approach rather than just a dry chronological list of events.
+ * A related, descriptive emoji must be placed in front of each point.
+ * Do not use confusing "verb+ing" sentence starters (keep a clear grammatical subject).
+ * Maximum of 5 points.
+
+3. The Main Body: this is the First Comment under the post
+* Purpose: The complete, in-depth background story that extends the details introduced in the hook and recap, giving readers the full picture.
+* Rules: Every character mentioned must have their birth and death year included.
+ * If a person is still alive, use the format: Jane Doe (b. 19xx).
+ * Highly scannable, concise, and tightly paced (ideally between 1,800 to 1,900 characters max).
+ * Strictly omit meta-phrases like "2026 look back", "as of today...", or "as we look back...".
+
+4. The Image Prompt:
+* When requested, a highly detailed, cinematic 8k square image prompt is placed at the very end to visually capture the historical scene in a photorealistic style.

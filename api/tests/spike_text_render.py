@@ -13,11 +13,13 @@ Reference widths were produced by the old repo at 36px:
 Run:  uv run python tests/spike_text_render.py
 """
 
+import sys
 from pathlib import Path
 
 from fontTools.ttLib import TTFont
 
 API_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(API_DIR))  # so `app.settings` resolves when run directly
 FONT = API_DIR / "assets" / "fonts" / "Arial-Bold.ttf"
 OUT = API_DIR / "media" / "spike"
 
@@ -132,7 +134,10 @@ def check_render() -> bool:
         font-size="36" fill="#ffffff">{sample}</text>
 </svg>"""
 
-    good = _ink_width(_render(plate("Arial", "bold")))
+    # From config, so this proves the value the compositor will actually use.
+    from app.settings import layout
+
+    good = _ink_width(_render(plate(layout.font.family, layout.font.weight)))
     (OUT / "spike-last.png").replace(OUT / "spike-arial-bold.png")
     bogus = _ink_width(_render(plate("NoSuchFace", "normal")))
     (OUT / "spike-last.png").replace(OUT / "spike-fallback.png")

@@ -1,57 +1,63 @@
-"""Prompt fragments that are the same for every Page.
+"""Prompts live in `api/prompts/*.txt`, not in the database.
 
-Only the page-specific part of a prompt lives in the `page` table. Everything
-identical across pages lives here, because the old system proved what happens
-otherwise: all three configured pages stored the full 2350-character image
-prompt, of which **2030 characters were byte-identical**. Those copies then
-went stale — the stored versions still say "HERO PHOTO (~75% height)" and
-"CIRCLE BRAND LOGO", while the code they were copied from had since changed to
-a panel that grows and a logo at natural aspect ratio. Three rows drifted from
-one constant, silently, and the model kept being told the old thing.
+They are the product, and they are edited far more often than anything else
+here. As database columns they were invisible to git, unreviewable, and they
+drifted: in the old system all three configured pages stored the full
+2350-character image prompt, of which **2030 characters were byte-identical**,
+and those copies went stale — they still said "HERO PHOTO (~75% height)" and
+"CIRCLE BRAND LOGO" while the code they were copied from had moved on to a
+panel that grows and a logo at natural aspect ratio. History Retraced's stored
+overlay prompt carries that same stale block a second time, at offset 903.
 
-So: the shared block is code, the page-specific block is data.
+As files they diff, review and revert. One page, one set of files:
+
+    prompts/system.txt        writer voice and post structure
+    prompts/overlay.txt       how to write the panel text and pick highlights
+    prompts/image.txt         this page's hero photography style
+    prompts/image_rules.txt   card layers + hero rules, appended to image.txt
+
+Read on every call — they are ~5KB total, and editing a prompt should not
+require a restart.
+
+## Placeholders
+
+A few numbers appear in both a prompt and the compositor, so they are written
+as tokens and substituted from `layout.yml`. The old system hardcoded them and
+they disagreed in production: History Retraced rendered a 20% panel while its
+prompt told the model 25%, because the hint was built from a shared default
+constant instead of the page's own value.
+
+Substitution is a plain `str.replace`, not `str.format`, so a stray brace in a
+prompt cannot raise at generation time.
 """
 
-from app.settings import Layout
+from app.settings import API_DIR, Layout
 
-HERO_RULES = """Hero composition rules:
-- Full-bleed photorealistic photograph edge to edge — no letterboxing or post mockup.
-- Must look like a real camera photo (documentary, editorial, or historical reenactment photography).
-- COMPOSITION: mid-shot or medium close-up — main subjects fill ~40–60% of frame height (~50% larger than a wide panorama). Not tiny distant figures.
-- FOCAL POINT: 1–3 faces or figures clearly visible in the foreground as the visual hook (reenactment faces OK). Prefer subjects facing or near the camera.
-- When people appear: believable anatomy and period-accurate dress; faces must be readable at feed size.
-- Keep the entire top-right quadrant clean — a brand logo is composited there in post.
-- NO surreal metaphors (giant objects, glowing silhouettes, fantasy props, comic or illustrated style).
-
-Strict exclusions — your image must contain NONE of these:
-- ANY readable text, letters, numbers, captions, titles, headline typography, or hashtags (including #tags painted in the image)
-- ANY social-media post mockup: black bars, text panels, meme layout, or card framing
-- ANY brand names, logos, watermarks, or channel name text
-- Black text box, speech bubbles, UI chrome, or post mockup frames
-- Circular frames, medallions, round profile photos, or logo badges drawn in the photo
-- Digital illustration, cartoon, anime, 3D render, or "AI art" look — photograph only
-- Wide establishing shots where people are small specks in the distance"""
+PROMPTS_DIR = API_DIR / "prompts"
 
 
-def card_layers_hint(layout: Layout) -> str:
-    """Tell the model what it is *not* drawing.
-
-    The percentage comes from `panel_ratio`, so the prompt and the compositor
-    cannot disagree. In the old system they already did: History Retraced
-    rendered at 0.20 while its prompt hint said 25%, because the hint was built
-    from a shared default constant rather than the page's own value.
-    """
-    panel_pct = round(layout.panel.ratio * 100)
-    return f"""Final post card assembly (layers 2–3 are added in code — do NOT draw them):
-1. HERO PHOTO (top portion — shrinks when copy is long) — YOU generate only this: full-bleed photorealistic photograph, square output, no UI, no text.
-2. BLACK TEXT BOX (bottom, at least ~{panel_pct}% of card height, grows to fit copy) — solid black panel with white/gold copy (added in code).
-3. BRAND LOGO — uploaded brand logo (natural aspect ratio), top-right corner of the hero (added in code). Leave top-right empty in your photo.
-
-Your output must be layer 1 only — a clean photograph with zero text and zero logos."""
+def _tokens(layout: Layout) -> dict[str, str]:
+    return {
+        "{panel_pct}": str(round(layout.panel.ratio * 100)),
+        "{highlight_color}": layout.highlight.color,
+    }
 
 
-def build_image_prompt(page_image_prompt: str, layout: Layout) -> str:
-    """The page's visual-style block, then the rules every page shares."""
-    return "\n\n".join(
-        [page_image_prompt.strip(), card_layers_hint(layout), HERO_RULES]
-    )
+def _read(name: str, layout: Layout) -> str:
+    text = (PROMPTS_DIR / name).read_text(encoding="utf-8").strip()
+    for token, value in _tokens(layout).items():
+        text = text.replace(token, value)
+    return text
+
+
+def system_prompt(layout: Layout) -> str:
+    return _read("system.txt", layout)
+
+
+def overlay_prompt(layout: Layout) -> str:
+    return _read("overlay.txt", layout)
+
+
+def image_prompt(layout: Layout) -> str:
+    """This page's visual style, then the rules about what it must not draw."""
+    return f"{_read('image.txt', layout)}\n\n{_read('image_rules.txt', layout)}"

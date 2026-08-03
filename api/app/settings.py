@@ -1,11 +1,12 @@
-"""Three tiers of configuration, deliberately kept apart.
+"""Four tiers of configuration, deliberately kept apart.
 
   config/layout.yml  how the image looks — frozen, identical for every Page
+  prompts/*.txt      what the model is told — the product, edited constantly
   .env               secrets and model ids, which get retired upstream
-  page rows          the twelve things that genuinely differ per Page
+  page rows          identity and publishing policy
 
 Layout is parsed at import, so a bad value fails the boot rather than the
-render.
+render. Prompts are read per call, so editing one needs no restart.
 """
 
 from functools import lru_cache
@@ -63,6 +64,12 @@ class WatermarkLayout(Frozen):
 
 class FontLayout(Frozen):
     family: str
+    weight: str
+    """`family` must match the TTF's name table, not the file name. resvg
+    substitutes a serif face silently when it does not — "Arial Bold" renders,
+    it just does not render Arial. The file is family "Arial", subfamily "Bold",
+    so it is selected as family + weight."""
+
     path: str
 
 
@@ -105,10 +112,6 @@ class Settings(BaseSettings):
     metricool_user_id: str = ""
 
     x_bearer_token: str = ""
-
-    # One-off, Phase 1 only: seeding page rows out of the old Supabase project.
-    supabase_url: str = ""
-    supabase_service_role_key: str = ""
 
     def missing_secrets(self) -> list[str]:
         """Named, never valued. Reported by /health so a blank .env is obvious."""

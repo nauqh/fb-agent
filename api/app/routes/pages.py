@@ -1,4 +1,9 @@
-"""Pages: list, read, edit. The Settings screen is the only writer."""
+"""Pages: list, read, edit.
+
+One page in v1, so this is a small surface: the Settings screen shows the
+identity read-only and edits `daily_quota`. Prompts are files now and are edited
+in an editor, not here.
+"""
 
 from datetime import datetime, timezone
 
@@ -19,21 +24,13 @@ class PageUpdate(BaseModel):
     `metricool_blog_id` come from Metricool and are not the operator's to edit.
     """
 
-    is_active: bool | None = None
     daily_quota: int | None = None
-    system_prompt: str | None = None
-    overlay_prompt: str | None = None
-    image_prompt: str | None = None
     watermark_image_path: str | None = None
 
 
 @router.get("")
 def list_pages(session: Session = Depends(get_session)) -> list[Page]:
-    """Active first, then by name. Inactive pages are listed, not hidden —
-    activating the fifth page is a toggle, not a migration."""
-    return list(
-        session.exec(select(Page).order_by(Page.is_active.desc(), Page.name)).all()
-    )
+    return list(session.exec(select(Page).order_by(Page.name)).all())
 
 
 @router.get("/{page_id}")

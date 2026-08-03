@@ -7,6 +7,38 @@ table (ADR-0001). No `brand_key` (ADR-0003).
 Everything removed was one of three things: configuration duplicated across
 rows, external state mirrored locally, or tenancy ceremony.
 
+## One page in v1
+
+v1 runs **History Retraced only**. The other nine pages are not modelled, not
+seeded, and not migrated; adding one later is an insert plus a set of prompt
+files.
+
+`PAGE` stays a table rather than collapsing into a constant because
+`draft.page_id` and `source_item.synced_for_page_id` point at it. Making the
+second page a schema change *and* a rewrite of every query is exactly the trap
+ADR-0003 describes. One row costs nothing.
+
+`is_active` went with the other nine pages: with a single page the flag is never
+false, and a flag that is never false is not state.
+
+## Prompts are files, not columns
+
+`system_prompt`, `overlay_prompt` and `image_prompt` are no longer columns. They
+live in [`api/prompts/`](../api/prompts) as `.txt`, loaded by
+[`app/writer/prompts.py`](../api/app/writer/prompts.py) on every call.
+
+They are the product and they change constantly. As columns they were invisible
+to git, unreviewable, and they drifted — the old system's three configured pages
+each stored the same 2030-character block, and every copy had gone stale against
+the code it was pasted from. History Retraced's stored *overlay* prompt carried
+that block a second time, at offset 903, still claiming a 75% hero and a circular
+logo. Both copies are dropped; the surviving text is one file.
+
+Two numbers appear in both a prompt and the compositor and are substituted from
+`layout.yml` at read time rather than typed twice: `{panel_pct}` and
+`{highlight_color}`. Production had already drifted on the first — History
+Retraced rendered a 20% panel while its prompt said 25%.
+
 ## ERD
 
 ```mermaid
@@ -20,12 +52,8 @@ erDiagram
         text name UK "History Retraced"
         text facebook_page_id UK "from Metricool"
         text metricool_blog_id
-        bool is_active "4 of 10 at launch"
         int daily_quota "per Asia/Ho_Chi_Minh day"
-        text system_prompt "writer voice + structure"
-        text overlay_prompt "how to write panel text"
-        text image_prompt "hero scene direction"
-        text watermark_image_path "the page's own logo"
+        text watermark_image_path "null - renders name as text"
         ts created_at
         ts updated_at
     }
@@ -106,9 +134,16 @@ compositor hardcodes `const cornerRadius = 0` (`image-composite.ts:313`) and the
 preview helper was zeroed to match, with the comment "previews must match the
 composited output, which is no longer rounded" (`brand-image-layout.ts:111`).
 
-Three things stayed columns because they are genuinely per-page, not layout:
-`daily_quota` (1, 2, 12 — publishing policy), the three prompts (the product),
-and `watermark_image_path` (each page's own logo file — cannot be one constant).
+Two things stayed columns because they are genuinely per-page, not layout:
+`daily_quota` (1, 2, 12 across the old pages — publishing policy) and
+`watermark_image_path` (each page's own logo file — cannot be one constant).
+The prompts were the third until they became files; see above.
+
+**History Retraced has no watermark image.** The path stored in the old row
+returns `NoSuchKey`, the whole `brand-assets/` prefix lists empty, and the newest
+composite in that bucket renders "History Retraced" as white text in the *top*
+right. The logo was already gone in production, so the text fallback is not a
+regression — it is current behaviour.
 
 Config in a module is safe here in a way `brand_key` was not: **nothing points at
 it**. ADR-0003's failure was rows carrying a foreign key into a code constant that
@@ -119,15 +154,18 @@ could not grow with the data. A padding value has no referent, so it cannot rot.
 **`PAGE`** is the unit of identity, and of the little configuration that survived
 the layout cut above. It replaces the old `facebook_post_templates` (54 columns,
 two-level page→brand fallback whose brand rows turned out to be byte-identical
-duplicates) and the `brand-config.ts` constant. Pages are rows with an
-`is_active` flag, so adding the fifth page is an insert. See ADR-0003 for what
-the code-constant version cost.
+duplicates) and the `brand-config.ts` constant. Pages are rows, so adding the
+second page is an insert. See ADR-0003 for what the code-constant version cost.
 
 It is deliberately **not** split into `page` + `page_style`. That relationship
 would be strictly 1:1, so the split buys a join and nothing else — and it
 rebuilds the exact shape ADR-0003 destroyed, where one setting lived in two rows
-and drifted. The one split worth making later is a versioned `prompt` table, and
-that is a feature (A/B, rollback), not normalisation.
+and drifted.
+
+**Adding page two** is: insert a row, move the prompt files into
+`prompts/<page>/`, and give the loader that directory instead of the module-level
+constant it uses today. Nothing in the schema moves. The flat layout is not an
+oversight — it is the honest representation of one page.
 
 **`SOURCE_ITEM`** is one table for all three source kinds. They differ only at
 ingest; generation reads `text`, `image_url`, and whether the subject is

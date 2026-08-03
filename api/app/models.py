@@ -40,7 +40,17 @@ class DraftStatus(StrEnum):
 
 
 class Page(SQLModel, table=True):
-    """An owned Facebook page. Rows, not constants — adding one is an insert."""
+    """An owned Facebook page. Rows, not constants — adding one is an insert.
+
+    v1 runs **one** page, History Retraced. The table stays rather than becoming
+    a constant because `draft.page_id` and `source_item.synced_for_page_id`
+    point at it; adding the second page should be an insert, not a schema change
+    plus a rewrite of every query (ADR-0003).
+
+    Identity and policy only. The prompts moved to `api/prompts/*.txt` — see
+    app/writer/prompts.py. There is no `is_active`: with one page it is always
+    true, and a flag that is never false is not state.
+    """
 
     __tablename__ = "page"
 
@@ -48,16 +58,18 @@ class Page(SQLModel, table=True):
     name: str = Field(unique=True, index=True)
     facebook_page_id: str = Field(unique=True, index=True)
     metricool_blog_id: str | None = None
-    is_active: bool = Field(default=False, index=True)
+
     daily_quota: int = 12
     """Posts per calendar day in Asia/Ho_Chi_Minh."""
 
-    system_prompt: str = ""
-    overlay_prompt: str = ""
-    image_prompt: str = ""
-
     watermark_image_path: str | None = None
-    """The page's own logo. Falls back to rendering `name` as text."""
+    """The page's own logo, relative to media_root.
+
+    Null for History Retraced, and that is not a gap: both Supabase Storage
+    objects the old rows referenced return `NoSuchKey`, and the newest composite
+    in that bucket renders "History Retraced" as white text top-right. The text
+    fallback is what production ships.
+    """
 
     created_at: datetime = Field(default_factory=_now)
     updated_at: datetime = Field(default_factory=_now)

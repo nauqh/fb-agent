@@ -44,15 +44,21 @@ highlight:
   color: "#F5C542"      # gold, for phrases the writer marks verbatim
 
 watermark:
-  # Bottom-right, inset by edge_margin. Uses page.watermark_image_path when set,
-  # otherwise renders page.name as text.
+  # Top-right of the hero, inset by edge_margin — verified against the newest
+  # composite in production storage, which renders "History Retraced" as white
+  # text there. Uses page.watermark_image_path when set; History Retraced has
+  # none (the stored object is gone), so it renders page.name as text.
   max_px: 138           # capped again at 0.22 × width
   top_ratio: 0.014      # × hero height, floor 8px
   # Seam portrait inset is not ported: portrait_inset_enabled is false on all
   # ten production pages.
 
 font:
-  family: Arial Bold
+  # family must match the TTF name table. resvg substitutes silently otherwise:
+  # `font-family="Arial Bold"` renders a serif face and still returns a valid
+  # PNG. tests/spike_text_render.py guards this by width.
+  family: Arial
+  weight: bold
   path: assets/fonts/Arial-Bold.ttf   # measured and rasterised from this file
 
 # No headline badge. It renders only under `if (isFullOverlay && label)`

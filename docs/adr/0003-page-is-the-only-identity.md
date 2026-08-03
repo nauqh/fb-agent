@@ -15,9 +15,9 @@ constant, so the other six carried `brand_key = NULL` and silently fell through
 to code defaults. The brand-level rows turned out to be **byte-identical
 duplicates** of their page-level counterparts.
 
-A Page is now the only identity. Pages are **rows, not constants**, with an
-`is_active` flag; four are active at launch and the remaining six are already
-seedable. Everything references `page_id`.
+A Page is now the only identity. Pages are **rows, not constants**. v1 seeds
+exactly one, History Retraced; the rest are inserts when they are wanted, which
+is the whole point of the decision. Everything references `page_id`.
 
 ## Consequences
 

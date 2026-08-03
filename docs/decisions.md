@@ -15,6 +15,34 @@ Three decisions were significant enough to get their own ADR:
 [0002](adr/0002-single-operator-no-tenancy.md) ·
 [0003](adr/0003-page-is-the-only-identity.md)
 
+## v1 is one page, History Retraced
+
+Decided 2026-08-03, after Phase 1's backend landed. The other nine pages are
+dropped — not deactivated, not seeded — and come back as inserts when they are
+wanted. `is_active` goes with them: one page means the flag is never false.
+
+This also ends the Supabase dependency. With prompts extracted to files and the
+layout to `layout.yml`, the entire migration is four constants
+(`name`, `facebook_page_id`, `metricool_blog_id`, `daily_quota`), so
+`scripts/seed_pages.py` — which read production Supabase and Metricool at
+runtime — collapses to `scripts/seed_page.py`, and `SUPABASE_URL` /
+`SUPABASE_SERVICE_ROLE_KEY` leave `.env`.
+
+## The prompts are files
+
+`system_prompt`, `overlay_prompt` and `image_prompt` move out of `page` and into
+`api/prompts/*.txt`, read on every call so an edit needs no restart.
+
+The prompts are the product, and they are the most-edited thing in the system.
+In a database column they were invisible to git, unreviewable, and un-revertable
+— and they had already rotted: the stored copies still described a 75% hero and
+a circular logo long after the code moved to a growing panel and a natural-aspect
+logo. History Retraced's overlay prompt carried that stale block a second time.
+
+The two numbers shared with the compositor are tokens, `{panel_pct}` and
+`{highlight_color}`, substituted from `layout.yml`. Substitution is `str.replace`
+rather than `str.format`, so a stray brace in a prompt cannot raise mid-generation.
+
 ## v1 is a draft factory
 
 Four screens: **Sources** · **Generate** · **Review** · **Settings**.
@@ -146,20 +174,24 @@ not only against the template row. Two per-draft overrides exist in
 **399 leave both null**, so the code fallbacks `#ffffff` and `#F5C542` are what
 production renders, and they become the config values.
 
-Only `daily_quota`, the three prompts and `watermark_image_path` stay per-page —
-policy, product, and a per-page asset respectively. Details and the full
-before/after table are in
+Only `daily_quota` and `watermark_image_path` stay per-page — policy and a
+per-page asset. The prompts were the third until they became files. Details and
+the full before/after table are in
 [data-model.md](data-model.md#layout-is-config-not-data).
 
 ## Migration
 
-Page settings only, and there is barely anything left to move: a one-off script
-lifts four fields — `daily_quota`, `system_prompt`, `text_overlay_prompt`,
-`image_gen_system_prompt` — plus the watermark asset path from the ten
-page-level template rows. The other 49 columns are dropped, not migrated.
-Rivals re-sync from Metricool. Source Items are transient by nature.
-The 464 drafts stay behind — 237 are already published and Metricool holds that
-record.
+There is effectively nothing to migrate. `scripts/seed_page.py` inserts four
+constants for History Retraced; the prompts were lifted into `api/prompts/` once,
+by hand, and are now source files. The other 49 template columns are dropped.
+Rivals re-sync from Metricool. Source Items are transient by nature. The 464
+drafts stay behind — 237 are already published and Metricool holds that record.
+
+**The watermark image is gone and is not coming back.** History Retraced's
+`portrait_image_path` returns `NoSuchKey`, the `brand-assets/` prefix lists
+empty, and no copy exists in the old repo. It does not matter: the newest
+composite in that bucket renders "History Retraced" as white text in the top
+right, so production has been on the text fallback already.
 
 ## Deferred to v2
 
