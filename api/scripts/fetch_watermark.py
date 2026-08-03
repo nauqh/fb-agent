@@ -11,11 +11,21 @@ public page and needs no token:
 
     https://graph.facebook.com/<page_id>/picture?width=2048
 
-That avatar is dark ink on a white square. Compositing it as-is would paste a
-white box onto the hero, so this reproduces the *white* variant the missing file
-was named for (`hrwhite.png`): the background becomes transparent, the ink
-becomes white, and alpha is taken from ink coverage so antialiased edges survive.
-Both are written — the untouched avatar as `-source.png`, for reference.
+That avatar is the logo in its dark-on-white form: black "istory"/"etraced" with
+a red H and R, on a white square. Compositing it as-is would paste a white box
+onto the hero, so this reproduces the *white* variant the missing file was named
+for (`hrwhite.png`), checked against a real post that still carries the original:
+
+    background   -> transparent
+    black ink    -> white
+    red ink      -> stays red
+
+The red is the point. A naive "alpha = 1 - luminance" makes the whole mark white,
+and because red sits mid-luminance the H and R come out half-transparent grey —
+visibly wrong next to the real thing. So pixels are classified by hue first, and
+coverage is unmultiplied against the colour each one is *supposed* to reach.
+
+Both files are written; the untouched avatar is kept as `-source.png`.
 
 Output is 217×105 at the avatar's native 247px, and the compositor caps the
 watermark at 138px, so there is resolution to spare.
@@ -50,16 +60,42 @@ def fetch_avatar(page_id: str) -> Image.Image:
     return Image.open(BytesIO(response.content)).convert("RGB")
 
 
+BRAND_RED = (180, 51, 32)
+"""Sampled from the avatar, and confirmed against a real post that still carries
+the original watermark — that one reads (180, 45, 26) after JPEG."""
+
+
+def _luminance(pixel: tuple[int, int, int]) -> float:
+    red, green, blue = pixel
+    return (0.299 * red + 0.587 * green + 0.114 * blue) / 255
+
+
 def to_white_on_transparent(source: Image.Image) -> Image.Image:
-    """Ink -> white, paper -> transparent, alpha from how dark the pixel was."""
+    """Paper -> transparent, black ink -> white, red ink -> still red.
+
+    Every pixel is a blend of its ink colour over white paper. Coverage is
+    recovered by comparing how far the pixel fell from white *relative to how
+    far its own ink would take it* — which is why the red needs its own
+    denominator: fully-inked red is already at 0.34 luminance, so measuring it
+    against black would read as 66% coverage and render the H and R translucent.
+    """
+    red_ceiling = 1 - _luminance(BRAND_RED)
     width, height = source.size
     result = Image.new("RGBA", (width, height))
     target, origin = result.load(), source.load()
+
     for y in range(height):
         for x in range(width):
-            red, green, blue = origin[x, y]
-            luminance = (0.299 * red + 0.587 * green + 0.114 * blue) / 255
-            target[x, y] = (255, 255, 255, round((1 - luminance) * 255))
+            pixel = origin[x, y]
+            red, green, blue = pixel
+            is_red = red - green > 40 and red - blue > 40
+
+            darkness = 1 - _luminance(pixel)
+            coverage = darkness / red_ceiling if is_red else darkness
+            alpha = round(min(1.0, max(0.0, coverage)) * 255)
+
+            target[x, y] = (*BRAND_RED, alpha) if is_red else (255, 255, 255, alpha)
+
     return result.crop(result.getbbox())
 
 
