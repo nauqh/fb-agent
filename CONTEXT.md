@@ -59,9 +59,9 @@ operator to judge; it never blocks Approve.
 **Composed Image**:
 The final post image: a generated hero image with the text panel, highlighted
 phrases, and page watermark rendered over it. There is exactly one form — a hero
-photo above a black text panel — at one size, 896×1120, identical for every
-Page. Only the watermark differs. No headline badge; it belonged to the cut
-`full_overlay` layout.
+photo above a black text panel — at one size, 896×1120. Nothing about it is
+per-Page except which watermark file is stamped on. No headline badge; it
+belonged to the cut `full_overlay` layout.
 _Avoid_: Overlay, composite, thumbnail, card, layout
 
 **Highlight Phrase**:

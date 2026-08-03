@@ -118,8 +118,9 @@ call per Source Item. One `async def` covers it.
 **The operator workflow.** Sources → Cart → Generate → Review is not the
 problem; the code structure was.
 
-**The compositor**, as a hero image plus text panel, highlight phrases, headline
-badge and watermark. Ported to `resvg-py` + `fontTools` + Pillow — the old code
+**The compositor**, as a hero image plus text panel, highlight phrases and
+watermark — no headline badge, which went with the `full_overlay` layout that
+was its only caller. Ported to `resvg-py` + `fontTools` + Pillow — the old code
 already rasterised via resvg rather than sharp (`composite-font.ts:24`) and
 measured via `opentype.js` advance widths (`overlay-text-measure.server.ts:19`),
 both of which have exact Python equivalents reading the same `Arial-Bold.ttf`.

@@ -207,9 +207,9 @@ process there is no other writer that could still own it.
 ## HTTP surface
 
 ```
-GET    /pages                       list, incl. inactive
+GET    /pages                       one row in v1
 GET    /pages/{id}
-PATCH  /pages/{id}                  quota, prompts, watermark
+PATCH  /pages/{id}                  quota, watermark (prompts are files)
 
 GET    /sources/rivals?page_id=     Metricool sync, then rows
 GET    /sources/articles            curated feeds, live, unsaved

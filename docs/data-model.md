@@ -113,7 +113,7 @@ Model ids do **not** live there — they are deployment config and change withou
 warning (the previous system had to ship `fix(gemini): replace retired image
 fallback model`). `GEMINI_TEXT_MODEL` and `GEMINI_IMAGE_MODEL` go to env.
 
-Ten of the settings never varied in production in production anyway — across all 10 page
+Ten of the settings never varied in production anyway — across all 10 page
 rows, the four paddings, `panel_color`, `text_align` and `model_id` each had
 exactly **one distinct value**, and `panel_opacity` had one in 9 of 10. `brand_watermark_text`
 was byte-identical to `page_name` in **10/10**, so it is derived from `name`, not

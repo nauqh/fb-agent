@@ -108,8 +108,8 @@ the right `kind`, `author`, and `synced_for_page_id`; re-ticking produces none.
 
 - `writer/agent.py` — one Pydantic AI agent over `GoogleModel`, typed
   `DraftContent` output.
-- `writer/prompts.py` — page prompt + the style-vs-factual instruction, chosen
-  from `kind`.
+- `writer/prompts.py` — loads `prompts/*.txt` and substitutes the layout tokens
+  (already built); add the style-vs-factual instruction, chosen from `kind`.
 - `writer/validators.py` — the seven brand rules as `@agent.output_validator`
   raising `ModelRetry`, capped at two retries; residue lands in
   `draft.warnings`.
@@ -117,9 +117,9 @@ the right `kind`, `author`, and `synced_for_page_id`; re-ticking produces none.
   and returns ids; a `BackgroundTask` fills them; progress columns advance.
 - **Generate** and **Review** screens, text only, polling `GET /drafts/{id}`.
 
-**Done when:** a cart of three sources against two pages yields six drafts, and
-a deliberately provoked violation (a hook ending in `?`) is visibly retried and
-corrected rather than warned about.
+**Done when:** a cart of three sources yields three drafts, and a deliberately
+provoked violation (a hook ending in `?`) is visibly retried and corrected
+rather than warned about.
 
 This is the phase that decides whether the rebuild is worth finishing.
 
@@ -132,13 +132,20 @@ This is the phase that decides whether the rebuild is worth finishing.
 - `image/hero.py` — `google-genai`, image output, size from `layout.yml`.
 - `image/text.py` — measure, wrap, plan panel height. Pure functions, unit
   tested. Panel grows from `ratio` toward `max_ratio`; the font never shrinks.
-- `image/compositor.py` — hero + black panel + gold highlights + watermark
-  (image if the Page has one, else its name as text). Golden-image tests.
+- `image/compositor.py` — hero + black panel + gold highlights + watermark.
+  A configured watermark file that does not load must **raise**; the text
+  fallback is only for a Page with no logo at all. The old code returned `null`
+  there, which is how History Retraced lost its logo unnoticed for weeks.
 - `media.py` — `LocalMediaStore`, static `/media` mount.
 - `hero_image_path` and `composed_image_path` stored separately from the start.
 
 **Done when:** a generated image sits side by side with a real History Retraced
 post and the difference is taste, not correctness.
+
+The geometry half of that is already proven: replaying a real post's overlay
+text through `layout.yml` reproduces its 6 line breaks word for word, its 45px
+line height, its 300px panel and its 820px hero. Keep that post as the golden
+fixture rather than inventing one.
 
 ---
 
