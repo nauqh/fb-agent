@@ -139,11 +139,20 @@ Two things stayed columns because they are genuinely per-page, not layout:
 `watermark_image_path` (each page's own logo file — cannot be one constant).
 The prompts were the third until they became files; see above.
 
-**History Retraced has no watermark image.** The path stored in the old row
-returns `NoSuchKey`, the whole `brand-assets/` prefix lists empty, and the newest
-composite in that bucket renders "History Retraced" as white text in the *top*
-right. The logo was already gone in production, so the text fallback is not a
-regression — it is current behaviour.
+**The watermark was rebuilt, not migrated.** All six paths the old rows
+referenced return `NoSuchKey` — across `brand-assets/`, `page-assets/`, all three
+buckets, and a second user id. Storage holds 8 objects, all recent draft jpgs;
+the rest were purged, and no asset was ever committed to the old repo. Production
+had already fallen back to rendering the page name as text, which is what the
+newest composite there shows.
+
+It is re-derived instead from the page's public Facebook avatar
+([`scripts/fetch_watermark.py`](../api/scripts/fetch_watermark.py)), converted to
+the white-on-transparent form the missing `hrwhite.png` was named for.
+
+`watermark_image_path` is relative to `API_DIR`, and the file lives in
+`api/assets/` beside the font — **not** `api/media/`, which is gitignored and
+would drop the logo on a fresh clone.
 
 Config in a module is safe here in a way `brand_key` was not: **nothing points at
 it**. ADR-0003's failure was rows carrying a foreign key into a code constant that

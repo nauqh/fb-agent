@@ -3,8 +3,8 @@
 The values below were read from the old system's `facebook_post_templates` row
 for page 569035169625026 and cross-checked live against Metricool
 `/admin/simpleProfiles`. There is nothing left to migrate: the prompts are files
-(`api/prompts/`), the layout is `config/layout.yml`, and the watermark image no
-longer exists in Supabase Storage.
+(`api/prompts/`), the layout is `config/layout.yml`, and the watermark is a
+committed asset rebuilt by `scripts/fetch_watermark.py`.
 
     uv run python scripts/seed_page.py
 """
@@ -24,6 +24,9 @@ PAGE = {
     "facebook_page_id": "569035169625026",
     "metricool_blog_id": "4605385",
     "daily_quota": 12,
+    # Relative to API_DIR. Committed, unlike media/. Rebuild it with
+    # scripts/fetch_watermark.py — the original asset is gone from Storage.
+    "watermark_image_path": "assets/watermarks/history-retraced.png",
 }
 
 

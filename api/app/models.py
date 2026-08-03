@@ -63,12 +63,15 @@ class Page(SQLModel, table=True):
     """Posts per calendar day in Asia/Ho_Chi_Minh."""
 
     watermark_image_path: str | None = None
-    """The page's own logo, relative to media_root.
+    """The page's own logo, relative to `API_DIR` — a committed asset, not
+    media_root, which is gitignored and would lose it on clone.
 
-    Null for History Retraced, and that is not a gap: both Supabase Storage
-    objects the old rows referenced return `NoSuchKey`, and the newest composite
-    in that bucket renders "History Retraced" as white text top-right. The text
-    fallback is what production ships.
+    Null falls back to rendering `name` as text, which is what production has
+    been doing: all six watermark objects the old rows referenced return
+    `NoSuchKey` (Supabase Storage holds 8 objects, all recent draft jpgs), and
+    the newest composite there shows the page name as text. The asset was
+    recovered from the page's own Facebook avatar instead — see
+    scripts/fetch_watermark.py.
     """
 
     created_at: datetime = Field(default_factory=_now)

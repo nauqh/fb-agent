@@ -187,11 +187,16 @@ by hand, and are now source files. The other 49 template columns are dropped.
 Rivals re-sync from Metricool. Source Items are transient by nature. The 464
 drafts stay behind — 237 are already published and Metricool holds that record.
 
-**The watermark image is gone and is not coming back.** History Retraced's
-`portrait_image_path` returns `NoSuchKey`, the `brand-assets/` prefix lists
-empty, and no copy exists in the old repo. It does not matter: the newest
-composite in that bucket renders "History Retraced" as white text in the top
-right, so production has been on the text fallback already.
+**The watermark is rebuilt from the Facebook avatar, not migrated.** All six
+watermark objects the old rows referenced are gone — every path 404s across all
+three buckets, including an `hr` variant filed under a second user id — and no
+copy was ever committed. Storage retains 8 objects, all recent draft jpgs.
+Production had already degraded to the page-name text fallback as a result.
+
+`scripts/fetch_watermark.py` pulls the page's public Graph avatar and converts it
+to white-on-transparent, which is what the missing `hrwhite.png` was. The result
+is a committed asset under `api/assets/watermarks/`, so it cannot evaporate the
+way the hosted one did.
 
 ## Deferred to v2
 
