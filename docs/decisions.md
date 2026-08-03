@@ -187,16 +187,17 @@ by hand, and are now source files. The other 49 template columns are dropped.
 Rivals re-sync from Metricool. Source Items are transient by nature. The 464
 drafts stay behind — 237 are already published and Metricool holds that record.
 
-**The watermark is rebuilt from the Facebook avatar, not migrated.** All six
-watermark objects the old rows referenced are gone — every path 404s across all
-three buckets, including an `hr` variant filed under a second user id — and no
-copy was ever committed. Storage retains 8 objects, all recent draft jpgs.
-Production had already degraded to the page-name text fallback as a result.
+**The watermark becomes a committed file.** In the current Supabase project every
+watermark path 404s; the bucket was cleared to 8 recent draft jpgs. The old
+compositor reads the logo back by storage key and treats a failed download as
+"no logo", so output silently degraded to the page name in text — no error, no
+log, posts kept shipping. The genuine assets were recovered from the *previous*
+Supabase project, which still holds 1491 objects.
 
-`scripts/fetch_watermark.py` pulls the page's public Graph avatar and converts it
-to white-on-transparent, which is what the missing `hrwhite.png` was. The result
-is a committed asset under `api/assets/watermarks/`, so it cannot evaporate the
-way the hosted one did.
+They now live in `api/assets/watermarks/`, beside `Arial-Bold.ttf`, because they
+are the same kind of thing: a fixed input the renderer cannot work without.
+Versioned with the code that reads them, so they cannot evaporate again, and a
+clone is complete. A missing file should be an error, never a quiet fallback.
 
 ## Deferred to v2
 

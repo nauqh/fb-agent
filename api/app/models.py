@@ -66,12 +66,15 @@ class Page(SQLModel, table=True):
     """The page's own logo, relative to `API_DIR` — a committed asset, not
     media_root, which is gitignored and would lose it on clone.
 
-    Null falls back to rendering `name` as text, which is what production has
-    been doing: all six watermark objects the old rows referenced return
-    `NoSuchKey` (Supabase Storage holds 8 objects, all recent draft jpgs), and
-    the newest composite there shows the page name as text. The asset was
-    recovered from the page's own Facebook avatar instead — see
-    scripts/fetch_watermark.py.
+    Committed rather than hosted because the hosted one is exactly what failed:
+    the old system kept it in Supabase Storage and read it back by key, and when
+    the bucket was cleared every path started returning `NoSuchKey`. The
+    compositor swallows that (`return null`, image-composite.ts:136) and quietly
+    prints the page name as text instead, so the logo vanished from output with
+    nothing raised. See docs/data-model.md for where the file was recovered from.
+
+    Null still means "no logo, render the name as text" — but only as a
+    deliberate choice for a page without one, never as cover for a broken path.
     """
 
     created_at: datetime = Field(default_factory=_now)

@@ -20,8 +20,8 @@ uv run fastapi dev app/main.py
 Schema changed? Delete `api/fb_agent.db` and re-seed. There is no migration tool
 until the move to Supabase.
 
-The page watermark is committed at `api/assets/watermarks/`;
-`scripts/fetch_watermark.py` rebuilds it from the page's Facebook avatar.
+The page watermark is committed at `api/assets/watermarks/` — recovered from the
+previous Supabase project, [provenance here](docs/data-model.md#layout-is-config-not-data).
 
 ## Prompts
 

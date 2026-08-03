@@ -139,16 +139,30 @@ Two things stayed columns because they are genuinely per-page, not layout:
 `watermark_image_path` (each page's own logo file — cannot be one constant).
 The prompts were the third until they became files; see above.
 
-**The watermark was rebuilt, not migrated.** All six paths the old rows
-referenced return `NoSuchKey` — across `brand-assets/`, `page-assets/`, all three
-buckets, and a second user id. Storage holds 8 objects, all recent draft jpgs;
-the rest were purged, and no asset was ever committed to the old repo. Production
-had already fallen back to rendering the page name as text, which is what the
-newest composite there shows.
+**The watermark is a committed file, and that is the whole point.**
 
-It is re-derived instead from the page's public Facebook avatar
-([`scripts/fetch_watermark.py`](../api/scripts/fetch_watermark.py)), converted to
-the white-on-transparent form the missing `hrwhite.png` was named for.
+The old system stored it in Supabase Storage and read it back by key at composite
+time. In the *current* project that key now 404s — all six watermark paths do,
+across every bucket — because the bucket was cleared down to 8 recent draft jpgs.
+The compositor treats a failed download as "no logo" (`return null`,
+`image-composite.ts:136`) and silently prints the page name as text, so the logo
+disappeared from output with no error, no log, and no failed post. The newest
+draft on record, 2026-08-02, ships the text version.
+
+The real assets survive in the **previous** Supabase project
+(`zlrgwutoctezdbunaqxu`, commented out at the top of the old `.env.local`), which
+still holds 1491 objects:
+
+| File | Size | Shape |
+|---|---|---|
+| `brand-assets/hr/watermark-1782917403896-historyretracedwhite.png` | 350×74 RGBA | one line — **in use** |
+| `brand-assets/hr/watermark-1782917347424-historyretracedlogo.png` | 350×74 RGBA | one line, near-identical |
+| `brand-assets/hr/watermark-1782917203719-profilephoto.jpg` | 400×400 RGB | stacked, on white |
+
+The single-line PNG is what the old `portrait_image_path` actually pointed at,
+and it is already white-on-transparent with the red H and R, so it is used as-is.
+The stacked variant is kept as `history-retraced-stacked.jpg` for the switch;
+using it needs the white background removed first.
 
 `watermark_image_path` is relative to `API_DIR`, and the file lives in
 `api/assets/` beside the font — **not** `api/media/`, which is gitignored and
