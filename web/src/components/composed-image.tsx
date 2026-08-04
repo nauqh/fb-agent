@@ -6,6 +6,16 @@ import { LAYOUT } from "@/lib/fixtures/pages";
 import { cn } from "@/lib/utils";
 
 /**
+ * The committed watermark, copied to `public/` for the preview only.
+ *
+ * The API composites from `api/assets/watermarks/history-retraced.png`; the
+ * browser cannot read that path, and re-drawing the wordmark in SVG would be a
+ * second version of a logo that already exists. This copy goes away the moment
+ * the preview is replaced by the composed PNG the API actually serves.
+ */
+const WATERMARK_PREVIEW = "/watermarks/history-retraced.png";
+
+/**
  * A preview of the Composed Image.
  *
  * **This is an approximation, and structurally cannot be anything else.** The
@@ -23,14 +33,18 @@ import { cn } from "@/lib/utils";
 export function ComposedImage({
   overlayText,
   highlightPhrases,
-  watermark,
+  watermarkPath,
   seed = 0,
   className,
 }: {
   overlayText: string | null;
   highlightPhrases: string[];
-  /** Page name — `watermark_image_path` is null, so the name renders as text. */
-  watermark: string;
+  /**
+   * `page.watermark_image_path`, relative to `API_DIR`. Null is not a fallback:
+   * the asset is committed at `api/assets/watermarks/`, so a Page without one is
+   * a broken Page and this says so instead of quietly printing the name.
+   */
+  watermarkPath: string | null;
   /** Varies the hero gradient so two drafts do not look identical. */
   seed?: number;
   className?: string;
@@ -61,17 +75,31 @@ export function ComposedImage({
         }}
       >
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_120%,transparent_40%,rgba(0,0,0,0.55))]" />
-        {/* Watermark: top-right of the hero, inset by edge_margin_ratio. */}
-        <span
-          className="absolute font-semibold tracking-tight text-white/90 drop-shadow"
+        {/* Watermark: top-right of the hero, inset by edge_margin_ratio,
+            natural aspect, capped at 0.22 × width. */}
+        <div
+          className="absolute"
           style={{
             top: `${LAYOUT.edgeMarginRatio * 100}%`,
             right: `${LAYOUT.edgeMarginRatio * 100}%`,
-            fontSize: "clamp(9px, 3.2cqw, 15px)",
+            width: `${(LAYOUT.watermarkMaxPx / LAYOUT.width) * 100}%`,
           }}
         >
-          {watermark}
-        </span>
+          {watermarkPath ? (
+            // A fixed asset at a container-relative width; next/image would add
+            // a loader and an intrinsic size for nothing here.
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={WATERMARK_PREVIEW}
+              alt=""
+              className="w-full drop-shadow"
+            />
+          ) : (
+            <p className="rounded border border-red-500/70 bg-black/70 px-1 py-0.5 text-right text-[8px] leading-tight text-red-400">
+              no watermark asset
+            </p>
+          )}
+        </div>
       </div>
 
       {/* Panel. `min-height` is the 20% floor; the content pushes it taller. */}

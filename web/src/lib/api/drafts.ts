@@ -4,7 +4,7 @@ import { db, emit, latency, nowIso } from "@/lib/store";
 
 /**
  * `POST /generate`, `GET /drafts`, `GET /drafts/{id}`, `PATCH /drafts/{id}`,
- * approve · reject · regenerate-image.
+ * approve · unapprove · reject · recomposite · regenerate-image.
  */
 
 export interface DraftFilter {
@@ -35,11 +35,23 @@ export async function getDraft(id: number): Promise<Draft> {
   return latency(draft, 80);
 }
 
-/** Operator edits. Only the text fields; status moves through its own routes. */
+/**
+ * Operator edits. The written fields only; status moves through its own routes.
+ *
+ * `image_prompt` is in here because it is the only lever on a hero the model
+ * refused — the writer produced it, so the operator has to be able to correct it
+ * before paying for another generation.
+ */
 export type DraftEdit = Partial<
   Pick<
     Draft,
-    "hook" | "caption" | "first_comment" | "overlay_text" | "highlight_phrases" | "hashtags"
+    | "hook"
+    | "caption"
+    | "first_comment"
+    | "overlay_text"
+    | "highlight_phrases"
+    | "hashtags"
+    | "image_prompt"
   >
 >;
 
@@ -58,24 +70,55 @@ export async function rejectDraft(id: number): Promise<Draft> {
   return setStatus(id, "rejected");
 }
 
-/** Undo, for the toast. Approve is reversible right up until the v2 push. */
+/**
+ * `POST /drafts/{id}/unapprove` — Undo, for the toast.
+ *
+ * Approve is reversible right up until the v2 Metricool push, which is exactly
+ * why the Quota it consumes is advisory: an approved Draft can come back.
+ */
 export async function returnToReview(id: number): Promise<Draft> {
   return setStatus(id, "review");
 }
 
 /**
- * Recomposite from the stored hero.
+ * `POST /drafts/{id}/recomposite` — redraw the panel over the stored hero.
  *
- * `hero_image_path` and `composed_image_path` are separate columns precisely so
- * that editing the overlay text does not re-pay for image generation — only the
- * composed path is rewritten here.
+ * The cheap half. `hero_image_path` and `composed_image_path` are separate
+ * columns precisely so that editing the overlay text does not re-pay for image
+ * generation, so this rewrites only the composed path and needs a hero already
+ * on disk.
  */
-export async function regenerateImage(id: number): Promise<Draft> {
+export async function recomposite(id: number): Promise<Draft> {
   const draft = requireDraft(id);
+  if (!draft.hero_image_path) {
+    throw new Error("No hero image to composite over — regenerate the hero first.");
+  }
   draft.composed_image_path = `composed/${id}-${Date.now()}.png`;
   draft.updated_at = nowIso();
   emit();
   return latency(draft, 900);
+}
+
+/**
+ * `POST /drafts/{id}/regenerate-image` — a new hero, then a recomposite.
+ *
+ * The expensive half: this is a paid `google-genai` call. It is also the only way
+ * out of a Draft whose hero was refused, so it clears `error` — the text was
+ * written and saved, and the row was only ever stuck on the image.
+ */
+export async function regenerateHero(id: number): Promise<Draft> {
+  const draft = requireDraft(id);
+  const stamp = Date.now();
+  Object.assign(draft, {
+    hero_image_path: `heroes/${id}-${stamp}.png`,
+    composed_image_path: `composed/${id}-${stamp}.png`,
+    error: null,
+    progress_step: null,
+    progress_pct: 100,
+    updated_at: nowIso(),
+  });
+  emit();
+  return latency(draft, 2_400);
 }
 
 export interface GenerateRequest {

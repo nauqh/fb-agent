@@ -3,10 +3,11 @@ import type { Page, PromptFile } from "@/lib/types";
 /**
  * The one Page.
  *
- * Values are the row `api/scripts/seed_page.py` inserts, not invented ones —
- * v1 runs History Retraced only, and `watermark_image_path` is genuinely null:
- * the Supabase object the old row pointed at returns `NoSuchKey`, so the
- * compositor renders `name` as text. See docs/data-model.md#one-page-in-v1.
+ * Values are the row `api/scripts/seed_page.py` inserts, not invented ones — v1
+ * runs History Retraced only, and the watermark is a committed file under
+ * `api/assets/`, recovered from the previous Supabase project after the current
+ * one's copy started 404ing. It is versioned with the code that reads it so a
+ * fresh clone is complete. See docs/data-model.md#layout-is-config-not-data.
  */
 export const PAGES: Page[] = [
   {
@@ -15,7 +16,7 @@ export const PAGES: Page[] = [
     facebook_page_id: "569035169625026",
     metricool_blog_id: "4605385",
     daily_quota: 12,
-    watermark_image_path: null,
+    watermark_image_path: "assets/watermarks/history-retraced.png",
     created_at: "2026-08-03T02:10:00Z",
     updated_at: "2026-08-03T02:10:00Z",
   },
@@ -89,11 +90,8 @@ Visual style — MANDATORY:
 - Documentary or cinematic historical reenactment photography: believable environment (battlefield, city, interior, landscape).
 - Dramatic but natural lighting (golden hour, overcast, torchlight); no neon, no magic glow, no fire heads, no supernatural effects.
 - One grounded historical moment — factual tone, not fantasy or surreal symbolism.
-`,
-  },
-  {
-    filename: "image_rules.txt",
-    body: `Final post card assembly (layers 2—3 are added in code — do NOT draw them):
+
+Final post card assembly (layers 2—3 are added in code — do NOT draw them):
 1. HERO PHOTO (top portion — shrinks when copy is long) — YOU generate only this: full-bleed photorealistic photograph, square output, no UI, no text.
 2. BLACK TEXT BOX (bottom, at least ~{panel_pct}% of card height, grows to fit copy) — solid black panel with white/gold copy (added in code).
 3. BRAND LOGO — uploaded brand logo (natural aspect ratio), top-right corner of the hero (added in code). Leave top-right empty in your photo.
@@ -139,4 +137,6 @@ export const LAYOUT = {
   fontSizePx: 36,
   lineHeightRatio: 1.26,
   edgeMarginRatio: 0.02,
+  /** Watermark width cap. Capped again at 0.22 × width by the compositor. */
+  watermarkMaxPx: 138,
 } as const;

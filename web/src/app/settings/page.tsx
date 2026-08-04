@@ -108,13 +108,34 @@ export default function SettingsScreen() {
 
           <div className="space-y-2">
             <Label>Watermark</Label>
-            <p className="text-sm">
-              none — renders <span className="font-medium">{page.name}</span> as text
-            </p>
-            <p className="text-xs leading-relaxed text-muted-foreground">
-              Not a gap. The stored Supabase object returns <code>NoSuchKey</code>, and the text
-              fallback is what production already ships.
-            </p>
+            {page.watermark_image_path ? (
+              <>
+                <div className="flex items-center gap-2">
+                  <span className="rounded bg-black px-2 py-1.5">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- the
+                        committed asset at its own 350×74, not a content image. */}
+                    <img
+                      src="/watermarks/history-retraced.png"
+                      alt={`${page.name} watermark`}
+                      className="h-4 w-auto"
+                    />
+                  </span>
+                  <code className="text-xs">{page.watermark_image_path}</code>
+                </div>
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  350×74 white-on-transparent, committed beside the font because the renderer
+                  cannot work without it. A missing file is an error — the old compositor
+                  silently printed the name as text instead, and nobody noticed for months.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-destructive">missing</p>
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  Nothing to composite. This is a broken Page, not a styling choice.
+                </p>
+              </>
+            )}
           </div>
         </div>
 

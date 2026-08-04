@@ -8,6 +8,7 @@ import {
   ImageIcon,
   Loader2,
   RotateCcw,
+  Sparkles,
   TriangleAlert,
   X,
 } from "lucide-react";
@@ -24,7 +25,8 @@ import {
   approveDraft,
   getDraft,
   listDrafts,
-  regenerateImage,
+  recomposite,
+  regenerateHero,
   rejectDraft,
   returnToReview,
   updateDraft,
@@ -43,6 +45,7 @@ interface Form {
   overlay_text: string;
   highlight_phrases: string[];
   hashtags: string[];
+  image_prompt: string;
 }
 
 export function DraftDetail({ draftId }: { draftId: number }) {
@@ -53,7 +56,7 @@ export function DraftDetail({ draftId }: { draftId: number }) {
   });
   const [saving, setSaving] = useState(false);
   const [deciding, setDeciding] = useState(false);
-  const [recompositing, setRecompositing] = useState(false);
+  const [imageWork, setImageWork] = useState<"recomposite" | "hero" | null>(null);
 
   const { data: pages } = useQuery(() => listPages(), []);
 
@@ -155,17 +158,31 @@ export function DraftDetail({ draftId }: { draftId: number }) {
     }
   }
 
-  async function recomposite() {
-    setRecompositing(true);
+  /**
+   * The two image operations, priced differently on purpose.
+   *
+   * Recompositing redraws the panel over the hero already on disk; regenerating
+   * the hero is a `google-genai` call. The columns are separate so the first one
+   * is free, and the UI has to keep them apart or that distinction is decoration.
+   */
+  async function redoImage(kind: "recomposite" | "hero") {
+    setImageWork(kind);
     try {
-      await regenerateImage(draftId);
-      toast.success("Recomposited from the stored hero.", {
-        description: "No image generation was paid for.",
-      });
+      if (kind === "recomposite") {
+        await recomposite(draftId);
+        toast.success("Recomposited from the stored hero.", {
+          description: "No image generation was paid for.",
+        });
+      } else {
+        await regenerateHero(draftId);
+        toast.success("New hero generated and composited.", {
+          description: "That was a paid image generation.",
+        });
+      }
     } catch (cause) {
-      toast.error(cause instanceof Error ? cause.message : "Recomposite failed");
+      toast.error(cause instanceof Error ? cause.message : "Image work failed");
     } finally {
-      setRecompositing(false);
+      setImageWork(null);
     }
   }
 
@@ -179,31 +196,60 @@ export function DraftDetail({ draftId }: { draftId: number }) {
         <ComposedImage
           overlayText={form?.overlay_text ?? draft.overlay_text}
           highlightPhrases={form?.highlight_phrases ?? draft.highlight_phrases}
-          watermark={page?.name ?? "History Retraced"}
+          watermarkPath={page?.watermark_image_path ?? null}
           seed={draft.id}
         />
         <div className="flex items-center justify-between text-[11px] text-muted-foreground">
           <span className="font-mono">896 × 1120</span>
-          <span>{draft.composed_image_path ? "composed" : "not composed"}</span>
+          <span>
+            {draft.hero_image_path ? "hero" : "no hero"}
+            <span className="mx-1">·</span>
+            {draft.composed_image_path ? "composed" : "not composed"}
+          </span>
         </div>
         <p className="text-[11px] leading-relaxed text-muted-foreground">
           Approximate. The real panel is measured with fontTools and rasterised by resvg, so
           line breaks and panel height will differ.
         </p>
-        <Button
-          variant="outline"
-          size="sm"
-          className="w-full"
-          disabled={recompositing || !draft.hero_image_path}
-          onClick={recomposite}
-        >
-          {recompositing ? (
-            <Loader2 className="size-3.5 animate-spin" />
-          ) : (
-            <ImageIcon className="size-3.5" />
-          )}
-          Recomposite
-        </Button>
+        <div className="space-y-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full"
+            disabled={imageWork !== null || !draft.hero_image_path}
+            title={
+              draft.hero_image_path
+                ? undefined
+                : "There is no hero on disk to composite over."
+            }
+            onClick={() => void redoImage("recomposite")}
+          >
+            {imageWork === "recomposite" ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <ImageIcon className="size-3.5" />
+            )}
+            Recomposite
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full text-muted-foreground"
+            disabled={imageWork !== null}
+            onClick={() => void redoImage("hero")}
+          >
+            {imageWork === "hero" ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <Sparkles className="size-3.5" />
+            )}
+            Regenerate hero
+          </Button>
+          <p className="text-[11px] leading-relaxed text-muted-foreground">
+            Recompositing is free — it redraws the panel over the stored hero. Regenerating
+            pays for a new image.
+          </p>
+        </div>
       </div>
 
       <div className="min-w-0 space-y-6">
@@ -356,6 +402,20 @@ export function DraftDetail({ draftId }: { draftId: number }) {
                   setForm({ ...form, hashtags: event.target.value.split(/\s+/).filter(Boolean) })
                 }
                 className="font-mono text-xs"
+              />
+            </Field>
+
+            {/* The writer produced this, and it is what a refused hero has to be
+                corrected in before paying for another one. */}
+            <Field
+              label="Image prompt"
+              hint="Sent to Gemini for the hero. Editing it changes nothing until you regenerate."
+            >
+              <Textarea
+                value={form.image_prompt}
+                rows={5}
+                className="text-xs leading-relaxed"
+                onChange={(event) => setForm({ ...form, image_prompt: event.target.value })}
               />
             </Field>
 
@@ -516,5 +576,6 @@ function toForm(draft: Draft): Form {
     overlay_text: draft.overlay_text ?? "",
     highlight_phrases: [...draft.highlight_phrases],
     hashtags: [...draft.hashtags],
+    image_prompt: draft.image_prompt ?? "",
   };
 }
