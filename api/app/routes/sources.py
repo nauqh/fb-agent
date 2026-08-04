@@ -82,7 +82,7 @@ def get_competitor_posts(
         # reading an empty grid as "no competitor posted this week".
         raise HTTPException(status_code=502, detail=str(error)) from error
 
-    _upsert(session, fetched)
+    _upsert(session, fetched, refresh_volatile=True)
     session.commit()
 
     rows = session.exec(
@@ -166,13 +166,32 @@ def save_sources(
     return rows
 
 
-def _upsert(session: Session, items: list[SourceItemBase]) -> list[SourceItem]:
+VOLATILE = ("image_url", "reactions", "comments", "shares")
+"""Facts the vendor owns and keeps changing, as opposed to the content chosen.
+
+`image_url` is the reason this list exists. Facebook's CDN URLs are *signed and
+expire* — the `oe` parameter on a freshly synced one is about four days out,
+while the competitor window is seven. Frozen at first sync, every image in the
+grid would break before it left the window. The old system refreshed these on
+every sync (`competitorMetricoolSyncService.ts:203`), and it was right to.
+
+`text` is deliberately not here. Metrics and a CDN URL are the vendor's; the
+words are what the operator chose, and rewriting them under a Draft that already
+used them would make the Draft's provenance a moving target.
+"""
+
+
+def _upsert(
+    session: Session,
+    items: list[SourceItemBase],
+    refresh_volatile: bool = False,
+) -> list[SourceItem]:
     """One row per item, existing or new. Does not commit.
 
-    Existing rows are returned untouched rather than refreshed from the source.
-    Metrics do drift — a competitor post keeps collecting reactions — but a
-    Source Item is an input that was chosen, and rewriting it under a Draft that
-    already used it would make the Draft's provenance a moving target.
+    Existing rows keep their content. `refresh_volatile` additionally updates
+    `VOLATILE` — set by the competitor sync, which is re-reading the same posts
+    from the vendor, and not by `POST /sources`, where the client is handing
+    back a body it was shown rather than a fresh read.
     """
     rows: list[SourceItem] = []
     # Items within one call can collide too (the same story in two feeds), and
@@ -192,6 +211,10 @@ def _upsert(session: Session, items: list[SourceItemBase]) -> list[SourceItem]:
         ).first()
         if existing is None:
             existing = SourceItem(**item.model_dump())
+            session.add(existing)
+        elif refresh_volatile:
+            for field in VOLATILE:
+                setattr(existing, field, getattr(item, field))
             session.add(existing)
 
         pending[key] = existing

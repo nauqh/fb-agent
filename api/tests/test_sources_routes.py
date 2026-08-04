@@ -170,6 +170,54 @@ def test_competitor_posts_are_written_on_arrival_and_sorted_by_reactions(
     assert _count(engine, SourceKind.COMPETITOR_POST) == 2
 
 
+def test_a_resync_refreshes_the_image_url_and_metrics_but_not_the_text(
+    client, engine, monkeypatch
+):
+    """Facebook's CDN URLs are signed and expire in about four days.
+
+    The competitor window is seven, so a URL frozen at first sync breaks while
+    the post is still on screen. Metrics move with it. The text does not: it is
+    what the operator chose, and a Draft's provenance must not drift.
+    """
+
+    def sync(image_url: str, reactions: int, text: str):
+        monkeypatch.setattr(
+            routes.metricool,
+            "fetch_competitor_posts",
+            lambda page, **_: [
+                SourceItemBase(
+                    kind=SourceKind.COMPETITOR_POST,
+                    external_id="same_post",
+                    synced_for_page_id=page.id,
+                    image_url=image_url,
+                    reactions=reactions,
+                    text=text,
+                )
+            ],
+        )
+        return client.get("/sources/competitors", params={"page_id": 1}).json()
+
+    sync("https://cdn.example/a.jpg?oe=68000000", 10, "As posted")
+    rows = sync("https://cdn.example/a.jpg?oe=69999999", 4_200, "Edited upstream")
+
+    assert len(rows) == 1, "a re-sync must not create a second row"
+    assert rows[0]["image_url"] == "https://cdn.example/a.jpg?oe=69999999"
+    assert rows[0]["reactions"] == 4_200
+    assert rows[0]["text"] == "As posted"
+    assert _count(engine) == 1
+
+
+def test_ticking_does_not_rewrite_an_existing_row(client, engine, cart):
+    """`POST /sources` hands back a body it was shown, not a fresh vendor read."""
+    first = client.post("/sources", json=cart).json()
+
+    tampered = [{**item, "text": "rewritten", "reactions": 999} for item in cart]
+    client.post("/sources", json=tampered)
+
+    rows = client.get("/sources", params={"ids": first[0]["id"]}).json()
+    assert rows[0]["text"] == "Body"
+
+
 def test_a_metricool_failure_is_502_not_an_empty_grid(client, monkeypatch):
     """An empty grid reads as "no competitor posted this week"."""
 
