@@ -125,6 +125,25 @@ rather than an intention.
 `GET /sources?ids=` was not in the design and had to be added: the Cart holds
 ids and something has to turn them back into rows.
 
+**Facebook CDN URLs are signed and expire.** A freshly synced competitor post's
+`oe` parameter is about four days out, while the window is seven, so an
+`image_url` frozen at first sync dies while the post is still on screen. Proven,
+not inferred: four production rows from the old system, synced 2026-07-27 with
+`oe` of 2026-07-31, all return **403** today — every competitor image in the old
+app is currently broken, and it renders them with no `onError`.
+
+`_upsert` therefore refreshes `image_url` and the three metrics on a competitor
+sync, and only there. `text` stays frozen: the metrics and the CDN URL are the
+vendor's, the words are what the operator chose, and a Draft's provenance must
+not drift. `POST /sources` refreshes nothing — the client is handing back a body
+it was shown, not a fresh read, so it must not be able to rewrite a row.
+
+Commit `db1dfba` recorded it as unknown whether Metricool re-signs or serves a
+stale URL of its own. **It re-signs.** Back-to-back calls return byte-identical
+URLs, which is what made the first check inconclusive, but a sync today returned
+`oe` four days in the future while rows untouched since July hold a July `oe`.
+Refreshing on sync is therefore sufficient for the grid.
+
 Feeds and windows moved out of `sources/rss.py` into
 [`config/sources.yml`](../api/config/sources.yml), keyed by `page.name`, ahead of
 page two — the old repo's own comment predicted this, warning that appending to
@@ -174,6 +193,34 @@ This is the phase that decides whether the rebuild is worth finishing.
   there, which is how History Retraced lost its logo unnoticed for weeks.
 - `media.py` — `LocalMediaStore`, static `/media` mount.
 - `hero_image_path` and `composed_image_path` stored separately from the start.
+- **Download a ticked Source Item's picture into `MediaStore`.** Deferred to
+  here because it cannot be finished earlier — see below.
+
+### The competitor image, and why it waits for `MediaStore`
+
+Measured in Phase 2, recorded so it is not re-derived:
+
+- Metricool serves **one** post image and it is a **130×130 thumbnail**
+  (467 of 482 posts). No second image, no HD field. The URL signature covers the
+  size parameter, so `s480`/`s720`/`p720` and dropping `stp` all return 403.
+- A real image exists only on the Facebook post page, as its `og:image` —
+  **600×750**, readable without auth on an ordinary User-Agent. But it is one
+  page fetch per post: **~54s and ~24 MB for a 60-post grid load**, and 1 in 5
+  posts (video, some link posts) carries no `og:image` at all. So it is a
+  tick-time operation, never a browse-time one.
+- That `og:image` URL is **itself a signed, expiring fbcdn link**. Fetching it
+  early and storing the URL therefore buys nothing. Only the *bytes* are
+  durable, which is why this needs `MediaStore` and lands here.
+
+The grid needs none of this and is already correct: the sync re-signs every URL
+on each read, and the card renders at 64px so a 130px source is not upscaled.
+What breaks without the download is a **ticked** post — it falls out of the
+7-day sync window, nothing refreshes it, and its picture 403s while attached to
+a Draft.
+
+Scraping facebook.com is fragile and arguably against their terms even at one
+request per ticked item, so it must fail soft to the 130px thumbnail rather than
+fail the tick.
 
 **Done when:** a generated image sits side by side with a real History Retraced
 post and the difference is taste, not correctness.
