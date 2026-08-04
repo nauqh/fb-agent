@@ -10,8 +10,11 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from app.db import init_db
-from app.routes import pages, prompts, sources
+from sqlmodel import Session
+
+from app import generate
+from app.db import get_engine, init_db
+from app.routes import drafts, pages, prompts, sources
 from app.settings import layout, settings
 
 
@@ -19,6 +22,12 @@ from app.settings import layout, settings
 async def lifespan(_app: FastAPI):
     init_db()
     Path(settings.media_root).mkdir(parents=True, exist_ok=True)
+    # A restart mid-run leaves rows at `generating` with nothing filling them.
+    # Safe to sweep only because there is exactly one writer process.
+    with Session(get_engine()) as session:
+        stranded = generate.sweep_stranded(session)
+    if stranded:
+        print(f"swept {stranded} draft(s) stranded by a restart")
     yield
 
 
@@ -30,6 +39,7 @@ app.mount(
     name="media",
 )
 
+app.include_router(drafts.router)
 app.include_router(pages.router)
 app.include_router(prompts.router)
 app.include_router(sources.router)
