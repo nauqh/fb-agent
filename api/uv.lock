@@ -710,7 +710,7 @@ requires-dist = [
     { name = "google-genai", specifier = ">=1.0" },
     { name = "httpx", specifier = ">=0.28" },
     { name = "pillow", specifier = ">=11.0" },
-    { name = "pydantic-ai", specifier = ">=0.0.14" },
+    { name = "pydantic-ai", specifier = ">=2.22" },
     { name = "pydantic-settings", specifier = ">=2.6" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "resvg-py", specifier = ">=0.3.3" },

@@ -11,7 +11,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from app.db import init_db
-from app.routes import pages, sources
+from app.routes import pages, prompts, sources
 from app.settings import layout, settings
 
 
@@ -31,6 +31,7 @@ app.mount(
 )
 
 app.include_router(pages.router)
+app.include_router(prompts.router)
 app.include_router(sources.router)
 
 

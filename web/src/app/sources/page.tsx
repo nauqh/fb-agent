@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 import { CartPanel } from "@/components/cart-panel";
 import { ScreenHeader } from "@/components/screen";
+import { QueryError } from "@/components/query-error";
 import { SourceCard } from "@/components/source-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -108,7 +109,7 @@ export default function SourcesScreen() {
 
 function CompetitorsTab() {
   const cart = useCart();
-  const { data, loading } = useQuery(() => getCompetitorPosts(PAGE_ID), []);
+  const { data, loading, error, refresh } = useQuery(() => getCompetitorPosts(PAGE_ID), []);
   const [syncing, setSyncing] = useState(false);
 
   /**
@@ -147,7 +148,9 @@ function CompetitorsTab() {
         </Button>
       </div>
 
-      {loading ? (
+      {error ? (
+        <QueryError error={error} onRetry={refresh} />
+      ) : loading ? (
         <CardGridSkeleton />
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
@@ -173,7 +176,7 @@ interface LiveTabProps {
 
 function RssTab({ onTick, savedIds, pending }: LiveTabProps) {
   const cart = useCart();
-  const { data, loading, refresh } = useQuery(() => getRss(PAGE_ID), []);
+  const { data, loading, error, refresh } = useQuery(() => getRss(PAGE_ID), []);
   const [refreshing, setRefreshing] = useState(false);
 
   return (
@@ -216,7 +219,9 @@ function RssTab({ onTick, savedIds, pending }: LiveTabProps) {
         </div>
       ) : null}
 
-      {loading ? (
+      {error ? (
+        <QueryError error={error} onRetry={refresh} />
+      ) : loading ? (
         <CardGridSkeleton />
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">

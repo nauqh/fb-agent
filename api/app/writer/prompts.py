@@ -71,3 +71,31 @@ def overlay_prompt(layout: Layout) -> str:
 
 def image_prompt(layout: Layout) -> str:
     return _read("image.txt", layout)
+
+
+ORDER = ("system.txt", "overlay.txt", "image.txt")
+"""Reading order, which is also the order the run uses them in."""
+
+
+def list_prompt_files(layout: Layout) -> list[dict]:
+    """Every prompt file, for the Settings screen.
+
+    Returns the text **as substituted**, not as typed, because what the operator
+    needs to confirm is that the prompt agrees with `layout.yml` — a raw
+    `{panel_pct}` on screen proves nothing. The file itself is still where edits
+    happen; this is a read-only window onto what the model is actually told.
+
+    Read from disk on every call, deliberately. The screen used to render a
+    hardcoded copy of these bodies, and the copy drifted: it went on listing
+    `image_rules.txt` after that file was merged into `image.txt`.
+    """
+    found = {path.name: path for path in PROMPTS_DIR.glob("*.txt")}
+    # Known files first, then anything else on disk, so a new prompt cannot be
+    # added and go unnoticed here.
+    names = [n for n in ORDER if n in found] + sorted(set(found) - set(ORDER))
+
+    files = []
+    for name in names:
+        body = _read(name, layout)
+        files.append({"filename": name, "chars": len(body), "body": body})
+    return files

@@ -214,6 +214,7 @@ process there is no other writer that could still own it.
 GET    /pages                       one row in v1
 GET    /pages/{id}
 PATCH  /pages/{id}                  quota, watermark (prompts are files)
+GET    /prompts                     the prompt files, read-only, substituted
 
 GET    /sources?ids=1,2,3           resolve Cart ids back to rows (goes in Phase 3)
 GET    /sources/competitors?page_id=  Metricool sync, then rows

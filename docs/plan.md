@@ -78,7 +78,12 @@ disk, visible in a browser.
 **Done when:** changing `daily_quota` in the browser survives a restart, and
 `/pages` returns exactly one page.
 
-**Status:** backend done. `web/` not started.
+**Status:** done. Backend, and `web/` on the real API — `GET /prompts` was
+added so Settings reads the files rather than a bundled copy, which had already
+drifted to a file that no longer existed.
+
+`getQuotaUsage` is the one thing still on the fixture store: it counts approved
+Drafts, and `GET /drafts` arrives with Phase 3.
 
 ---
 
