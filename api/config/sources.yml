@@ -1,0 +1,68 @@
+# Where Source Items come from.
+#
+# Separate from layout.yml on purpose. That file describes the Composed Image
+# and has no per-page section, ever — every Page renders identically. This one
+# is per-page by nature: the old system's four brands had unrelated beats, and
+# hot tub news is noise on a history grid.
+#
+# Feeds are configuration, not data. There is no `feed` table because nothing
+# would point at a row in it — see docs/data-model.md, "What was considered and
+# rejected". The publisher name lands on the Source Item as `author`.
+
+rss:
+    # These publishers cover history, where a five-day-old story is still good
+    # post material. A tighter window buys freshness the beat does not need and
+    # empties the grid on a quiet weekend, which reads as broken.
+    since_days: 7
+    # The grid is browsed, not paged.
+    max_items: 50
+
+competitors:
+    lookback_days: 7
+    # How many competitor posts the grid shows. Every post in the window is
+    # stored — they arrive on sync and cost nothing — but a week runs to several
+    # hundred across seventeen competitor pages, and the tail below this is not
+    # what anyone browses for.
+    grid_limit: 60
+
+# Keyed by `page.name`, which is unique and is what an operator reads. A Page
+# with no entry here raises rather than returning an empty grid: a source that
+# silently stops producing looks exactly like a quiet week, which is how the old
+# system lost its watermark for months.
+#
+# `name` is the byline. It is curated here rather than taken from the feed's own
+# <title>, which is written for feed readers and reads badly on a card —
+# "History | smithsonianmag.com", "Archaeology News -- ScienceDaily", "Latest
+# from Live Science in Archaeology". It reaches the writer as the publisher.
+#
+# Probed 2026-07-31; every entry below returned 100% summary coverage. Rejected:
+# Smithsonian Smart News (277 items, swamps max_items on recency alone), Live
+# Science /all and ScienceDaily "Fossils & Ruins" (superseded by the tag feeds
+# they overlap), Archaeology Magazine (101-char summaries are thin fuel),
+# Ancient Origins / HeritageDaily / GreekReporter (403 even with a User-Agent).
+#
+# Google News is excluded by design: its items carry no summary and an
+# unresolvable redirect link, which is weak input for a Factual Source that has
+# to be written about accurately.
+feeds:
+    History Retraced:
+        # 31 items, 179-char summaries, every item imaged.
+        - name: Smithsonian Magazine
+          url: https://www.smithsonianmag.com/rss/history/
+        # 50 items, every item imaged. The archaeology tag, not /all.
+        - name: Live Science
+          url: https://www.livescience.com/feeds/tag/archaeology
+        # Longest summaries here at 357 chars, but carries no images at all.
+        - name: Science Daily
+          url: https://www.sciencedaily.com/rss/fossils_ruins/archaeology.xml
+        # 1882-char bodies — by a wide margin the richest source in this list.
+        - name: Atlas Obscura
+          url: https://www.atlasobscura.com/feeds/latest
+        # Only 5 items, but 420-char summaries and unmixed history.
+        - name: The History Blog
+          url: http://www.thehistoryblog.com/feed
+        - name: HistoryExtra
+          url: https://www.historyextra.com/feed/
+        # Highest volume of the keepers at 100 items.
+        - name: All That's Interesting
+          url: https://allthatsinteresting.com/feed

@@ -87,27 +87,27 @@ disk, visible in a browser.
 **Goal:** browse all three source kinds, tick items, see rows appear.
 
 - `source_item` table with `UNIQUE (kind, external_id)`.
-- `sources/metricool.py` — rivals and their posts, per page, lookback-windowed.
+- `sources/metricool.py` — competitors and their posts, per page, lookback-windowed.
   Writes on arrival.
-- `sources/rss.py` — the seven curated feeds, 7-day window, 50 items.
+- `sources/rss.py` — the Page's curated feeds, from `config/sources.yml`.
 - `sources/x.py` — one tweet from a pasted URL via `api.x.com/2`.
-- `GET /sources/rivals|articles|tweet`, `POST /sources`.
+- `GET /sources/competitors|rss|tweet`, `POST /sources`.
 - **Sources** screen: three tabs, the Cart as client-side ids.
 
-**Enforce here, not later:** browsing does not write. Articles and tweets become
-rows only on `POST /sources`. Rival posts are the exception.
+**Enforce here, not later:** browsing does not write. RSS items and tweets become
+rows only on `POST /sources`. Competitor posts are the exception.
 
 **Done when:** ticking one item of each kind produces exactly three rows with
 the right `kind`, `author`, and `synced_for_page_id`; re-ticking produces none.
 
 ### Outcome — passed, with three vendor traps found
 
-Verified against the live APIs, not fixtures: 22 rivals and 500 posts for
-History Retraced, all seven feeds answering, 50 articles, 0 failures.
+Verified against the live APIs, not fixtures: 22 competitors and 500 posts for
+History Retraced, all seven feeds answering, 50 RSS items, 0 failures.
 
 - **Metricool's `creationDate.dateTime` is naive local time in the account's own
   zone** — Europe/Madrid here, whatever the `timezone` parameter says. Read as
-  UTC it puts every rival post two hours out, which is invisible until the grid
+  UTC it puts every competitor post two hours out, which is invisible until the grid
   sorts wrongly. `created` is epoch ms; use that.
 - **Feed `<title>`s read badly as a byline** — "History | smithsonianmag.com",
   "Archaeology News -- ScienceDaily". `author` is what the card shows and what
@@ -115,7 +115,7 @@ History Retraced, all seven feeds answering, 50 articles, 0 failures.
 - **x.com answers 200 with an `errors` array** for a deleted or missing tweet,
   so the status alone does not tell you the read worked.
 
-`POST /sources` refuses an article whose host is not one of the curated feeds'.
+`POST /sources` refuses an RSS item whose host is not one of the curated feeds'.
 The tab is live, so the client posts the item body back rather than an id the
 server can look up; without the check the endpoint accepts arbitrary text and
 hands it to the writer. This was `isCuratedFeedUrl` in the old repo and it is
@@ -124,6 +124,13 @@ rather than an intention.
 
 `GET /sources?ids=` was not in the design and had to be added: the Cart holds
 ids and something has to turn them back into rows.
+
+Feeds and windows moved out of `sources/rss.py` into
+[`config/sources.yml`](../api/config/sources.yml), keyed by `page.name`, ahead of
+page two — the old repo's own comment predicted this, warning that appending to
+one flat list would put hot tub news on a history grid. `article` became `rss`
+and `rival_post` became `competitor_post`, the latter because Metricool's API
+already says competitor and translating at every boundary buys nothing.
 
 **Status:** done. `web/` Sources is on the real API, proxied by a `next.config`
 rewrite so there is no CORS to configure. Generate and Review still read

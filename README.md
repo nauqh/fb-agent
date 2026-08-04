@@ -1,7 +1,7 @@
 # fb-agent
 
-Generates Facebook posts for **History Retraced** from rival posts, tweets, and
-news articles. Python + FastAPI + SQLite, with a Next.js frontend. More pages are
+Generates Facebook posts for **History Retraced** from competitor posts, tweets, and
+RSS items. Python + FastAPI + SQLite, with a Next.js frontend. More pages are
 inserts, not a rewrite — [why](docs/data-model.md#one-page-in-v1).
 
 A rebuild of the Next.js/Supabase system at `../social-agent`, which is still
@@ -22,6 +22,17 @@ until the move to Supabase.
 
 The page watermark is committed at `api/assets/watermarks/` — recovered from the
 previous Supabase project, [provenance here](docs/data-model.md#layout-is-config-not-data).
+
+## Config
+
+`api/config/layout.yml` is the Composed Image — one form, never per-page.
+`api/config/sources.yml` is where material comes from — feeds keyed by page
+name, plus the windows and grid caps. Both are parsed at import, so a bad value
+fails the boot rather than the render.
+
+Vendor base URLs, query-parameter sets and the User-Agent stay in code: changing
+one means changing the code that parses the response, so exposing it would offer
+an edit that cannot safely be made.
 
 ## Prompts
 

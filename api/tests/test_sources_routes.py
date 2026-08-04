@@ -29,7 +29,7 @@ def _count(engine, kind: SourceKind | None = None) -> int:
         return session.exec(query).one()
 
 
-CURATED_ARTICLE = "https://www.smithsonianmag.com/history/a-story-180987410/"
+CURATED_RSS_URL = "https://www.smithsonianmag.com/history/a-story-180987410/"
 
 
 @pytest.fixture
@@ -37,17 +37,17 @@ def cart() -> list[dict]:
     """One of each kind, which is what the phase is measured on."""
     return [
         _live(
-            SourceKind.RIVAL_POST,
+            SourceKind.COMPETITOR_POST,
             "117997197937838_989827367419507",
             author="TerrifyingMyths",
             synced_for_page_id=1,
             reactions=16,
         ),
         _live(
-            SourceKind.ARTICLE,
-            CURATED_ARTICLE,
+            SourceKind.RSS,
+            CURATED_RSS_URL,
             author="Smithsonian Magazine",
-            url=CURATED_ARTICLE,
+            url=CURATED_RSS_URL,
         ),
         _live(
             SourceKind.TWEET,
@@ -63,13 +63,13 @@ def test_ticking_one_of_each_kind_creates_three_rows(client, engine, cart):
     assert response.status_code == 201
 
     rows = response.json()
-    assert [row["kind"] for row in rows] == ["rival_post", "article", "tweet"]
+    assert [row["kind"] for row in rows] == ["competitor_post", "rss", "tweet"]
     assert [row["author"] for row in rows] == [
         "TerrifyingMyths",
         "Smithsonian Magazine",
         "@qikipedia",
     ]
-    # Only a rival post belongs to a Page's competitor set.
+    # Only a competitor post belongs to a Page's competitor set.
     assert [row["synced_for_page_id"] for row in rows] == [1, None, None]
     assert _count(engine) == 3
 
@@ -94,13 +94,13 @@ def test_the_same_item_twice_in_one_cart_is_one_row(client, engine, cart):
     assert _count(engine) == 1
 
 
-def test_an_article_from_outside_the_curated_list_is_refused(client, engine, cart):
-    """The Articles tab is live, so the client posts the body back.
+def test_an_rss_item_from_outside_the_curated_list_is_refused(client, engine, cart):
+    """The RSS tab is live, so the client posts the body back.
 
     Without this the endpoint takes arbitrary text and hands it to the writer.
     """
     smuggled = _live(
-        SourceKind.ARTICLE,
+        SourceKind.RSS,
         "https://evil.example/post",
         url="https://evil.example/post",
     )
@@ -118,17 +118,17 @@ def test_an_item_with_no_external_id_is_refused(client, engine):
     assert _count(engine) == 0
 
 
-def test_browsing_articles_writes_nothing(client, engine, monkeypatch):
+def test_browsing_rss_writes_nothing(client, engine, monkeypatch):
     monkeypatch.setattr(
         rss,
-        "fetch_articles",
-        lambda: rss.ArticleFeed(
-            items=[SourceItemBase(kind=SourceKind.ARTICLE, external_id=CURATED_ARTICLE)],
+        "fetch_rss",
+        lambda _page_name: rss.RssFeed(
+            items=[SourceItemBase(kind=SourceKind.RSS, external_id=CURATED_RSS_URL)],
             failures=[rss.FeedFailure("http://dead.example/feed", "504")],
         ),
     )
 
-    response = client.get("/sources/articles")
+    response = client.get("/sources/rss", params={"page_id": 1})
 
     assert response.status_code == 200
     assert len(response.json()["items"]) == 1
@@ -139,23 +139,23 @@ def test_browsing_articles_writes_nothing(client, engine, monkeypatch):
     assert _count(engine) == 0
 
 
-def test_rivals_are_written_on_arrival_and_sorted_by_reactions(
+def test_competitor_posts_are_written_on_arrival_and_sorted_by_reactions(
     client, engine, monkeypatch
 ):
     """The one kind that browsing *does* write — they arrive by sync."""
     monkeypatch.setattr(
         routes.metricool,
-        "fetch_rival_posts",
+        "fetch_competitor_posts",
         lambda page, **_: [
             SourceItemBase(
-                kind=SourceKind.RIVAL_POST,
+                kind=SourceKind.COMPETITOR_POST,
                 external_id="quiet",
                 synced_for_page_id=page.id,
                 reactions=12,
                 text="…",
             ),
             SourceItemBase(
-                kind=SourceKind.RIVAL_POST,
+                kind=SourceKind.COMPETITOR_POST,
                 external_id="loud",
                 synced_for_page_id=page.id,
                 reactions=9_000,
@@ -164,25 +164,25 @@ def test_rivals_are_written_on_arrival_and_sorted_by_reactions(
         ],
     )
 
-    rows = client.get("/sources/rivals", params={"page_id": 1}).json()
+    rows = client.get("/sources/competitors", params={"page_id": 1}).json()
 
     assert [row["external_id"] for row in rows] == ["loud", "quiet"]
-    assert _count(engine, SourceKind.RIVAL_POST) == 2
+    assert _count(engine, SourceKind.COMPETITOR_POST) == 2
 
 
 def test_a_metricool_failure_is_502_not_an_empty_grid(client, monkeypatch):
-    """An empty grid reads as "no rival posted this week"."""
+    """An empty grid reads as "no competitor posted this week"."""
 
     def boom(page, **_):
         raise routes.metricool.MetricoolError("token expired")
 
-    monkeypatch.setattr(routes.metricool, "fetch_rival_posts", boom)
+    monkeypatch.setattr(routes.metricool, "fetch_competitor_posts", boom)
 
-    response = client.get("/sources/rivals", params={"page_id": 1})
+    response = client.get("/sources/competitors", params={"page_id": 1})
 
     assert response.status_code == 502
     assert "token expired" in response.json()["detail"]
 
 
-def test_rivals_for_an_unknown_page_is_404(client):
-    assert client.get("/sources/rivals", params={"page_id": 99}).status_code == 404
+def test_competitors_for_an_unknown_page_is_404(client):
+    assert client.get("/sources/competitors", params={"page_id": 99}).status_code == 404

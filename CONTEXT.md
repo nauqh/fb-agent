@@ -1,7 +1,7 @@
 # Facebook Agent
 
 Generates Facebook posts for a fixed set of owned Facebook pages by drawing on
-external material — rival posts, tweets, and news articles — then hands approved
+external material — competitor posts, tweets, and RSS items — then hands approved
 posts to Metricool for scheduling and publishing.
 
 ## Language
@@ -15,23 +15,32 @@ _Avoid_: Brand, brand key, `hr`/`tff`/`bf`/`htt`, blog
 
 **Source Item**:
 A piece of external material selected as input for generation. Exactly three
-kinds exist: a rival post, a tweet, or an article.
-_Avoid_: Competitor post, inspiration post, feed item, viral post
+kinds exist: a competitor post, a tweet, or an RSS item.
+_Avoid_: Inspiration post, viral post, article
 
-**Rival**:
+**Competitor**:
 A Facebook page, not owned by us, whose posts are synced from Metricool and used
-as Source Items. Which pages are Rivals is configured in Metricool, not here —
-the agent stores their posts, never the list itself.
-_Avoid_: Competitor
+as Source Items. Which pages are Competitors is configured in Metricool, not
+here — the agent stores their posts, never the list itself.
+
+The word is Metricool's own: the endpoint is `/analytics/competitors`, and its
+tables were `social_competitors` and `competitor_posts`. Naming it anything else
+means translating at every boundary, in both directions, forever.
+_Avoid_: Rival
+
+**RSS Item**:
+A Source Item from one of a Page's curated feeds. The feeds are configured in
+`api/config/sources.yml`, per Page, because the beats do not overlap.
+_Avoid_: Article, news item, feed item
 
 **Style Source**:
 A Source Item whose *subject is not binding* — it is borrowed for tone and
-structure only. Rival posts are Style Sources.
+structure only. Competitor posts are Style Sources.
 
 **Factual Source**:
 A Source Item whose *subject is binding* — the generated post must be about the
-same story, people, and events. Tweets and articles are Factual Sources.
-Confusing the two tells the model to treat a Smithsonian article as a writing
+same story, people, and events. Tweets and RSS items are Factual Sources.
+Confusing the two tells the model to treat a Smithsonian piece as a writing
 sample.
 
 **Cart**:

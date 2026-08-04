@@ -15,21 +15,21 @@ def _now() -> datetime:
 
 
 class SourceKind(StrEnum):
-    RIVAL_POST = "rival_post"
+    COMPETITOR_POST = "competitor_post"
     TWEET = "tweet"
-    ARTICLE = "article"
+    RSS = "rss"
 
     @property
     def is_factual(self) -> bool:
         """Whether the *subject* binds the writer.
 
-        A rival post is borrowed for tone only; a tweet or article must produce
-        a post about that same story. Reversing this tells the model to treat a
-        Smithsonian article as a writing sample. Derived, never stored — a
+        A competitor post is borrowed for tone only; a tweet or an RSS item must
+        produce a post about that same story. Reversing this tells the model to
+        treat a Smithsonian piece as a writing sample. Derived, never stored — a
         stored copy is a second truth, and when it drifts the model still
         returns confident, well-formed output about the wrong story.
         """
-        return self is not SourceKind.RIVAL_POST
+        return self is not SourceKind.COMPETITOR_POST
 
 
 class DraftStatus(StrEnum):
@@ -85,7 +85,7 @@ class SourceItemBase(SQLModel):
     """A Source Item's content, with no identity yet.
 
     This is what an adapter returns and what the client posts back. It exists
-    because **browsing does not write**: an article or tweet is fetched live and
+    because **browsing does not write**: an RSS item or tweet is fetched live and
     shown in the grid long before — and usually without ever — becoming a row,
     so the unsaved shape needs a type of its own rather than a `SourceItem` with
     a fake id.
@@ -98,12 +98,12 @@ class SourceItemBase(SQLModel):
     kind: SourceKind = Field(index=True)
     external_id: str
     author: str | None = None
-    """Rival page name, X handle, or publisher."""
+    """Competitor page name, X handle, or publisher."""
 
     synced_for_page_id: int | None = Field(
         default=None, foreign_key="page.id", index=True
     )
-    """Whose competitor set this belongs to. rival_post only."""
+    """Whose competitor set this belongs to. competitor_post only."""
 
     text: str = ""
     url: str | None = None
@@ -113,7 +113,7 @@ class SourceItemBase(SQLModel):
     reactions: int | None = None
     comments: int | None = None
     shares: int | None = None
-    """Null for tweets and articles. Reactions is the default sort on Rivals."""
+    """Null for tweets and RSS items. Reactions is the default sort on Competitors."""
 
 
 class SourceItem(SourceItemBase, table=True):
@@ -121,7 +121,7 @@ class SourceItem(SourceItemBase, table=True):
 
     __tablename__ = "source_item"
     __table_args__ = (
-        # Ticking the same article twice must not create a second row.
+        # Ticking the same RSS item twice must not create a second row.
         UniqueConstraint("kind", "external_id", name="uq_source_item_kind_external"),
     )
 

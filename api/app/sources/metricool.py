@@ -1,14 +1,14 @@
-"""Rival posts, from Metricool's competitor analytics.
+"""Competitor posts, from Metricool's competitor analytics.
 
-The one source kind written on arrival. Rivals are configured in Metricool, not
+The one source kind written on arrival. Competitors are configured in Metricool, not
 here, so there is nothing live to browse and nothing to tick — a sync either
 found posts or it did not (see data-model.md, "What was considered and
-rejected", for why there is no `rival` table).
+rejected", for why there is no `competitor` table).
 
 One endpoint does the work. `/v2/analytics/competitors/facebook/posts` is
 already scoped to a blog's competitor set, so a single call returns every
-rival's posts for one of our Pages — the old client fetched the same payload and
-then filtered it down to one rival at a time, because its UI browsed rivals
+competitor's posts for one of our Pages — the old client fetched the same payload and
+then filtered it down to one competitor at a time, because its UI browsed them
 individually (`metricoolService.ts:1046`). Ours does not, so it keeps them all.
 """
 
@@ -17,16 +17,15 @@ from datetime import datetime, timedelta, timezone
 import httpx
 
 from app.models import Page, SourceItemBase, SourceKind
-from app.settings import settings
+from app.settings import settings, sources
 
 BASE = "https://app.metricool.com/api"
-
-LOOKBACK_DAYS = 7
-"""Matches the old `COMPETITOR_POSTS_LOOKBACK_DAYS`. A rival post is a style
-sample, not news, but a stale grid is a grid nobody opens."""
+"""Not configurable. Changing it means changing the response parsing below, so
+exposing it would offer an edit that cannot safely be made."""
 
 FETCH_LIMIT = 500
-"""What we ask Metricool for. The window, not the grid — see `MAX_ITEMS`."""
+"""What we ask Metricool for — the window, not the grid. Bounds the request
+rather than the display, so it belongs with the code that makes the request."""
 
 
 class MetricoolError(RuntimeError):
@@ -71,7 +70,7 @@ def _published_at(row: dict) -> datetime | None:
 
     `creationDate.dateTime` is a *naive* local timestamp in whatever zone the
     Metricool account reports — Europe/Madrid on this one, regardless of the
-    `timezone` parameter we send. Reading it as UTC puts every rival post two
+    `timezone` parameter we send. Reading it as UTC puts every competitor post two
     hours out, which is invisible until the grid sorts wrongly. `created` is
     epoch milliseconds and has no such ambiguity.
     """
@@ -83,7 +82,7 @@ def _published_at(row: dict) -> datetime | None:
 
 def _to_source_item(row: dict, page_id: int) -> SourceItemBase:
     return SourceItemBase(
-        kind=SourceKind.RIVAL_POST,
+        kind=SourceKind.COMPETITOR_POST,
         external_id=str(row.get("postId") or ""),
         author=row.get("ownerDisplayName") or row.get("ownerScreenName"),
         synced_for_page_id=page_id,
@@ -97,12 +96,12 @@ def _to_source_item(row: dict, page_id: int) -> SourceItemBase:
     )
 
 
-def fetch_rival_posts(
-    page: Page, days: int = LOOKBACK_DAYS, timeout: float = 20.0
+def fetch_competitor_posts(
+    page: Page, days: int | None = None, timeout: float = 20.0
 ) -> list[SourceItemBase]:
-    """Every rival post in the window, for one Page's competitor set.
+    """Every competitor post in the window, for one Page's competitor set.
 
-    Ordered by reactions, which is the Rivals tab's default sort and the only
+    Ordered by reactions, which is the Competitors tab's default sort and the only
     metric populated on effectively every row.
 
     Raises:
@@ -112,7 +111,12 @@ def fetch_rival_posts(
         raise MetricoolError(f"{page.name} has no metricool_blog_id to sync against")
 
     with httpx.Client(timeout=timeout) as client:
-        rows = _get(client, "/posts", page.metricool_blog_id, days)
+        rows = _get(
+            client,
+            "/posts",
+            page.metricool_blog_id,
+            days if days is not None else sources.competitors.lookback_days,
+        )
 
     assert page.id is not None
     items = [
@@ -126,8 +130,8 @@ def fetch_rival_posts(
     return items
 
 
-def fetch_rivals(page: Page, timeout: float = 20.0) -> list[dict]:
-    """The rival list itself. Read live, never stored (ADR-0001's logic).
+def fetch_competitors(page: Page, timeout: float = 20.0) -> list[dict]:
+    """The competitor list itself. Read live, never stored (ADR-0001's logic).
 
     Not on the HTTP surface — the Sources screen shows posts, not pages. It is
     here because it is the one call that answers "is this Page's Metricool
@@ -138,12 +142,12 @@ def fetch_rivals(page: Page, timeout: float = 20.0) -> list[dict]:
         raise MetricoolError(f"{page.name} has no metricool_blog_id to sync against")
 
     with httpx.Client(timeout=timeout) as client:
-        rows = _get(client, "", page.metricool_blog_id, LOOKBACK_DAYS)
+        rows = _get(client, "", page.metricool_blog_id, sources.competitors.lookback_days)
 
     return [
         {
             "provider_id": str(row.get("providerId") or ""),
-            "name": row.get("displayName") or row.get("screenName") or "Rival",
+            "name": row.get("displayName") or row.get("screenName") or "Competitor",
             "followers": row.get("followers"),
         }
         for row in rows

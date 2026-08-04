@@ -1,13 +1,15 @@
-"""Articles, from seven curated feeds.
+"""RSS items, from a Page's curated feeds.
 
-Curated in code rather than managed in a UI: the list churns slowly, and every
-candidate has to be probed before it earns a place, which is not a thing to do
-from a form. There is no `feed` table for the same reason nothing points at one
-— see data-model.md, "What was considered and rejected".
+Which feeds, and how wide a window, live in
+[`config/sources.yml`](../../config/sources.yml) — curated rather than managed
+in a UI, because the list churns slowly and every candidate has to be probed
+before it earns a place, which is not a thing to do from a form. There is no
+`feed` table for the same reason nothing points at one; see data-model.md,
+"What was considered and rejected".
 
 Browsing does not write. This module only ever *returns* items; they become rows
 when the operator ticks them, which is what keeps `source_item` from filling
-with hundreds of unread articles.
+with hundreds of unread items.
 """
 
 from concurrent.futures import ThreadPoolExecutor
@@ -21,58 +23,11 @@ import feedparser
 import httpx
 
 from app.models import SourceItemBase, SourceKind
-
-@dataclass(frozen=True)
-class Feed:
-    name: str
-    url: str
-
-
-CURATED_FEEDS = [
-    # 31 items, 179-char summaries, every item imaged.
-    Feed("Smithsonian Magazine", "https://www.smithsonianmag.com/rss/history/"),
-    # 50 items, every item imaged. The archaeology tag, not /all.
-    Feed("Live Science", "https://www.livescience.com/feeds/tag/archaeology"),
-    # Longest summaries here at 357 chars, but carries no images at all.
-    Feed(
-        "Science Daily",
-        "https://www.sciencedaily.com/rss/fossils_ruins/archaeology.xml",
-    ),
-    # 1882-char bodies — by a wide margin the richest source in this list.
-    Feed("Atlas Obscura", "https://www.atlasobscura.com/feeds/latest"),
-    # Only 5 items, but 420-char summaries and unmixed history.
-    Feed("The History Blog", "http://www.thehistoryblog.com/feed"),
-    Feed("HistoryExtra", "https://www.historyextra.com/feed/"),
-    # Highest volume of the keepers at 100 items.
-    Feed("All That's Interesting", "https://allthatsinteresting.com/feed"),
-]
-"""Named here rather than taken from each feed's own `<title>`, which is written
-for a feed reader and reads badly as a byline: "History | smithsonianmag.com",
-"Archaeology News -- ScienceDaily", "Latest from Live Science in Archaeology".
-`author` is what the card shows and what reaches the writer as the publisher, so
-it is curated exactly like the list itself.
-
-Probed 2026-07-31 in the old repo; every entry returned 100% summary
-coverage. Rejected there, and not worth re-testing: Smithsonian Smart News (277
-items, would swamp the cap on recency alone), Live Science /all and ScienceDaily
-"Fossils & Ruins" (superseded by the tag feeds they overlap), Archaeology
-Magazine (101-char summaries are thin fuel), Ancient Origins / HeritageDaily /
-GreekReporter (403 even with a User-Agent).
-
-Google News is excluded by design: its items carry no summary and an
-unresolvable redirect link, which is weak input for a Factual Source that has to
-be written about accurately."""
-
-SINCE_DAYS = 7
-"""These publishers cover history, where a five-day-old story is still good post
-material. A tighter window buys freshness the beat does not need and empties the
-grid on a quiet weekend, which reads as broken."""
-
-MAX_ITEMS = 50
-"""The grid is browsed, not paged."""
+from app.settings import Feed, sources
 
 USER_AGENT = "Mozilla/5.0 (compatible; fb-agent/1.0)"
-"""Several publisher feeds 403 a request that sends none."""
+"""Several publisher feeds 403 a request that sends none. Not configurable: it
+is part of how the fetch works, not a thing an operator would tune."""
 
 
 @dataclass
@@ -82,7 +37,7 @@ class FeedFailure:
 
 
 @dataclass
-class ArticleFeed:
+class RssFeed:
     """Items, *and* the feeds that did not answer.
 
     The failures are returned rather than logged because a feed that rots is
@@ -164,7 +119,7 @@ def _to_source_item(entry, publisher: str | None) -> SourceItemBase | None:
         summary = ""
 
     return SourceItemBase(
-        kind=SourceKind.ARTICLE,
+        kind=SourceKind.RSS,
         # The link, not the feed's guid. It is what the operator can open, and
         # what `is_curated_url` is checked against on the way back in — a guid
         # is often an opaque internal id that answers neither.
@@ -186,12 +141,17 @@ def _fetch_one(client: httpx.Client, feed: Feed) -> list[SourceItemBase]:
     return [item for item in items if item is not None]
 
 
-def fetch_articles(timeout: float = 10.0) -> ArticleFeed:
-    """Every curated feed, merged, deduplicated, newest first.
+def fetch_rss(page_name: str, timeout: float = 10.0) -> RssFeed:
+    """Every feed configured for this Page, merged, deduplicated, newest first.
 
     Feeds break often — dead paths, 403s and hangs are all routine — so a
     failing feed is collected rather than raised, and never sinks the batch.
+
+    Raises:
+        KeyError: the Page has no feeds in `config/sources.yml`. Loud, because
+            an empty grid is indistinguishable from a quiet week.
     """
+    feeds = sources.feeds_for(page_name)
     results: list[SourceItemBase] = []
     failures: list[FeedFailure] = []
 
@@ -206,14 +166,14 @@ def fetch_articles(timeout: float = 10.0) -> ArticleFeed:
         except Exception as error:  # noqa: BLE001 — one bad feed must not sink the rest
             return feed, error
 
-    with ThreadPoolExecutor(max_workers=len(CURATED_FEEDS)) as pool:
-        for feed, outcome in pool.map(load, CURATED_FEEDS):
+    with ThreadPoolExecutor(max_workers=len(feeds)) as pool:
+        for feed, outcome in pool.map(load, feeds):
             if isinstance(outcome, Exception):
                 failures.append(FeedFailure(feed.url, _describe(outcome)))
             else:
                 results.extend(outcome)
 
-    return ArticleFeed(items=_merge(results), failures=failures)
+    return RssFeed(items=_merge(results), failures=failures)
 
 
 def _describe(error: Exception) -> str:
@@ -230,7 +190,7 @@ def _merge(items: list[SourceItemBase]) -> list[SourceItemBase]:
     Deduplicated on url *and* again on normalised title, because the same story
     routinely runs in several of these feeds under different URLs.
     """
-    cutoff = datetime.now(timezone.utc) - timedelta(days=SINCE_DAYS)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=sources.rss.since_days)
     seen: set[str] = set()
     merged: list[SourceItemBase] = []
 
@@ -247,18 +207,19 @@ def _merge(items: list[SourceItemBase]) -> list[SourceItemBase]:
         key=lambda item: item.published_at or datetime.min.replace(tzinfo=timezone.utc),
         reverse=True,
     )
-    return merged[:MAX_ITEMS]
-
-
-_CURATED_HOSTS = {urlsplit(feed.url).hostname for feed in CURATED_FEEDS}
+    return merged[: sources.rss.max_items]
 
 
 def is_curated_url(url: str | None) -> bool:
-    """Whether a posted article actually came from the curated list.
+    """Whether a posted item actually came from a configured feed.
 
-    The Articles tab is live, so the client posts the item body back when one is
+    The RSS tab is live, so the client posts the item body back when one is
     ticked — the server holds no copy to compare against. Without this check
     `POST /sources` accepts arbitrary text and hands it to the writer, and
     "fully curated" is an intention rather than a property.
+
+    Checked against every Page's hosts, not one Page's, because an RSS item is
+    not tied to a Page and `POST /sources` has none to check against. The
+    question it answers is "is this one of ours".
     """
-    return bool(url) and urlsplit(url).hostname in _CURATED_HOSTS
+    return bool(url) and urlsplit(url).hostname in sources.curated_hosts

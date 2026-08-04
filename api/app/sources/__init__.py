@@ -1,6 +1,6 @@
 """Three adapters, one shape.
 
-Rival posts, tweets and articles arrive over three unrelated protocols and
+Competitor posts, tweets and RSS items arrive over three unrelated protocols and
 converge on `SourceItemBase`. Generation never learns which adapter produced
 one — it asks `kind.is_factual`, which is what decides whether the subject binds
 the writer.

@@ -9,12 +9,13 @@ from datetime import datetime, timezone
 import pytest
 
 from app.models import SourceKind
+from app.settings import sources
 from app.sources import metricool, rss, x
 
 # --- Metricool -------------------------------------------------------------
 
 # One real row from /v2/analytics/competitors/facebook/posts, trimmed.
-RIVAL_ROW = {
+COMPETITOR_ROW = {
     "pageId": "117997197937838",
     "postId": "117997197937838_989827367419507",
     "text": "  Gander, Newfoundland, before the war.  ",
@@ -31,10 +32,10 @@ RIVAL_ROW = {
 }
 
 
-def test_a_rival_post_maps_onto_the_shared_shape():
-    item = metricool._to_source_item(RIVAL_ROW, page_id=1)
+def test_a_competitor_post_maps_onto_the_shared_shape():
+    item = metricool._to_source_item(COMPETITOR_ROW, page_id=1)
 
-    assert item.kind is SourceKind.RIVAL_POST
+    assert item.kind is SourceKind.COMPETITOR_POST
     assert item.external_id == "117997197937838_989827367419507"
     assert item.author == "TerrifyingMyths"
     assert item.synced_for_page_id == 1
@@ -46,10 +47,10 @@ def test_published_at_comes_from_the_epoch_not_the_local_string():
     """`creationDate.dateTime` is naive local time in the *account's* zone.
 
     It reads 05:33:19 with a `timezone` of Europe/Madrid regardless of the
-    timezone parameter the request sends. Taking it as UTC puts every rival post
+    timezone parameter the request sends. Taking it as UTC puts every competitor post
     two hours out, which is invisible until the grid sorts wrongly.
     """
-    item = metricool._to_source_item(RIVAL_ROW, page_id=1)
+    item = metricool._to_source_item(COMPETITOR_ROW, page_id=1)
 
     assert item.published_at == datetime(2026, 8, 4, 3, 33, 19, tzinfo=timezone.utc)
 
@@ -59,7 +60,7 @@ def test_a_page_with_no_blog_id_fails_loudly():
 
     page = Page(name="X", facebook_page_id="1", metricool_blog_id=None)
     with pytest.raises(metricool.MetricoolError, match="metricool_blog_id"):
-        metricool.fetch_rival_posts(page)
+        metricool.fetch_competitor_posts(page)
 
 
 # --- RSS -------------------------------------------------------------------
@@ -95,10 +96,10 @@ def entries():
     return feedparser.parse(FEED_XML).entries
 
 
-def test_an_article_carries_its_headline_and_summary(entries):
+def test_an_rss_item_carries_its_headline_and_summary(entries):
     item = rss._to_source_item(entries[0], "Smithsonian Magazine")
 
-    assert item.kind is SourceKind.ARTICLE
+    assert item.kind is SourceKind.RSS
     # The link, not the guid — the guid here is an opaque internal tag that the
     # operator cannot open and `is_curated_url` cannot check.
     assert item.external_id == "https://www.smithsonianmag.com/history/ocean-floor-180987410/"
@@ -140,14 +141,21 @@ def test_only_curated_hosts_pass_the_guard():
     assert not rss.is_curated_url(None)
 
 
-def test_every_curated_feed_host_is_one_an_article_can_come_from():
-    """The guard compares an *article* URL against *feed* hosts.
+def test_every_curated_feed_host_is_one_an_item_can_come_from():
+    """The guard compares an *item* URL against *feed* hosts.
 
     That only holds while each publisher serves both from one host — a feed
-    moved to feedburner would silently start refusing its own articles.
+    moved to feedburner would silently start refusing its own items.
     """
-    for feed in rss.CURATED_FEEDS:
-        assert rss.is_curated_url(feed.url), feed.name
+    for feeds in sources.feeds.values():
+        for feed in feeds:
+            assert rss.is_curated_url(feed.url), feed.name
+
+
+def test_a_page_with_no_feeds_configured_raises():
+    """Rather than returning an empty grid, which reads as a quiet week."""
+    with pytest.raises(KeyError, match="No feeds configured"):
+        sources.feeds_for("A Page That Does Not Exist")
 
 
 def test_merge_drops_stale_items_and_duplicate_stories():
@@ -158,10 +166,10 @@ def test_merge_drops_stale_items_and_duplicate_stories():
 
     merged = rss._merge(
         [
-            SourceItemBase(kind=SourceKind.ARTICLE, external_id="a", text="Same story\n\none", published_at=now),
+            SourceItemBase(kind=SourceKind.RSS, external_id="a", text="Same story\n\none", published_at=now),
             # Same story, different URL — routine across these seven feeds.
-            SourceItemBase(kind=SourceKind.ARTICLE, external_id="b", text="Same story\n\ntwo", published_at=now),
-            SourceItemBase(kind=SourceKind.ARTICLE, external_id="c", text="Ancient", published_at=old),
+            SourceItemBase(kind=SourceKind.RSS, external_id="b", text="Same story\n\ntwo", published_at=now),
+            SourceItemBase(kind=SourceKind.RSS, external_id="c", text="Ancient", published_at=old),
         ]
     )
 

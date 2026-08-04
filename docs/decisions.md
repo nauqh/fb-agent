@@ -145,7 +145,7 @@ failure, capped at two retries. Same call count in the happy path.
 ## The model is three tables
 
 `page`, `source_item`, `draft`. Down from eight tables plus a 54-column
-templates table. A `rival` table, a `page_rival` join, a `feed` table, a
+templates table. A `competitor` table, a `page_competitor` join, a `feed` table, a
 `generation_event` table and a cart table were each designed and then rejected —
 [data-model.md](data-model.md#what-was-considered-and-rejected) records why, and
 the production evidence that settled each one.
@@ -185,7 +185,7 @@ the full before/after table are in
 There is effectively nothing to migrate. `scripts/seed_page.py` inserts four
 constants for History Retraced; the prompts were lifted into `api/prompts/` once,
 by hand, and are now source files. The other 49 template columns are dropped.
-Rivals re-sync from Metricool. Source Items are transient by nature. The 464
+Competitors re-sync from Metricool. Source Items are transient by nature. The 464
 drafts stay behind — 237 are already published and Metricool holds that record.
 
 **The watermark becomes a committed file.** In the current Supabase project every
