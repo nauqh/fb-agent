@@ -36,8 +36,15 @@ export default function SourcesScreen() {
     async (item: LiveSourceItem) => {
       const known = savedIds[item.external_id];
       if (known !== undefined) {
-        // Already a row. Untick drops it from the Cart only — the row stays,
-        // because a Draft generated from it points back at it.
+        // Untick drops the id from the Cart; the row stays, and if nothing was
+        // ever generated from it the row is an orphan. There is no DELETE, so
+        // this leaks — tick ten, untick nine, generate one, and nine rows
+        // remain referenced by nothing.
+        //
+        // Known and accepted until Phase 3, which moves the write to
+        // POST /generate and removes this whole path along with `savedIds`.
+        // See docs/plan.md, "Ticking stops writing". Not worth a DELETE route
+        // that would be deleted again a week later.
         if (cart.has(known)) cart.remove(known);
         else cart.add(known);
         return;

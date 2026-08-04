@@ -170,13 +170,52 @@ fixtures until Phase 3.
   `draft.warnings`.
 - `generate.py` — the run. `POST /generate` inserts `status='generating'` rows
   and returns ids; a `BackgroundTask` fills them; progress columns advance.
+- **The Cart stops writing. `POST /generate` becomes the only write point** —
+  see below. `GET /sources?ids=` and the client's `savedIds` map both go away.
 - **Generate** and **Review** screens, text only, polling `GET /drafts/{id}`.
 
 **Done when:** a cart of three sources yields three drafts, and a deliberately
 provoked violation (a hook ending in `?`) is visibly retried and corrected
-rather than warned about.
+rather than warned about. Ticking ten RSS items, unticking nine and generating
+leaves **one** `source_item` row, not ten.
 
 This is the phase that decides whether the rebuild is worth finishing.
+
+### Ticking stops writing
+
+Today a tick on an RSS item or a tweet is a `POST /sources`. Untick only drops
+the id from the Cart — there is no `DELETE`, so the row survives with nothing
+referencing it. Tick ten, untick nine, generate one, and nine permanent orphans
+remain: the junk accumulation "browsing does not write" exists to prevent,
+arriving slowly instead of quickly. The comment defending it claimed "a Draft
+generated from it points back at it", which is exactly false for the rows that
+become orphans.
+
+The deeper fault is that **one gesture means two things**. For a competitor post
+the sync owns the row and a tick is a local cart add; for an RSS item the tick
+*is* the write. Same checkbox, different semantics, different failure modes.
+
+So the Cart carries the item instead of creating it, and `POST /generate` writes
+what it is about to use. Nothing is saved that is not used, and the rule becomes
+true as stated rather than nearly true.
+
+Consequences, all of them simplifications: ticking becomes instant and offline,
+with no spinner and no failure path; `savedIds` disappears, taking with it the
+bug where a ticked item renders unticked after navigating away and back;
+`GET /sources?ids=` disappears, because the Cart already holds what it renders;
+and the curated-feed guard moves to generate, beside everything else it protects.
+
+The asymmetry stays visible in the type, because it is real: **a body may be
+sent only for a kind the client is allowed to create.** RSS items and tweets go
+by value and are validated on arrival. Competitor posts go by id — the sync owns
+them, and there is no equivalent of `is_curated_url` for a Facebook post, so
+accepting a competitor body would accept arbitrary text.
+
+This changes the contract [design.md](design.md#http-surface) records for
+`POST /generate`, which is why it is settled here before the code exists. Doing
+it now is free; patching it today with a `DELETE /sources/{id}` route, its
+foreign-key guard, its tests and its docs would mean building all of that a week
+before deleting it.
 
 ---
 

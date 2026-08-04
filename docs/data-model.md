@@ -262,13 +262,28 @@ client. Nothing about it needs to survive that is not already a row.
 
 ## Ingest rule: browsing does not write
 
-Tweets and RSS items are fetched live and become rows **only when ticked into the
-Cart**. This keeps the table from filling with hundreds of unread items. The
-old RSS design was forced into this because the generate endpoint accepts ids
-only (`prd-rss-to-facebook.md` §2); it is kept here on merit.
+Tweets and RSS items are fetched live and become rows **only when they are
+generated from**. This keeps the table from filling with hundreds of unread
+items.
 
 Competitor posts are the exception — they arrive by Metricool sync, so they are
-written on arrival.
+written on arrival. It is a real exception rather than a leak: nothing was
+browsed to produce them, and the sync owns their lifecycle.
+
+**The write happens at generate, not at tick.** Phase 2 shipped it at tick,
+which left a hole: untick removes the id from the Cart but there is no `DELETE`,
+so an unticked row survives referenced by nothing. It also gave one gesture two
+meanings — a tick on a competitor post is a local cart add, a tick on an RSS
+item is a network write. Phase 3 moves the write to `POST /generate`; the
+reasoning and its consequences are in [plan.md](plan.md#ticking-stops-writing).
+
+A Source Item is worth contrasting with a Draft here, because the two are saved
+for opposite reasons. A Draft is **load-bearing**: it is the job record, it holds
+paid model output, review state and what Quota counts, and it cannot be
+ephemeral. A Source Item is **bookkeeping** — a pointer to something that exists
+elsewhere and can be re-fetched, kept only so a Draft can say where it came from.
+That is why a Source Item need not exist until a Draft points at it, and why a
+Draft must exist from the moment its run starts.
 
 ## Flow
 

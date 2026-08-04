@@ -215,13 +215,13 @@ GET    /pages                       one row in v1
 GET    /pages/{id}
 PATCH  /pages/{id}                  quota, watermark (prompts are files)
 
-GET    /sources?ids=1,2,3           resolve Cart ids back to rows
+GET    /sources?ids=1,2,3           resolve Cart ids back to rows (goes in Phase 3)
 GET    /sources/competitors?page_id=  Metricool sync, then rows
 GET    /sources/rss?page_id=          the Page's curated feeds, live
-POST   /sources                     persist ticked items → ids
+POST   /sources                     persist ticked items → ids (goes in Phase 3)
 GET    /sources/tweet?url=          single lookup, live, unsaved
 
-POST   /generate                    {source_item_ids, page_ids} → draft ids
+POST   /generate                    {sources, page_ids} → draft ids; the only write
 GET    /drafts?status=&page_id=
 GET    /drafts/{id}                 poll target
 PATCH  /drafts/{id}                 operator edits
