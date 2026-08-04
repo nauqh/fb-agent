@@ -9,15 +9,26 @@ and those copies went stale — they still said "HERO PHOTO (~75% height)" and
 panel that grows and a logo at natural aspect ratio. History Retraced's stored
 overlay prompt carries that same stale block a second time, at offset 903.
 
-As files they diff, review and revert. One page, one set of files:
+As files they diff, review and revert. One page, one file per prompt:
 
-    prompts/system.txt        writer voice and post structure
-    prompts/overlay.txt       how to write the panel text and pick highlights
-    prompts/image.txt         this page's hero photography style
-    prompts/image_rules.txt   card layers + hero rules, appended to image.txt
+    prompts/system.txt     writer voice and post structure
+    prompts/overlay.txt    how to write the panel text and pick highlights
+    prompts/image.txt      hero photography style, card layers, exclusions
 
 Read on every call — they are ~5KB total, and editing a prompt should not
 require a restart.
+
+`image.txt` was two files until the split was measured against its own rule.
+The claim was that hero *style* varies by page while the *card contract* does
+not, so they should live apart — but 7 of the 19 lines in the shared half were
+History Retraced's taste, not the card's geometry: historical reenactment,
+period-accurate dress, no surreal metaphors, mid-shot at 40–60% of frame. The
+old system proves those are not universal, because it sent that same block to
+Hot Tub Timeout and to a Bible Focus page whose own style block asked for
+reverent fine-art photography the shared rules then forbade. A boundary nobody
+can place a line on correctly is not a boundary; it had already caused
+photorealism, mid-shot and documentary to be stated twice. Merging changed no
+bytes — the concatenation this function used to do is now the file.
 
 ## Placeholders
 
@@ -59,5 +70,4 @@ def overlay_prompt(layout: Layout) -> str:
 
 
 def image_prompt(layout: Layout) -> str:
-    """This page's visual style, then the rules about what it must not draw."""
-    return f"{_read('image.txt', layout)}\n\n{_read('image_rules.txt', layout)}"
+    return _read("image.txt", layout)

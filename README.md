@@ -25,8 +25,8 @@ previous Supabase project, [provenance here](docs/data-model.md#layout-is-config
 
 ## Prompts
 
-`api/prompts/*.txt` — `system`, `overlay`, `image`, and the shared `image_rules`.
-Edit them in place; they are read on every generation, so no restart. `{panel_pct}`
+`api/prompts/*.txt` — `system`, `overlay`, `image`. One per prompt, one loader
+each. Edit them in place; they are read on every generation, so no restart. `{panel_pct}`
 and `{highlight_color}` are filled from `config/layout.yml`. Do not paste those
 numbers in literally — that is precisely how the old system's prompts came to
 promise a 25% panel while rendering 20%.
