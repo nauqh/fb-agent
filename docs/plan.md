@@ -217,6 +217,32 @@ it now is free; patching it today with a `DELETE /sources/{id}` route, its
 foreign-key guard, its tests and its docs would mean building all of that a week
 before deleting it.
 
+### And competitor posts stop being stored
+
+Once the Cart stops writing, competitor posts are the **last** write-on-browse.
+Drop that too and "browsing does not write" has no exceptions at all.
+
+`GET /sources/competitors` becomes read-through: sync, sort, cap, return. No
+upsert, no `VOLATILE` refresh, no `synced_for_page_id` bookkeeping on rows
+nobody asked for, and no 500-row write to display 60.
+
+Phase 2 measured why this is worth doing. The sync is **5.5s and 1.6MB for 500
+posts**, against a seven-day window that gains roughly **three posts an hour** —
+and Metricool does time out under repeated calls. Phase 2 already stopped
+syncing on every read; this removes the storage the sync existed to fill.
+
+It also settles the trust question the previous section raises. A competitor
+body cannot be accepted from the client — there is no `is_curated_url`
+equivalent for a Facebook post — so `POST /generate` resolves a competitor
+`external_id` by **re-fetching from Metricool** and matching it server-side.
+Authoritative, and it costs one vendor call inside an operation that already
+takes tens of seconds for the model calls.
+
+The row is still written at generate, exactly like an RSS item, so
+`draft.source_item_id` and Draft provenance are unchanged.
+
+**Done when:** browsing any tab, in any order, writes zero rows.
+
 ---
 
 ## Phase 4 — Images

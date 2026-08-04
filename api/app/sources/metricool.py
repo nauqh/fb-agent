@@ -52,11 +52,22 @@ def _params(blog_id: str, days: int) -> dict[str, str]:
 
 
 def _get(client: httpx.Client, path: str, blog_id: str, days: int) -> list[dict]:
-    response = client.get(
-        f"{BASE}/v2/analytics/competitors/facebook{path}",
-        params=_params(blog_id, days),
-        headers=_headers(),
-    )
+    try:
+        response = client.get(
+            f"{BASE}/v2/analytics/competitors/facebook{path}",
+            params=_params(blog_id, days),
+            headers=_headers(),
+        )
+    except httpx.HTTPError as error:
+        # A timeout or a refused connection is still "the sync failed", and the
+        # route turns MetricoolError into a 502. Without this it escapes as an
+        # unhandled ReadTimeout and the operator gets a 500 stack trace instead
+        # of a sentence. This endpoint does time out in practice — it moves
+        # 1.6MB and takes ~5.5s on a good day.
+        raise MetricoolError(
+            f"Metricool {path or '/'} did not answer: {type(error).__name__}"
+        ) from error
+
     if response.is_error:
         raise MetricoolError(
             f"Metricool {path or '/'} failed ({response.status_code}): "

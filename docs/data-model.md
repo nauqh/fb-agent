@@ -266,9 +266,11 @@ Tweets and RSS items are fetched live and become rows **only when they are
 generated from**. This keeps the table from filling with hundreds of unread
 items.
 
-Competitor posts are the exception — they arrive by Metricool sync, so they are
-written on arrival. It is a real exception rather than a leak: nothing was
-browsed to produce them, and the sync owns their lifecycle.
+Competitor posts are the exception today — they arrive by Metricool sync, so
+they are written on arrival. Phase 2 stopped that sync running on every read
+(5.5s and 1.6MB for 500 posts, against a window gaining ~3 an hour); Phase 3
+removes the storage it fills, and then the rule has no exceptions at all. See
+[plan.md](plan.md#and-competitor-posts-stop-being-stored).
 
 **The write happens at generate, not at tick.** Phase 2 shipped it at tick,
 which left a hole: untick removes the id from the Cart but there is no `DELETE`,

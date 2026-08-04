@@ -9,7 +9,7 @@ competitor grid to page through.
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlmodel import Session, select
+from sqlmodel import Session, func, select
 
 from app.db import get_session
 from app.models import Page, SourceItem, SourceItemBase, SourceKind
@@ -62,28 +62,44 @@ def list_sources(
 @router.get("/competitors")
 def get_competitor_posts(
     page_id: int = Query(...),
+    refresh: bool = Query(False, description="Force a Metricool sync"),
     session: Session = Depends(get_session),
 ) -> list[SourceItem]:
-    """Sync this Page's competitor set from Metricool, then return the rows.
+    """Stored competitor posts. Syncs when there are none, or when asked.
 
-    Syncing on every read, with no cooldown. The old client cached for 60
-    seconds (`competitorMetricoolSyncService.ts:22`); one operator opening one
-    tab does not need it, and a cooldown is a thing to add when a bill or a rate
-    limit says so, not before.
+    It used to sync on every read, which cost **5.5s and 1.6MB** for 500 posts
+    to display 60 — against a seven-day window that gains roughly three posts an
+    hour. Two reads ten minutes apart paid six seconds to learn nothing, and the
+    grid was hostage to a vendor API that does sometimes time out.
+
+    So the sync is explicit, matching the Refresh button the RSS tab already
+    has. The empty case still syncs by itself, because a first-run operator
+    should not have to know that a button is what makes the grid work.
+
+    No time-based cooldown. A cooldown guesses at how stale is too stale; the
+    operator looking at the grid knows, and the button is right there.
     """
     page = session.get(Page, page_id)
     if page is None:
         raise HTTPException(status_code=404, detail=f"No page {page_id}")
 
-    try:
-        fetched = metricool.fetch_competitor_posts(page)
-    except metricool.MetricoolError as error:
-        # 502: the failure is upstream, and saying so is what stops the operator
-        # reading an empty grid as "no competitor posted this week".
-        raise HTTPException(status_code=502, detail=str(error)) from error
+    stored = session.exec(
+        select(func.count())
+        .select_from(SourceItem)
+        .where(SourceItem.kind == SourceKind.COMPETITOR_POST)
+        .where(SourceItem.synced_for_page_id == page_id)
+    ).one()
 
-    _upsert(session, fetched, refresh_volatile=True)
-    session.commit()
+    if refresh or stored == 0:
+        try:
+            fetched = metricool.fetch_competitor_posts(page)
+        except metricool.MetricoolError as error:
+            # 502: the failure is upstream, and saying so is what stops the
+            # operator reading an empty grid as "no competitor posted this week".
+            raise HTTPException(status_code=502, detail=str(error)) from error
+
+        _upsert(session, fetched, refresh_volatile=True)
+        session.commit()
 
     rows = session.exec(
         select(SourceItem)
@@ -194,30 +210,52 @@ def _upsert(
     back a body it was shown rather than a fresh read.
     """
     rows: list[SourceItem] = []
-    # Items within one call can collide too (the same story in two feeds), and
-    # the flush that would surface it has not happened yet.
-    pending: dict[tuple[SourceKind, str], SourceItem] = {}
+    # Looked up in one query, not one per item. A competitor sync carries 500
+    # posts, and a lookup each made this route 502 statements.
+    pending = _existing_by_key(session, items)
 
     for item in items:
         key = (item.kind, item.external_id)
-        if key in pending:
-            rows.append(pending[key])
-            continue
+        existing = pending.get(key)
 
-        existing = session.exec(
-            select(SourceItem)
-            .where(SourceItem.kind == item.kind)
-            .where(SourceItem.external_id == item.external_id)
-        ).first()
         if existing is None:
             existing = SourceItem(**item.model_dump())
             session.add(existing)
+            # Items within one call can collide too — the same story in two
+            # feeds — and the flush that would surface it has not happened yet.
+            pending[key] = existing
         elif refresh_volatile:
             for field in VOLATILE:
                 setattr(existing, field, getattr(item, field))
             session.add(existing)
 
-        pending[key] = existing
         rows.append(existing)
 
     return rows
+
+
+_CHUNK = 500
+"""SQLite caps host parameters per statement. The modern default is 32766, but
+older builds ship 999 and this runs on whatever Python bundles."""
+
+
+def _existing_by_key(
+    session: Session, items: list[SourceItemBase]
+) -> dict[tuple[SourceKind, str], SourceItem]:
+    """Rows that already exist, keyed by `(kind, external_id)`.
+
+    Filtered on `external_id` alone and paired up in Python: one indexed `IN`
+    beats a composite match, and an `external_id` colliding across two kinds is
+    not a thing that happens — a Facebook post id is not a feed URL.
+    """
+    wanted = sorted({item.external_id for item in items if item.external_id})
+    found: dict[tuple[SourceKind, str], SourceItem] = {}
+
+    for start in range(0, len(wanted), _CHUNK):
+        chunk = wanted[start : start + _CHUNK]
+        for row in session.exec(
+            select(SourceItem).where(SourceItem.external_id.in_(chunk))  # type: ignore[union-attr]
+        ).all():
+            found[(row.kind, row.external_id)] = row
+
+    return found

@@ -14,6 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getRss, getCompetitorPosts, getTweet, saveSources } from "@/lib/api/sources";
 import type { LiveSourceItem } from "@/lib/fixtures/sources";
 import { useCart } from "@/lib/cart";
+import { emit } from "@/lib/store";
 import { useQuery } from "@/lib/use-query";
 
 /** The Page every competitor set belongs to. One Page in v1, so it is a constant. */
@@ -108,25 +109,58 @@ export default function SourcesScreen() {
 function CompetitorsTab() {
   const cart = useCart();
   const { data, loading } = useQuery(() => getCompetitorPosts(PAGE_ID), []);
+  const [syncing, setSyncing] = useState(false);
 
-  if (loading) return <CardGridSkeleton />;
+  /**
+   * Syncing is the operator's call, not the tab's.
+   *
+   * Opening the tab used to cost ~5.5s and 1.6MB to pull 500 posts and show 60,
+   * against a seven-day window that gains about three an hour. The server syncs
+   * on its own only when it has nothing stored.
+   */
+  async function sync() {
+    setSyncing(true);
+    try {
+      await getCompetitorPosts(PAGE_ID, true);
+      emit();
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Sync failed");
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   return (
     <>
-      <p className="pb-3 text-xs text-muted-foreground">
-        Synced from Metricool, newest window, sorted by reactions. Which pages are Competitors is
-        configured in Metricool — never here.
-      </p>
-      <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
-        {data?.map((item) => (
-          <SourceCard
-            key={item.id}
-            {...item}
-            selected={cart.has(item.id)}
-            onToggle={() => (cart.has(item.id) ? cart.remove(item.id) : cart.add(item.id))}
-          />
-        ))}
+      <div className="flex items-center justify-between gap-3 pb-3">
+        <p className="text-xs text-muted-foreground">
+          Synced from Metricool, sorted by reactions. Which pages are Competitors is configured in
+          Metricool — never here.
+        </p>
+        <Button variant="outline" size="sm" disabled={syncing || loading} onClick={sync}>
+          {syncing ? (
+            <Loader2 className="size-3.5 animate-spin" />
+          ) : (
+            <RefreshCw className="size-3.5" />
+          )}
+          Sync
+        </Button>
       </div>
+
+      {loading ? (
+        <CardGridSkeleton />
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
+          {data?.map((item) => (
+            <SourceCard
+              key={item.id}
+              {...item}
+              selected={cart.has(item.id)}
+              onToggle={() => (cart.has(item.id) ? cart.remove(item.id) : cart.add(item.id))}
+            />
+          ))}
+        </div>
+      )}
     </>
   );
 }

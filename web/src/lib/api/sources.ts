@@ -24,9 +24,23 @@ export type LiveSourceItem = Omit<SourceItem, "id" | "created_at">;
  * that guarantees it.
  */
 
-/** Rows, already synced. The server re-syncs from Metricool on each read. */
-export async function getCompetitorPosts(pageId: number): Promise<SourceItem[]> {
-  return get<SourceItem[]>("/sources/competitors", { page_id: pageId });
+/**
+ * Stored competitor posts.
+ *
+ * `refresh` forces a Metricool sync. Without it the server answers from what it
+ * already has, because a sync costs ~5.5s and 1.6MB to fetch 500 posts against
+ * a seven-day window that gains roughly three an hour — so syncing on every tab
+ * open paid six seconds to learn nothing. The server still syncs by itself when
+ * it has nothing stored.
+ */
+export async function getCompetitorPosts(
+  pageId: number,
+  refresh = false,
+): Promise<SourceItem[]> {
+  return get<SourceItem[]>("/sources/competitors", {
+    page_id: pageId,
+    ...(refresh ? { refresh: "true" } : {}),
+  });
 }
 
 export interface RssFeedResult {

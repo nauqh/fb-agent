@@ -63,6 +63,32 @@ def test_a_page_with_no_blog_id_fails_loudly():
         metricool.fetch_competitor_posts(page)
 
 
+def test_a_timeout_becomes_a_metricool_error(monkeypatch):
+    """The route turns MetricoolError into a 502 and anything else into a 500.
+
+    This endpoint moves 1.6MB and takes ~5.5s on a good day, and it does time
+    out in practice — so an unconverted timeout means the operator gets a stack
+    trace instead of a sentence.
+    """
+    from app.models import Page
+
+    class Client:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return False
+
+        def get(self, *_, **__):
+            raise metricool.httpx.ReadTimeout("timed out")
+
+    monkeypatch.setattr(metricool.httpx, "Client", lambda **_: Client())
+    page = Page(id=1, name="X", facebook_page_id="1", metricool_blog_id="42")
+
+    with pytest.raises(metricool.MetricoolError, match="did not answer: ReadTimeout"):
+        metricool.fetch_competitor_posts(page)
+
+
 # --- RSS -------------------------------------------------------------------
 
 FEED_XML = b"""<?xml version="1.0" encoding="UTF-8"?>

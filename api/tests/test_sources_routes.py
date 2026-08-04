@@ -180,7 +180,7 @@ def test_a_resync_refreshes_the_image_url_and_metrics_but_not_the_text(
     what the operator chose, and a Draft's provenance must not drift.
     """
 
-    def sync(image_url: str, reactions: int, text: str):
+    def sync(image_url: str, reactions: int, text: str, **params):
         monkeypatch.setattr(
             routes.metricool,
             "fetch_competitor_posts",
@@ -195,16 +195,51 @@ def test_a_resync_refreshes_the_image_url_and_metrics_but_not_the_text(
                 )
             ],
         )
-        return client.get("/sources/competitors", params={"page_id": 1}).json()
+        return client.get(
+            "/sources/competitors", params={"page_id": 1, **params}
+        ).json()
 
+    # The first read syncs by itself — there is nothing stored yet.
     sync("https://cdn.example/a.jpg?oe=68000000", 10, "As posted")
-    rows = sync("https://cdn.example/a.jpg?oe=69999999", 4_200, "Edited upstream")
+    rows = sync(
+        "https://cdn.example/a.jpg?oe=69999999", 4_200, "Edited upstream", refresh=True
+    )
 
     assert len(rows) == 1, "a re-sync must not create a second row"
     assert rows[0]["image_url"] == "https://cdn.example/a.jpg?oe=69999999"
     assert rows[0]["reactions"] == 4_200
     assert rows[0]["text"] == "As posted"
     assert _count(engine) == 1
+
+
+def test_a_plain_read_does_not_sync(client, monkeypatch):
+    """5.5s and 1.6MB, for a window that gains ~3 posts an hour.
+
+    The first read has nothing stored and syncs anyway, because a first-run
+    operator should not have to discover that a button is what fills the grid.
+    """
+    calls: list[int] = []
+
+    def counted(page, **_):
+        calls.append(1)
+        return [
+            SourceItemBase(
+                kind=SourceKind.COMPETITOR_POST,
+                external_id="p1",
+                synced_for_page_id=page.id,
+                text="…",
+            )
+        ]
+
+    monkeypatch.setattr(routes.metricool, "fetch_competitor_posts", counted)
+
+    client.get("/sources/competitors", params={"page_id": 1})  # empty -> syncs
+    client.get("/sources/competitors", params={"page_id": 1})  # stored -> does not
+    client.get("/sources/competitors", params={"page_id": 1})
+    assert len(calls) == 1
+
+    client.get("/sources/competitors", params={"page_id": 1, "refresh": True})
+    assert len(calls) == 2
 
 
 def test_ticking_does_not_rewrite_an_existing_row(client, engine, cart):
