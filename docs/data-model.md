@@ -53,17 +53,17 @@ erDiagram
         text facebook_page_id UK "from Metricool"
         text metricool_blog_id
         int daily_quota "per Asia/Ho_Chi_Minh day"
-        text watermark_image_path "null - renders name as text"
+        text watermark_image_path "committed file under api/assets/"
         ts created_at
         ts updated_at
     }
 
     SOURCE_ITEM {
         int id PK
-        text kind "rival_post | tweet | article"
+        text kind "competitor_post | tweet | rss"
         text external_id "post id, tweet id, feed guid"
-        text author "rival name, handle, publisher"
-        int synced_for_page_id FK "rival_post only"
+        text author "competitor name, handle, publisher"
+        int synced_for_page_id FK "competitor_post only"
         text text
         text url
         text image_url
@@ -98,7 +98,7 @@ erDiagram
     }
 ```
 
-`UNIQUE (kind, external_id)` on `SOURCE_ITEM` — ticking the same article twice
+`UNIQUE (kind, external_id)` on `SOURCE_ITEM` — ticking the same RSS item twice
 must not create a second row.
 
 ## Layout is config, not data
@@ -195,9 +195,9 @@ ingest; generation reads `text`, `image_url`, and whether the subject is
 binding. The old system faked a "competitor" parent row for every Twitter handle
 and every RSS feed to fit them into `competitor_posts`.
 
-`reactions`, `comments` and `shares` are null for tweets and articles and stay
-three typed columns anyway: reactions is the *default* sort on the Rivals tab
-(`competitor-panel.tsx:691`), and they are populated in 144–147 of 150 rival
+`reactions`, `comments` and `shares` are null for tweets and RSS items and stay
+three typed columns anyway: reactions is the *default* sort on the Competitors tab
+(`competitor-panel.tsx:691`), and they are populated in 144–147 of 150 competitor
 rows. Production already tried the blob alternative — `competitor_posts.metrics`
 (jsonb) is populated in **0 of 150 rows**.
 
@@ -210,8 +210,8 @@ polls.
 
 | `kind` | Subject | Instruction to the writer |
 |---|---|---|
-| `rival_post` | not binding | borrow tone and structure, pick your own story |
-| `tweet`, `article` | **binding** | write about this *same* story, people, events |
+| `competitor_post` | not binding | borrow tone and structure, pick your own story |
+| `tweet`, `rss` | **binding** | write about this *same* story, people, events |
 
 The old code branches on this at `facebookGenerateGraph.ts:395`, with a comment
 noting that reversing it "tells the model to treat a Smithsonian article as a
@@ -224,15 +224,15 @@ human reads the post.
 
 ## What was considered and rejected
 
-**A `rival` table.** Rejected by ADR-0001's own logic: don't mirror state you
-don't own. All 161 rivals in production came from Metricool sync — **zero manual
+**A `competitor` table.** Rejected by ADR-0001's own logic: don't mirror state you
+don't own. All 161 competitors in production came from Metricool sync — **zero manual
 adds** — and `listCachedCompetitors` was already just a cache with a 60-second
-cooldown (`competitorMetricoolSyncService.ts:22`). The rival list is configured
+cooldown (`competitorMetricoolSyncService.ts:22`). The competitor list is configured
 in Metricool and read live from there. `author` and `external_id` denormalized
 onto `SOURCE_ITEM` cover everything generation and display need.
 
-**A `page_rival` join table.** Rejected on the data: of 92 rival rows carrying a
-real `source_page_id`, there are **92 distinct `external_id`s and zero rivals
+**A `page_competitor` join table.** Rejected on the data: of 92 competitor rows carrying a
+real `source_page_id`, there are **92 distinct `external_id`s and zero competitors
 tracked by more than one page**. Each page has a disjoint competitor set. (The
 apparent duplication in production — 161 rows — is 65 legacy rows with
 `source_page_id = NULL`, predating migration `20260702150000` that added the
@@ -241,8 +241,17 @@ column.) `SOURCE_ITEM.synced_for_page_id` carries the one link that matters.
 **A `feed` table.** Rejected. The argument for it was that configuration in code
 corrupts the data referencing it — which is what happened to `brand_key`. But
 `brand_key` corrupted because *rows pointed at it*. Nothing would point at a
-feed except a `feed_id` FK that exists only because the table exists. Feeds stay
-a Python list; the publisher name lands in `SOURCE_ITEM.author`.
+feed except a `feed_id` FK that exists only because the table exists.
+
+Feeds live in [`api/config/sources.yml`](../api/config/sources.yml), keyed by
+`page.name`, and the publisher name lands in `SOURCE_ITEM.author`. That key is
+the one pointer in the arrangement, so a Page with no entry **raises** rather
+than returning an empty grid — a source that silently stops producing looks
+exactly like a quiet week, which is how the watermark went missing for months.
+
+It is a file rather than a `page` column because a feed list is a list, and
+because it is edited the way the curation actually happens: every candidate is
+probed before it earns a place, which is not a thing to do from a form.
 
 **A `generation_event` table.** Rejected. Progress needs a step and a
 percentage, both columns on `DRAFT`. The old scrolling log was already capped at
@@ -253,20 +262,20 @@ client. Nothing about it needs to survive that is not already a row.
 
 ## Ingest rule: browsing does not write
 
-Tweets and articles are fetched live and become rows **only when ticked into the
-Cart**. This keeps the table from filling with hundreds of unread articles. The
+Tweets and RSS items are fetched live and become rows **only when ticked into the
+Cart**. This keeps the table from filling with hundreds of unread items. The
 old RSS design was forced into this because the generate endpoint accepts ids
 only (`prd-rss-to-facebook.md` §2); it is kept here on merit.
 
-Rival posts are the exception — they arrive by Metricool sync, so they are
+Competitor posts are the exception — they arrive by Metricool sync, so they are
 written on arrival.
 
 ## Flow
 
 ```
-Metricool sync ──> SOURCE_ITEM(kind=rival_post, synced_for_page_id)  [on arrival]
+Metricool sync ──> SOURCE_ITEM(kind=competitor_post, sync'd_page)  [on arrival]
 Tweet URL      ──> SOURCE_ITEM(kind=tweet)                           [on tick]
-Curated feeds  ──> SOURCE_ITEM(kind=article)                         [on tick]
+Curated feeds  ──> SOURCE_ITEM(kind=rss)                             [on tick]
                               │
                     Cart — client-side, just ids
                               │

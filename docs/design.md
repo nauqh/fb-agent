@@ -42,9 +42,10 @@ Two processes, one machine. No queue, no worker, no Redis, no cron — see
 fb-agent/
 ├── api/
 │   ├── config/layout.yml        the one Composed Image form
+│   ├── config/sources.yml       feeds and windows, per Page
 │   ├── app/
 │   │   ├── main.py              FastAPI app, lifespan, static /media
-│   │   ├── settings.py          env + layout.yml → frozen models
+│   │   ├── settings.py          env + both yml files → frozen models
 │   │   ├── db.py                engine, pragmas, session dependency
 │   │   ├── models.py            SQLModel: Page, SourceItem, Draft
 │   │   ├── routes/              pages · sources · generate · drafts
@@ -70,7 +71,7 @@ Seven, each stated as its interface. Everything else is implementation.
 | `HeroImage` | `generate(prompt, w, h) -> bytes` | `google-genai`, model id, safety refusals |
 | `Compositor` | `compose(hero, text, highlights, watermark) -> bytes` | measurement, wrapping, panel geometry, SVG, rasterisation |
 | `MediaStore` | `save(bytes, name) -> url` | where files live and how they become URLs |
-| `Metricool` | `pages()`, `rivals(page)`, `rival_posts(page)` | auth, blog-id resolution, lookback windows |
+| `Metricool` | `pages()`, `competitors(page)`, `competitor_posts(page)` | auth, blog-id resolution, lookback windows |
 | `GenerateRun` | `run(source_ids, page_ids) -> list[draft_id]` | the whole pipeline |
 
 Persistence is **SQLModel** — the table classes in `models.py` are both the
@@ -95,20 +96,23 @@ Phase 1 seed script will run while the dev server is up.
 Three adapters behind one interface, which is what makes the seam genuine rather
 than hypothetical:
 
-- **`MetricoolRivals`** — `fetchMetricoolCompetitors` + `fetchMetricoolCompetitorPosts`,
+- **`MetricoolCompetitors`** — `fetchMetricoolCompetitors` + `fetchMetricoolCompetitorPosts`,
   windowed by a lookback in days. Writes rows on arrival.
 - **`XTweet`** — `https://api.x.com/2`, one tweet resolved from a pasted URL.
-- **`RssFeeds`** — seven curated feeds (Smithsonian, Live Science, Science Daily,
-  Atlas Obscura, The History Blog, HistoryExtra, All That's Interesting), 7-day
-  window, 50 items.
+- **`RssFeeds`** — the Page's curated feeds, read from
+  [`config/sources.yml`](../api/config/sources.yml). Per-page, because the beats
+  do not overlap: History Retraced draws seven (Smithsonian, Live Science,
+  Science Daily, Atlas Obscura, The History Blog, HistoryExtra, All That's
+  Interesting) over a 7-day window, capped at 50 items. A Page with no entry
+  raises rather than showing an empty grid.
 
 They converge on one `SourceItem`, and generation never learns which adapter
 produced one. It asks `is_factual`, which is a pure function of `kind`
 (see [data-model.md](data-model.md#is_factual-is-derived-never-stored)).
 
-The ingest rule — **browsing does not write** — lives here. Tweets and articles
+The ingest rule — **browsing does not write** — lives here. Tweets and RSS items
 are fetched live and become rows only when ticked into the Cart, so the table
-does not fill with hundreds of unread articles.
+does not fill with hundreds of unread items.
 
 ### `Writer` — validation moves inside the interface
 
@@ -211,24 +215,39 @@ GET    /pages                       one row in v1
 GET    /pages/{id}
 PATCH  /pages/{id}                  quota, watermark (prompts are files)
 
-GET    /sources/rivals?page_id=     Metricool sync, then rows
-GET    /sources/articles            curated feeds, live, unsaved
-GET    /sources/tweet?url=          single lookup, live, unsaved
+GET    /sources?ids=1,2,3           resolve Cart ids back to rows
+GET    /sources/competitors?page_id=  Metricool sync, then rows
+GET    /sources/rss?page_id=          the Page's curated feeds, live
 POST   /sources                     persist ticked items → ids
+GET    /sources/tweet?url=          single lookup, live, unsaved
 
 POST   /generate                    {source_item_ids, page_ids} → draft ids
 GET    /drafts?status=&page_id=
 GET    /drafts/{id}                 poll target
 PATCH  /drafts/{id}                 operator edits
 POST   /drafts/{id}/approve
+POST   /drafts/{id}/unapprove       back to review; Approve is reversible in v1
 POST   /drafts/{id}/reject
-POST   /drafts/{id}/regenerate-image
+POST   /drafts/{id}/recomposite     redraw the panel over the stored hero — free
+POST   /drafts/{id}/regenerate-image  new hero, then recomposite — a paid call
 
 GET    /media/{path}                static
 ```
 
 `hero_image_path` and `composed_image_path` are stored separately so
-regenerating the overlay after an edit does not re-pay for image generation.
+regenerating the overlay after an edit does not re-pay for image generation —
+which is why the two operations are **two routes**. Collapsing them into one
+hides the price difference from the only screen that could show it, and the
+cheap one is the common case: every overlay edit needs it.
+
+`regenerate-image` also clears `error`, because a refused hero is the one failure
+that leaves a Draft complete except for its image, and the prompt it was refused
+for is `image_prompt` — an operator-editable field on `PATCH`, or the row is a
+dead end.
+
+`unapprove` exists because nothing publishes in v1, so Approve is a queue
+movement rather than a commitment. It is also what makes the Quota advisory:
+an approved Draft can come back.
 
 ## Configuration
 
@@ -248,6 +267,64 @@ Four tiers, and the split is deliberate:
   `fix(gemini): replace retired image fallback model`.
 - **`page` rows** — identity and publishing policy: name, the two external ids,
   quota, watermark file.
+
+### The three prompt files
+
+Two models are prompted — the text writer and the hero image model. One file per
+prompt, one loader each.
+
+| File | Model | What it does |
+|---|---|---|
+| `system.txt` | text | The post: hook ≤65 words no questions, recap of ≤5 emoji-led points, first comment with birth/death years and no meta-phrases |
+| `overlay.txt` | text | The panel copy, then 5–8 short substrings quoted verbatim out of it |
+| `image.txt` | image | How the photo should look, which layer to draw, and what must not appear in it |
+
+**`overlay.txt` is a contract with the compositor, not a style note.** The
+writer produces the panel text *and then quotes pieces of its own text back* —
+it is not searching text it was given, and it must not paraphrase. Highlighting
+is a substring match, so a phrase off by one character silently renders no gold.
+The prompt therefore demands verbatim copies, and demands them short (1–4 words:
+years, names, places) because a whole clause in gold emphasises nothing. The
+colour it names is `{highlight_color}`, substituted so it cannot disagree with
+what is painted.
+
+**`image.txt` also carries a contract with the card**, and that is why it is one
+file rather than two. It tells the model the panel takes `{panel_pct}`% from the
+bottom, that the watermark lands top-right, and that layers 2–3 are drawn in
+code — so it must leave room and draw neither.
+
+It was two files, on the theory that hero *style* is the page's taste while the
+*card contract* is universal, so page two would fork the first and share the
+second. Measured against the actual text, the theory did not hold: **7 of the 19
+lines in the shared half were History Retraced's taste** — historical
+reenactment, period-accurate dress, no surreal metaphors, mid-shot filling
+40–60% of frame. The old system is the proof, because it sent exactly that block
+to Hot Tub Timeout, and to a Bible Focus page whose own style block asked for
+reverent fine-art photography that the shared rules then forbade.
+
+A boundary nobody can place a line on correctly is not a boundary, and this one
+had already cost something: photorealistic-not-illustration, mid-shot, and
+documentary/reenactment were each stated twice, once on either side of it. The
+merge changed no bytes — the concatenation `image_prompt()` used to perform is
+now simply the file — so it deletes a seam without touching a prompt. Whether
+the surviving repetition helps the image model is a Phase 4 question, to be
+answered by rendering rather than by reasoning.
+
+This is the same call as `page` + `page_style` in
+[decisions.md](decisions.md): a strictly 1:1 split buys nothing and rebuilds the
+shape where one setting lives in two places and drifts. Adding page two forks
+`prompts/` into `prompts/<page>/`
+([data-model.md](data-model.md#prompts-are-files-not-columns)) — and it would
+have had to re-split these two anyway, since page two inheriting the old
+"universal" file would have inherited HR's reenactment rules exactly as Hot Tub
+Timeout did.
+
+The old system glued the pair together and stored the result per page: three
+pages, ~2350 characters each, of which **2030 were byte-identical**. Every copy
+had drifted from the code it was pasted from — all three still specified a 75%
+hero and a circular logo long after the panel had learned to grow and the logo
+had moved to natural aspect ratio. Files fix that; the number of files was never
+what fixed it.
 
 ## Frontend
 
@@ -281,7 +358,7 @@ the wrong shape.
 
 BullMQ · Redis · a worker process · cron · LangGraph · Supabase auth · RLS ·
 `user_id` · Postiz · Facebook Graph OAuth · `sharp` · the `full_overlay` layout ·
-the headline badge · rounded corners · a schedule table · a rivals table.
+the headline badge · rounded corners · a schedule table · a competitors table.
 
 Each was checked against running code or production data before removal;
 [decisions.md](decisions.md#cut-with-the-evidence) records the evidence.
