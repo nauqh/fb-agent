@@ -1,28 +1,32 @@
 import type { SourceItem } from "@/lib/types";
-import {
-  ARTICLE_FEED,
-  FEED_FAILURES,
-  TWEET_LOOKUP,
-  type LiveSourceItem,
-} from "@/lib/fixtures/sources";
-import { db, emit, latency, nowIso } from "@/lib/store";
+import { get, post } from "@/lib/api/client";
 
 /**
- * `GET /sources/rivals|articles|tweet`, `POST /sources`.
+ * A Source Item that is not a row yet — no id, no created_at.
  *
- * The rule this module enforces is **browsing does not write**. Rivals arrive
+ * It has a type of its own because **browsing does not write**: an article or
+ * tweet is fetched live and shown in the grid long before, and usually without
+ * ever, becoming a row. Mirrors `SourceItemBase` in api/app/models.py, which is
+ * the shape `POST /sources` accepts and the three adapters return.
+ */
+export type LiveSourceItem = Omit<SourceItem, "id" | "created_at">;
+
+/**
+ * `GET /sources`, `/sources/rivals|articles|tweet`, `POST /sources`.
+ *
+ * The rule this module surfaces is **browsing does not write**. Rivals arrive
  * by Metricool sync and are rows already; articles and tweets are fetched live
  * and become rows only when ticked, which is what keeps `source_item` from
  * filling with hundreds of unread articles.
+ *
+ * The enforcement lives on the server — the API refuses an article that is not
+ * from a curated feed — because this file is the client and cannot be the thing
+ * that guarantees it.
  */
 
+/** Rows, already synced. The server re-syncs from Metricool on each read. */
 export async function getRivals(pageId: number): Promise<SourceItem[]> {
-  const rows = db.sourceItems
-    .filter((item) => item.kind === "rival_post" && item.synced_for_page_id === pageId)
-    // Reactions is the default sort on Rivals — it was in the old panel and it
-    // is the only metric populated across effectively every rival row.
-    .sort((a, b) => (b.reactions ?? 0) - (a.reactions ?? 0));
-  return latency(rows, 420);
+  return get<SourceItem[]>("/sources/rivals", { page_id: pageId });
 }
 
 export interface ArticleFeedResult {
@@ -32,51 +36,26 @@ export interface ArticleFeedResult {
 }
 
 export async function getArticles(): Promise<ArticleFeedResult> {
-  return latency({ items: ARTICLE_FEED, failures: FEED_FAILURES }, 620);
+  return get<ArticleFeedResult>("/sources/articles");
 }
 
 /** One tweet resolved from a pasted URL. Never a browsable list. */
 export async function getTweet(url: string): Promise<LiveSourceItem> {
-  const id = url.match(/status\/(\d+)/)?.[1];
-  if (!id) {
-    await latency(null, 200);
-    throw new Error("That does not look like a tweet URL — expected .../status/<id>");
-  }
-  const tweet = TWEET_LOOKUP[id];
-  if (!tweet) {
-    await latency(null, 400);
-    throw new Error(`x.com returned no tweet for id ${id}`);
-  }
-  return latency(tweet, 540);
+  return get<LiveSourceItem>("/sources/tweet", { url });
 }
 
 /**
  * Persist ticked items.
  *
- * `UNIQUE (kind, external_id)` is enforced here rather than left to the caller:
- * ticking the same article twice returns the existing row instead of creating a
- * second one.
+ * Idempotent by `UNIQUE (kind, external_id)` on the server: ticking the same
+ * article twice returns the existing row rather than creating a second one.
  */
 export async function saveSources(items: LiveSourceItem[]): Promise<SourceItem[]> {
-  const saved = items.map((item) => {
-    const existing = db.sourceItems.find(
-      (row) => row.kind === item.kind && row.external_id === item.external_id,
-    );
-    if (existing) return existing;
-
-    const row: SourceItem = { ...item, id: db.nextSourceItemId++, created_at: nowIso() };
-    db.sourceItems.push(row);
-    return row;
-  });
-
-  emit();
-  return latency(saved, 260);
+  return post<SourceItem[]>("/sources", items);
 }
 
 /** Cart display: resolve the ids the client is holding back to rows. */
 export async function getSourceItems(ids: number[]): Promise<SourceItem[]> {
-  const rows = ids
-    .map((id) => db.sourceItems.find((item) => item.id === id))
-    .filter((item): item is SourceItem => item !== undefined);
-  return latency(rows, 90);
+  if (ids.length === 0) return [];
+  return get<SourceItem[]>("/sources", { ids: ids.join(",") });
 }

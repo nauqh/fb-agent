@@ -1,12 +1,12 @@
 import type { SourceItem } from "@/lib/types";
+import type { LiveSourceItem } from "@/lib/api/sources";
 
 /** Minutes/hours/days ago as an ISO string, so fixtures never look stale. */
 export function ago(hours: number): string {
   return new Date(Date.now() - hours * 3_600_000).toISOString();
 }
 
-/** A Source Item that has not been persisted yet — no id, no created_at. */
-export type LiveSourceItem = Omit<SourceItem, "id" | "created_at">;
+export type { LiveSourceItem };
 
 /**
  * Rival posts, already rows.

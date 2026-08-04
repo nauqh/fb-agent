@@ -100,6 +100,35 @@ rows only on `POST /sources`. Rival posts are the exception.
 **Done when:** ticking one item of each kind produces exactly three rows with
 the right `kind`, `author`, and `synced_for_page_id`; re-ticking produces none.
 
+### Outcome — passed, with three vendor traps found
+
+Verified against the live APIs, not fixtures: 22 rivals and 500 posts for
+History Retraced, all seven feeds answering, 50 articles, 0 failures.
+
+- **Metricool's `creationDate.dateTime` is naive local time in the account's own
+  zone** — Europe/Madrid here, whatever the `timezone` parameter says. Read as
+  UTC it puts every rival post two hours out, which is invisible until the grid
+  sorts wrongly. `created` is epoch ms; use that.
+- **Feed `<title>`s read badly as a byline** — "History | smithsonianmag.com",
+  "Archaeology News -- ScienceDaily". `author` is what the card shows and what
+  reaches the writer, so publishers are named beside the URL in `CURATED_FEEDS`.
+- **x.com answers 200 with an `errors` array** for a deleted or missing tweet,
+  so the status alone does not tell you the read worked.
+
+`POST /sources` refuses an article whose host is not one of the curated feeds'.
+The tab is live, so the client posts the item body back rather than an id the
+server can look up; without the check the endpoint accepts arbitrary text and
+hands it to the writer. This was `isCuratedFeedUrl` in the old repo and it is
+the one guard worth carrying over — it is what keeps "fully curated" a property
+rather than an intention.
+
+`GET /sources?ids=` was not in the design and had to be added: the Cart holds
+ids and something has to turn them back into rows.
+
+**Status:** done. `web/` Sources is on the real API, proxied by a `next.config`
+rewrite so there is no CORS to configure. Generate and Review still read
+fixtures until Phase 3.
+
 ---
 
 ## Phase 3 — Writer, end to end, no images

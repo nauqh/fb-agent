@@ -40,6 +40,29 @@ class ArticleFeedOut(BaseModel):
     failures: list[FeedFailureOut]
 
 
+@router.get("")
+def list_sources(
+    ids: str = Query("", description="Comma-separated row ids"),
+    session: Session = Depends(get_session),
+) -> list[SourceItem]:
+    """Resolve Cart ids back to rows.
+
+    The Cart is client-side and holds nothing but ids (data-model.md, "A cart
+    table. Rejected."), so something has to turn them back into rows to display.
+    Returned in the order asked for, because that is the order they were ticked
+    in and the Cart shows it.
+    """
+    wanted = [int(part) for part in ids.split(",") if part.strip().isdigit()]
+    if not wanted:
+        return []
+
+    rows = session.exec(select(SourceItem).where(SourceItem.id.in_(wanted))).all()  # type: ignore[union-attr]
+    by_id = {row.id: row for row in rows}
+    # Silently drops an id with no row. The Cart is client state and can outlive
+    # a deleted row; failing the whole panel over one stale id helps nobody.
+    return [by_id[row_id] for row_id in wanted if row_id in by_id]
+
+
 @router.get("/rivals")
 def get_rivals(
     page_id: int = Query(...),
