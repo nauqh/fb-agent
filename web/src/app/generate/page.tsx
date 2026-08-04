@@ -51,7 +51,11 @@ export default function GenerateScreen() {
     setRunning(true);
     try {
       const ids = await generate({
-        source_item_ids: usingTopic ? [] : cart.ids,
+        // By value, not by id: generate is the only thing that writes a
+        // source_item row. The Cart still holds ids today, so these come back
+        // from the rows it resolved; once the Cart carries items it passes them
+        // straight through. See docs/plan.md, "Ticking stops writing".
+        sources: usingTopic ? [] : (items ?? []),
         page_ids: [page.id],
         topic: usingTopic ? topic.trim() : undefined,
       });
