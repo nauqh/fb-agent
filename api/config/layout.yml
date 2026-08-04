@@ -9,57 +9,61 @@
 # genuinely varies by Page belongs in the `page` table, not here.
 
 image:
-  width: 896
-  height: 1120          # 4:5 — the tallest ratio Facebook renders in feed
-  # Corners are square. The old code still computes a radius but the compositor
-  # hardcodes `const cornerRadius = 0` (image-composite.ts:313); the preview
-  # helper was zeroed to match (brand-image-layout.ts:111). Don't reintroduce it.
-  edge_margin_ratio: 0.02   # × width → 18px, used to inset the watermark
+    width: 896
+    height: 1120 # 4:5 — the tallest ratio Facebook renders in feed
+    # Corners are square. The old code still computes a radius but the compositor
+    # hardcodes `const cornerRadius = 0` (image-composite.ts:313); the preview
+    # helper was zeroed to match (brand-image-layout.ts:111). Don't reintroduce it.
+    edge_margin_ratio: 0.02 # × width → 18px, used to inset the watermark
 
 panel:
-  # Fraction of image height reserved for the text panel. A floor, not a cap:
-  # the panel grows to fit the text, up to `max_ratio`. The hero occupies
-  # (1 - actual ratio). Also feeds the image-gen prompt hint, so changing it
-  # changes how the hero is composed.
-  ratio: 0.20
-  max_ratio: 0.85
-  color: "#000000"
-  opacity: 1.0
+    # Fraction of image height reserved for the text panel. A floor, not a cap:
+    # the panel grows to fit the text, up to `max_ratio`. The hero occupies
+    # (1 - actual ratio). Also feeds the image-gen prompt hint, so changing it
+    # changes how the hero is composed.
+    ratio: 0.20
+    max_ratio: 0.85
+    color: "#000000"
+    opacity: 1.0
 
 text:
-  # Fixed. There is no autofit — `planOverlayLayout` reads `fontSizePx` once
-  # (overlay-layout-plan.ts:248) and the panel grows instead of the type
-  # shrinking. The old font_min/font_max columns were never read.
-  font_size_px: 36
-  line_height_ratio: 1.26
-  align: center
-  color: "#ffffff"
-  padding:
-    left_px: 5
-    right_px: 5
-    top_px: 15
-    bottom_px: 15
+    # Fixed. There is no autofit — `planOverlayLayout` reads `fontSizePx` once
+    # (overlay-layout-plan.ts:248) and the panel grows instead of the type
+    # shrinking. The old font_min/font_max columns were never read.
+    font_size_px: 36
+    line_height_ratio: 1.26
+    align: center
+    color: "#ffffff"
+    padding:
+        left_px: 5
+        right_px: 5
+        top_px: 15
+        bottom_px: 15
 
 highlight:
-  color: "#F5C542"      # gold, for phrases the writer marks verbatim
+    color: "#F5C542" # gold, for phrases the writer marks verbatim
 
 watermark:
-  # Top-right of the hero, inset by edge_margin — verified against the newest
-  # composite in production storage, which renders "History Retraced" as white
-  # text there. Uses page.watermark_image_path when set; History Retraced has
-  # none (the stored object is gone), so it renders page.name as text.
-  max_px: 138           # capped again at 0.22 × width
-  top_ratio: 0.014      # × hero height, floor 8px
-  # Seam portrait inset is not ported: portrait_inset_enabled is false on all
-  # ten production pages.
+    # Top-right of the hero, inset by edge_margin — the position was verified
+    # against the newest composite in production storage, which prints "History
+    # Retraced" as white text there because the stored logo had gone missing.
+    # Reads page.watermark_image_path, a committed file under api/assets/, at its
+    # natural aspect ratio. A missing file is an error: the old compositor
+    # returned null and printed the name instead, and output degraded for months
+    # without one failed post.
+    max_px: 138 # capped again at 0.22 × width
+    top_ratio: 0.014 # × hero height, floor 8px
+    # Seam portrait inset is not ported: portrait_inset_enabled is false on all
+    # ten production pages.
 
 font:
-  # family must match the TTF name table. resvg substitutes silently otherwise:
-  # `font-family="Arial Bold"` renders a serif face and still returns a valid
-  # PNG. tests/spike_text_render.py guards this by width.
-  family: Arial
-  weight: bold
-  path: assets/fonts/Arial-Bold.ttf   # measured and rasterised from this file
+    # family must match the TTF name table. resvg substitutes silently otherwise:
+    # `font-family="Arial Bold"` renders a serif face and still returns a valid
+    # PNG. tests/spike_text_render.py guards this by width.
+    family: Arial
+    weight: bold
+    path: assets/fonts/Arial-Bold.ttf # measured and rasterised from this file
+
 
 # No headline badge. It renders only under `if (isFullOverlay && label)`
 # (image-composite.ts:367), and the full_overlay layout is cut.
