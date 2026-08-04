@@ -3,7 +3,7 @@
  * timezone — an operator in another zone must see the same number the Page's
  * policy is written against.
  */
-const PAGE_TIMEZONE = "Asia/Ho_Chi_Minh";
+export const PAGE_TIMEZONE = "Asia/Ho_Chi_Minh";
 
 const dayFormatter = new Intl.DateTimeFormat("en-CA", {
   timeZone: PAGE_TIMEZONE,

@@ -1,5 +1,12 @@
+import { PAGE_TIMEZONE } from "@/lib/quota";
+
 const relative = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
 const compact = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 });
+const stamp = new Intl.DateTimeFormat("en-GB", {
+  timeZone: PAGE_TIMEZONE,
+  dateStyle: "medium",
+  timeStyle: "short",
+});
 
 export function timeAgo(iso: string | null): string {
   if (!iso) return "—";
@@ -14,6 +21,18 @@ export function timeAgo(iso: string | null): string {
   let chosen: [Intl.RelativeTimeFormatUnit, number] = units[0];
   for (const unit of units) if (seconds >= unit[1]) chosen = unit;
   return relative.format(-Math.round(seconds / chosen[1]), chosen[0]);
+}
+
+/**
+ * `4 Aug 2026, 14:30`, in the Page's timezone rather than the browser's.
+ *
+ * `timeAgo` is for the grid, where "2 days ago" is the only thing being asked.
+ * This is for the detail view, where an operator deciding whether a story is
+ * stale needs the actual instant — and needs it in the same zone the Quota and
+ * the posting schedule are written against.
+ */
+export function fullDate(iso: string | null): string {
+  return iso ? stamp.format(new Date(iso)) : "—";
 }
 
 export function metric(value: number | null): string {
