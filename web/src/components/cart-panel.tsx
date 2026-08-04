@@ -39,9 +39,9 @@ export function CartPanel() {
       <div className="min-h-0 flex-1 overflow-y-auto p-2">
         {cart.count === 0 ? (
           <p className="px-2 py-8 text-center text-xs leading-relaxed text-muted-foreground">
-            Tick a rival post, a tweet or an article.
+            Tick a competitor post, a tweet or an RSS item.
             <br />
-            Ticking an article is what writes its row.
+            Ticking a live one is what writes its row.
           </p>
         ) : (
           <ul className="space-y-1">

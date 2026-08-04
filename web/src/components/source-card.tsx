@@ -1,6 +1,7 @@
 "use client";
 
-import { Check, Loader2, MessageCircle, Repeat2, ThumbsUp } from "lucide-react";
+import { useState } from "react";
+import { Check, ImageOff, Loader2, MessageCircle, Repeat2, ThumbsUp } from "lucide-react";
 
 import type { SourceKind } from "@/lib/types";
 import { isFactual } from "@/lib/types";
@@ -12,7 +13,8 @@ import { cn } from "@/lib/utils";
  *
  * The card states which way the subject binds, because that is the single most
  * consequential thing about a Source Item and it is invisible otherwise: a
- * rival post is borrowed for *tone*, an article or tweet binds the *story*.
+ * competitor post (`competitor_post`) is borrowed for *tone*, an RSS item or tweet
+ * binds the *story*.
  * Getting it backwards produces confident, well-formed output about the wrong
  * subject, and nothing downstream catches it.
  */
@@ -21,6 +23,7 @@ export function SourceCard({
   author,
   text,
   url,
+  image_url,
   published_at,
   reactions,
   comments,
@@ -33,6 +36,7 @@ export function SourceCard({
   author: string | null;
   text: string;
   url: string | null;
+  image_url?: string | null;
   /** Snake case so a `SourceItem` can be spread straight onto this card. */
   published_at: string | null;
   reactions?: number | null;
@@ -83,7 +87,10 @@ export function SourceCard({
         </span>
       </div>
 
-      <p className="line-clamp-5 flex-1 text-sm leading-relaxed text-foreground/85">{text}</p>
+      <div className="flex flex-1 gap-3">
+        <SourceThumbnail src={image_url} />
+        <p className="line-clamp-5 flex-1 text-sm leading-relaxed text-foreground/85">{text}</p>
+      </div>
 
       <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
         {reactions !== null && reactions !== undefined ? (
@@ -103,6 +110,65 @@ export function SourceCard({
         )}
       </div>
     </button>
+  );
+}
+
+/**
+ * The post's picture, or a placeholder.
+ *
+ * **Deliberately small.** Metricool serves a 130×130 thumbnail and nothing
+ * larger — `stp=dst-jpg_s130x130_tt6`, and the URL signature covers that
+ * parameter, so asking for s480/s720/p720 or dropping `stp` all return 403. The
+ * payload carries no HD field either. Rendered at 64px it is sharp on a 1x
+ * display and near-native on a 2x one; the old system stretched the same 130px
+ * across the full card width and was blurry for exactly this reason.
+ *
+ * A bigger image does exist — the post's own `og:image` is 600×750 and is
+ * readable without auth — but that is one extra request against facebook.com
+ * per post, which is not something to do 60 times per grid load. It belongs at
+ * tick time, alongside the Phase 4 download-and-store.
+ *
+ * `onError` is not decoration. Facebook's CDN URLs are signed and expire about
+ * four days after they are issued, and Metricool hands back a freshly signed one
+ * on every sync — so what is on screen is normally fine, but anything not just
+ * synced is a 403. The old system rendered these with no error handling and its
+ * stored URLs are, right now, all dead: four sampled production rows expired on
+ * 2026-07-31 and return 403 today.
+ *
+ * A plain `<img>`, not `next/image`: the optimizer would need every fbcdn host
+ * in `remotePatterns`, and it would cache a URL built to expire.
+ */
+function SourceThumbnail({ src }: { src?: string | null }) {
+  const [failed, setFailed] = useState(false);
+
+  // A refreshed sync can replace a dead URL with a live one, so the failure has
+  // to clear when `src` changes. Adjusted during render rather than in an
+  // effect — the same pattern as `use-query.ts` — because an effect would show
+  // the placeholder for one frame before correcting itself.
+  const [renderedSrc, setRenderedSrc] = useState(src);
+  if (src !== renderedSrc) {
+    setRenderedSrc(src);
+    setFailed(false);
+  }
+
+  if (!src || failed) {
+    return (
+      <div className="flex size-16 shrink-0 items-center justify-center rounded-md bg-muted">
+        <ImageOff className="size-4 text-muted-foreground/50" aria-hidden />
+        <span className="sr-only">No image</span>
+      </div>
+    );
+  }
+
+  return (
+    // eslint-disable-next-line @next/next/no-img-element -- deliberate, see above
+    <img
+      src={src}
+      alt=""
+      loading="lazy"
+      className="size-16 shrink-0 rounded-md object-cover"
+      onError={() => setFailed(true)}
+    />
   );
 }
 

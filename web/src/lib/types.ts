@@ -8,7 +8,7 @@
  * beyond "is this today in Asia/Ho_Chi_Minh", which lives in `lib/quota.ts`.
  */
 
-export type SourceKind = "rival_post" | "tweet" | "article";
+export type SourceKind = "competitor_post" | "tweet" | "rss";
 
 export type DraftStatus = "generating" | "review" | "approved" | "rejected";
 
@@ -19,7 +19,12 @@ export interface Page {
   facebook_page_id: string;
   metricool_blog_id: string | null;
   daily_quota: number;
-  /** Null renders `name` as text, which is what production ships. */
+  /**
+   * The Page's logo file, relative to `API_DIR` — a committed asset under
+   * `api/assets/`, not storage. Null is an error state, not a fallback: the old
+   * compositor treated a missing file as "no logo" and printed the name as text,
+   * and the logo vanished from output for months without one failed post.
+   */
   watermark_image_path: string | null;
   created_at: string;
   updated_at: string;
@@ -30,15 +35,15 @@ export interface SourceItem {
   id: number;
   kind: SourceKind;
   external_id: string;
-  /** Rival page name, X handle, or publisher. */
+  /** Competitor page name, X handle, or publisher. */
   author: string | null;
-  /** rival_post only. */
+  /** competitor_post only. */
   synced_for_page_id: number | null;
   text: string;
   url: string | null;
   image_url: string | null;
   published_at: string | null;
-  /** Null for tweets and articles. */
+  /** Null for tweets and RSS items. */
   reactions: number | null;
   comments: number | null;
   shares: number | null;
@@ -90,7 +95,7 @@ export interface Draft {
  * wrong story. Mirrors `SourceKind.is_factual` in models.py.
  */
 export function isFactual(kind: SourceKind): boolean {
-  return kind !== "rival_post";
+  return kind !== "competitor_post";
 }
 
 /** A prompt file on disk, as Settings displays it. Not a table. */

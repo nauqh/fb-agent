@@ -11,12 +11,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { getArticles, getRivals, getTweet, saveSources } from "@/lib/api/sources";
+import { getRss, getCompetitorPosts, getTweet, saveSources } from "@/lib/api/sources";
 import type { LiveSourceItem } from "@/lib/fixtures/sources";
 import { useCart } from "@/lib/cart";
 import { useQuery } from "@/lib/use-query";
 
-/** The Page every rival set belongs to. One Page in v1, so it is a constant. */
+/** The Page every competitor set belongs to. One Page in v1, so it is a constant. */
 const PAGE_ID = 1;
 
 export default function SourcesScreen() {
@@ -61,28 +61,30 @@ export default function SourcesScreen() {
     <div className="flex min-h-0 flex-1 flex-col">
       <ScreenHeader
         title="Sources"
-        hint="Rival posts are synced and already rows. Tweets and articles are live — ticking one is what writes it."
+        hint="Competitor posts are synced and already rows. Tweets and RSS items are live — ticking one is what writes it."
       />
 
       <Tabs
-        defaultValue="rivals"
+        defaultValue="competitors"
         className="grid min-h-0 flex-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px]"
       >
         <div className="flex min-h-0 flex-col gap-4">
-          <TabsList className="shrink-0">
-            <TabsTrigger value="rivals">Rivals</TabsTrigger>
+          {/* `*:` reaches the triggers, so the width and padding live in one
+              place instead of being repeated on each of the three. */}
+          <TabsList className="shrink-0 gap-1.5 p-1 *:min-w-28 *:px-4">
+            <TabsTrigger value="competitors">Competitors</TabsTrigger>
             <TabsTrigger value="tweets">Tweets</TabsTrigger>
-            <TabsTrigger value="articles">Articles</TabsTrigger>
+            <TabsTrigger value="rss">RSS</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="rivals" className="min-h-0 flex-1 overflow-y-auto">
-            <RivalsTab />
+          <TabsContent value="competitors" className="min-h-0 flex-1 overflow-y-auto">
+            <CompetitorsTab />
           </TabsContent>
           <TabsContent value="tweets" className="min-h-0 flex-1 overflow-y-auto">
             <TweetsTab onTick={tick} savedIds={savedIds} pending={pending} />
           </TabsContent>
-          <TabsContent value="articles" className="min-h-0 flex-1 overflow-y-auto">
-            <ArticlesTab onTick={tick} savedIds={savedIds} pending={pending} />
+          <TabsContent value="rss" className="min-h-0 flex-1 overflow-y-auto">
+            <RssTab onTick={tick} savedIds={savedIds} pending={pending} />
           </TabsContent>
         </div>
 
@@ -96,16 +98,16 @@ export default function SourcesScreen() {
   );
 }
 
-function RivalsTab() {
+function CompetitorsTab() {
   const cart = useCart();
-  const { data, loading } = useQuery(() => getRivals(PAGE_ID), []);
+  const { data, loading } = useQuery(() => getCompetitorPosts(PAGE_ID), []);
 
   if (loading) return <CardGridSkeleton />;
 
   return (
     <>
       <p className="pb-3 text-xs text-muted-foreground">
-        Synced from Metricool, newest window, sorted by reactions. Which pages are Rivals is
+        Synced from Metricool, newest window, sorted by reactions. Which pages are Competitors is
         configured in Metricool — never here.
       </p>
       <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
@@ -128,9 +130,9 @@ interface LiveTabProps {
   pending: string[];
 }
 
-function ArticlesTab({ onTick, savedIds, pending }: LiveTabProps) {
+function RssTab({ onTick, savedIds, pending }: LiveTabProps) {
   const cart = useCart();
-  const { data, loading, refresh } = useQuery(() => getArticles(), []);
+  const { data, loading, refresh } = useQuery(() => getRss(PAGE_ID), []);
   const [refreshing, setRefreshing] = useState(false);
 
   return (

@@ -9,19 +9,20 @@ export function ago(hours: number): string {
 export type { LiveSourceItem };
 
 /**
- * Rival posts, already rows.
+ * Competitor posts, already rows.
  *
- * Rivals are the one kind written on arrival: they come from a Metricool sync,
- * so there is nothing live to browse. `synced_for_page_id` is whose competitor
- * set they belong to — always 1 here, because there is one Page.
+ * They are the one kind written on arrival: they come from a Metricool sync, so
+ * there is nothing live to browse. `synced_for_page_id` is whose competitor set
+ * they belong to — always 1 here, because there is one Page.
  *
- * `reactions` is the default sort on the Rivals tab, and metrics are populated
- * for rival posts only; tweets and articles leave the three columns null.
+ * `reactions` is the default sort on the Competitors tab, and metrics are
+ * populated for competitor posts only; tweets and RSS items leave the three
+ * columns null.
  */
-export const RIVAL_POSTS: SourceItem[] = [
+export const COMPETITOR_POSTS: SourceItem[] = [
   {
     id: 101,
-    kind: "rival_post",
+    kind: "competitor_post",
     external_id: "1225577819_10160418822",
     author: "Historic Vids",
     synced_for_page_id: 1,
@@ -36,7 +37,7 @@ export const RIVAL_POSTS: SourceItem[] = [
   },
   {
     id: 102,
-    kind: "rival_post",
+    kind: "competitor_post",
     external_id: "9930277461_10159002731",
     author: "The Vintage News",
     synced_for_page_id: 1,
@@ -51,7 +52,7 @@ export const RIVAL_POSTS: SourceItem[] = [
   },
   {
     id: 103,
-    kind: "rival_post",
+    kind: "competitor_post",
     external_id: "4471028833_10158771204",
     author: "History Cool Kids",
     synced_for_page_id: 1,
@@ -66,7 +67,7 @@ export const RIVAL_POSTS: SourceItem[] = [
   },
   {
     id: 104,
-    kind: "rival_post",
+    kind: "competitor_post",
     external_id: "7783340019_10157220088",
     author: "Rare Historical Photos",
     synced_for_page_id: 1,
@@ -81,7 +82,7 @@ export const RIVAL_POSTS: SourceItem[] = [
   },
   {
     id: 105,
-    kind: "rival_post",
+    kind: "competitor_post",
     external_id: "2298104477_10160990312",
     author: "Historic Vids",
     synced_for_page_id: 1,
@@ -96,7 +97,7 @@ export const RIVAL_POSTS: SourceItem[] = [
   },
   {
     id: 106,
-    kind: "rival_post",
+    kind: "competitor_post",
     external_id: "5510923388_10161004557",
     author: "Weird History",
     synced_for_page_id: 1,
@@ -112,15 +113,15 @@ export const RIVAL_POSTS: SourceItem[] = [
 ];
 
 /**
- * One previously-ticked article, kept as a row.
+ * One previously-ticked RSS item, kept as a row.
  *
- * Proves the tick is what creates the row: everything else in ARTICLE_FEED is
+ * Proves the tick is what creates the row: everything else in RSS_FEED is
  * live and has no id until the operator selects it.
  */
 export const SAVED_SOURCES: SourceItem[] = [
   {
     id: 107,
-    kind: "article",
+    kind: "rss",
     external_id: "https://www.smithsonianmag.com/history/the-clockmaker-who-outlived-his-clock-180987221/",
     author: "Smithsonian Magazine",
     synced_for_page_id: null,
@@ -136,15 +137,15 @@ export const SAVED_SOURCES: SourceItem[] = [
 ];
 
 /**
- * Live articles from the seven curated feeds.
+ * Live RSS items from the curated feeds.
  *
  * Not rows. Browsing does not write — these become Source Items only when
  * ticked into the Cart, which is what keeps the table from filling with
- * hundreds of unread articles.
+ * hundreds of unread items.
  */
-export const ARTICLE_FEED: LiveSourceItem[] = [
+export const RSS_FEED: LiveSourceItem[] = [
   {
-    kind: "article",
+    kind: "rss",
     external_id: "https://www.smithsonianmag.com/history/the-woman-who-mapped-the-ocean-floor-180987410/",
     author: "Smithsonian Magazine",
     synced_for_page_id: null,
@@ -157,7 +158,7 @@ export const ARTICLE_FEED: LiveSourceItem[] = [
     shares: null,
   },
   {
-    kind: "article",
+    kind: "rss",
     external_id: "https://www.atlasobscura.com/articles/the-village-that-moved-itself-uphill",
     author: "Atlas Obscura",
     synced_for_page_id: null,
@@ -170,7 +171,7 @@ export const ARTICLE_FEED: LiveSourceItem[] = [
     shares: null,
   },
   {
-    kind: "article",
+    kind: "rss",
     external_id: "https://www.thehistoryblog.com/archives/71204",
     author: "The History Blog",
     synced_for_page_id: null,
@@ -183,7 +184,7 @@ export const ARTICLE_FEED: LiveSourceItem[] = [
     shares: null,
   },
   {
-    kind: "article",
+    kind: "rss",
     external_id: "https://www.historyextra.com/period/tudor/the-queens-food-taster/",
     author: "HistoryExtra",
     synced_for_page_id: null,
@@ -196,7 +197,7 @@ export const ARTICLE_FEED: LiveSourceItem[] = [
     shares: null,
   },
   {
-    kind: "article",
+    kind: "rss",
     external_id: "https://www.livescience.com/archaeology/bronze-age-bakery-uncovered",
     author: "Live Science",
     synced_for_page_id: null,
@@ -209,7 +210,7 @@ export const ARTICLE_FEED: LiveSourceItem[] = [
     shares: null,
   },
   {
-    kind: "article",
+    kind: "rss",
     external_id: "https://allthatsinteresting.com/the-lighthouse-keepers-of-eilean-mor",
     author: "All That's Interesting",
     synced_for_page_id: null,
@@ -222,7 +223,7 @@ export const ARTICLE_FEED: LiveSourceItem[] = [
     shares: null,
   },
   {
-    kind: "article",
+    kind: "rss",
     external_id: "https://www.sciencedaily.com/releases/2026/07/260729114502.htm",
     author: "Science Daily",
     synced_for_page_id: null,
@@ -235,7 +236,7 @@ export const ARTICLE_FEED: LiveSourceItem[] = [
     shares: null,
   },
   {
-    kind: "article",
+    kind: "rss",
     external_id: "https://www.smithsonianmag.com/smart-news/the-bell-that-rang-for-nobody-180987388/",
     author: "Smithsonian Magazine",
     synced_for_page_id: null,
@@ -253,7 +254,7 @@ export const ARTICLE_FEED: LiveSourceItem[] = [
  * Feeds that did not answer this fetch.
  *
  * A feed that rots goes unnoticed unless its failure is on screen, so the
- * Articles tab surfaces these rather than silently returning fewer items.
+ * RSS tab surfaces these rather than silently returning fewer items.
  */
 export const FEED_FAILURES = [
   { feed_url: "https://feeds.feedburner.com/historyextra/all", error: "504 after 10s" },

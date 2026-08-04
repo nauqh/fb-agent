@@ -1,7 +1,7 @@
 import type { Draft, SourceItem } from "@/lib/types";
 import { DRAFTS } from "@/lib/fixtures/drafts";
 import { PAGES } from "@/lib/fixtures/pages";
-import { RIVAL_POSTS, SAVED_SOURCES } from "@/lib/fixtures/sources";
+import { COMPETITOR_POSTS, SAVED_SOURCES } from "@/lib/fixtures/sources";
 
 /**
  * The prototype's stand-in for fb_agent.db.
@@ -23,7 +23,7 @@ interface Tables {
 }
 
 function seed(): Tables {
-  const sourceItems = [...RIVAL_POSTS, ...SAVED_SOURCES];
+  const sourceItems = [...COMPETITOR_POSTS, ...SAVED_SOURCES];
   const drafts = DRAFTS.map((draft) => ({ ...draft }));
   return {
     pages: PAGES,
