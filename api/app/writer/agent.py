@@ -10,7 +10,7 @@ from functools import lru_cache
 
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent, ModelRetry, RunContext
-from pydantic_ai.models.google import GoogleModel
+from pydantic_ai.models.google import GoogleModel, GoogleModelSettings
 from pydantic_ai.providers.google import GoogleProvider
 
 from app.models import Page, SourceItem, SourceKind
@@ -86,23 +86,58 @@ def build_agent(page: Page, model: object | None = None) -> Agent:
     the instructions depend on the Page, and an Agent is cheap to build.
     """
     agent = Agent(
-        model or _model(),
+        model or _model(settings.gemini_text_model),
         output_type=DraftContent,
         instructions=_instructions(page, layout),
+        model_settings=_model_settings(settings.gemini_text_model),
         retries=MAX_RETRIES,
     )
     agent.output_validator(_validate)
     return agent
 
 
-@lru_cache(maxsize=1)
-def _model() -> GoogleModel:
+FALLBACK_MODELS = ("gemini-2.5-flash", "gemini-2.0-flash")
+"""Tried in order when the configured model is unavailable.
+
+Ported from the old repo, which kept the same chain
+(`generate-with-fallback.ts:9`) — and needed it. `gemini-3.5-flash` answered
+503 "experiencing high demand" three times while this was being built, and one
+of those killed a real run.
+"""
+
+TRANSIENT = ("503", "UNAVAILABLE", "high demand", "RESOURCE_EXHAUSTED", "500", "502")
+"""Substrings that mean "ask again", not "this request is wrong".
+
+Matched on the message because `ModelHTTPError` flattens the provider's body
+into it. Crude, and deliberately so: the failure mode of matching too widely is
+one wasted retry, and of matching too narrowly is a dead run.
+"""
+
+
+def is_transient(error: Exception) -> bool:
+    message = str(error)
+    return any(marker.lower() in message.lower() for marker in TRANSIENT)
+
+
+@lru_cache(maxsize=4)
+def _model(model_name: str) -> GoogleModel:
     if not settings.gemini_api_key:
         raise RuntimeError("missing GEMINI_API_KEY")
     return GoogleModel(
-        settings.gemini_text_model,
-        provider=GoogleProvider(api_key=settings.gemini_api_key),
+        model_name, provider=GoogleProvider(api_key=settings.gemini_api_key)
     )
+
+
+def _model_settings(model_name: str) -> GoogleModelSettings | None:
+    """Thinking is a Gemini 3.x feature; asking 2.5 for it is an error.
+
+    The old repo stripped `thinkingConfig` for any model that was not 3.x
+    (`generate-with-fallback.ts:30`), which matters here precisely because the
+    fallback chain steps down onto 2.5 and 2.0.
+    """
+    if "gemini-3" not in model_name.lower():
+        return None
+    return GoogleModelSettings(google_thinking_config={"thinking_level": "MEDIUM"})
 
 
 def user_prompt(source: SourceItem | None, topic: str | None) -> str:
@@ -122,6 +157,39 @@ def user_prompt(source: SourceItem | None, topic: str | None) -> str:
 
 
 def write(page: Page, source: SourceItem | None, topic: str | None = None, model=None):
-    """A brand-compliant draft, or an explanation. Never a retry."""
-    agent = build_agent(page, model)
-    return agent.run_sync(user_prompt(source, topic))
+    """A brand-compliant draft, or an explanation. Never a retry.
+
+    Two different retries live here and they are not the same thing.
+    `ModelRetry` corrects a draft that broke a brand rule — that is the writer
+    doing its job. This loop reacts to the model being *unavailable*, which is
+    not about the draft at all, and steps down the fallback chain rather than
+    asking the same overloaded model again.
+
+    A caller passing `model` gets exactly that model and no fallback: tests
+    supply a fake, and silently swapping it for a real one would bill them.
+    """
+    if model is not None:
+        return build_agent(page, model).run_sync(user_prompt(source, topic))
+
+    prompt = user_prompt(source, topic)
+    names = [settings.gemini_text_model, *FALLBACK_MODELS]
+    last: Exception | None = None
+
+    for name in dict.fromkeys(names):  # de-duplicated, order kept
+        try:
+            agent = Agent(
+                _model(name),
+                output_type=DraftContent,
+                instructions=_instructions(page, layout),
+                model_settings=_model_settings(name),
+                retries=MAX_RETRIES,
+            )
+            agent.output_validator(_validate)
+            return agent.run_sync(prompt)
+        except Exception as error:  # noqa: BLE001 — re-raised below if not transient
+            if not is_transient(error):
+                raise
+            last = error
+
+    assert last is not None
+    raise last

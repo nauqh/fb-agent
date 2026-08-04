@@ -194,3 +194,51 @@ def test_the_prompt_carries_the_source_text_and_its_instruction():
 def test_a_run_with_neither_a_source_nor_a_topic_is_refused():
     with pytest.raises(ValueError, match="source item or a topic"):
         writer.user_prompt(None, None)
+
+
+# --- the model being unavailable, which is not about the draft ---------------
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "status_code: 503, body: {'error': {'status': 'UNAVAILABLE'}}",
+        "This model is currently experiencing high demand.",
+        "RESOURCE_EXHAUSTED",
+    ],
+)
+def test_an_overloaded_model_is_transient(message):
+    assert writer.is_transient(RuntimeError(message))
+
+
+@pytest.mark.parametrize(
+    "message", ["status_code: 400, invalid argument", "API key not valid"]
+)
+def test_a_bad_request_is_not_transient(message):
+    """Retrying these just spends the same money three times."""
+    assert not writer.is_transient(RuntimeError(message))
+
+
+def test_thinking_is_set_for_gemini_3_and_stripped_below_it():
+    """Asking 2.5 for a 3.x thinking config is an error, and the chain steps down."""
+    assert writer._model_settings("gemini-3.5-flash") is not None
+    assert writer._model_settings("gemini-2.5-flash") is None
+    assert writer._model_settings("gemini-2.0-flash") is None
+
+
+def test_the_configured_model_is_tried_before_the_fallbacks():
+    names = [writer.settings.gemini_text_model, *writer.FALLBACK_MODELS]
+    assert list(dict.fromkeys(names))[0] == writer.settings.gemini_text_model
+    assert "gemini-2.5-flash" in writer.FALLBACK_MODELS
+
+
+def test_a_supplied_model_is_never_swapped_for_a_real_one(page, monkeypatch):
+    """A test passing a fake must not be billed for a live call."""
+
+    def explode(*_a, **_k):
+        raise AssertionError("built a real model when one was supplied")
+
+    monkeypatch.setattr(writer, "_model", explode)
+    model, _ = _responder(GOOD)
+
+    assert writer.write(page, None, topic="x", model=model).output.hook == GOOD["hook"]
