@@ -1,6 +1,7 @@
-"""FastAPI app. Four screens' worth of routes will hang off this.
+"""FastAPI app. Four screens' worth of routes hang off this.
 
-Phase 0 has one route. See docs/plan.md.
+Pages and sources so far; generate and drafts arrive with Phase 3. See
+docs/plan.md.
 """
 
 from contextlib import asynccontextmanager
@@ -10,7 +11,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from app.db import init_db
-from app.routes import pages
+from app.routes import pages, sources
 from app.settings import layout, settings
 
 
@@ -30,6 +31,7 @@ app.mount(
 )
 
 app.include_router(pages.router)
+app.include_router(sources.router)
 
 
 @app.get("/health")

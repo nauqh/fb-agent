@@ -81,16 +81,20 @@ class Page(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=_now)
 
 
-class SourceItem(SQLModel, table=True):
-    """External material selected as input. One table, three kinds."""
+class SourceItemBase(SQLModel):
+    """A Source Item's content, with no identity yet.
 
-    __tablename__ = "source_item"
-    __table_args__ = (
-        # Ticking the same article twice must not create a second row.
-        UniqueConstraint("kind", "external_id", name="uq_source_item_kind_external"),
-    )
+    This is what an adapter returns and what the client posts back. It exists
+    because **browsing does not write**: an article or tweet is fetched live and
+    shown in the grid long before — and usually without ever — becoming a row,
+    so the unsaved shape needs a type of its own rather than a `SourceItem` with
+    a fake id.
 
-    id: int | None = Field(default=None, primary_key=True)
+    Splitting it here rather than declaring the fields twice is what keeps the
+    two from drifting; adding a column to `SourceItem` alone would silently stop
+    the adapters from being able to supply it.
+    """
+
     kind: SourceKind = Field(index=True)
     external_id: str
     author: str | None = None
@@ -111,6 +115,17 @@ class SourceItem(SQLModel, table=True):
     shares: int | None = None
     """Null for tweets and articles. Reactions is the default sort on Rivals."""
 
+
+class SourceItem(SourceItemBase, table=True):
+    """External material selected as input. One table, three kinds."""
+
+    __tablename__ = "source_item"
+    __table_args__ = (
+        # Ticking the same article twice must not create a second row.
+        UniqueConstraint("kind", "external_id", name="uq_source_item_kind_external"),
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
     created_at: datetime = Field(default_factory=_now)
 
 
