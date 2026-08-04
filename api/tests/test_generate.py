@@ -200,3 +200,58 @@ def test_a_draft_still_being_written_cannot_be_edited(client, session):
     draft_id = session.exec(select(Draft)).one().id
 
     assert client.patch(f"/drafts/{draft_id}", json={"hook": "x"}).status_code == 409
+
+
+# --- behaviour inherited from the deleted POST /sources ----------------------
+
+
+def test_the_same_item_twice_in_one_run_is_one_row(client, engine, written):
+    """Two feeds carrying one story arrive as two ticks in a single request.
+
+    Nothing has committed when the second copy is looked up, so this relies on
+    the autoflush before each query rather than on the unique constraint.
+    """
+    item = _rss().model_dump(mode="json")
+
+    response = client.post("/generate", json={"page_ids": [1], "sources": [item, item]})
+
+    assert response.status_code == 202
+    assert _count(engine, SourceItem) == 1
+    assert _count(engine, Draft) == 2, "two drafts, one source"
+
+
+def test_one_of_each_kind_creates_three_rows(client, engine, session, written):
+    session.add(
+        SourceItem(kind=SourceKind.COMPETITOR_POST, external_id="1_2", text="synced")
+    )
+    session.commit()
+
+    sources = [
+        SourceItemBase(
+            kind=SourceKind.COMPETITOR_POST, external_id="1_2", text="synced"
+        ).model_dump(mode="json"),
+        _rss().model_dump(mode="json"),
+        SourceItemBase(
+            kind=SourceKind.TWEET, external_id="1817449230118928441", text="a tweet"
+        ).model_dump(mode="json"),
+    ]
+    response = client.post("/generate", json={"page_ids": [1], "sources": sources})
+
+    assert response.status_code == 202
+    assert _count(engine, SourceItem) == 3
+    with Session(engine) as fresh:
+        kinds = {row.kind for row in fresh.exec(select(SourceItem)).all()}
+    assert kinds == {SourceKind.COMPETITOR_POST, SourceKind.RSS, SourceKind.TWEET}
+
+
+def test_generating_twice_does_not_rewrite_an_existing_row(client, engine, written):
+    """The client hands back a body it was shown, not a fresh vendor read."""
+    client.post("/generate", json={"page_ids": [1], "sources": [_rss().model_dump(mode="json")]})
+
+    tampered = _rss().model_dump(mode="json") | {"text": "rewritten", "reactions": 999}
+    client.post("/generate", json={"page_ids": [1], "sources": [tampered]})
+
+    with Session(engine) as fresh:
+        row = fresh.exec(select(SourceItem)).one()
+    assert row.text == "A story"
+    assert row.reactions is None

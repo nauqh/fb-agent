@@ -4,9 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Sparkles, X } from "lucide-react";
 
-import { getSourceItems } from "@/lib/api/sources";
-import { useCart } from "@/lib/cart";
-import { useQuery } from "@/lib/use-query";
+import { sourceKey, useCart } from "@/lib/cart";
 import { Button } from "@/components/ui/button";
 import { isFactual } from "@/lib/types";
 
@@ -21,8 +19,8 @@ export function CartPanel() {
   const cart = useCart();
   const router = useRouter();
 
-  const { data: items } = useQuery(() => getSourceItems(cart.ids), [cart.ids.join(",")]);
-
+  // No fetch: the Cart holds the items themselves, so there is nothing to
+  // resolve. This used to call GET /sources?ids= to turn ids back into rows.
   return (
     <aside className="flex h-full min-h-0 w-full flex-col rounded-lg border">
       <div className="flex items-center justify-between border-b px-4 py-3">
@@ -45,9 +43,9 @@ export function CartPanel() {
           </p>
         ) : (
           <ul className="space-y-1">
-            {items?.map((item) => (
+            {cart.items.map((item) => (
               <li
-                key={item.id}
+                key={sourceKey(item)}
                 className="group flex items-start gap-2 rounded-md p-2 hover:bg-muted/60"
               >
                 <div className="min-w-0 flex-1">
@@ -59,7 +57,7 @@ export function CartPanel() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => cart.remove(item.id)}
+                  onClick={() => cart.remove(item)}
                   className="rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100"
                   aria-label="Remove from cart"
                 >

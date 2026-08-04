@@ -1,10 +1,12 @@
-"""Sources: browse three kinds, persist the ticked ones.
+"""Sources: browse three kinds. Reads only.
 
-The rule this module enforces is **browsing does not write**. Every `GET` here
-returns items without touching the database; `POST /sources` is the only thing
-that creates a row. Competitor posts are the one exception, and they are the
-exception because they arrive by sync rather than by browsing — there is no live
-competitor grid to page through.
+**Browsing does not write.** Nothing here creates a Source Item — the Cart
+carries what the operator ticked and `POST /generate` writes only what a run
+uses, so an item that is browsed and abandoned leaves nothing behind.
+
+Competitor posts are the one remaining exception: the Metricool sync writes them
+on arrival, because they are synced rather than browsed. Removing that is the
+last step of Phase 3.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -34,29 +36,6 @@ class RssFeedOut(BaseModel):
 
     items: list[SourceItemBase]
     failures: list[FeedFailureOut]
-
-
-@router.get("")
-def list_sources(
-    ids: str = Query("", description="Comma-separated row ids"),
-    session: Session = Depends(get_session),
-) -> list[SourceItem]:
-    """Resolve Cart ids back to rows.
-
-    The Cart is client-side and holds nothing but ids (data-model.md, "A cart
-    table. Rejected."), so something has to turn them back into rows to display.
-    Returned in the order asked for, because that is the order they were ticked
-    in and the Cart shows it.
-    """
-    wanted = [int(part) for part in ids.split(",") if part.strip().isdigit()]
-    if not wanted:
-        return []
-
-    rows = session.exec(select(SourceItem).where(SourceItem.id.in_(wanted))).all()  # type: ignore[union-attr]
-    by_id = {row.id: row for row in rows}
-    # Silently drops an id with no row. The Cart is client state and can outlive
-    # a deleted row; failing the whole panel over one stale id helps nobody.
-    return [by_id[row_id] for row_id in wanted if row_id in by_id]
 
 
 @router.get("/competitors")
@@ -148,38 +127,6 @@ def get_tweet(url: str = Query(...)) -> SourceItemBase:
         return x.fetch_tweet(url)
     except x.XError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
-
-
-@router.post("", status_code=201)
-def save_sources(
-    items: list[SourceItemBase],
-    session: Session = Depends(get_session),
-) -> list[SourceItem]:
-    """Persist ticked items, returning one row per item in the order given.
-
-    Idempotent by `UNIQUE (kind, external_id)`: ticking the same item twice
-    returns the existing row rather than creating a second one.
-    """
-    for item in items:
-        if item.kind == SourceKind.RSS and not rss.is_curated_url(item.url):
-            # The RSS tab is live, so the client posts the body back rather than
-            # an id the server can look up. Without this the endpoint takes
-            # arbitrary text and hands it to the writer, and "fully curated"
-            # stops being a property of the system.
-            raise HTTPException(
-                status_code=422,
-                detail=f"Not from a curated feed: {item.url}",
-            )
-        if not item.external_id:
-            raise HTTPException(
-                status_code=422, detail="A source item needs an external_id to dedup on"
-            )
-
-    rows = _upsert(session, items)
-    session.commit()
-    for row in rows:
-        session.refresh(row)
-    return rows
 
 
 VOLATILE = ("image_url", "reactions", "comments", "shares")

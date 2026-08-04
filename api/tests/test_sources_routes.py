@@ -1,24 +1,15 @@
-"""The Phase 2 contract: browsing does not write, and ticking is idempotent."""
+"""Browsing does not write.
 
-import pytest
+Every route here reads. What used to be tested against `POST /sources` — the
+curated-feed guard, dedup, and not rewriting an existing row — moved to
+tests/test_generate.py when generate became the only write point.
+"""
+
 from sqlmodel import Session, func, select
 
 from app.models import SourceItem, SourceItemBase, SourceKind
 from app.routes import sources as routes
 from app.sources import rss
-
-
-def _live(kind: SourceKind, external_id: str, **overrides) -> dict:
-    """A Source Item as the client posts one — no id, no created_at."""
-    item = SourceItemBase(
-        kind=kind,
-        external_id=external_id,
-        author=overrides.pop("author", "Someone"),
-        text=overrides.pop("text", "Body"),
-        url=overrides.pop("url", None),
-        **overrides,
-    )
-    return item.model_dump(mode="json")
 
 
 def _count(engine, kind: SourceKind | None = None) -> int:
@@ -30,92 +21,6 @@ def _count(engine, kind: SourceKind | None = None) -> int:
 
 
 CURATED_RSS_URL = "https://www.smithsonianmag.com/history/a-story-180987410/"
-
-
-@pytest.fixture
-def cart() -> list[dict]:
-    """One of each kind, which is what the phase is measured on."""
-    return [
-        _live(
-            SourceKind.COMPETITOR_POST,
-            "117997197937838_989827367419507",
-            author="TerrifyingMyths",
-            synced_for_page_id=1,
-            reactions=16,
-        ),
-        _live(
-            SourceKind.RSS,
-            CURATED_RSS_URL,
-            author="Smithsonian Magazine",
-            url=CURATED_RSS_URL,
-        ),
-        _live(
-            SourceKind.TWEET,
-            "1817449230118928441",
-            author="@qikipedia",
-            url="https://x.com/qikipedia/status/1817449230118928441",
-        ),
-    ]
-
-
-def test_ticking_one_of_each_kind_creates_three_rows(client, engine, cart):
-    response = client.post("/sources", json=cart)
-    assert response.status_code == 201
-
-    rows = response.json()
-    assert [row["kind"] for row in rows] == ["competitor_post", "rss", "tweet"]
-    assert [row["author"] for row in rows] == [
-        "TerrifyingMyths",
-        "Smithsonian Magazine",
-        "@qikipedia",
-    ]
-    # Only a competitor post belongs to a Page's competitor set.
-    assert [row["synced_for_page_id"] for row in rows] == [1, None, None]
-    assert _count(engine) == 3
-
-
-def test_reticking_creates_none(client, engine, cart):
-    first = client.post("/sources", json=cart).json()
-    second = client.post("/sources", json=cart).json()
-
-    assert [row["id"] for row in second] == [row["id"] for row in first]
-    assert _count(engine) == 3
-
-
-def test_the_same_item_twice_in_one_cart_is_one_row(client, engine, cart):
-    """Two feeds carrying one story arrive as two ticks in a single POST.
-
-    The unique constraint would not have surfaced this — nothing has flushed
-    yet when the second copy is looked up.
-    """
-    rows = client.post("/sources", json=[cart[1], cart[1]]).json()
-
-    assert rows[0]["id"] == rows[1]["id"]
-    assert _count(engine) == 1
-
-
-def test_an_rss_item_from_outside_the_curated_list_is_refused(client, engine, cart):
-    """The RSS tab is live, so the client posts the body back.
-
-    Without this the endpoint takes arbitrary text and hands it to the writer.
-    """
-    smuggled = _live(
-        SourceKind.RSS,
-        "https://evil.example/post",
-        url="https://evil.example/post",
-    )
-    response = client.post("/sources", json=[smuggled])
-
-    assert response.status_code == 422
-    assert "curated" in response.json()["detail"]
-    assert _count(engine) == 0
-
-
-def test_an_item_with_no_external_id_is_refused(client, engine):
-    response = client.post("/sources", json=[_live(SourceKind.TWEET, "")])
-
-    assert response.status_code == 422
-    assert _count(engine) == 0
 
 
 def test_browsing_rss_writes_nothing(client, engine, monkeypatch):
@@ -240,17 +145,6 @@ def test_a_plain_read_does_not_sync(client, monkeypatch):
 
     client.get("/sources/competitors", params={"page_id": 1, "refresh": True})
     assert len(calls) == 2
-
-
-def test_ticking_does_not_rewrite_an_existing_row(client, engine, cart):
-    """`POST /sources` hands back a body it was shown, not a fresh vendor read."""
-    first = client.post("/sources", json=cart).json()
-
-    tampered = [{**item, "text": "rewritten", "reactions": 999} for item in cart]
-    client.post("/sources", json=tampered)
-
-    rows = client.get("/sources", params={"ids": first[0]["id"]}).json()
-    assert rows[0]["text"] == "Body"
 
 
 def test_a_metricool_failure_is_502_not_an_empty_grid(client, monkeypatch):

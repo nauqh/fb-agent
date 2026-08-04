@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import { AlertTriangle, Loader2, RefreshCw, Search } from "lucide-react";
 import { toast } from "sonner";
 
@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { getRss, getCompetitorPosts, getTweet, saveSources } from "@/lib/api/sources";
+import { getRss, getCompetitorPosts, getTweet } from "@/lib/api/sources";
 import type { LiveSourceItem } from "@/lib/fixtures/sources";
 import { useCart } from "@/lib/cart";
 import { emit } from "@/lib/store";
@@ -22,55 +22,11 @@ import { useQuery } from "@/lib/use-query";
 const PAGE_ID = 1;
 
 export default function SourcesScreen() {
-  const cart = useCart();
-
-  /**
-   * `external_id` → row id, for items that were live until they were ticked.
-   *
-   * The grid knows external ids; the Cart holds row ids. Ticking is what
-   * creates the row, so this map is the bridge between the two — and it is why
-   * a tick is a round trip rather than a local toggle.
-   */
-  const [savedIds, setSavedIds] = useState<Record<string, number>>({});
-  const [pending, setPending] = useState<string[]>([]);
-
-  const tick = useCallback(
-    async (item: LiveSourceItem) => {
-      const known = savedIds[item.external_id];
-      if (known !== undefined) {
-        // Untick drops the id from the Cart; the row stays, and if nothing was
-        // ever generated from it the row is an orphan. There is no DELETE, so
-        // this leaks — tick ten, untick nine, generate one, and nine rows
-        // remain referenced by nothing.
-        //
-        // Known and accepted until Phase 3, which moves the write to
-        // POST /generate and removes this whole path along with `savedIds`.
-        // See docs/plan.md, "Ticking stops writing". Not worth a DELETE route
-        // that would be deleted again a week later.
-        if (cart.has(known)) cart.remove(known);
-        else cart.add(known);
-        return;
-      }
-
-      setPending((current) => [...current, item.external_id]);
-      try {
-        const [saved] = await saveSources([item]);
-        setSavedIds((current) => ({ ...current, [item.external_id]: saved.id }));
-        cart.add(saved.id);
-      } catch (cause) {
-        toast.error(cause instanceof Error ? cause.message : "Could not save that item");
-      } finally {
-        setPending((current) => current.filter((id) => id !== item.external_id));
-      }
-    },
-    [cart, savedIds],
-  );
-
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <ScreenHeader
         title="Sources"
-        hint="Competitor posts are synced and already rows. Tweets and RSS items are live — ticking one is what writes it."
+        hint="Tick what you want to write from. Nothing is saved until you generate."
       />
 
       <Tabs
@@ -90,10 +46,10 @@ export default function SourcesScreen() {
             <CompetitorsTab />
           </TabsContent>
           <TabsContent value="tweets" className="min-h-0 flex-1 overflow-y-auto">
-            <TweetsTab onTick={tick} savedIds={savedIds} pending={pending} />
+            <TweetsTab />
           </TabsContent>
           <TabsContent value="rss" className="min-h-0 flex-1 overflow-y-auto">
-            <RssTab onTick={tick} savedIds={savedIds} pending={pending} />
+            <RssTab />
           </TabsContent>
         </div>
 
@@ -158,8 +114,8 @@ function CompetitorsTab() {
             <SourceCard
               key={item.id}
               {...item}
-              selected={cart.has(item.id)}
-              onToggle={() => (cart.has(item.id) ? cart.remove(item.id) : cart.add(item.id))}
+              selected={cart.has(item)}
+              onToggle={() => cart.toggle(item)}
             />
           ))}
         </div>
@@ -168,13 +124,7 @@ function CompetitorsTab() {
   );
 }
 
-interface LiveTabProps {
-  onTick: (item: LiveSourceItem) => void;
-  savedIds: Record<string, number>;
-  pending: string[];
-}
-
-function RssTab({ onTick, savedIds, pending }: LiveTabProps) {
+function RssTab() {
   const cart = useCart();
   const { data, loading, error, refresh } = useQuery(() => getRss(PAGE_ID), []);
   const [refreshing, setRefreshing] = useState(false);
@@ -225,25 +175,21 @@ function RssTab({ onTick, savedIds, pending }: LiveTabProps) {
         <CardGridSkeleton />
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
-          {data?.items.map((item) => {
-            const rowId = savedIds[item.external_id];
-            return (
-              <SourceCard
-                key={item.external_id}
-                {...item}
-                selected={rowId !== undefined && cart.has(rowId)}
-                pending={pending.includes(item.external_id)}
-                onToggle={() => onTick(item)}
-              />
-            );
-          })}
+          {data?.items.map((item) => (
+            <SourceCard
+              key={item.external_id}
+              {...item}
+              selected={cart.has(item)}
+              onToggle={() => cart.toggle(item)}
+            />
+          ))}
         </div>
       )}
     </>
   );
 }
 
-function TweetsTab({ onTick, savedIds, pending }: LiveTabProps) {
+function TweetsTab() {
   const cart = useCart();
   const [url, setUrl] = useState("");
   const [looking, setLooking] = useState(false);
@@ -289,18 +235,14 @@ function TweetsTab({ onTick, savedIds, pending }: LiveTabProps) {
         </p>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
-          {found.map((item) => {
-            const rowId = savedIds[item.external_id];
-            return (
-              <SourceCard
-                key={item.external_id}
-                {...item}
-                selected={rowId !== undefined && cart.has(rowId)}
-                pending={pending.includes(item.external_id)}
-                onToggle={() => onTick(item)}
-              />
-            );
-          })}
+          {found.map((item) => (
+            <SourceCard
+              key={item.external_id}
+              {...item}
+              selected={cart.has(item)}
+              onToggle={() => cart.toggle(item)}
+            />
+          ))}
         </div>
       )}
     </>

@@ -13,8 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { generate } from "@/lib/api/drafts";
 import { getQuotaUsage, listPages } from "@/lib/api/pages";
-import { getSourceItems } from "@/lib/api/sources";
-import { useCart } from "@/lib/cart";
+import { sourceKey, useCart } from "@/lib/cart";
 import { isFactual } from "@/lib/types";
 import { useQuery } from "@/lib/use-query";
 import { cn } from "@/lib/utils";
@@ -33,7 +32,6 @@ export default function GenerateScreen() {
   const [running, setRunning] = useState(false);
 
   const { data: pages } = useQuery(() => listPages(), []);
-  const { data: items } = useQuery(() => getSourceItems(cart.ids), [cart.ids.join(",")]);
 
   const page = pages?.[0];
   const { data: used } = useQuery(
@@ -51,11 +49,9 @@ export default function GenerateScreen() {
     setRunning(true);
     try {
       const ids = await generate({
-        // By value, not by id: generate is the only thing that writes a
-        // source_item row. The Cart still holds ids today, so these come back
-        // from the rows it resolved; once the Cart carries items it passes them
-        // straight through. See docs/plan.md, "Ticking stops writing".
-        sources: usingTopic ? [] : (items ?? []),
+        // By value: generate is the only thing that writes a source_item row,
+        // so it needs the item rather than a pointer to one.
+        sources: usingTopic ? [] : cart.items,
         page_ids: [page.id],
         topic: usingTopic ? topic.trim() : undefined,
       });
@@ -116,8 +112,8 @@ export default function GenerateScreen() {
             </div>
           ) : (
             <ul className="divide-y">
-              {items?.map((item) => (
-                <li key={item.id} className="flex items-start gap-3 px-4 py-3">
+              {cart.items.map((item) => (
+                <li key={sourceKey(item)} className="flex items-start gap-3 px-4 py-3">
                   <div className="min-w-0 flex-1">
                     <p className="flex items-center gap-2 text-sm font-medium">
                       {item.author}
@@ -138,7 +134,7 @@ export default function GenerateScreen() {
                   </div>
                   <button
                     type="button"
-                    onClick={() => cart.remove(item.id)}
+                    onClick={() => cart.remove(item)}
                     className="rounded p-1 text-muted-foreground hover:text-foreground"
                     aria-label="Remove from cart"
                   >
