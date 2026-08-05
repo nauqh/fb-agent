@@ -51,6 +51,21 @@
   --color-panel: var(--panel);
 }
 
+@theme {
+  --animate-progress-sweep: progress-sweep 1.4s ease-in-out infinite;
+
+  /* Travels the full track and back. `left` rather than `translate` so the
+     third-width bar never leaves the rounded ends of its own track. */
+  @keyframes progress-sweep {
+    0% {
+      left: -35%;
+    }
+    100% {
+      left: 100%;
+    }
+  }
+}
+
 :root {
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);

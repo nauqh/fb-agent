@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AlertTriangle, Loader2, RefreshCw, Search } from "lucide-react";
 import { toast } from "sonner";
 
@@ -10,6 +10,7 @@ import { QueryError } from "@/components/query-error";
 import { SourceCard } from "@/components/source-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getRss, getCompetitorPosts, getTweet } from "@/lib/api/sources";
@@ -104,6 +105,14 @@ function CompetitorsTab() {
         </Button>
       </div>
 
+      {/* A five-second wait behind a spinning icon reads as a hung button. The
+          bar and the counter are what separate "slow" from "stuck" — and the
+          first load waits on the same sync, because the server syncs itself
+          when it has nothing stored. */}
+      {syncing || loading ? (
+        <SyncProgress label={syncing ? "Fetching from Metricool" : "Loading competitor posts"} />
+      ) : null}
+
       {error ? (
         <QueryError error={error} onRetry={refresh} />
       ) : loading ? (
@@ -153,6 +162,13 @@ function RssTab() {
           Refresh
         </Button>
       </div>
+
+      {/* Same wait, same bar as Competitors: seven feeds fetched live, and the
+          slowest one sets the pace. `refresh()` leaves the old items up, so
+          without this the screen looks untouched until they change. */}
+      {refreshing || loading ? (
+        <SyncProgress label={refreshing ? "Fetching feeds" : "Loading feeds"} />
+      ) : null}
 
       {/* A feed that rots goes unnoticed unless its failure is on screen. */}
       {data?.failures.length ? (
@@ -247,6 +263,39 @@ function TweetsTab() {
       )}
     </>
   );
+}
+
+/**
+ * The bar, plus how long it has been going.
+ *
+ * Mounted only while a fetch is in flight, so the counter starts at zero for
+ * each one without anything having to reset it.
+ */
+function SyncProgress({ label }: { label: string }) {
+  const seconds = useElapsedSeconds();
+
+  return (
+    <div className="flex flex-col gap-1.5 pb-3">
+      <Progress />
+      <p className="text-xs text-muted-foreground">
+        {label}…{seconds > 0 ? ` ${seconds}s` : ""}
+      </p>
+    </div>
+  );
+}
+
+/** Whole seconds since mount. Ticks faster than it displays, so the number
+    turns over on the second rather than up to a second late. */
+function useElapsedSeconds() {
+  const [seconds, setSeconds] = useState(0);
+
+  useEffect(() => {
+    const started = Date.now();
+    const id = setInterval(() => setSeconds(Math.floor((Date.now() - started) / 1000)), 200);
+    return () => clearInterval(id);
+  }, []);
+
+  return seconds;
 }
 
 function CardGridSkeleton() {
