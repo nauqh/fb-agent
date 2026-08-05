@@ -60,13 +60,38 @@ def test_a_recap_line_without_an_emoji_is_caught():
     assert reason and "do not start with an emoji" in reason
 
 
-@pytest.mark.parametrize("years", ["Marie Tharp (1920-2006) did", "Ada Lovelace (b. 1990) does"])
+@pytest.mark.parametrize(
+    "years",
+    [
+        "Marie Tharp (1920-2006) did",
+        "Ada Lovelace (b. 1990) does",
+        "Ada Lovelace (1815 — 1852) wrote",  # em dash
+        # Antiquity. These were all rejected until 2026-08-06: the pattern was
+        # `\d{4}` with no era, so every pre-1000 subject was unwritable on a
+        # history page — and because this rule raises `ModelRetry`, the writer
+        # resubmitted correct text until it ran out of retries and the run died.
+        "Wu Zetian (624 – 705 AD) ascended",
+        "Hypatia (350 - 415 CE) taught",
+        "Cleopatra (69 BC - 30 BC) ruled",
+        "Someone (b. 812) lived",
+    ],
+)
 def test_birth_and_death_years_are_recognised(years):
     assert validators.birth_death_years(years) is None
 
 
-def test_a_body_with_no_years_is_caught():
-    reason = validators.birth_death_years("Marie Tharp mapped the ocean floor.")
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Marie Tharp mapped the ocean floor.",
+        "The year 1934 appears bare, outside parentheses.",
+        # The era marker is what keeps a short span from reading as a lifespan.
+        "It took (2 - 3 hours) to build.",
+        "Rated (4 - 5 stars) by critics.",
+    ],
+)
+def test_a_body_with_no_years_is_caught(text):
+    reason = validators.birth_death_years(text)
     assert reason and "birth/death years" in reason
 
 
@@ -80,6 +105,28 @@ def test_every_violation_is_reported_at_once():
     reasons = validators.check("Why did she do it?", "no emoji here", "short")
 
     assert len(reasons) >= 4
+
+
+def test_a_story_naming_no_people_does_not_block_the_writer():
+    """The Zantigo case: an Atlas Obscura piece about a taco chain.
+
+    No person is named, so no rewrite can produce birth/death years. While this
+    was a blocking rule the writer resubmitted a correct draft until it ran out
+    of retries and the run died.
+    """
+    body = "\n\n".join(
+        ["The chain opened in Minneapolis. " * 28, "Then it closed for good. " * 30]
+    )
+
+    assert validators.check("A hook.", "🌮 One point.", body) == []
+    assert validators.advise(body), "still worth telling the operator"
+
+
+def test_the_blocking_rules_are_only_ones_the_model_can_act_on():
+    """A rule that cannot be satisfied on demand kills the run instead of warning."""
+    blocking = "\n".join(validators.check("Why?", "no emoji", "short"))
+
+    assert "birth/death years" not in blocking
 
 
 # --- the retry loop ----------------------------------------------------------
@@ -212,10 +259,34 @@ def test_an_overloaded_model_is_transient(message):
 
 
 @pytest.mark.parametrize(
-    "message", ["status_code: 400, invalid argument", "API key not valid"]
+    "message",
+    [
+        "status_code: 400, invalid argument",
+        "API key not valid",
+        "status_code: 404, this model is no longer available. NOT_FOUND",
+    ],
 )
 def test_a_bad_request_is_not_transient(message):
     """Retrying these just spends the same money three times."""
+    assert not writer.is_transient(RuntimeError(message))
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "The first comment is 1402 characters; expand it past 1500.",
+        "The first comment is 2117 characters; cut it below 2100.",
+        "The hook is 502 words; it must be under 65.",
+        "Exceeded maximum output retries (2)",
+    ],
+)
+def test_our_own_rule_messages_are_never_read_as_an_outage(message):
+    """`"500"` lives inside `"1500"`, and `BODY_MIN_CHARS` is 1,500.
+
+    While the codes were matched as bare substrings, a brand-rule failure could
+    read as an overloaded server and move the run onto a different model — a
+    silent model swap for a reason that has nothing to do with availability.
+    """
     assert not writer.is_transient(RuntimeError(message))
 
 
@@ -230,6 +301,16 @@ def test_the_configured_model_is_tried_before_the_fallbacks():
     names = [writer.settings.gemini_text_model, *writer.FALLBACK_MODELS]
     assert list(dict.fromkeys(names))[0] == writer.settings.gemini_text_model
     assert "gemini-2.5-flash" in writer.FALLBACK_MODELS
+
+
+def test_the_last_fallback_is_an_alias_so_it_cannot_be_retired():
+    """`gemini-2.0-flash` was the last link until it started answering 404.
+
+    It was still listed by `models.list()` while refusing to generate, so a
+    pinned version rots without warning. An alias is repointed by the provider.
+    """
+    assert writer.FALLBACK_MODELS[-1].endswith("-latest")
+    assert "gemini-2.0-flash" not in writer.FALLBACK_MODELS
 
 
 def test_a_supplied_model_is_never_swapped_for_a_real_one(page, monkeypatch):

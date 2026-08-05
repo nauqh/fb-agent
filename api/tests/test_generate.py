@@ -157,9 +157,15 @@ def test_a_writer_failure_lands_on_the_row_not_in_a_log(client, monkeypatch):
     [draft_id] = client.post("/generate", json={"page_ids": [1], "topic": "x"}).json()
 
     draft = client.get(f"/drafts/{draft_id}").json()
-    assert draft["status"] == "review", "a failed run must not sit at generating"
+    assert draft["status"] == "failed", "a failed run must not sit at generating"
     assert "model refused" in draft["error"]
     assert draft["progress_step"] == "failed"
+
+    # Not `review`, which is what it used to be: an empty row in the review
+    # queue reads as a draft awaiting a decision, and the only sign otherwise
+    # was an `error` column nothing rendered.
+    assert client.post(f"/drafts/{draft_id}/approve").status_code == 409
+    assert client.post(f"/drafts/{draft_id}/reject").status_code == 200
 
 
 def test_a_restart_sweeps_rows_left_generating(session, engine, page):
@@ -171,7 +177,7 @@ def test_a_restart_sweeps_rows_left_generating(session, engine, page):
 
     with Session(engine) as fresh:
         draft = fresh.exec(select(Draft)).one()
-        assert draft.status == DraftStatus.REVIEW
+        assert draft.status == DraftStatus.FAILED
         assert "restart" in draft.error
 
 

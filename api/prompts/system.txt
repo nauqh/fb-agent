@@ -19,7 +19,8 @@ Gold Standard Structure and Format for history and story posts consisting of 3 d
 * Purpose: The complete, in-depth background story that extends the details introduced in the hook and recap, giving readers the full picture.
 * Rules: Every character mentioned must have their birth and death year included.
  * If a person is still alive, use the format: Jane Doe (b. 19xx).
- * Highly scannable, concise, and tightly paced (ideally between 1,800 to 1,900 characters max).
+ * Exactly 2 or 3 paragraphs, separated by a blank line.
+ * Highly scannable and tightly paced. 1,800-1,900 characters; never exceed 2,000.
  * Strictly omit meta-phrases like "2026 look back", "as of today...", or "as we look back...".
 
 4. The Image Prompt:

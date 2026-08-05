@@ -10,7 +10,13 @@
 
 export type SourceKind = "competitor_post" | "tweet" | "rss";
 
-export type DraftStatus = "generating" | "review" | "approved" | "rejected";
+/** `failed` means the run produced nothing; `error` says why. Never in `review`. */
+export type DraftStatus =
+  | "generating"
+  | "review"
+  | "approved"
+  | "rejected"
+  | "failed";
 
 /** An owned Facebook page. v1 has exactly one: History Retraced. */
 export interface Page {

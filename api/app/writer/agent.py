@@ -6,6 +6,7 @@ system exposed every intermediate state of a six-node graph, and its brand
 rules ran afterwards as warnings nobody had to act on.
 """
 
+import re
 from functools import lru_cache
 
 from pydantic import BaseModel, Field
@@ -30,7 +31,12 @@ class DraftContent(BaseModel):
 
     hook: str = Field(description="Text for the image panel. Under 65 words, no questions.")
     caption: str = Field(description="The recap: at most 5 points, each opening with an emoji.")
-    first_comment: str = Field(description="The main body, 1800-1900 characters.")
+    first_comment: str = Field(
+        description=(
+            "The main body, 1800-1900 characters, as 2-3 paragraphs separated "
+            "by a blank line."
+        )
+    )
     overlay_text: str = Field(description="Panel text. The hook unless there is reason to differ.")
     highlight_phrases: list[str] = Field(
         description="5-8 short substrings copied verbatim out of overlay_text."
@@ -96,27 +102,47 @@ def build_agent(page: Page, model: object | None = None) -> Agent:
     return agent
 
 
-FALLBACK_MODELS = ("gemini-2.5-flash", "gemini-2.0-flash")
+FALLBACK_MODELS = ("gemini-2.5-flash", "gemini-flash-latest")
 """Tried in order when the configured model is unavailable.
 
 Ported from the old repo, which kept the same chain
 (`generate-with-fallback.ts:9`) — and needed it. `gemini-3.5-flash` answered
 503 "experiencing high demand" three times while this was being built, and one
 of those killed a real run.
+
+`gemini-2.0-flash` was the third link until 2026-08-06, when it started
+answering **404 "no longer available"** — the same rot the old repo hit on the
+image side (`376afdc`). It was still in `models.list()` while refusing to
+generate, so the list is not evidence; each link here was checked by actually
+generating from it.
+
+`gemini-flash-latest` is an alias rather than a version on purpose. Google
+repoints it, so the last link cannot rot the way the pinned one did.
 """
 
-TRANSIENT = ("503", "UNAVAILABLE", "high demand", "RESOURCE_EXHAUSTED", "500", "502")
-"""Substrings that mean "ask again", not "this request is wrong".
+TRANSIENT_CODES = ("500", "502", "503", "504", "429")
+TRANSIENT_WORDS = ("unavailable", "high demand", "resource_exhausted", "overloaded")
+_STATUS = re.compile(r"\b(?:code|status(?:_code)?)\W{0,3}(\d{3})\b", re.I)
+"""What means "ask again", as opposed to "this request is wrong".
 
-Matched on the message because `ModelHTTPError` flattens the provider's body
-into it. Crude, and deliberately so: the failure mode of matching too widely is
-one wasted retry, and of matching too narrowly is a dead run.
+The codes are matched **as codes**, not as substrings. They used to be plain
+`in` tests, which made `is_transient` true for
+`"The first comment is 1402 characters; expand it past 1500."` — our own
+validator message, because `"1500"` contains `"500"`. A brand-rule failure would
+have read as an overloaded server and silently moved the run onto a different
+model. Nothing had hit it yet: `UnexpectedModelBehavior` does not carry the
+retry reason in its text. `BODY_MIN_CHARS` being 1,500 was one exception
+signature away from it.
+
+The words stay as substrings — they are phrases no rule of ours produces.
 """
 
 
 def is_transient(error: Exception) -> bool:
     message = str(error)
-    return any(marker.lower() in message.lower() for marker in TRANSIENT)
+    if any(word in message.lower() for word in TRANSIENT_WORDS):
+        return True
+    return any(found in TRANSIENT_CODES for found in _STATUS.findall(message))
 
 
 @lru_cache(maxsize=4)

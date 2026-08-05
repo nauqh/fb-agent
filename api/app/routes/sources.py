@@ -4,9 +4,14 @@
 carries what the operator ticked and `POST /generate` writes only what a run
 uses, so an item that is browsed and abandoned leaves nothing behind.
 
-Competitor posts are the one remaining exception: the Metricool sync writes them
-on arrival, because they are synced rather than browsed. Removing that is the
-last step of Phase 3.
+Competitor posts are the standing exception, and stay one: the Metricool sync
+writes them on arrival, because they are synced rather than browsed. Storage is
+also what makes them checkable — there is no `is_curated_url` equivalent for a
+Facebook post, so `POST /generate` takes a competitor by id and resolves it
+against a row the sync owns. Phase 3 planned to drop the storage and re-fetch at
+generate instead; that was reversed, because it would put a vendor call that has
+already 502'd twice at the front of a 60-second run. See docs/plan.md, "But
+competitor posts stay stored".
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query

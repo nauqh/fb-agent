@@ -37,6 +37,14 @@ class DraftStatus(StrEnum):
     REVIEW = "review"
     APPROVED = "approved"
     REJECTED = "rejected"
+    FAILED = "failed"
+    """The run did not produce a draft. `error` says why.
+
+    Separate from `review` because a run that produced nothing is not a draft
+    awaiting a decision. It used to land in `review`, which put empty rows in the
+    queue beside real ones, looking ready — the operator's only clue was an
+    `error` column nothing rendered.
+    """
 
 
 class Page(SQLModel, table=True):

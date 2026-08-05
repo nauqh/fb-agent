@@ -187,6 +187,8 @@ export function DraftDetail({ draftId }: { draftId: number }) {
   }
 
   const decided = draft.status === "approved" || draft.status === "rejected";
+  /** A failed run has nothing to approve, and the server refuses it with a 409. */
+  const failed = draft.status === "failed";
 
   return (
     <div className="grid gap-8 pb-16 lg:grid-cols-[340px_minmax(0,1fr)]">
@@ -462,18 +464,25 @@ export function DraftDetail({ draftId }: { draftId: number }) {
                     <X className="size-4" />
                     Reject
                   </Button>
-                  <Button
-                    className="bg-gold text-gold-foreground hover:bg-gold/90"
-                    disabled={deciding}
-                    onClick={() => decide("approve")}
-                  >
-                    {deciding ? (
-                      <Loader2 className="size-4 animate-spin" />
-                    ) : (
-                      <Check className="size-4" />
-                    )}
-                    Approve
-                  </Button>
+                  {failed ? (
+                    <p className="text-xs text-muted-foreground">
+                      This run failed, so there is nothing to approve. Reject it to clear
+                      the queue, then generate again.
+                    </p>
+                  ) : (
+                    <Button
+                      className="bg-gold text-gold-foreground hover:bg-gold/90"
+                      disabled={deciding}
+                      onClick={() => decide("approve")}
+                    >
+                      {deciding ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        <Check className="size-4" />
+                      )}
+                      Approve
+                    </Button>
+                  )}
                 </div>
               )}
             </div>

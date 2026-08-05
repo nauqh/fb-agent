@@ -102,6 +102,14 @@ def update_draft(
 
 @router.post("/drafts/{draft_id}/approve")
 def approve_draft(draft_id: int, session: Session = Depends(get_session)) -> Draft:
+    """A failed run cannot be approved — there is nothing in it to approve.
+
+    Rejecting one is still allowed: that is how it leaves the queue.
+    """
+    if _require(session, draft_id).status == DraftStatus.FAILED:
+        raise HTTPException(
+            status_code=409, detail="That draft failed and has nothing to approve."
+        )
     return _set_status(session, draft_id, DraftStatus.APPROVED)
 
 

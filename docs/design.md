@@ -216,10 +216,8 @@ GET    /pages/{id}
 PATCH  /pages/{id}                  quota, watermark (prompts are files)
 GET    /prompts                     the prompt files, read-only, substituted
 
-GET    /sources?ids=1,2,3           resolve Cart ids back to rows (goes in Phase 3)
-GET    /sources/competitors?page_id=  Metricool sync, then rows
-GET    /sources/rss?page_id=          the Page's curated feeds, live
-POST   /sources                     persist ticked items → ids (goes in Phase 3)
+GET    /sources/competitors?page_id=&refresh=  stored rows; syncs when empty or asked
+GET    /sources/rss?page_id=          the Page's curated feeds, live, unsaved
 GET    /sources/tweet?url=          single lookup, live, unsaved
 
 POST   /generate                    {sources, page_ids} → draft ids; the only write

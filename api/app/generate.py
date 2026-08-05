@@ -157,11 +157,14 @@ def _run_one(session: Session, draft_id: int) -> None:
         draft.hashtags = content.hashtags
         draft.image_prompt = content.image_prompt
 
-        # Residue: what the writer could not fix within its retries. Every rule
-        # is enforced first, so a Warning here has already survived correction.
+        # Residue: what the writer could not fix within its retries. Every
+        # blocking rule is enforced first, so a Warning from `check` has already
+        # survived correction. `advise` adds the rules that were never enforced
+        # because they cannot be satisfied on demand.
         draft.warnings = validators.check(
             content.hook, content.caption, content.first_comment
         )
+        draft.warnings += validators.advise(content.first_comment)
         draft.warnings += _highlight_warnings(content)
 
         draft.status = DraftStatus.REVIEW
@@ -169,7 +172,7 @@ def _run_one(session: Session, draft_id: int) -> None:
 
     except Exception as error:  # noqa: BLE001 — the row is where a failure goes
         draft.error = f"{type(error).__name__}: {error}"[:500]
-        draft.status = DraftStatus.REVIEW
+        draft.status = DraftStatus.FAILED
         draft.progress_step = "failed"
         draft.progress_pct = 100
         draft.updated_at = datetime.now(timezone.utc)
@@ -212,7 +215,7 @@ def sweep_stranded(session: Session) -> int:
     ).all()
     for draft in stranded:
         draft.error = "Interrupted by a restart before it finished."
-        draft.status = DraftStatus.REVIEW
+        draft.status = DraftStatus.FAILED
         draft.progress_step = "failed"
         draft.progress_pct = 100
         session.add(draft)

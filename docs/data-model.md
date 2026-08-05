@@ -257,8 +257,9 @@ probed before it earns a place, which is not a thing to do from a form.
 percentage, both columns on `DRAFT`. The old scrolling log was already capped at
 40 entries and is cosmetic.
 
-**A cart table.** Rejected. The Cart is a list of `source_item` ids held by the
-client. Nothing about it needs to survive that is not already a row.
+**A cart table.** Rejected. The Cart is a list of Source Items held by the
+client — the items themselves, not ids, since most of them are not rows yet.
+Nothing about it needs to survive that is not already a row.
 
 ## Ingest rule: browsing does not write
 
@@ -266,11 +267,16 @@ Tweets and RSS items are fetched live and become rows **only when they are
 generated from**. This keeps the table from filling with hundreds of unread
 items.
 
-Competitor posts are the exception today — they arrive by Metricool sync, so
-they are written on arrival. Phase 2 stopped that sync running on every read
-(5.5s and 1.6MB for 500 posts, against a window gaining ~3 an hour); Phase 3
-removes the storage it fills, and then the rule has no exceptions at all. See
-[plan.md](plan.md#and-competitor-posts-stop-being-stored).
+Competitor posts are the standing exception: they arrive by a Metricool sync the
+operator pressed, not by a tab opening, so they are written on arrival. The
+exception is deliberate and stays. The rule exists to stop the table filling with
+items nobody looked twice at, and a competitor sync is not that — it is bounded
+by the seven-day window and re-syncing updates the same rows rather than adding
+more. Storage is also what makes them checkable: there is no `is_curated_url`
+equivalent for a Facebook post, so `POST /generate` accepts a competitor by **id
+only**, resolved against a row the sync owns. Phase 3 planned to remove the
+storage and re-fetch from Metricool instead, then reversed it —
+[why](plan.md#but-competitor-posts-stay-stored--reversed-2026-08-06).
 
 **The write happens at generate, not at tick.** Phase 2 shipped it at tick,
 which left a hole: untick removes the id from the Cart but there is no `DELETE`,
@@ -290,13 +296,15 @@ Draft must exist from the moment its run starts.
 ## Flow
 
 ```
-Metricool sync ──> SOURCE_ITEM(kind=competitor_post, sync'd_page)  [on arrival]
-Tweet URL      ──> SOURCE_ITEM(kind=tweet)                           [on tick]
-Curated feeds  ──> SOURCE_ITEM(kind=rss)                             [on tick]
+Metricool sync ──> SOURCE_ITEM(kind=competitor_post, sync'd_page)  [on sync]
+Tweet URL      ──> live lookup, unsaved
+Curated feeds  ──> live read, unsaved
                               │
-                    Cart — client-side, just ids
+                    Cart — client-side, the items themselves
                               │
                     Generate: pick Pages
+                              │
+              SOURCE_ITEM(kind=tweet | rss)              [written here, if used]
                               │
               DRAFT per (source × page), status=generating
                               │

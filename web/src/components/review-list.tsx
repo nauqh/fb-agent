@@ -16,6 +16,9 @@ const FILTERS: { value: DraftStatus | "all"; label: string }[] = [
   { value: "review", label: "Needs review" },
   { value: "approved", label: "Approved" },
   { value: "rejected", label: "Rejected" },
+  // Its own tab, not folded into "Needs review": a run that produced nothing is
+  // not awaiting a decision, and it used to sit in the queue looking ready.
+  { value: "failed", label: "Failed" },
   { value: "all", label: "All" },
 ];
 

@@ -222,31 +222,106 @@ it now is free; patching it today with a `DELETE /sources/{id}` route, its
 foreign-key guard, its tests and its docs would mean building all of that a week
 before deleting it.
 
-### And competitor posts stop being stored
+### But competitor posts stay stored — reversed 2026-08-06
 
-Once the Cart stops writing, competitor posts are the **last** write-on-browse.
-Drop that too and "browsing does not write" has no exceptions at all.
+This section used to say the opposite: that once the Cart stopped writing,
+competitor posts were the last write-on-browse and should go read-through, with
+`POST /generate` re-fetching from Metricool to confirm an `external_id`. That is
+withdrawn. **The sync keeps writing them.**
 
-`GET /sources/competitors` becomes read-through: sync, sort, cap, return. No
-upsert, no `VOLATILE` refresh, no `synced_for_page_id` bookkeeping on rows
-nobody asked for, and no 500-row write to display 60.
+It was withdrawn because it contradicted the section immediately above it, which
+had been true all along and was not noticed: *"Competitor posts go by id — the
+sync owns them, and there is no equivalent of `is_curated_url` for a Facebook
+post."* Going by id **requires the row to exist**. Both paragraphs were written
+in the same sitting and cannot both hold.
 
-Phase 2 measured why this is worth doing. The sync is **5.5s and 1.6MB for 500
-posts**, against a seven-day window that gains roughly **three posts an hour** —
-and Metricool does time out under repeated calls. Phase 2 already stopped
-syncing on every read; this removes the storage the sync existed to fill.
+Removing the storage means removing the check with it, and the replacement is
+worse. Confirming a competitor `external_id` would mean a Metricool call at the
+front of `POST /generate` — an operation already 60s deep in paid model calls —
+against an API that timed out and 502'd twice during Phase 3 alone. A cart of
+three competitor posts would fail for a reason having nothing to do with the
+posts, the writer, or anything the operator can act on. That is a new failure
+mode bought with nothing.
 
-It also settles the trust question the previous section raises. A competitor
-body cannot be accepted from the client — there is no `is_curated_url`
-equivalent for a Facebook post — so `POST /generate` resolves a competitor
-`external_id` by **re-fetching from Metricool** and matching it server-side.
-Authoritative, and it costs one vendor call inside an operation that already
-takes tens of seconds for the model calls.
+And the rule was being applied past its purpose. "Browsing does not write" exists
+to stop the table filling with items nobody looked twice at — the RSS grid is 50
+items a refresh, unbounded over a week of idle scrolling. Competitor posts are
+not that shape:
 
-The row is still written at generate, exactly like an RSS item, so
-`draft.source_item_id` and Draft provenance are unchanged.
+- they arrive from a **Sync the operator pressed**, not from a tab opening
+  (Phase 2 already made that explicit);
+- the set is bounded by the seven-day window, ~500 rows, and does not grow with
+  how much anyone browses;
+- re-syncing updates the same rows through `VOLATILE` rather than adding new
+  ones, which it must, because the CDN URLs expire inside the window.
 
-**Done when:** browsing any tab, in any order, writes zero rows.
+So it is a sync, not a browse, and the ingest rule keeps one documented
+exception. `_upsert`, `VOLATILE` and `synced_for_page_id` all stay.
+
+**Done when:** browsing the RSS and Tweets tabs, in any order, writes zero rows;
+the Competitors tab writes only when it syncs.
+
+### Outcome — passed, once the rules stopped fighting the prompt
+
+Both done-when checks hold. Ticking ten RSS items, unticking nine and generating
+leaves **one** row. A cart of three sources yields three drafts.
+
+The three-source run failed the first four times it was tried, and every failure
+was the same shape: **a rule the prompt never asked for.**
+
+- **The paragraph rule was enforced and never stated.** `validators` demanded
+  2–3 paragraphs; nothing in `system.txt` or the output schema mentioned
+  paragraphs at all. The model wrote 4–5 and was rejected on the first attempt
+  of *every* run. The old repo asked for it three times over
+  (`hr-tff.ts:22`, `draft-schema.ts:28`, `facebookGenerateGraph.ts:377`); the
+  check was ported and the instruction was not.
+- **The length rule disagreed with itself.** The prompt said "ideally between
+  1,800 to 1,900 characters max" — read as a preference — while the validator
+  hard-failed at 2,100. Bodies came back at 2,325 and 2,117.
+- **`birth_death_years` could not be satisfied at all.** Two ways: its regex
+  wanted `\d{4}`, so `Wu Zetian (624 – 705 AD)` counted as *no years found* and
+  every pre-1000 subject was unwritable on a history page; and a story naming no
+  people — an Atlas Obscura piece on the Zantigo taco chain — can never produce
+  them. In both cases the writer resubmitted correct text until the retries ran
+  out and the run died.
+
+Fixed: the prompt states the paragraph and length rules directly, the regex
+takes three-digit years and an AD/BC/BCE/CE suffix, and `birth_death_years`
+moved out of `check` into `advise` — a Warning, which is how the old repo had it
+(`validation.ts:100`, "may be missing"). Same seven blocking rules afterwards:
+**zero retries, and the run went from 352s to 90s.**
+
+The lesson is a constraint on the design, not a one-off fix:
+
+> A validator may **block** only if the prompt states it and the model can
+> verify it in its own output. Everything else is a Warning.
+
+That is what separates `check` from `advise`. Moving a rule from warning to
+blocker raises the bar on its precision — a loose warning is noise, a loose
+blocker is a dead run — and every rule in `check` is now a count the model can
+do itself.
+
+Three more traps, found by running it rather than reasoning about it:
+
+- **`gemini-2.0-flash` answers 404 "no longer available"**, and was the last
+  link of the fallback chain. It is still returned by `models.list()`, so the
+  listing is not evidence — each link is now verified by generating from it. The
+  last link is `gemini-flash-latest`, an alias, so it cannot rot the same way.
+  Same rot the old repo hit on the image side (`376afdc`).
+- **`is_transient` matched `"500"` inside `"1500"`.** With `BODY_MIN_CHARS`
+  at 1,500, our own validator message read as an overloaded server, which would
+  have moved a run onto a different model for a reason that had nothing to do
+  with availability. Codes are now matched as codes.
+- **A failed run was given `status='review'`.** Empty rows sat in the queue
+  looking ready, their only tell an `error` column nothing rendered — five of
+  nine drafts in the local database were failures parked in the review queue.
+  `DraftStatus.FAILED` is its own state; approving one is a 409, rejecting it
+  still works, and Quota is unaffected because Quota counts approvals.
+
+No migration was needed for that: SQLModel stores `status` as a plain
+`VARCHAR` with no `CHECK`, so a new enum member is not a schema change.
+
+**Status:** done.
 
 ---
 
