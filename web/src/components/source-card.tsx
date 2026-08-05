@@ -2,14 +2,17 @@
 
 import { useState } from "react";
 import {
+  Bird,
   Check,
   ExternalLink,
   Eye,
   ImageOff,
   Loader2,
   MessageCircle,
+  Newspaper,
   Repeat2,
   ThumbsUp,
+  Users,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -31,6 +34,13 @@ const KIND_LABEL: Record<SourceKind, string> = {
   competitor_post: "Competitor post",
   tweet: "Tweet",
   rss: "RSS item",
+};
+
+/** Stands in for a picture there never was. See `SourceThumbnail`. */
+const KIND_GLYPH: Record<SourceKind, typeof Users> = {
+  competitor_post: Users,
+  tweet: Bird,
+  rss: Newspaper,
 };
 
 interface SourceCardProps {
@@ -118,7 +128,7 @@ export function SourceCard({ selected, pending, onToggle, ...item }: SourceCardP
         </div>
 
         <div className="flex flex-1 gap-3">
-          <SourceThumbnail src={image_url} />
+          <SourceThumbnail kind={item.kind} src={image_url} />
           <p className="line-clamp-5 flex-1 text-sm leading-relaxed text-foreground/85">{text}</p>
         </div>
 
@@ -185,7 +195,7 @@ export function SourceCard({ selected, pending, onToggle, ...item }: SourceCardP
                 and upscaling it four times only makes the blur bigger. */}
             {image_url ? (
               <div className="flex justify-center rounded-md bg-muted p-3">
-                <SourceThumbnail src={image_url} className="size-32 rounded" />
+                <SourceThumbnail kind={item.kind} src={image_url} className="size-32 rounded" />
               </div>
             ) : null}
 
@@ -230,14 +240,26 @@ export function SourceCard({ selected, pending, onToggle, ...item }: SourceCardP
 }
 
 /**
- * The post's picture, or a placeholder.
+ * The post's picture, or a placeholder. One size, every kind, image or not —
+ * that is what keeps a row of cards from going ragged.
  *
- * **Deliberately small.** Metricool serves a 130×130 thumbnail and nothing
- * larger — `stp=dst-jpg_s130x130_tt6`, and the URL signature covers that
+ * **Small, but no longer tiny.** Metricool serves a 130×130 thumbnail and
+ * nothing larger — `stp=dst-jpg_s130x130_tt6`, and the URL signature covers that
  * parameter, so asking for s480/s720/p720 or dropping `stp` all return 403. The
- * payload carries no HD field either. Rendered at 64px it is sharp on a 1x
- * display and near-native on a 2x one; the old system stretched the same 130px
- * across the full card width and was blurry for exactly this reason.
+ * payload carries no HD field either. The old system stretched that 130px across
+ * the full card width and was blurry for exactly this reason.
+ *
+ * 88px is the deliberate middle. It is native on a 1x display and 1.35x
+ * upscaled on a 2x one, which is soft under close inspection and invisible at
+ * arm's length; 64px was sharp everywhere and read as an afterthought beside the
+ * text. Past ~104px the upscale starts to smear, so this is not a knob to keep
+ * turning. RSS and tweet images are full size and cropped square, so they only
+ * get sharper.
+ *
+ * The placeholder is the kind's glyph rather than a broken-image mark: most
+ * imageless items are RSS entries that simply never had a picture, and marking
+ * those as damaged is both wrong and, at four per screen, loud. A picture that
+ * loaded and *failed* still gets `ImageOff`, because that one is damage.
  *
  * A bigger image does exist — the post's own `og:image` is 600×750 and is
  * readable without auth — but that is one extra request against facebook.com
@@ -255,7 +277,15 @@ export function SourceCard({ selected, pending, onToggle, ...item }: SourceCardP
  * A plain `<img>`, not `next/image`: the optimizer would need every fbcdn host
  * in `remotePatterns`, and it would cache a URL built to expire.
  */
-function SourceThumbnail({ src, className }: { src?: string | null; className?: string }) {
+function SourceThumbnail({
+  kind,
+  src,
+  className,
+}: {
+  kind: SourceKind;
+  src?: string | null;
+  className?: string;
+}) {
   const [failed, setFailed] = useState(false);
 
   // A refreshed sync can replace a dead URL with a live one, so the failure has
@@ -268,16 +298,16 @@ function SourceThumbnail({ src, className }: { src?: string | null; className?: 
     setFailed(false);
   }
 
+  // An inset ring, not a border: the tile then measures exactly 88px whether or
+  // not it holds a photo, and a pale photo on a pale card still gets an edge.
+  const tile = "size-22 shrink-0 rounded-md inset-ring inset-ring-foreground/10";
+
   if (!src || failed) {
+    const Glyph = failed ? ImageOff : KIND_GLYPH[kind];
     return (
-      <div
-        className={cn(
-          "flex size-16 shrink-0 items-center justify-center rounded-md bg-muted",
-          className,
-        )}
-      >
-        <ImageOff className="size-4 text-muted-foreground/50" aria-hidden />
-        <span className="sr-only">No image</span>
+      <div className={cn(tile, "flex items-center justify-center bg-muted", className)}>
+        <Glyph className="size-5.5 text-muted-foreground/45" aria-hidden />
+        <span className="sr-only">{failed ? "Image unavailable" : "No image"}</span>
       </div>
     );
   }
@@ -288,7 +318,7 @@ function SourceThumbnail({ src, className }: { src?: string | null; className?: 
       src={src}
       alt=""
       loading="lazy"
-      className={cn("size-16 shrink-0 rounded-md object-cover", className)}
+      className={cn(tile, "bg-muted object-cover", className)}
       onError={() => setFailed(true)}
     />
   );
