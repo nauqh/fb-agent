@@ -29,13 +29,17 @@ function DrawerContent({
 }: React.ComponentProps<typeof DialogPrimitive.Content>) {
   return (
     <DialogPrimitive.Portal>
-      <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/40 duration-200 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0" />
+      <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/40 duration-300 ease-out data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0" />
       <DialogPrimitive.Content
         data-slot="drawer-content"
         className={cn(
           "fixed top-[5vh] right-0 z-50 flex h-[90vh] w-[92vw] max-w-[1120px] flex-col",
-          "rounded-l-2xl border bg-background shadow-2xl duration-300 outline-none",
-          "data-open:animate-in data-open:slide-in-from-right data-closed:animate-out data-closed:slide-out-to-right",
+          "rounded-l-2xl border bg-background shadow-2xl outline-none",
+          // Out is slightly quicker than in, which is the usual asymmetry: an
+          // opening panel is being read, a closing one is already finished with.
+          "duration-300 ease-out data-closed:duration-200 data-closed:ease-in",
+          "data-open:animate-in data-open:slide-in-from-right data-open:fade-in-0",
+          "data-closed:animate-out data-closed:slide-out-to-right data-closed:fade-out-0",
           className,
         )}
         {...props}

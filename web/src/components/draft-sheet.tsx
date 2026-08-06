@@ -1,9 +1,13 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { DraftDetail } from "@/components/draft-detail";
 import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from "@/components/ui/drawer";
+
+/** Matches the `duration-300` on the panel. */
+const CLOSE_MS = 300;
 
 /**
  * The draft, over the queue.
@@ -12,15 +16,23 @@ import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from "@/compone
  * draft being open. That keeps every link deep-linkable, keeps the back button
  * meaning "close", and lets approving navigate to the next draft by pushing a
  * URL — which is what it already did when this was a pane.
+ *
+ * The one thing a route cannot do on its own is animate *out*. Navigating away
+ * unmounts this component immediately, so Radix never gets to run the closing
+ * animation and the drawer vanished. `closing` holds it on screen for exactly
+ * as long as the transition lasts, and the navigation happens after.
  */
 export function DraftSheet({ draftId }: { draftId: number }) {
   const router = useRouter();
+  const [closing, setClosing] = useState(false);
 
   return (
     <Drawer
-      open
+      open={!closing}
       onOpenChange={(next) => {
-        if (!next) router.push("/review");
+        if (next || closing) return;
+        setClosing(true);
+        setTimeout(() => router.push("/review"), CLOSE_MS);
       }}
     >
       <DrawerContent>

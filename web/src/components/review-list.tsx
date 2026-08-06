@@ -91,22 +91,24 @@ export function ReviewList() {
         {loading && !drafts ? (
           <div className="space-y-2 p-4">
             {Array.from({ length: 5 }).map((_, index) => (
-              <Skeleton key={index} className="h-20 rounded-lg" />
+              <Skeleton key={index} className="h-28 rounded-lg" />
             ))}
           </div>
         ) : drafts?.length === 0 ? (
           <p className="py-20 text-center text-sm text-muted-foreground">Queue is empty.</p>
         ) : (
-          <table className="w-full min-w-[760px]">
+          <table className="w-full min-w-[860px]">
             <thead>
-              <tr className="border-b bg-muted/40 text-left text-[11px] uppercase tracking-wide text-muted-foreground">
-                <th className="w-20 px-4 py-2.5 font-medium">
+              <tr className="border-b bg-muted/30 text-left text-[11px] uppercase tracking-wide text-muted-foreground">
+                <th className="w-32 px-5 py-3 font-medium">
                   <span className="sr-only">Image</span>
                 </th>
-                <th className="px-4 py-2.5 font-medium">Post</th>
-                <th className="w-32 px-4 py-2.5 font-medium">Created</th>
-                <th className="w-40 px-4 py-2.5 font-medium">Status</th>
-                <th className="w-28 px-4 py-2.5 text-right font-medium">
+                <th className="px-2 py-3 font-medium">Post</th>
+                {/* Status and Created sit together at the right rather than in
+                    two spread-out columns. On a wide screen they used to drift
+                    so far from the row they read as unrelated. */}
+                <th className="w-56 px-5 py-3 font-medium">Status</th>
+                <th className="w-24 px-5 py-3 text-right font-medium">
                   <span className="sr-only">Actions</span>
                 </th>
               </tr>
@@ -147,10 +149,12 @@ function Row({ draft, onDecided }: { draft: Draft; onDecided: () => void }) {
       className={cn("group", generating ? "bg-muted/10" : "cursor-pointer hover:bg-muted/30")}
       onClick={generating ? undefined : () => router.push(`/review/${draft.id}`)}
     >
-      <td className="px-4 py-3 align-middle">
-        {/* 4:5 whether or not a composite exists, so rows do not change height
-            as pictures arrive. */}
-        <div className="aspect-[4/5] w-12 overflow-hidden rounded-md border bg-muted">
+      <td className="px-5 py-4 align-top">
+        {/* The composite at a size you can actually judge. It is the product —
+            a 48px chip of it told you a picture existed and nothing else. 4:5
+            whether or not one has been drawn, so rows keep their height as
+            pictures arrive. */}
+        <div className="aspect-[4/5] w-[88px] overflow-hidden rounded-lg border bg-muted shadow-sm">
           {draft.composed_image_path ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -160,7 +164,7 @@ function Row({ draft, onDecided }: { draft: Draft; onDecided: () => void }) {
             />
           ) : generating ? (
             <div className="flex size-full items-center justify-center">
-              <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
+              <Loader2 className="size-4 animate-spin text-muted-foreground" />
             </div>
           ) : null}
         </div>
@@ -168,34 +172,32 @@ function Row({ draft, onDecided }: { draft: Draft; onDecided: () => void }) {
 
       {/* `max-w-0` is what makes the clamps work: without it the cell grows to
           fit the text and nothing ever truncates. */}
-      <td className="max-w-0 px-4 py-3 align-middle">
-        <p className="line-clamp-1 text-sm font-medium leading-snug">
+      <td className="max-w-0 px-2 py-4 align-middle">
+        {/* The hook only. The old app's second line was the brand label, which
+            on a one-page install is the same string on every row; the caption
+            went there instead and turned the queue into a wall of body text you
+            have to read past to find the post you want. */}
+        <p className="line-clamp-2 text-[15px] font-medium leading-snug">
           {generating ? (draft.topic ?? "Writing…") : (draft.hook ?? draft.topic ?? "Untitled")}
         </p>
         {generating ? (
-          <div className="mt-2 flex items-center gap-2">
-            <div className="h-1 w-32 overflow-hidden rounded-full bg-border">
+          <div className="mt-3 flex items-center gap-2">
+            <div className="h-1 w-40 overflow-hidden rounded-full bg-border">
               <div
                 className="h-full bg-gold transition-[width] duration-500"
                 style={{ width: `${draft.progress_pct}%` }}
               />
             </div>
-            <span className="text-[11px] tabular-nums text-muted-foreground">
+            <span className="text-xs tabular-nums text-muted-foreground">
               {draft.progress_step} · {draft.progress_pct}%
             </span>
           </div>
-        ) : (
-          <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">
-            {draft.caption?.replace(/\n/g, "  ") ?? ""}
-          </p>
-        )}
+        ) : null}
       </td>
 
-      <td className="whitespace-nowrap px-4 py-3 align-middle text-xs text-muted-foreground">
-        {timeAgo(draft.created_at)}
-      </td>
-
-      <td className="px-4 py-3 align-middle">
+      {/* Status over the timestamp, in one block. Two spread columns put them
+          at opposite ends of a wide row and neither read as belonging to it. */}
+      <td className="px-5 py-4 align-middle">
         <div className="flex flex-wrap items-center gap-1.5">
           <StatusBadge draft={draft} />
           {draft.warnings.length > 0 ? (
@@ -205,35 +207,35 @@ function Row({ draft, onDecided }: { draft: Draft; onDecided: () => void }) {
             </span>
           ) : null}
         </div>
+        <p className="mt-1.5 whitespace-nowrap text-[13px] text-muted-foreground">
+          {timeAgo(draft.created_at)}
+        </p>
       </td>
 
       {/* Draining the queue is the common case, so Approve and Reject are here
           as well as in the sheet. `stopPropagation` keeps a decision from also
           opening the draft it just removed. */}
-      <td className="px-4 py-3 align-middle text-right" onClick={(event) => event.stopPropagation()}>
+      <td className="px-5 py-4 align-middle text-right" onClick={(event) => event.stopPropagation()}>
         {draft.status === "review" ? (
           <div className="flex items-center justify-end gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
             <Button
               variant="ghost"
-              size="icon-sm"
+              size="icon"
               disabled={deciding}
               onClick={() => void decide("reject")}
               title="Reject"
             >
-              <X className="size-3.5" />
+              <X className="size-4" />
             </Button>
             <Button
               variant="ghost"
-              size="icon-sm"
+              size="icon"
+              className="text-gold hover:bg-gold/10 hover:text-gold"
               disabled={deciding}
               onClick={() => void decide("approve")}
               title="Approve"
             >
-              {deciding ? (
-                <Loader2 className="size-3.5 animate-spin" />
-              ) : (
-                <Check className="size-3.5" />
-              )}
+              {deciding ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
             </Button>
           </div>
         ) : null}
