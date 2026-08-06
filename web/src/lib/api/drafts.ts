@@ -98,18 +98,17 @@ export async function generate(request: GenerateRequest): Promise<number[]> {
 }
 
 /**
- * The two image routes, which Phase 4 serves.
+ * The two image routes. One endpoint, and the flag is the whole difference.
  *
- * Declared rather than faked. A stub returning a plausible Draft would let the
- * Review screen look finished while doing nothing, and the first person to find
- * out would be whoever trusted the button.
+ * `recomposite` redraws over the hero already on disk and costs nothing, so it
+ * is the button an operator can press after every edit. `regenerateHero` buys a
+ * new picture — the only call in the app that spends money on demand, which is
+ * why it is a separate function rather than an option on the first.
  */
-const NOT_YET = "Images arrive in Phase 4 — there is no hero to composite yet.";
-
 export async function recomposite(id: number): Promise<Draft> {
-  throw new Error(`${NOT_YET} (draft ${id})`);
+  return post<Draft>(`/drafts/${id}/image`, {});
 }
 
 export async function regenerateHero(id: number): Promise<Draft> {
-  throw new Error(`${NOT_YET} (draft ${id})`);
+  return post<Draft>(`/drafts/${id}/image?new_hero=true`, {});
 }

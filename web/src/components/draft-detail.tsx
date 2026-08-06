@@ -195,12 +195,25 @@ export function DraftDetail({ draftId }: { draftId: number }) {
       {/* Sticky against the detail pane's own scroll, so the image stays in
           view while the copy below it moves. */}
       <div className="space-y-3 lg:sticky lg:top-0 lg:self-start">
-        <ComposedImage
-          overlayText={form?.overlay_text ?? draft.overlay_text}
-          highlightPhrases={form?.highlight_phrases ?? draft.highlight_phrases}
-          watermarkPath={page?.watermark_image_path ?? null}
-          seed={draft.id}
-        />
+        {/* The real composite once one exists, and only while it is still
+            current. An edited overlay makes the stored PNG stale, so the
+            approximation comes back — showing a picture that no longer matches
+            the copy beside it is worse than admitting it is a preview. */}
+        {draft.composed_image_path && !dirty ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={`/api/media/${draft.composed_image_path}`}
+            alt={`Composed image for draft ${draft.id}`}
+            className="w-full rounded border"
+          />
+        ) : (
+          <ComposedImage
+            overlayText={form?.overlay_text ?? draft.overlay_text}
+            highlightPhrases={form?.highlight_phrases ?? draft.highlight_phrases}
+            watermarkPath={page?.watermark_image_path ?? null}
+            seed={draft.id}
+          />
+        )}
         <div className="flex items-center justify-between text-[11px] text-muted-foreground">
           <span className="font-mono">896 × 1120</span>
           <span>
@@ -210,8 +223,11 @@ export function DraftDetail({ draftId }: { draftId: number }) {
           </span>
         </div>
         <p className="text-[11px] leading-relaxed text-muted-foreground">
-          Approximate. The real panel is measured with fontTools and rasterised by resvg, so
-          line breaks and panel height will differ.
+          {draft.composed_image_path && !dirty
+            ? "The composited PNG, measured with fontTools and rasterised by resvg."
+            : dirty
+              ? "Preview of your unsaved edits. Save, then Recomposite to redraw the real image."
+              : "Approximate. The real panel is measured with fontTools and rasterised by resvg, so line breaks and panel height will differ."}
         </p>
         <div className="space-y-2">
           <Button

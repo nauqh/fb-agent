@@ -201,6 +201,54 @@ No queue. The sequence, for each (source × page) pair:
 3. The client polls `GET /drafts/{id}` until `status` leaves `generating`.
 4. Failure writes `error` and stops. The row stays, so nothing is lost silently.
 
+### The run, end to end
+
+Two model calls, and they fail differently. **Only the two orange steps cost
+money**; everything downstream of the hero is arithmetic and rasterising, and
+can be re-run for free.
+
+```mermaid
+flowchart TD
+    Start["POST /generate<br/><i>202, returns draft ids</i>"] --> Row["insert draft<br/>status = generating"]
+    Row --> Write["<b>Writer</b> — Gemini text<br/><i>progress: writing, 20%</i>"]
+
+    Write -->|"brand rule broken"| Retry["ModelRetry<br/><i>names every rule at once</i>"]
+    Retry -->|"max 2"| Write
+    Write -->|"503 / 429 overloaded"| Fallback["step down<br/>gemini-flash-latest"]
+    Fallback --> Write
+    Write -->|"4xx, or retries spent"| Failed["status = failed<br/><i>error on the row</i>"]
+
+    Write -->|"compliant draft"| Save["save copy + residual warnings"]
+    Save --> Plan["<b>text.py</b> — measure, wrap,<br/>size the panel<br/><i>pure, no spend</i>"]
+    Plan --> Hero["<b>hero.py</b> — Gemini image<br/><i>progress: illustrating, 60%</i>"]
+
+    Hero -->|"refusal or error"| Warn["warning on the row<br/><i>status stays review</i>"]
+    Hero -->|"bytes"| StoreHero["MediaStore: hero_image_path"]
+    StoreHero --> Composite["<b>compositor.py</b><br/>hero + panel + gold + watermark"]
+    Composite --> StoreOut["MediaStore: composed_image_path"]
+
+    StoreOut --> Review["status = review<br/><i>progress: done, 100%</i>"]
+    Warn --> Review
+    Review --> Edit["operator edits overlay"]
+    Edit --> Recompose["POST /drafts/{id}/image<br/><i>reuses the paid hero — free</i>"]
+    Recompose --> Composite
+
+    classDef paid fill:#F5C542,stroke:#8a6d00,color:#000
+    classDef bad fill:#4a1010,stroke:#a33,color:#fff
+    class Write,Hero paid
+    class Failed,Warn bad
+```
+
+The asymmetry between the two failure paths is the design decision worth
+keeping. A writer failure is fatal to the draft — there is no post without copy.
+An image failure is **not**: the row stays at `review` with its caption intact
+and the reason in `warnings`, because throwing away a good caption over one
+refused prompt is the more expensive mistake.
+
+`hero_image_path` and `composed_image_path` are separate columns for the same
+reason. Editing the overlay text re-enters the graph at `compositor.py` and
+costs nothing; only `?new_hero=true` buys another picture.
+
 The row *is* the job record. That is why `draft` carries progress columns and
 why there is no `generation_event` table.
 

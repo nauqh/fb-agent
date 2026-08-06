@@ -14,7 +14,10 @@ from datetime import datetime, timezone
 
 from sqlmodel import Session, select
 
+from app import media
 from app.db import get_engine
+from app.image import compositor, hero
+from app.image import text as overlay
 from app.models import Draft, DraftStatus, Page, SourceItem, SourceItemBase, SourceKind
 from app.sources import rss
 from app.writer import agent as writer
@@ -168,6 +171,14 @@ def _run_one(session: Session, draft_id: int) -> None:
         draft.warnings += _highlight_warnings(content)
 
         draft.status = DraftStatus.REVIEW
+        _progress(session, draft, "illustrating", 60)
+
+        # Rebound, never `+=`. `warnings` is a plain JSON column with no
+        # mutation tracking, so an in-place append after the last commit is
+        # invisible to SQLAlchemy and never reaches the row.
+        draft.warnings = draft.warnings + build_image(session, draft, page)
+
+        draft.status = DraftStatus.REVIEW
         _progress(session, draft, "done", 100)
 
     except Exception as error:  # noqa: BLE001 — the row is where a failure goes
@@ -178,6 +189,69 @@ def _run_one(session: Session, draft_id: int) -> None:
         draft.updated_at = datetime.now(timezone.utc)
         session.add(draft)
         session.commit()
+
+
+IMAGE_WARNING = "Image: "
+"""Prefix on every warning this step produces, so a rebuild can replace them.
+
+Without a marker there is no way to tell a stale image warning from a live
+brand-rule one, and re-compositing appends a second copy of a complaint the
+operator has just fixed.
+"""
+
+
+def build_image(session: Session, draft: Draft, page: Page) -> list[str]:
+    """Hero, then composite, then store. Returns warnings; never raises.
+
+    **A picture that fails must not throw away text that worked.** The draft
+    stays at `review` with its copy intact and the reason in `warnings`, because
+    the alternative is a `failed` row whose caption was fine and whose only
+    problem was one refused prompt. That is also why this is a separate entry
+    point: `POST /drafts/{id}/image` calls it again without re-billing the
+    writer.
+
+    The two paths are stored separately on purpose. Re-compositing after an
+    overlay edit reuses `hero_image_path`, so editing the text is free and only
+    a genuinely new picture is charged for.
+    """
+    if not draft.overlay_text:
+        return [f"{IMAGE_WARNING}no overlay text, so nothing was composed."]
+
+    try:
+        plan = overlay.plan(draft.overlay_text, draft.highlight_phrases)
+        warnings = (
+            [
+                f"{IMAGE_WARNING}{len(plan.lost_highlights)} highlight phrase(s) "
+                f"fall across a line break and render no gold: "
+                f"{plan.lost_highlights[:3]}"
+            ]
+            if plan.lost_highlights
+            else []
+        )
+
+        if draft.hero_image_path:
+            image_bytes = media.store.path(draft.hero_image_path).read_bytes()
+        else:
+            image_bytes = hero.generate(draft.image_prompt or "", plan.hero_height_px)
+            draft.hero_image_path = media.store.save(
+                image_bytes, media.filename(draft.id or 0, "hero")
+            )
+
+        composed = compositor.compose(
+            image_bytes,
+            plan,
+            draft.highlight_phrases,
+            page.watermark_image_path,
+        )
+        draft.composed_image_path = media.store.save(
+            composed, media.filename(draft.id or 0, "composed")
+        )
+        session.add(draft)
+        session.commit()
+        return warnings
+
+    except Exception as error:  # noqa: BLE001 — a warning, not a dead draft
+        return [f"{IMAGE_WARNING}{type(error).__name__}: {error}"[:300]]
 
 
 def _highlight_warnings(content) -> list[str]:

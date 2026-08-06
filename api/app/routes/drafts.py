@@ -13,7 +13,7 @@ from sqlmodel import Session, select
 
 from app import generate
 from app.db import get_session
-from app.models import Draft, DraftStatus, SourceItemBase
+from app.models import Draft, DraftStatus, Page, SourceItemBase
 
 router = APIRouter(tags=["drafts"])
 
@@ -97,6 +97,41 @@ def update_draft(
     draft = _require(session, draft_id)
     for field, value in edit.model_dump(exclude_unset=True).items():
         setattr(draft, field, value)
+    return _save(session, draft)
+
+
+@router.post("/drafts/{draft_id}/image")
+def rebuild_image(
+    draft_id: int,
+    new_hero: bool = Query(
+        False,
+        description="Buy a new hero. Off by default because it is the one paid step.",
+    ),
+    session: Session = Depends(get_session),
+) -> Draft:
+    """Compose the image again after an overlay edit, or after one failed.
+
+    Default reuses `hero_image_path`, so fixing a line break or a highlight
+    costs nothing. `new_hero=true` discards the picture and pays for another —
+    the only call in the app that spends money on demand, which is why it is an
+    explicit flag rather than the default.
+
+    Synchronous, unlike `/generate`: re-compositing is milliseconds, and a new
+    hero is a single call the operator is waiting on anyway.
+    """
+    draft = _require(session, draft_id)
+    page = session.get(Page, draft.page_id)
+    if page is None:
+        raise HTTPException(status_code=404, detail=f"No page {draft.page_id}")
+
+    if new_hero:
+        draft.hero_image_path = None
+
+    # Rebound rather than appended: `warnings` is a plain JSON column, so an
+    # in-place edit does not mark the row dirty and never persists.
+    fresh = generate.build_image(session, draft, page)
+    kept = [w for w in draft.warnings if not w.startswith(generate.IMAGE_WARNING)]
+    draft.warnings = kept + fresh
     return _save(session, draft)
 
 

@@ -261,3 +261,118 @@ def test_generating_twice_does_not_rewrite_an_existing_row(client, engine, writt
         row = fresh.exec(select(SourceItem)).one()
     assert row.text == "A story"
     assert row.reactions is None
+
+
+# --- the image, which must never take the text down with it ------------------
+
+
+def test_a_finished_run_composes_an_image(client, engine, written, illustrated):
+    client.post("/generate", json={"page_ids": [1], "sources": [_rss().model_dump(mode="json")]})
+
+    draft = client.get("/drafts/1").json()
+
+    assert draft["status"] == "review"
+    assert draft["hero_image_path"], "the generated hero was not stored"
+    assert draft["composed_image_path"], "the composite was not stored"
+
+
+def test_the_hero_and_the_composite_are_stored_apart(client, written, illustrated):
+    """So editing the overlay can re-composite without re-buying the picture."""
+    client.post("/generate", json={"page_ids": [1], "sources": [_rss().model_dump(mode="json")]})
+
+    draft = client.get("/drafts/1").json()
+
+    assert draft["hero_image_path"] != draft["composed_image_path"]
+
+
+def test_a_refused_image_leaves_the_text_usable(client, written, monkeypatch):
+    """The whole point of the split. A failed picture is a warning, not a dead row.
+
+    Without this a perfectly good caption is thrown away because one prompt
+    tripped a safety filter.
+    """
+    from app.image import hero
+
+    def refuse(*_a, **_k):
+        raise hero.HeroError("the model returned no image")
+
+    monkeypatch.setattr(hero, "generate", refuse)
+
+    client.post("/generate", json={"page_ids": [1], "sources": [_rss().model_dump(mode="json")]})
+    draft = client.get("/drafts/1").json()
+
+    assert draft["status"] == "review", "a missing picture must not fail the draft"
+    assert draft["hook"], "the text survived"
+    assert draft["composed_image_path"] is None
+    assert any(warning.startswith(generate.IMAGE_WARNING) for warning in draft["warnings"])
+
+
+def test_recompositing_reuses_the_paid_hero(client, written, illustrated, monkeypatch):
+    """`POST /drafts/{id}/image` is free unless it is explicitly told not to be."""
+    client.post("/generate", json={"page_ids": [1], "sources": [_rss().model_dump(mode="json")]})
+    before = client.get("/drafts/1").json()
+
+    from app.image import hero
+
+    def refuse(*_a, **_k):
+        raise AssertionError("bought a second hero without being asked to")
+
+    monkeypatch.setattr(hero, "generate", refuse)
+    after = client.post("/drafts/1/image").json()
+
+    assert after["hero_image_path"] == before["hero_image_path"]
+    assert after["composed_image_path"] != before["composed_image_path"]
+
+
+def test_asking_for_a_new_hero_buys_one(client, written, illustrated):
+    client.post("/generate", json={"page_ids": [1], "sources": [_rss().model_dump(mode="json")]})
+    before = client.get("/drafts/1").json()
+
+    after = client.post("/drafts/1/image?new_hero=true").json()
+
+    assert after["hero_image_path"] != before["hero_image_path"]
+
+
+def test_a_stale_image_warning_does_not_outlive_the_fix(client, written, monkeypatch, illustrated):
+    """Otherwise the row keeps complaining about a picture it now has."""
+    from app.image import hero
+
+    monkeypatch.setattr(hero, "generate", lambda *a, **k: (_ for _ in ()).throw(hero.HeroError("nope")))
+    client.post("/generate", json={"page_ids": [1], "sources": [_rss().model_dump(mode="json")]})
+    assert any(w.startswith(generate.IMAGE_WARNING) for w in client.get("/drafts/1").json()["warnings"])
+
+    monkeypatch.setattr(hero, "generate", lambda *a, **k: illustrated)
+    fixed = client.post("/drafts/1/image?new_hero=true").json()
+
+    assert fixed["composed_image_path"]
+    assert not any(warning.startswith(generate.IMAGE_WARNING) for warning in fixed["warnings"])
+
+
+def test_rebuilding_replaces_image_warnings_rather_than_stacking_them(
+    client, written, illustrated, monkeypatch
+):
+    """Seen on the first real post: two identical complaints after one rebuild.
+
+    Image warnings are regenerated every time the picture is, so the old ones
+    have to go. Warnings from the writer are not this step's to delete.
+    """
+    long_overlay = DraftContent(
+        **{**GOOD.model_dump(), "overlay_text": (
+            "In 1952, geologist Marie Tharp mapped the ocean floor by hand and "
+            "discovered the massive Mid-Atlantic Ridge rift valley beneath it."
+        ), "highlight_phrases": ["mapped the ocean floor"]}
+    )
+
+    class Result:
+        output = long_overlay
+
+    monkeypatch.setattr(generate.writer, "write", lambda *a, **k: Result())
+    client.post("/generate", json={"page_ids": [1], "sources": [_rss().model_dump(mode="json")]})
+
+    first = client.get("/drafts/1").json()["warnings"]
+    image_warnings = [w for w in first if w.startswith(generate.IMAGE_WARNING)]
+    assert len(image_warnings) == 1, "the split-highlight warning did not fire"
+
+    after = client.post("/drafts/1/image").json()["warnings"]
+
+    assert [w for w in after if w.startswith(generate.IMAGE_WARNING)] == image_warnings

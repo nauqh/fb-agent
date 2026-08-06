@@ -23,6 +23,60 @@ from app.models import Page  # noqa: E402
 from app.settings import settings  # noqa: E402
 
 
+@pytest.fixture(autouse=True)
+def never_buy_an_image(monkeypatch):
+    """No test may call the image model. Autouse, so opting in is deliberate.
+
+    Every draft the run finishes now asks for a hero, and `hero.generate` is the
+    one function in the app that spends money per call. Without this the suite
+    bills Google on every `POST /generate` test — which it did, once, before
+    this existed. Tests that need pixels use the `illustrated` fixture.
+    """
+    from app.image import hero
+
+    def refuse(*_args, **_kwargs):
+        raise AssertionError(
+            "a test called hero.generate, which is a paid API call. Use the "
+            "`illustrated` fixture."
+        )
+
+    monkeypatch.setattr(hero, "generate", refuse)
+
+
+@pytest.fixture
+def illustrated(monkeypatch):
+    """A hero without the invoice. Returns a real, decodable PNG.
+
+    Real bytes rather than a sentinel because the compositor genuinely opens
+    them — a stub that is not an image tests the error path by accident.
+    """
+    import io
+
+    from PIL import Image
+
+    from app.image import hero
+
+    buffer = io.BytesIO()
+    Image.new("RGB", (1280, 720), (40, 70, 120)).save(buffer, format="PNG")
+    png = buffer.getvalue()
+
+    monkeypatch.setattr(hero, "generate", lambda *a, **k: png)
+    return png
+
+
+@pytest.fixture(autouse=True)
+def media_root(tmp_path, monkeypatch):
+    """Written images go to the test's own directory, not `api/media`.
+
+    `media.store` is built at import from `settings.media_root`, so patching the
+    setting after the fact changes nothing — the object is what has to move.
+    """
+    from app import media
+
+    monkeypatch.setattr(media, "store", media.LocalMediaStore(str(tmp_path / "media")))
+    return tmp_path / "media"
+
+
 @pytest.fixture
 def engine(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "database_path", str(tmp_path / "test.db"))

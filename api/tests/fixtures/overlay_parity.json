@@ -1,0 +1,654 @@
+[
+  {
+    "name": "sample",
+    "text": "This 2,000-year-old Lighthouse discovery changed everything we know about ancient Alexandria",
+    "phrases": [
+      "2,000-year-old",
+      "Lighthouse",
+      "Alexandria"
+    ],
+    "lines": [
+      "This 2,000-year-old Lighthouse discovery changed",
+      "everything we know about ancient Alexandria"
+    ],
+    "lineHeight": 45,
+    "panelHeight": 224,
+    "heroHeight": 896,
+    "segments": [
+      [
+        [
+          "This ",
+          false
+        ],
+        [
+          "2,000-year-old",
+          true
+        ],
+        [
+          " ",
+          false
+        ],
+        [
+          "Lighthouse",
+          true
+        ],
+        [
+          " discovery changed",
+          false
+        ]
+      ],
+      [
+        [
+          "everything we know about ancient ",
+          false
+        ],
+        [
+          "Alexandria",
+          true
+        ]
+      ]
+    ]
+  },
+  {
+    "name": "tharp",
+    "text": "Marie Tharp mapped the ocean floor in 1957 and was told it was girl talk.",
+    "phrases": [
+      "Marie Tharp",
+      "1957",
+      "ocean floor"
+    ],
+    "lines": [
+      "Marie Tharp mapped the ocean floor in 1957 and",
+      "was told it was girl talk."
+    ],
+    "lineHeight": 45,
+    "panelHeight": 224,
+    "heroHeight": 896,
+    "segments": [
+      [
+        [
+          "Marie Tharp",
+          true
+        ],
+        [
+          " mapped the ",
+          false
+        ],
+        [
+          "ocean floor",
+          true
+        ],
+        [
+          " in ",
+          false
+        ],
+        [
+          "1957",
+          true
+        ],
+        [
+          " and",
+          false
+        ]
+      ],
+      [
+        [
+          "was told it was girl talk.",
+          false
+        ]
+      ]
+    ]
+  },
+  {
+    "name": "long",
+    "text": "In 2026, West Virginia physician assistant Christina Nolte was sentenced to federal prison. She faked medical records to secure VA disability status, wiping out $242,528 in student loans before federal investigators exposed her massive fraud scheme.",
+    "phrases": [
+      "West Virginia",
+      "federal prison",
+      "$242,528"
+    ],
+    "lines": [
+      "In 2026, West Virginia physician assistant Christina",
+      "Nolte was sentenced to federal prison. She faked",
+      "medical records to secure VA disability status,",
+      "wiping out $242,528 in student loans before federal",
+      "investigators exposed her massive fraud scheme."
+    ],
+    "lineHeight": 45,
+    "panelHeight": 255,
+    "heroHeight": 865,
+    "segments": [
+      [
+        [
+          "In 2026, ",
+          false
+        ],
+        [
+          "West Virginia",
+          true
+        ],
+        [
+          " physician assistant Christina",
+          false
+        ]
+      ],
+      [
+        [
+          "Nolte was sentenced to ",
+          false
+        ],
+        [
+          "federal prison",
+          true
+        ],
+        [
+          ". She faked",
+          false
+        ]
+      ],
+      [
+        [
+          "medical records to secure VA disability status,",
+          false
+        ]
+      ],
+      [
+        [
+          "wiping out ",
+          false
+        ],
+        [
+          "$242,528",
+          true
+        ],
+        [
+          " in student loans before federal",
+          false
+        ]
+      ],
+      [
+        [
+          "investigators exposed her massive fraud scheme.",
+          false
+        ]
+      ]
+    ]
+  },
+  {
+    "name": "short",
+    "text": "One line only.",
+    "phrases": [
+      "One line"
+    ],
+    "lines": [
+      "One line only."
+    ],
+    "lineHeight": 45,
+    "panelHeight": 224,
+    "heroHeight": 896,
+    "segments": [
+      [
+        [
+          "One line",
+          true
+        ],
+        [
+          " only.",
+          false
+        ]
+      ]
+    ]
+  },
+  {
+    "name": "unbreakable",
+    "text": "Pneumonoultramicroscopicsilicovolcanoconiosisandthensomemoretomakeitwider is a word.",
+    "phrases": [],
+    "lines": [
+      "Pneumonoultramicroscopicsilicovolcanoconiosisa",
+      "ndthensomemoretomakeitwider",
+      "is a word."
+    ],
+    "lineHeight": 45,
+    "panelHeight": 224,
+    "heroHeight": 896,
+    "segments": [
+      [
+        [
+          "Pneumonoultramicroscopicsilicovolcanoconiosisa",
+          false
+        ]
+      ],
+      [
+        [
+          "ndthensomemoretomakeitwider",
+          false
+        ]
+      ],
+      [
+        [
+          "is a word.",
+          false
+        ]
+      ]
+    ]
+  },
+  {
+    "name": "six-lines",
+    "text": "In 1923, archaeologists opened a sealed tomb in the Valley of the Kings and found the burial chamber of a pharaoh whose name had been chiselled off every monument in Egypt, and for eighty years nobody could say who had ordered it done.",
+    "phrases": [
+      "1923",
+      "Valley of the Kings",
+      "Egypt"
+    ],
+    "lines": [
+      "In 1923, archaeologists opened a sealed tomb in",
+      "the Valley of the Kings and found the burial",
+      "chamber of a pharaoh whose name had been",
+      "chiselled off every monument in Egypt, and for",
+      "eighty years nobody could say who had ordered it",
+      "done."
+    ],
+    "lineHeight": 45,
+    "panelHeight": 300,
+    "heroHeight": 820,
+    "segments": [
+      [
+        [
+          "In ",
+          false
+        ],
+        [
+          "1923",
+          true
+        ],
+        [
+          ", archaeologists opened a sealed tomb in",
+          false
+        ]
+      ],
+      [
+        [
+          "the ",
+          false
+        ],
+        [
+          "Valley of the Kings",
+          true
+        ],
+        [
+          " and found the burial",
+          false
+        ]
+      ],
+      [
+        [
+          "chamber of a pharaoh whose name had been",
+          false
+        ]
+      ],
+      [
+        [
+          "chiselled off every monument in ",
+          false
+        ],
+        [
+          "Egypt",
+          true
+        ],
+        [
+          ", and for",
+          false
+        ]
+      ],
+      [
+        [
+          "eighty years nobody could say who had ordered it",
+          false
+        ]
+      ],
+      [
+        [
+          "done.",
+          false
+        ]
+      ]
+    ]
+  },
+  {
+    "name": "clipped",
+    "text": "The panel grows until it cannot grow any further. The panel grows until it cannot grow any further. The panel grows until it cannot grow any further. The panel grows until it cannot grow any further. The panel grows until it cannot grow any further. The panel grows until it cannot grow any further. The panel grows until it cannot grow any further. The panel grows until it cannot grow any further. The panel grows until it cannot grow any further. The panel grows until it cannot grow any further. The panel grows until it cannot grow any further. The panel grows until it cannot grow any further. The panel grows until it cannot grow any further. The panel grows until it cannot grow any further. The panel grows until it cannot grow any further. The panel grows until it cannot grow any further. The panel grows until it cannot grow any further. The panel grows until it cannot grow any further. The panel grows until it cannot grow any further. The panel grows until it cannot grow any further. The panel grows until it cannot grow any further. The panel grows until it cannot grow any further. The panel grows until it cannot grow any further. The panel grows until it cannot grow any further. The panel grows until it cannot grow any further. The panel grows until it cannot grow any further. The panel grows until it cannot grow any further. The panel grows until it cannot grow any further. The panel grows until it cannot grow any further. The panel grows until it cannot grow any further. The panel grows until it cannot grow any further. The panel grows until it cannot grow any further. The panel grows until it cannot grow any further. The panel grows until it cannot grow any further. The panel grows until it cannot grow any further. The panel grows until it cannot grow any further. The panel grows until it cannot grow any further. The panel grows until it cannot grow any further. The panel grows until it cannot grow any further. The panel grows until it cannot grow any further.",
+    "phrases": [],
+    "lines": [
+      "The panel grows until it cannot grow any further.",
+      "The panel grows until it cannot grow any further.",
+      "The panel grows until it cannot grow any further.",
+      "The panel grows until it cannot grow any further.",
+      "The panel grows until it cannot grow any further.",
+      "The panel grows until it cannot grow any further.",
+      "The panel grows until it cannot grow any further.",
+      "The panel grows until it cannot grow any further.",
+      "The panel grows until it cannot grow any further.",
+      "The panel grows until it cannot grow any further.",
+      "The panel grows until it cannot grow any further.",
+      "The panel grows until it cannot grow any further.",
+      "The panel grows until it cannot grow any further.",
+      "The panel grows until it cannot grow any further.",
+      "The panel grows until it cannot grow any further.",
+      "The panel grows until it cannot grow any further.",
+      "The panel grows until it cannot grow any further.",
+      "The panel grows until it cannot grow any further.",
+      "The panel grows until it cannot grow any further.",
+      "The panel grows until it cannot grow any further.",
+      "The panel grows until it cannot grow any further.",
+      "The panel grows until it cannot grow any further.",
+      "The panel grows until it cannot grow any further.",
+      "The panel grows until it cannot grow any further.",
+      "The panel grows until it cannot grow any further.",
+      "The panel grows until it cannot grow any further.",
+      "The panel grows until it cannot grow any further.",
+      "The panel grows until it cannot grow any further.",
+      "The panel grows until it cannot grow any further.",
+      "The panel grows until it cannot grow any further.",
+      "The panel grows until it cannot grow any further.",
+      "The panel grows until it cannot grow any further.",
+      "The panel grows until it cannot grow any further.",
+      "The panel grows until it cannot grow any further.",
+      "The panel grows until it cannot grow any further.",
+      "The panel grows until it cannot grow any further.",
+      "The panel grows until it cannot grow any further.",
+      "The panel grows until it cannot grow any further.",
+      "The panel grows until it cannot grow any further.",
+      "The panel grows until it cannot grow any further."
+    ],
+    "lineHeight": 45,
+    "panelHeight": 952,
+    "heroHeight": 168,
+    "segments": [
+      [
+        [
+          "The panel grows until it cannot grow any further.",
+          false
+        ]
+      ],
+      [
+        [
+          "The panel grows until it cannot grow any further.",
+          false
+        ]
+      ],
+      [
+        [
+          "The panel grows until it cannot grow any further.",
+          false
+        ]
+      ],
+      [
+        [
+          "The panel grows until it cannot grow any further.",
+          false
+        ]
+      ],
+      [
+        [
+          "The panel grows until it cannot grow any further.",
+          false
+        ]
+      ],
+      [
+        [
+          "The panel grows until it cannot grow any further.",
+          false
+        ]
+      ],
+      [
+        [
+          "The panel grows until it cannot grow any further.",
+          false
+        ]
+      ],
+      [
+        [
+          "The panel grows until it cannot grow any further.",
+          false
+        ]
+      ],
+      [
+        [
+          "The panel grows until it cannot grow any further.",
+          false
+        ]
+      ],
+      [
+        [
+          "The panel grows until it cannot grow any further.",
+          false
+        ]
+      ],
+      [
+        [
+          "The panel grows until it cannot grow any further.",
+          false
+        ]
+      ],
+      [
+        [
+          "The panel grows until it cannot grow any further.",
+          false
+        ]
+      ],
+      [
+        [
+          "The panel grows until it cannot grow any further.",
+          false
+        ]
+      ],
+      [
+        [
+          "The panel grows until it cannot grow any further.",
+          false
+        ]
+      ],
+      [
+        [
+          "The panel grows until it cannot grow any further.",
+          false
+        ]
+      ],
+      [
+        [
+          "The panel grows until it cannot grow any further.",
+          false
+        ]
+      ],
+      [
+        [
+          "The panel grows until it cannot grow any further.",
+          false
+        ]
+      ],
+      [
+        [
+          "The panel grows until it cannot grow any further.",
+          false
+        ]
+      ],
+      [
+        [
+          "The panel grows until it cannot grow any further.",
+          false
+        ]
+      ],
+      [
+        [
+          "The panel grows until it cannot grow any further.",
+          false
+        ]
+      ],
+      [
+        [
+          "The panel grows until it cannot grow any further.",
+          false
+        ]
+      ],
+      [
+        [
+          "The panel grows until it cannot grow any further.",
+          false
+        ]
+      ],
+      [
+        [
+          "The panel grows until it cannot grow any further.",
+          false
+        ]
+      ],
+      [
+        [
+          "The panel grows until it cannot grow any further.",
+          false
+        ]
+      ],
+      [
+        [
+          "The panel grows until it cannot grow any further.",
+          false
+        ]
+      ],
+      [
+        [
+          "The panel grows until it cannot grow any further.",
+          false
+        ]
+      ],
+      [
+        [
+          "The panel grows until it cannot grow any further.",
+          false
+        ]
+      ],
+      [
+        [
+          "The panel grows until it cannot grow any further.",
+          false
+        ]
+      ],
+      [
+        [
+          "The panel grows until it cannot grow any further.",
+          false
+        ]
+      ],
+      [
+        [
+          "The panel grows until it cannot grow any further.",
+          false
+        ]
+      ],
+      [
+        [
+          "The panel grows until it cannot grow any further.",
+          false
+        ]
+      ],
+      [
+        [
+          "The panel grows until it cannot grow any further.",
+          false
+        ]
+      ],
+      [
+        [
+          "The panel grows until it cannot grow any further.",
+          false
+        ]
+      ],
+      [
+        [
+          "The panel grows until it cannot grow any further.",
+          false
+        ]
+      ],
+      [
+        [
+          "The panel grows until it cannot grow any further.",
+          false
+        ]
+      ],
+      [
+        [
+          "The panel grows until it cannot grow any further.",
+          false
+        ]
+      ],
+      [
+        [
+          "The panel grows until it cannot grow any further.",
+          false
+        ]
+      ],
+      [
+        [
+          "The panel grows until it cannot grow any further.",
+          false
+        ]
+      ],
+      [
+        [
+          "The panel grows until it cannot grow any further.",
+          false
+        ]
+      ],
+      [
+        [
+          "The panel grows until it cannot grow any further.",
+          false
+        ]
+      ]
+    ]
+  },
+  {
+    "name": "overlapping-phrases",
+    "text": "The ocean floor and the ocean are not the same thing at all.",
+    "phrases": [
+      "ocean",
+      "ocean floor"
+    ],
+    "lines": [
+      "The ocean floor and the ocean are not the same",
+      "thing at all."
+    ],
+    "lineHeight": 45,
+    "panelHeight": 224,
+    "heroHeight": 896,
+    "segments": [
+      [
+        [
+          "The ",
+          false
+        ],
+        [
+          "ocean floor",
+          true
+        ],
+        [
+          " and the ",
+          false
+        ],
+        [
+          "ocean",
+          true
+        ],
+        [
+          " are not the same",
+          false
+        ]
+      ],
+      [
+        [
+          "thing at all.",
+          false
+        ]
+      ]
+    ]
+  }
+]
