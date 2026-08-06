@@ -196,31 +196,26 @@ export function DraftDetail({ draftId }: { draftId: number }) {
   const failed = draft.status === "failed";
 
   /**
-   * The composited PNG whenever one exists — including while it is stale.
+   * The hero with the panel drawn over it, never the baked PNG.
    *
-   * It used to fall back to `ComposedImage` the moment anything was edited, so
-   * touching a highlight chip replaced a real photograph with the mock's
-   * generated background. That reads as the picture breaking. A slightly out of
-   * date real composite is more use than an accurate drawing of nothing, and
-   * the old app agreed: editing there never disturbed the stored image.
+   * Showing the composited file is what made an edit require a round trip: the
+   * PNG cannot know about a highlight you added a second ago, so every change
+   * needed Recomposite before it was visible. Drawing the panel here instead
+   * makes it instant, and costs nothing — the hero is the expensive half and it
+   * is already on disk.
    *
-   * The approximation is for a draft that has no composite at all.
+   * Recomposite is therefore about producing the file that gets published, not
+   * about seeing your own edit.
    *
-   * Held as a value because both panes draw it: on its own under Image, and
-   * inside the feed card under Post.
+   * Held as a value because both views draw it: on its own under Edit, and
+   * inside the feed card under Preview.
    */
-  const picture = draft.composed_image_path ? (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={`/api/media/${draft.composed_image_path}`}
-      alt={`Composed image for draft ${draft.id}`}
-      className="w-full"
-    />
-  ) : (
+  const picture = (
     <ComposedImage
       overlayText={form?.hook ?? draft.hook}
       highlightPhrases={form?.highlight_phrases ?? draft.highlight_phrases}
       watermarkPath={page?.watermark_image_path ?? null}
+      heroSrc={draft.hero_image_path ? `/api/media/${draft.hero_image_path}` : null}
       seed={draft.id}
     />
   );
@@ -304,14 +299,16 @@ export function DraftDetail({ draftId }: { draftId: number }) {
                   {draft.composed_image_path ? "composed" : "not composed"}
                 </span>
               </div>
-              {/* Says something only when the picture is not what the fields now
-                  say. A current composite needs no caption — it is what it
-                  looks like. */}
-              {!draft.composed_image_path ? (
-                <p className="text-[11px] text-muted-foreground">Preview, not yet composed.</p>
-              ) : dirty ? (
+              {/* The picture above is always current, so nothing here is about
+                  what you are looking at — only about whether the *file* on
+                  disk matches it yet. */}
+              {!draft.hero_image_path ? (
                 <p className="text-[11px] text-muted-foreground">
-                  Edited — save, then recomposite to update this.
+                  No hero yet — the background is a placeholder.
+                </p>
+              ) : dirty || !draft.composed_image_path ? (
+                <p className="text-[11px] text-muted-foreground">
+                  Recomposite to bake this into the published PNG.
                 </p>
               ) : null}
           {/* Outside the switch: these act on the picture, and the picture is in

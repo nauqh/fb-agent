@@ -16,29 +16,43 @@ import { cn } from "@/lib/utils";
 const WATERMARK_PREVIEW = "/watermarks/history-retraced.png";
 
 /**
- * A preview of the Composed Image.
+ * A live preview of the Composed Image: the real hero, with the panel drawn
+ * here rather than fetched.
  *
- * **This is an approximation, and structurally cannot be anything else.** The
- * real image is measured with fontTools advance widths and rasterised by resvg
- * from Arial-Bold.ttf; the browser here is measuring a different font with a
+ * **This is why editing a highlight shows up instantly.** The hero is the
+ * expensive half and it is already on disk; the panel is text on a black
+ * rectangle and the browser can lay it out as fast as you type. Compositing on
+ * the server is then only about producing the file that gets published, not
+ * about seeing what you just changed. The old app worked exactly this way —
+ * `<img>` of the hero with `OverlayTextPanelPreview` over it — and this repo
+ * lost the behaviour by accident: the component was written before
+ * `google-genai` existed, so it had no hero to show and drew a gradient, and
+ * once real heroes arrived the callers quietly switched to the baked PNG
+ * instead of passing one in.
+ *
+ * **The panel is an approximation and structurally cannot be anything else.**
+ * The real image is measured with fontTools advance widths and rasterised by
+ * resvg from Arial-Bold.ttf; the browser is measuring a different font with a
  * different engine, so line breaks and therefore panel height will not match
- * pixel for pixel. What it does reproduce faithfully is the *form* — 4:5, hero
- * on top, solid black panel below that grows to fit the copy from a 20% floor,
- * highlight phrases in gold, watermark top-right of the hero — and it re-lays
- * live as the operator edits, which is the thing worth looking at.
+ * pixel for pixel. What it reproduces faithfully is the form — 4:5, hero on
+ * top, solid black panel growing from a 20% floor, highlights in gold,
+ * watermark top-right — which is what an edit needs to show.
  *
- * The hero is a CSS gradient. No `google-genai` exists yet, and a checked-in
- * photograph would imply one does.
+ * Without `heroSrc` the hero is a CSS gradient, which is the honest rendering
+ * of a draft whose picture has not been generated yet.
  */
 export function ComposedImage({
   overlayText,
   highlightPhrases,
   watermarkPath,
+  heroSrc,
   seed = 0,
   className,
 }: {
   overlayText: string | null;
   highlightPhrases: string[];
+  /** The generated hero, if one exists. A gradient stands in when it does not. */
+  heroSrc?: string | null;
   /**
    * `page.watermark_image_path`, relative to `API_DIR`. Null is not a fallback:
    * the asset is committed at `api/assets/watermarks/`, so a Page without one is
@@ -70,11 +84,23 @@ export function ComposedImage({
       {/* Hero. Shrinks as the panel grows, exactly as the compositor does. */}
       <div
         className="relative min-h-0 flex-1"
-        style={{
-          background: `radial-gradient(120% 90% at 30% 20%, hsl(${hue} 18% 42%), hsl(${(hue + 40) % 360} 22% 14%) 70%), linear-gradient(160deg, hsl(${hue} 25% 30%), hsl(${(hue + 60) % 360} 30% 8%))`,
-        }}
+        style={
+          heroSrc
+            ? undefined
+            : {
+                background: `radial-gradient(120% 90% at 30% 20%, hsl(${hue} 18% 42%), hsl(${(hue + 40) % 360} 22% 14%) 70%), linear-gradient(160deg, hsl(${hue} 25% 30%), hsl(${(hue + 60) % 360} 30% 8%))`,
+              }
+        }
       >
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_120%,transparent_40%,rgba(0,0,0,0.55))]" />
+        {heroSrc ? (
+          /* `object-cover` is the compositor's `_cover`: fill the box, crop the
+             overflow, centred. The hero is generated at its own resolution near
+             the requested ratio, never at exact pixels. */
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={heroSrc} alt="" className="absolute inset-0 size-full object-cover" />
+        ) : (
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_120%,transparent_40%,rgba(0,0,0,0.55))]" />
+        )}
         {/* Watermark: top-right of the hero, inset by edge_margin_ratio,
             natural aspect, capped at 0.22 × width. */}
         <div
@@ -104,7 +130,9 @@ export function ComposedImage({
 
       {/* Panel. `min-height` is the 20% floor; the content pushes it taller. */}
       <div
-        className="shrink-0 text-center font-bold uppercase leading-[1.26] text-white"
+        // Not `uppercase`: the compositor draws the hook verbatim, and shouting
+        // it here made the preview disagree with the PNG beside it.
+        className="shrink-0 text-center font-bold leading-[1.26] text-white"
         style={{
           minHeight: `${LAYOUT.panelRatio * 100}%`,
           maxHeight: `${LAYOUT.panelMaxRatio * 100}%`,
