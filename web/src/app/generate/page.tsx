@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useState } from "react";
-import { AlertTriangle, ArrowRight, Loader2, Sparkles, X } from "lucide-react";
+import { ArrowRight, Loader2, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { ScreenHeader } from "@/components/screen";
@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { generate } from "@/lib/api/drafts";
-import { getQuotaUsage, listPages } from "@/lib/api/pages";
+import { listPages } from "@/lib/api/pages";
 import { sourceKey, useCart } from "@/lib/cart";
 import { isFactual } from "@/lib/types";
 import { useQuery } from "@/lib/use-query";
@@ -21,9 +21,9 @@ import { cn } from "@/lib/utils";
 /**
  * The staging screen for a run.
  *
- * It exists because a run has two things worth seeing before it starts: how
- * many Drafts it will produce, and whether the Page is already at its Quota for
- * today. Both were previously buried in a page-picker dialog.
+ * It exists so the one thing worth seeing before a run starts — how many Drafts
+ * it will produce, against which Page — is in front of the operator rather than
+ * buried in a page-picker dialog.
  */
 export default function GenerateScreen() {
   const cart = useCart();
@@ -34,15 +34,9 @@ export default function GenerateScreen() {
   const { data: pages } = useQuery(() => listPages(), []);
 
   const page = pages?.[0];
-  const { data: used } = useQuery(
-    () => getQuotaUsage(page!.id),
-    [page?.id],
-    { enabled: Boolean(page) },
-  );
 
   const usingTopic = cart.count === 0;
   const draftCount = usingTopic ? (topic.trim() ? 1 : 0) : cart.count;
-  const atQuota = page !== undefined && used !== null && used !== undefined && used >= page.daily_quota;
 
   async function run() {
     if (!page || draftCount === 0) return;
@@ -152,29 +146,11 @@ export default function GenerateScreen() {
           </div>
           <div className="px-4 py-4">
             {page ? (
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-sm font-medium">{page.name}</p>
-                  <p className="pt-0.5 font-mono text-xs text-muted-foreground">
-                    {page.facebook_page_id}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p
-                    className={cn(
-                      "text-sm tabular-nums",
-                      atQuota ? "text-gold-foreground" : "text-muted-foreground",
-                    )}
-                  >
-                    {used ?? 0} / {page.daily_quota} approved today
-                  </p>
-                  {atQuota ? (
-                    <p className="flex items-center justify-end gap-1 pt-0.5 text-xs text-muted-foreground">
-                      <AlertTriangle className="size-3" />
-                      At quota — this will not stop the run
-                    </p>
-                  ) : null}
-                </div>
+              <div>
+                <p className="text-sm font-medium">{page.name}</p>
+                <p className="pt-0.5 font-mono text-xs text-muted-foreground">
+                  {page.facebook_page_id}
+                </p>
               </div>
             ) : null}
           </div>

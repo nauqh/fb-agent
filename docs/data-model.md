@@ -52,7 +52,6 @@ erDiagram
         text name UK "History Retraced"
         text facebook_page_id UK "from Metricool"
         text metricool_blog_id
-        int daily_quota "per Asia/Ho_Chi_Minh day"
         text watermark_image_path "committed file under api/assets/"
         ts created_at
         ts updated_at
@@ -134,10 +133,15 @@ compositor hardcodes `const cornerRadius = 0` (`image-composite.ts:313`) and the
 preview helper was zeroed to match, with the comment "previews must match the
 composited output, which is no longer rounded" (`brand-image-layout.ts:111`).
 
-Two things stayed columns because they are genuinely per-page, not layout:
-`daily_quota` (1, 2, 12 across the old pages — publishing policy) and
+One thing stayed a column because it is genuinely per-page, not layout:
 `watermark_image_path` (each page's own logo file — cannot be one constant).
-The prompts were the third until they became files; see above.
+The prompts were the second until they became files; see above.
+
+`daily_quota` was the third. It was ported (1, 2, 12 across the old pages) and
+then cut on 2026-08-06: nothing in v1 publishes, so the cap was counted against
+**Approve**, and Approve is a queue movement that `unapprove` can undo. A cap
+that only warns, over a number the operator can move by clicking twice, is not
+policy — it is decoration. It comes back with publishing or not at all.
 
 **The watermark is a committed file, and that is the whole point.**
 
@@ -287,8 +291,7 @@ reasoning and its consequences are in [plan.md](plan.md#ticking-stops-writing).
 
 A Source Item is worth contrasting with a Draft here, because the two are saved
 for opposite reasons. A Draft is **load-bearing**: it is the job record, it holds
-paid model output, review state and what Quota counts, and it cannot be
-ephemeral. A Source Item is **bookkeeping** — a pointer to something that exists
+paid model output and review state, and it cannot be ephemeral. A Source Item is **bookkeeping** — a pointer to something that exists
 elsewhere and can be re-fetched, kept only so a Draft can say where it came from.
 That is why a Source Item need not exist until a Draft points at it, and why a
 Draft must exist from the moment its run starts.

@@ -117,7 +117,8 @@ def approve_draft(draft_id: int, session: Session = Depends(get_session)) -> Dra
 def unapprove_draft(draft_id: int, session: Session = Depends(get_session)) -> Draft:
     """Nothing publishes in v1, so Approve is a queue movement, not a commitment.
 
-    It is also what makes the Quota advisory: an approved Draft can come back.
+    An approved Draft can come back, which is why nothing downstream may treat
+    Approve as final.
     """
     return _set_status(session, draft_id, DraftStatus.REVIEW)
 

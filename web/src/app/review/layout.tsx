@@ -13,7 +13,7 @@ export default function ReviewLayout({ children }: { children: React.ReactNode }
     <div className="flex min-h-0 flex-1 flex-col">
       <ScreenHeader
         title="Review"
-        hint="Approve drains the queue. Nothing publishes in v1 — approving is what counts against the Page's Quota."
+        hint="Approve drains the queue. Nothing publishes in v1 — approving is a queue movement, and it can be undone."
       />
       <div className="grid min-h-0 flex-1 gap-6 lg:grid-cols-[300px_minmax(0,1fr)]">
         <div className="min-h-0 lg:h-full">

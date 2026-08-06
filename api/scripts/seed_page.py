@@ -4,7 +4,7 @@ The values below were read from the old system's `facebook_post_templates` row
 for page 569035169625026 and cross-checked live against Metricool
 `/admin/simpleProfiles`. There is nothing left to migrate: the prompts are files
 (`api/prompts/`), the layout is `config/layout.yml`, and the watermark is a
-committed asset rebuilt by `scripts/fetch_watermark.py`.
+committed asset under `api/assets/watermarks/`.
 
     uv run python scripts/seed_page.py
 """
@@ -23,9 +23,10 @@ PAGE = {
     "name": "History Retraced",
     "facebook_page_id": "569035169625026",
     "metricool_blog_id": "4605385",
-    "daily_quota": 12,
-    # Relative to API_DIR. Committed, unlike media/. Rebuild it with
-    # scripts/fetch_watermark.py — the original asset is gone from Storage.
+    # Relative to API_DIR. Committed, unlike media/, because the current
+    # Supabase project 404s every watermark path — this one was recovered from
+    # the *previous* project. See docs/decisions.md, "The watermark becomes a
+    # committed file".
     "watermark_image_path": "assets/watermarks/history-retraced.png",
 }
 
@@ -44,7 +45,7 @@ def main() -> None:
         session.add(page)
         session.commit()
         session.refresh(page)
-        print(f"created: id={page.id} {page.name} quota={page.daily_quota}")
+        print(f"created: id={page.id} {page.name}")
 
 
 if __name__ == "__main__":

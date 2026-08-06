@@ -12,8 +12,8 @@ import { isFactual } from "@/lib/types";
  * The Cart, pinned beside the source grids.
  *
  * Its Generate button navigates to /generate rather than opening a picker
- * dialog: the run needs a Quota check and a source × page count in front of the
- * operator, and neither belongs in a modal.
+ * dialog: the run needs a source × page count in front of the operator, and
+ * that does not belong in a modal.
  */
 export function CartPanel() {
   const cart = useCart();

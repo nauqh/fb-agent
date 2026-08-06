@@ -72,18 +72,21 @@ disk, visible in a browser.
   `{highlight_color}` substituted from `layout.yml` so a prompt cannot disagree
   with the compositor.
 - `GET /pages`, `GET /pages/{id}`, `PATCH /pages/{id}`.
-- `web/` scaffold, and the **Settings** screen: identity read-only, `daily_quota`
-  editable, prompt files shown for reference (they are edited in an editor).
+- `web/` scaffold, and the **Settings** screen: identity and watermark shown
+  read-only, prompt files shown for reference (they are edited in an editor).
 
-**Done when:** changing `daily_quota` in the browser survives a restart, and
-`/pages` returns exactly one page.
+**Done when:** `/pages` returns exactly one page and the Settings screen renders
+it. The screen shipped with an editable `daily_quota`; the Quota was cut
+entirely on 2026-08-06, and Settings is read-only throughout as a result.
 
 **Status:** done. Backend, and `web/` on the real API — `GET /prompts` was
 added so Settings reads the files rather than a bundled copy, which had already
 drifted to a file that no longer existed.
 
-`getQuotaUsage` is the one thing still on the fixture store: it counts approved
-Drafts, and `GET /drafts` arrives with Phase 3.
+`getQuotaUsage` was the one thing left on the fixture store, counting approved
+Drafts until `GET /drafts` arrived in Phase 3. It never made that move — the
+Quota was cut on 2026-08-06 and the function went with it, so nothing in `web/`
+reads a fixture any more.
 
 ---
 
@@ -316,7 +319,7 @@ Three more traps, found by running it rather than reasoning about it:
   looking ready, their only tell an `error` column nothing rendered — five of
   nine drafts in the local database were failures parked in the review queue.
   `DraftStatus.FAILED` is its own state; approving one is a 409, rejecting it
-  still works, and Quota is unaffected because Quota counts approvals.
+  still works.
 
 No migration was needed for that: SQLModel stores `status` as a plain
 `VARCHAR` with no `CHECK`, so a new enum member is not a schema change.

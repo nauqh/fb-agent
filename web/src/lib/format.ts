@@ -1,4 +1,8 @@
-import { PAGE_TIMEZONE } from "@/lib/quota";
+/**
+ * Timestamps render in the Page's zone, not the browser's — an operator
+ * elsewhere must read the same clock the posting schedule is written against.
+ */
+const PAGE_TIMEZONE = "Asia/Ho_Chi_Minh";
 
 const relative = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
 const compact = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 });
@@ -28,8 +32,8 @@ export function timeAgo(iso: string | null): string {
  *
  * `timeAgo` is for the grid, where "2 days ago" is the only thing being asked.
  * This is for the detail view, where an operator deciding whether a story is
- * stale needs the actual instant — and needs it in the same zone the Quota and
- * the posting schedule are written against.
+ * stale needs the actual instant — and needs it in the same zone the posting
+ * schedule is written against.
  */
 export function fullDate(iso: string | null): string {
   return iso ? stamp.format(new Date(iso)) : "—";

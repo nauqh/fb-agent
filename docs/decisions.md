@@ -22,8 +22,8 @@ dropped — not deactivated, not seeded — and come back as inserts when they a
 wanted. `is_active` goes with them: one page means the flag is never false.
 
 This also ends the Supabase dependency. With prompts extracted to files and the
-layout to `layout.yml`, the entire migration is four constants
-(`name`, `facebook_page_id`, `metricool_blog_id`, `daily_quota`), so
+layout to `layout.yml`, the entire migration is three constants
+(`name`, `facebook_page_id`, `metricool_blog_id`), so
 `scripts/seed_pages.py` — which read production Supabase and Metricool at
 runtime — collapses to `scripts/seed_page.py`, and `SUPABASE_URL` /
 `SUPABASE_SERVICE_ROLE_KEY` leave `.env`.
@@ -175,9 +175,9 @@ not only against the template row. Two per-draft overrides exist in
 **399 leave both null**, so the code fallbacks `#ffffff` and `#F5C542` are what
 production renders, and they become the config values.
 
-Only `daily_quota` and `watermark_image_path` stay per-page — policy and a
-per-page asset. The prompts were the third until they became files. Details and
-the full before/after table are in
+Only `watermark_image_path` stays per-page — a per-page asset. The prompts were
+the second until they became files, and `daily_quota` was the third until the
+Quota was cut on 2026-08-06. Details and the full before/after table are in
 [data-model.md](data-model.md#layout-is-config-not-data).
 
 ## Migration

@@ -15,7 +15,6 @@ export const PAGES: Page[] = [
     name: "History Retraced",
     facebook_page_id: "569035169625026",
     metricool_blog_id: "4605385",
-    daily_quota: 12,
     watermark_image_path: "assets/watermarks/history-retraced.png",
     created_at: "2026-08-03T02:10:00Z",
     updated_at: "2026-08-03T02:10:00Z",

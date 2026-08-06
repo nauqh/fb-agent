@@ -213,7 +213,7 @@ process there is no other writer that could still own it.
 ```
 GET    /pages                       one row in v1
 GET    /pages/{id}
-PATCH  /pages/{id}                  quota, watermark (prompts are files)
+PATCH  /pages/{id}                  watermark (prompts are files, no UI caller)
 GET    /prompts                     the prompt files, read-only, substituted
 
 GET    /sources/competitors?page_id=&refresh=  stored rows; syncs when empty or asked
@@ -245,8 +245,9 @@ for is `image_prompt` — an operator-editable field on `PATCH`, or the row is a
 dead end.
 
 `unapprove` exists because nothing publishes in v1, so Approve is a queue
-movement rather than a commitment. It is also what makes the Quota advisory:
-an approved Draft can come back.
+movement rather than a commitment: an approved Draft can come back. That is also
+why the Quota was cut — it capped a number Approve could raise and `unapprove`
+could lower, so it never bound anything.
 
 ## Configuration
 
@@ -264,8 +265,7 @@ Four tiers, and the split is deliberate:
 - **env** — secrets and model ids. Model ids belong here because they get retired
   upstream without notice; the old repo shipped
   `fix(gemini): replace retired image fallback model`.
-- **`page` rows** — identity and publishing policy: name, the two external ids,
-  quota, watermark file.
+- **`page` rows** — identity: name, the two external ids, watermark file.
 
 ### The three prompt files
 

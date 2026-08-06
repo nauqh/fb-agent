@@ -1,8 +1,12 @@
 """Pages: list, read, edit.
 
-One page in v1, so this is a small surface: the Settings screen shows the
-identity read-only and edits `daily_quota`. Prompts are files now and are edited
-in an editor, not here.
+One page in v1, so this is a small surface: the Settings screen reads a Page and
+shows it. Prompts are files now and are edited in an editor, not here.
+
+Nothing in the UI writes a Page any more — `daily_quota` was the only field it
+edited, and it is gone. `PATCH` stays because `watermark_image_path` is still a
+per-page value and Phase 4 is the code that reads it; a Page with the wrong
+watermark needs a way back that is not a SQL prompt.
 """
 
 from datetime import datetime, timezone
@@ -24,7 +28,6 @@ class PageUpdate(BaseModel):
     `metricool_blog_id` come from Metricool and are not the operator's to edit.
     """
 
-    daily_quota: int | None = None
     watermark_image_path: str | None = None
 
 
@@ -52,9 +55,6 @@ def update_page(
         raise HTTPException(status_code=404, detail=f"No page {page_id}")
 
     changes = update.model_dump(exclude_unset=True)
-    if "daily_quota" in changes and changes["daily_quota"] < 1:
-        raise HTTPException(status_code=422, detail="daily_quota must be at least 1")
-
     for field, value in changes.items():
         setattr(page, field, value)
     page.updated_at = datetime.now(timezone.utc)

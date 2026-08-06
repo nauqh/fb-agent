@@ -4,8 +4,8 @@
  * These mirror `api/app/models.py` field for field, because SQLModel table
  * classes are also the API-facing types — there is no second set of DTOs on the
  * Python side, so there should not be one here either. Dates arrive as ISO
- * strings over JSON and stay strings; nothing in the UI does date arithmetic
- * beyond "is this today in Asia/Ho_Chi_Minh", which lives in `lib/quota.ts`.
+ * strings over JSON and stay strings; nothing in the UI does date arithmetic —
+ * they are only ever formatted, in `lib/format.ts`.
  */
 
 export type SourceKind = "competitor_post" | "tweet" | "rss";
@@ -24,7 +24,6 @@ export interface Page {
   name: string;
   facebook_page_id: string;
   metricool_blog_id: string | null;
-  daily_quota: number;
   /**
    * The Page's logo file, relative to `API_DIR` — a committed asset under
    * `api/assets/`, not storage. Null is an error state, not a fallback: the old

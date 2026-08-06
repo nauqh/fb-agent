@@ -67,9 +67,6 @@ class Page(SQLModel, table=True):
     facebook_page_id: str = Field(unique=True, index=True)
     metricool_blog_id: str | None = None
 
-    daily_quota: int = 12
-    """Posts per calendar day in Asia/Ho_Chi_Minh."""
-
     watermark_image_path: str | None = None
     """The page's own logo, relative to `API_DIR` — a committed asset, not
     media_root, which is gitignored and would lose it on clone.

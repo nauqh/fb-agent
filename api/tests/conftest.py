@@ -44,7 +44,6 @@ def page(session) -> Page:
         name="History Retraced",
         facebook_page_id="569035169625026",
         metricool_blog_id="4605385",
-        daily_quota=12,
     )
     session.add(page)
     session.commit()

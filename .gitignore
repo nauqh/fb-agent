@@ -16,6 +16,7 @@ node_modules/
 *.db
 *.db-wal
 *.db-shm
+*.db.bak
 api/media/
 .env
 .env.local

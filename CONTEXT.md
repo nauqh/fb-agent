@@ -7,8 +7,8 @@ posts to Metricool for scheduling and publishing.
 ## Language
 
 **Page**:
-One of the owned Facebook pages the agent publishes to. Owns its daily quota and
-its watermark. It does *not* own styling — every Page renders in the same form
+One of the owned Facebook pages the agent publishes to. Owns its watermark. It
+does *not* own styling — every Page renders in the same form
 and size — and it no longer owns its prompts, which are files. v1 has exactly
 one: History Retraced.
 _Avoid_: Brand, brand key, `hr`/`tff`/`bf`/`htt`, blog
@@ -77,9 +77,3 @@ _Avoid_: Overlay, composite, thumbnail, card, layout
 An exact substring of the panel text, copied verbatim by the writer, rendered in
 gold on the Composed Image.
 
-**Quota**:
-The maximum number of posts a Page may publish in one calendar day, in
-Asia/Ho_Chi_Minh time. Nothing publishes in v1, so what counts against it is
-**Approve**: a Page's usage is its Drafts approved during today. It is advisory
-— it warns, it never blocks a generation run, because an approved Draft can
-still be rejected.

@@ -62,7 +62,8 @@ export async function rejectDraft(id: number): Promise<Draft> {
  * `POST /drafts/{id}/unapprove` — undo, for the toast.
  *
  * Approve is reversible right up until the v2 Metricool push, which is exactly
- * why the Quota it consumes is advisory: an approved Draft can come back.
+ * why nothing downstream may treat Approve as final: an approved Draft can come
+ * back.
  */
 export async function returnToReview(id: number): Promise<Draft> {
   return post<Draft>(`/drafts/${id}/unapprove`, {});
