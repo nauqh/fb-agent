@@ -5,7 +5,6 @@ import { useMemo, useState } from "react";
 import {
   AlertTriangle,
   Check,
-  ImageIcon,
   Loader2,
   RotateCcw,
   Sparkles,
@@ -28,7 +27,6 @@ import {
   approveDraft,
   getDraft,
   listDrafts,
-  recomposite,
   regenerateHero,
   rejectDraft,
   returnToReview,
@@ -60,7 +58,7 @@ export function DraftDetail({ draftId }: { draftId: number }) {
   });
   const [saving, setSaving] = useState(false);
   const [deciding, setDeciding] = useState(false);
-  const [imageWork, setImageWork] = useState<"recomposite" | "hero" | null>(null);
+  const [imageWork, setImageWork] = useState<"hero" | null>(null);
   const [view, setView] = useState<View>("edit");
 
   const { data: pages } = useQuery(() => listPages(), []);
@@ -126,7 +124,7 @@ export function DraftDetail({ draftId }: { draftId: number }) {
     try {
       await updateDraft(draftId, form);
       toast.success("Saved.", {
-        description: "Recomposite to see it on the image.",
+        description: "The image was redrawn to match.",
       });
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : "Save failed");
@@ -164,26 +162,18 @@ export function DraftDetail({ draftId }: { draftId: number }) {
   }
 
   /**
-   * The two image operations, priced differently on purpose.
+   * The only operation left that costs anything.
    *
-   * Recompositing redraws the panel over the hero already on disk; regenerating
-   * the hero is a `google-genai` call. The columns are separate so the first one
-   * is free, and the UI has to keep them apart or that distinction is decoration.
+   * Redrawing the panel is free and now happens on save; buying a hero is a
+   * `google-genai` call, so it stays a button the operator presses on purpose.
    */
-  async function redoImage(kind: "recomposite" | "hero") {
+  async function redoImage(kind: "hero") {
     setImageWork(kind);
     try {
-      if (kind === "recomposite") {
-        await recomposite(draftId);
-        toast.success("Recomposited from the stored hero.", {
-          description: "No image generation was paid for.",
-        });
-      } else {
-        await regenerateHero(draftId);
-        toast.success("New hero generated and composited.", {
-          description: "That was a paid image generation.",
-        });
-      }
+      await regenerateHero(draftId);
+      toast.success("New hero generated and composited.", {
+        description: "That was a paid image generation.",
+      });
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : "Image work failed");
     } finally {
@@ -199,13 +189,11 @@ export function DraftDetail({ draftId }: { draftId: number }) {
    * The hero with the panel drawn over it, never the baked PNG.
    *
    * Showing the composited file is what made an edit require a round trip: the
-   * PNG cannot know about a highlight you added a second ago, so every change
-   * needed Recomposite before it was visible. Drawing the panel here instead
-   * makes it instant, and costs nothing — the hero is the expensive half and it
-   * is already on disk.
+   * PNG cannot know about a highlight you added a second ago. Drawing the panel
+   * here instead makes it instant, and costs nothing — the hero is the
+   * expensive half and it is already on disk.
    *
-   * Recomposite is therefore about producing the file that gets published, not
-   * about seeing your own edit.
+   * The server bakes the same thing into the PNG when the draft is saved.
    *
    * Held as a value because both views draw it: on its own under Edit, and
    * inside the feed card under Preview.
@@ -308,49 +296,30 @@ export function DraftDetail({ draftId }: { draftId: number }) {
                 </p>
               ) : dirty || !draft.composed_image_path ? (
                 <p className="text-[11px] text-muted-foreground">
-                  Recomposite to bake this into the published PNG.
+                  Save to bake this into the published PNG.
                 </p>
               ) : null}
-          {/* Outside the switch: these act on the picture, and the picture is in
-              both panes. */}
-          <div className="space-y-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full"
-              disabled={imageWork !== null || !draft.hero_image_path}
-              title={
-                draft.hero_image_path
-                  ? undefined
-                  : "There is no hero on disk to composite over."
-              }
-              onClick={() => void redoImage("recomposite")}
-            >
-              {imageWork === "recomposite" ? (
-                <Loader2 className="size-3.5 animate-spin" />
-              ) : (
-                <ImageIcon className="size-3.5" />
-              )}
-              Recomposite
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="w-full text-muted-foreground"
-              disabled={imageWork !== null}
-              onClick={() => void redoImage("hero")}
-              // The one button that spends money. Said on hover rather than in a
-              // paragraph under it — the warning belongs on the trigger.
-              title="Buys a new image from Gemini."
-            >
-              {imageWork === "hero" ? (
-                <Loader2 className="size-3.5 animate-spin" />
-              ) : (
-                <Sparkles className="size-3.5" />
-              )}
-              Regenerate hero
-            </Button>
-          </div>
+          {/* Recomposite used to sit here. Saving now redraws the panel
+              server-side, so the button only ever repeated what Save had
+              already done — and left the PNG stale for anyone who did not
+              know to press it. */}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full text-muted-foreground"
+            disabled={imageWork !== null}
+            onClick={() => void redoImage("hero")}
+            // The one button that spends money. Said on hover rather than in a
+            // paragraph under it — the warning belongs on the trigger.
+            title="Buys a new image from Gemini."
+          >
+            {imageWork === "hero" ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <Sparkles className="size-3.5" />
+            )}
+            Regenerate hero
+          </Button>
             </div>
 
             <div className="min-w-0 space-y-6">

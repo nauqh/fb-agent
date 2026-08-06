@@ -87,15 +87,44 @@ class DraftEdit(BaseModel):
     image_prompt: str | None = None
 
 
+DRAWN_FIELDS = ("hook", "highlight_phrases")
+"""The only edits that change the picture. Caption and body are not on it."""
+
+
 @router.patch("/drafts/{draft_id}")
 def update_draft(
     draft_id: int,
     edit: DraftEdit,
     session: Session = Depends(get_session),
 ) -> Draft:
+    """Save, and redraw the composite if the saved text is on it.
+
+    Recompositing used to be a button the operator pressed after saving, which
+    made "the row" and "the picture" two things that could disagree — and they
+    disagreed by default, because the obvious thing to do after editing is to
+    save and move on. Doing it here means the stored PNG always matches the
+    stored text, whatever client did the saving.
+
+    Free, so there is nothing to weigh: the hero is reused and only the panel is
+    redrawn. Buying a *new* hero stays an explicit request.
+    """
     draft = _require(session, draft_id)
-    for field, value in edit.model_dump(exclude_unset=True).items():
+    changes = edit.model_dump(exclude_unset=True)
+    redraw = any(
+        field in changes and changes[field] != getattr(draft, field)
+        for field in DRAWN_FIELDS
+    )
+
+    for field, value in changes.items():
         setattr(draft, field, value)
+
+    if redraw and draft.hero_image_path:
+        page = session.get(Page, draft.page_id)
+        if page is not None:
+            fresh = generate.build_image(session, draft, page)
+            kept = [w for w in draft.warnings if not w.startswith(generate.IMAGE_WARNING)]
+            draft.warnings = kept + fresh
+
     return _save(session, draft)
 
 
@@ -108,12 +137,17 @@ def rebuild_image(
     ),
     session: Session = Depends(get_session),
 ) -> Draft:
-    """Compose the image again after an overlay edit, or after one failed.
+    """Buy a new hero, or rebuild a composite that failed.
 
-    Default reuses `hero_image_path`, so fixing a line break or a highlight
-    costs nothing. `new_hero=true` discards the picture and pays for another —
-    the only call in the app that spends money on demand, which is why it is an
-    explicit flag rather than the default.
+    `new_hero=true` discards the picture and pays for another. It is the only
+    call in the app that spends money on demand, which is why it is a flag
+    rather than the default.
+
+    The default — reuse the hero, redraw the panel — is what `PATCH` now does on
+    every save that touches the drawn text, so nothing in the UI calls it. It
+    stays because a composite can fail on its own (a watermark that will not
+    load), and the way back from that must not be to edit something you did not
+    want to change.
 
     Synchronous, unlike `/generate`: re-compositing is milliseconds, and a new
     hero is a single call the operator is waiting on anyway.

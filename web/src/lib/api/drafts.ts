@@ -97,17 +97,14 @@ export async function generate(request: GenerateRequest): Promise<number[]> {
 }
 
 /**
- * The two image routes. One endpoint, and the flag is the whole difference.
+ * Buy a new hero.
  *
- * `recomposite` redraws over the hero already on disk and costs nothing, so it
- * is the button an operator can press after every edit. `regenerateHero` buys a
- * new picture — the only call in the app that spends money on demand, which is
- * why it is a separate function rather than an option on the first.
+ * The free half of this endpoint — reuse the hero, redraw the panel — is not
+ * called from here: `PATCH /drafts/{id}` does it on every save that touches the
+ * drawn text, so there is no state in which the client needs to ask separately.
+ * This is the paid half, and the only call in the app that spends money on
+ * demand.
  */
-export async function recomposite(id: number): Promise<Draft> {
-  return post<Draft>(`/drafts/${id}/image`, {});
-}
-
 export async function regenerateHero(id: number): Promise<Draft> {
   return post<Draft>(`/drafts/${id}/image?new_hero=true`, {});
 }

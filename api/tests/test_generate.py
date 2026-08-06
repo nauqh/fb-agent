@@ -370,3 +370,63 @@ def test_rebuilding_replaces_image_warnings_rather_than_stacking_them(
     after = client.post("/drafts/1/image").json()["warnings"]
 
     assert [w for w in after if w.startswith(generate.IMAGE_WARNING)] == image_warnings
+
+
+def test_saving_the_hook_redraws_the_composite(client, written, illustrated):
+    """Recompositing was a button, so the row and the picture disagreed by default.
+
+    The obvious thing to do after editing is save and move on, which left a PNG
+    showing the previous text. Saving redraws it now.
+    """
+    client.post("/generate", json={"page_ids": [1], "sources": [_rss().model_dump(mode="json")]})
+    before = client.get("/drafts/1").json()["composed_image_path"]
+
+    after = client.patch("/drafts/1", json={"hook": "A different hook entirely."}).json()
+
+    assert after["hook"] == "A different hook entirely."
+    assert after["composed_image_path"] != before, "the picture still shows the old text"
+
+
+def test_saving_a_highlight_redraws_the_composite(client, written, illustrated):
+    """The gold is drawn, so the phrases are a drawn field too."""
+    client.post("/generate", json={"page_ids": [1], "sources": [_rss().model_dump(mode="json")]})
+    before = client.get("/drafts/1").json()["composed_image_path"]
+
+    after = client.patch("/drafts/1", json={"highlight_phrases": ["Marie Tharp"]}).json()
+
+    assert after["composed_image_path"] != before
+
+
+def test_saving_the_caption_does_not_redraw(client, written, illustrated):
+    """The caption is not on the image. Redrawing for it is work for nothing."""
+    client.post("/generate", json={"page_ids": [1], "sources": [_rss().model_dump(mode="json")]})
+    before = client.get("/drafts/1").json()["composed_image_path"]
+
+    after = client.patch("/drafts/1", json={"caption": "🌊 A different recap."}).json()
+
+    assert after["composed_image_path"] == before
+
+
+def test_saving_the_same_hook_back_does_not_redraw(client, written, illustrated):
+    """A PATCH that changes nothing is not an edit."""
+    client.post("/generate", json={"page_ids": [1], "sources": [_rss().model_dump(mode="json")]})
+    row = client.get("/drafts/1").json()
+
+    after = client.patch("/drafts/1", json={"hook": row["hook"]}).json()
+
+    assert after["composed_image_path"] == row["composed_image_path"]
+
+
+def test_saving_without_a_hero_does_not_fail(client, written, monkeypatch):
+    """No picture to draw over is not an error — the text still saves."""
+    from app.image import hero
+
+    monkeypatch.setattr(
+        hero, "generate", lambda *a, **k: (_ for _ in ()).throw(hero.HeroError("nope"))
+    )
+    client.post("/generate", json={"page_ids": [1], "sources": [_rss().model_dump(mode="json")]})
+
+    after = client.patch("/drafts/1", json={"hook": "Saved anyway."})
+
+    assert after.status_code == 200
+    assert after.json()["hook"] == "Saved anyway."
