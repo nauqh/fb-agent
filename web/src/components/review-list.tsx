@@ -82,7 +82,7 @@ export function ReviewList() {
           </div>
         ) : drafts?.length === 0 ? (
           <p className="px-3 py-10 text-center text-xs text-muted-foreground">
-            Nothing here. The queue is drained.
+            Queue is empty.
           </p>
         ) : (
           <ul className="space-y-0.5">

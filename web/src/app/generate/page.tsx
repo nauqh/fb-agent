@@ -65,10 +65,7 @@ export default function GenerateScreen() {
 
   return (
     <div className="w-full max-w-4xl lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
-      <ScreenHeader
-        title="Generate"
-        hint="One Draft per Source Item, per Page. v1 has one Page, so the count is the Cart."
-      />
+      <ScreenHeader title="Generate" />
 
       <div className="space-y-6">
         <section className="rounded-lg border">

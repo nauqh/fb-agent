@@ -38,7 +38,7 @@ export default function SettingsScreen() {
 
   return (
     <div className="w-full max-w-3xl pb-16 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
-      <ScreenHeader title="Settings" hint="v1 runs one Page. Adding a second one is an insert." />
+      <ScreenHeader title="Settings" />
 
       <section className="space-y-6">
         <div>

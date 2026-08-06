@@ -271,15 +271,20 @@ export function DraftDetail({ draftId }: { draftId: number }) {
 
       <div className="min-w-0 space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
+          <div className="min-w-0">
             <h2 className="flex items-center gap-2 text-base font-medium">
               <span className="font-mono text-sm text-muted-foreground">#{draft.id}</span>
               {page?.name}
             </h2>
-            <p className="pt-0.5 text-xs text-muted-foreground">
-              {draft.topic ? `topic · ${draft.topic}` : `from source item ${draft.source_item_id}`}
-              <span className="mx-1.5">·</span>
-              {timeAgo(draft.created_at)}
+            {/* A topic is a whole sentence and pushed the date off the line.
+                Clipped with the full text on hover — it identifies the draft,
+                it does not need to be readable here. */}
+            <p className="flex min-w-0 gap-1.5 pt-0.5 text-xs text-muted-foreground">
+              <span className="truncate" title={draft.topic ?? undefined}>
+                {draft.topic ?? `source item ${draft.source_item_id}`}
+              </span>
+              <span>·</span>
+              <span className="shrink-0">{timeAgo(draft.created_at)}</span>
             </p>
           </div>
           <span

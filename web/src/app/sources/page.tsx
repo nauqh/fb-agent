@@ -25,10 +25,7 @@ const PAGE_ID = 1;
 export default function SourcesScreen() {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <ScreenHeader
-        title="Sources"
-        hint="Tick what you want to write from. Nothing is saved until you generate."
-      />
+      <ScreenHeader title="Sources" hint="Tick what you want to write from." />
 
       <Tabs
         defaultValue="competitors"

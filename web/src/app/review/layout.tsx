@@ -11,10 +11,7 @@ import { ScreenHeader } from "@/components/screen";
 export default function ReviewLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <ScreenHeader
-        title="Review"
-        hint="Approve drains the queue. Nothing publishes in v1 — approving is a queue movement, and it can be undone."
-      />
+      <ScreenHeader title="Review" />
       <div className="grid min-h-0 flex-1 gap-6 lg:grid-cols-[300px_minmax(0,1fr)]">
         <div className="min-h-0 lg:h-full">
           <ReviewList />
