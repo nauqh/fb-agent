@@ -1,14 +1,16 @@
 "use client";
 
-import Link from "next/link";
-import { useParams } from "next/navigation";
-import { AlertTriangle, TriangleAlert } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { AlertTriangle, Check, Loader2, TriangleAlert, X } from "lucide-react";
+import { toast } from "sonner";
 
-import { listDrafts } from "@/lib/api/drafts";
+import { approveDraft, listDrafts, rejectDraft } from "@/lib/api/drafts";
 import { timeAgo } from "@/lib/format";
 import type { Draft, DraftStatus } from "@/lib/types";
 import { useQuery } from "@/lib/use-query";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useReviewFilter } from "@/lib/review-filter";
 
@@ -23,17 +25,18 @@ const FILTERS: { value: DraftStatus | "all"; label: string }[] = [
 ];
 
 /**
- * The queue, as the whole screen.
+ * The queue: one table, one row per draft, click a row to open it.
  *
- * It used to be a 300px column with the draft permanently beside it, which
- * charged every screen for a list nobody reads while editing and left the rows
- * too narrow to say anything. Now the draft opens in a sheet over the top, so
- * the queue can be a grid of cards with the composed image on each — the one
- * thing that actually identifies a post at a glance.
+ * A table rather than cards, which is what the old app used and is the right
+ * shape for the job — the columns line up, so you scan *down* Status or Created
+ * instead of hunting for them inside each tile. Cards spread eight drafts over a
+ * screen that a table fits in a third of.
+ *
+ * The columns are the old app's minus Page, which had a filter dropdown there
+ * because it ran ten brands. v1 runs one, so the column would be the same value
+ * repeated down the page.
  */
 export function ReviewList() {
-  const params = useParams<{ id?: string }>();
-  const selectedId = params.id ? Number(params.id) : null;
   const { status, setStatus } = useReviewFilter();
 
   /**
@@ -42,7 +45,7 @@ export function ReviewList() {
    * A run in flight is not "needs review" yet, but hiding it means pressing
    * Generate appears to do nothing — the queue has to show the work arriving.
    */
-  const { data: drafts, loading } = useQuery(
+  const { data: drafts, loading, refresh } = useQuery(
     async () => {
       const [matching, generating] = await Promise.all([
         listDrafts({ status }),
@@ -63,7 +66,7 @@ export function ReviewList() {
   );
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4">
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
       <div className="flex flex-wrap gap-1">
         {FILTERS.map((filter) => (
           <button
@@ -82,102 +85,181 @@ export function ReviewList() {
         ))}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto pb-8">
+      <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border">
         {loading && !drafts ? (
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-            {Array.from({ length: 8 }).map((_, index) => (
-              <Skeleton key={index} className="h-28 rounded-lg" />
+          <div className="space-y-2 p-3">
+            {Array.from({ length: 5 }).map((_, index) => (
+              <Skeleton key={index} className="h-14 rounded-md" />
             ))}
           </div>
         ) : drafts?.length === 0 ? (
           <p className="py-16 text-center text-sm text-muted-foreground">Queue is empty.</p>
         ) : (
-          <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-            {drafts?.map((draft) => (
-              <li key={draft.id}>
-                <Card draft={draft} selected={draft.id === selectedId} />
-              </li>
-            ))}
-          </ul>
+          <table className="w-full min-w-[720px] text-sm">
+            <thead className="sticky top-0 z-10 bg-muted/40 backdrop-blur-sm">
+              <tr className="border-b text-left text-xs text-muted-foreground">
+                <th className="w-16 px-3 py-2 font-medium">
+                  <span className="sr-only">Image</span>
+                </th>
+                <th className="px-3 py-2 font-medium">Post</th>
+                <th className="w-32 px-3 py-2 font-medium">Created</th>
+                <th className="w-36 px-3 py-2 font-medium">Status</th>
+                <th className="w-24 px-3 py-2 text-right font-medium">
+                  <span className="sr-only">Actions</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {drafts?.map((draft) => (
+                <Row key={draft.id} draft={draft} onDecided={refresh} />
+              ))}
+            </tbody>
+          </table>
         )}
       </div>
     </div>
   );
 }
 
-function Card({ draft, selected }: { draft: Draft; selected: boolean }) {
+function Row({ draft, onDecided }: { draft: Draft; onDecided: () => void }) {
+  const router = useRouter();
+  const [deciding, setDeciding] = useState(false);
   const generating = draft.status === "generating";
 
+  async function decide(action: "approve" | "reject") {
+    setDeciding(true);
+    try {
+      if (action === "approve") await approveDraft(draft.id);
+      else await rejectDraft(draft.id);
+      toast(action === "approve" ? `Approved #${draft.id}.` : `Rejected #${draft.id}.`);
+      onDecided();
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Action failed");
+    } finally {
+      setDeciding(false);
+    }
+  }
+
   return (
-    <Link
-      href={`/review/${draft.id}`}
-      className={cn(
-        "flex gap-3 rounded-lg border p-2.5 transition-colors hover:bg-muted/50",
-        selected && "ring-2 ring-foreground/20",
-      )}
+    <tr
+      className={cn("group", generating ? "bg-muted/10" : "cursor-pointer hover:bg-muted/30")}
+      onClick={generating ? undefined : () => router.push(`/review/${draft.id}`)}
     >
-      {/* The picture is what identifies a post. 4:5 so the tile keeps the
-          composite's shape whether or not one has been drawn yet. */}
-      <div className="aspect-[4/5] w-16 shrink-0 overflow-hidden rounded bg-muted">
-        {draft.composed_image_path ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={`/api/media/${draft.composed_image_path}`}
-            alt=""
-            className="size-full object-cover"
-          />
-        ) : null}
-      </div>
-
-      <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex items-center justify-between gap-2">
-          <span className="font-mono text-[11px] text-muted-foreground">#{draft.id}</span>
-          <StatusMark draft={draft} />
+      <td className="px-3 py-2.5 align-top">
+        {/* 4:5 whether or not a composite exists, so rows do not change height
+            as pictures arrive. */}
+        <div className="aspect-[4/5] w-10 overflow-hidden rounded bg-muted">
+          {draft.composed_image_path ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={`/api/media/${draft.composed_image_path}`}
+              alt=""
+              className="size-full object-cover"
+            />
+          ) : generating ? (
+            <div className="flex size-full items-center justify-center">
+              <Loader2 className="size-3 animate-spin text-muted-foreground" />
+            </div>
+          ) : null}
         </div>
+      </td>
 
-        <p className="line-clamp-3 pt-1 text-xs leading-snug">
+      {/* `max-w-0` is what makes the clamps work: without it the cell grows to
+          fit the text and nothing ever truncates. */}
+      <td className="max-w-0 px-3 py-2.5 align-top">
+        <p className="line-clamp-1 font-medium leading-snug">
           {generating ? (draft.topic ?? "Writing…") : (draft.hook ?? draft.topic ?? "Untitled")}
         </p>
-
         {generating ? (
-          <div className="mt-auto pt-2">
-            <div className="h-0.5 w-full overflow-hidden rounded-full bg-border">
+          <div className="mt-1.5 flex items-center gap-2">
+            <div className="h-0.5 w-24 overflow-hidden rounded-full bg-border">
               <div
                 className="h-full bg-gold transition-[width] duration-500"
                 style={{ width: `${draft.progress_pct}%` }}
               />
             </div>
-            <p className="pt-1 text-[10px] tabular-nums text-muted-foreground">
+            <span className="text-[11px] tabular-nums text-muted-foreground">
               {draft.progress_step} · {draft.progress_pct}%
-            </p>
+            </span>
           </div>
         ) : (
-          <p className="mt-auto pt-1 text-[10px] text-muted-foreground">
-            {timeAgo(draft.created_at)}
+          <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">
+            {draft.caption?.replace(/\n/g, "  ") ?? ""}
           </p>
         )}
-      </div>
-    </Link>
+      </td>
+
+      <td className="whitespace-nowrap px-3 py-2.5 align-top text-xs text-muted-foreground">
+        {timeAgo(draft.created_at)}
+      </td>
+
+      <td className="px-3 py-2.5 align-top">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <StatusBadge draft={draft} />
+          {draft.warnings.length > 0 ? (
+            <span className="inline-flex items-center gap-1 rounded border border-gold/40 bg-gold/10 px-1.5 py-0.5 text-[11px]">
+              <AlertTriangle className="size-3" />
+              {draft.warnings.length}
+            </span>
+          ) : null}
+        </div>
+      </td>
+
+      {/* Draining the queue is the common case, so Approve and Reject are here
+          as well as in the sheet. `stopPropagation` keeps a decision from also
+          opening the draft it just removed. */}
+      <td className="px-3 py-2.5 align-top text-right" onClick={(event) => event.stopPropagation()}>
+        {draft.status === "review" ? (
+          <div className="flex items-center justify-end gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              disabled={deciding}
+              onClick={() => void decide("reject")}
+              title="Reject"
+            >
+              <X className="size-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              disabled={deciding}
+              onClick={() => void decide("approve")}
+              title="Approve"
+            >
+              {deciding ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Check className="size-3.5" />
+              )}
+            </Button>
+          </div>
+        ) : null}
+      </td>
+    </tr>
   );
 }
 
-function StatusMark({ draft }: { draft: Draft }) {
+function StatusBadge({ draft }: { draft: Draft }) {
   if (draft.error) {
     return (
-      <span className="flex items-center gap-1 text-[10px] text-destructive">
-        <TriangleAlert className="size-3" /> error
+      <span className="inline-flex items-center gap-1 rounded border border-destructive/40 bg-destructive/10 px-1.5 py-0.5 text-[11px] text-destructive">
+        <TriangleAlert className="size-3" />
+        failed
       </span>
     );
   }
-  if (draft.status === "generating") {
-    return <span className="size-1.5 animate-pulse rounded-full bg-gold" />;
-  }
-  if (draft.warnings.length > 0) {
-    return (
-      <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
-        <AlertTriangle className="size-3" /> {draft.warnings.length}
-      </span>
-    );
-  }
-  return <span className="text-[10px] text-muted-foreground">{draft.status}</span>;
+  return (
+    <span
+      className={cn(
+        "rounded border px-1.5 py-0.5 text-[11px]",
+        draft.status === "generating" && "border-gold/40 bg-gold/10",
+        draft.status === "review" && "border-foreground/20 bg-foreground/5",
+        (draft.status === "approved" || draft.status === "rejected") &&
+          "border-transparent bg-muted text-muted-foreground",
+      )}
+    >
+      {draft.status}
+    </span>
+  );
 }
