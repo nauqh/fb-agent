@@ -26,12 +26,9 @@ export function DraftSheet({ draftId }: { draftId: number }) {
       <DrawerContent>
         <DrawerTitle>Draft {draftId}</DrawerTitle>
         <DrawerDescription>Review and edit draft {draftId}.</DrawerDescription>
-        {/* The drawer scrolls, not the page behind it. Centred, so the content
-            does not stretch to absurd line lengths on a wide monitor. */}
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          <div className="mx-auto w-full max-w-[1400px] px-8 py-6">
-            <DraftDetail draftId={draftId} />
-          </div>
+        {/* The drawer scrolls, not the page behind it. */}
+        <div className="min-h-0 flex-1 overflow-y-auto px-7 py-6">
+          <DraftDetail draftId={draftId} />
         </div>
       </DrawerContent>
     </Drawer>

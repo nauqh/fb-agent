@@ -8,13 +8,14 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 /**
- * A panel that rises from the bottom and covers most of the screen.
+ * A panel that slides in from the right and covers most of the screen height.
  *
  * The same Radix dialog `ui/dialog.tsx` uses — focus trapping, Escape and
- * scroll locking come with it — anchored to the bottom edge instead of centred.
- * It replaced a right-hand sheet: at 1,180px wide that still left the draft in
- * a column, and the composite is portrait, so height is the dimension this
- * screen is actually short of.
+ * scroll locking come with it — anchored to the right edge rather than centred.
+ *
+ * Inset top and bottom to 90vh instead of running edge to edge, so the queue
+ * stays visible above and below it and the drawer reads as sitting *over* the
+ * screen rather than replacing it. Not full width for the same reason.
  */
 
 function Drawer(props: React.ComponentProps<typeof DialogPrimitive.Root>) {
@@ -32,15 +33,13 @@ function DrawerContent({
       <DialogPrimitive.Content
         data-slot="drawer-content"
         className={cn(
-          "fixed inset-x-0 bottom-0 z-50 flex h-[90vh] flex-col rounded-t-2xl border-t bg-background shadow-2xl duration-300 outline-none",
-          "data-open:animate-in data-open:slide-in-from-bottom data-closed:animate-out data-closed:slide-out-to-bottom",
+          "fixed top-[5vh] right-0 z-50 flex h-[90vh] w-[92vw] max-w-[1120px] flex-col",
+          "rounded-l-2xl border bg-background shadow-2xl duration-300 outline-none",
+          "data-open:animate-in data-open:slide-in-from-right data-closed:animate-out data-closed:slide-out-to-right",
           className,
         )}
         {...props}
       >
-        {/* The grab handle says "this came from the bottom and goes back
-            there". Decorative — dragging is not wired up. */}
-        <div className="mx-auto mt-2.5 h-1 w-10 shrink-0 rounded-full bg-border" />
 
         <DialogPrimitive.Close asChild>
           <Button variant="ghost" size="icon-sm" className="absolute top-3 right-4 z-10">
