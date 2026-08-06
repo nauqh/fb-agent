@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 
 import { DraftDetail } from "@/components/draft-detail";
-import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
+import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from "@/components/ui/drawer";
 
 /**
  * The draft, over the queue.
@@ -17,20 +17,23 @@ export function DraftSheet({ draftId }: { draftId: number }) {
   const router = useRouter();
 
   return (
-    <Sheet
+    <Drawer
       open
       onOpenChange={(next) => {
         if (!next) router.push("/review");
       }}
     >
-      <SheetContent className="sm:max-w-[min(96vw,1180px)]">
-        <SheetTitle>Draft {draftId}</SheetTitle>
-        <SheetDescription>Review and edit draft {draftId}.</SheetDescription>
-        {/* The panel scrolls, not the page behind it. */}
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
-          <DraftDetail draftId={draftId} />
+      <DrawerContent>
+        <DrawerTitle>Draft {draftId}</DrawerTitle>
+        <DrawerDescription>Review and edit draft {draftId}.</DrawerDescription>
+        {/* The drawer scrolls, not the page behind it. Centred, so the content
+            does not stretch to absurd line lengths on a wide monitor. */}
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="mx-auto w-full max-w-[1400px] px-8 py-6">
+            <DraftDetail draftId={draftId} />
+          </div>
         </div>
-      </SheetContent>
-    </Sheet>
+      </DrawerContent>
+    </Drawer>
   );
 }

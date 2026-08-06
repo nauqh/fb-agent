@@ -12,7 +12,7 @@ import { ScreenHeader } from "@/components/screen";
  */
 export default function ReviewLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
       <ScreenHeader title="Review" />
       <ReviewList />
       {children}

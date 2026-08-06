@@ -85,26 +85,28 @@ export function ReviewList() {
         ))}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border">
+      {/* Hugs its rows. A `flex-1` container left a tall empty bordered box
+          under a two-draft queue, which read as something failing to load. */}
+      <div className="overflow-hidden rounded-xl border">
         {loading && !drafts ? (
-          <div className="space-y-2 p-3">
+          <div className="space-y-2 p-4">
             {Array.from({ length: 5 }).map((_, index) => (
-              <Skeleton key={index} className="h-14 rounded-md" />
+              <Skeleton key={index} className="h-20 rounded-lg" />
             ))}
           </div>
         ) : drafts?.length === 0 ? (
-          <p className="py-16 text-center text-sm text-muted-foreground">Queue is empty.</p>
+          <p className="py-20 text-center text-sm text-muted-foreground">Queue is empty.</p>
         ) : (
-          <table className="w-full min-w-[720px] text-sm">
-            <thead className="sticky top-0 z-10 bg-muted/40 backdrop-blur-sm">
-              <tr className="border-b text-left text-xs text-muted-foreground">
-                <th className="w-16 px-3 py-2 font-medium">
+          <table className="w-full min-w-[760px]">
+            <thead>
+              <tr className="border-b bg-muted/40 text-left text-[11px] uppercase tracking-wide text-muted-foreground">
+                <th className="w-20 px-4 py-2.5 font-medium">
                   <span className="sr-only">Image</span>
                 </th>
-                <th className="px-3 py-2 font-medium">Post</th>
-                <th className="w-32 px-3 py-2 font-medium">Created</th>
-                <th className="w-36 px-3 py-2 font-medium">Status</th>
-                <th className="w-24 px-3 py-2 text-right font-medium">
+                <th className="px-4 py-2.5 font-medium">Post</th>
+                <th className="w-32 px-4 py-2.5 font-medium">Created</th>
+                <th className="w-40 px-4 py-2.5 font-medium">Status</th>
+                <th className="w-28 px-4 py-2.5 text-right font-medium">
                   <span className="sr-only">Actions</span>
                 </th>
               </tr>
@@ -145,10 +147,10 @@ function Row({ draft, onDecided }: { draft: Draft; onDecided: () => void }) {
       className={cn("group", generating ? "bg-muted/10" : "cursor-pointer hover:bg-muted/30")}
       onClick={generating ? undefined : () => router.push(`/review/${draft.id}`)}
     >
-      <td className="px-3 py-2.5 align-top">
+      <td className="px-4 py-3 align-middle">
         {/* 4:5 whether or not a composite exists, so rows do not change height
             as pictures arrive. */}
-        <div className="aspect-[4/5] w-10 overflow-hidden rounded bg-muted">
+        <div className="aspect-[4/5] w-12 overflow-hidden rounded-md border bg-muted">
           {draft.composed_image_path ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -158,7 +160,7 @@ function Row({ draft, onDecided }: { draft: Draft; onDecided: () => void }) {
             />
           ) : generating ? (
             <div className="flex size-full items-center justify-center">
-              <Loader2 className="size-3 animate-spin text-muted-foreground" />
+              <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
             </div>
           ) : null}
         </div>
@@ -166,13 +168,13 @@ function Row({ draft, onDecided }: { draft: Draft; onDecided: () => void }) {
 
       {/* `max-w-0` is what makes the clamps work: without it the cell grows to
           fit the text and nothing ever truncates. */}
-      <td className="max-w-0 px-3 py-2.5 align-top">
-        <p className="line-clamp-1 font-medium leading-snug">
+      <td className="max-w-0 px-4 py-3 align-middle">
+        <p className="line-clamp-1 text-sm font-medium leading-snug">
           {generating ? (draft.topic ?? "Writing…") : (draft.hook ?? draft.topic ?? "Untitled")}
         </p>
         {generating ? (
-          <div className="mt-1.5 flex items-center gap-2">
-            <div className="h-0.5 w-24 overflow-hidden rounded-full bg-border">
+          <div className="mt-2 flex items-center gap-2">
+            <div className="h-1 w-32 overflow-hidden rounded-full bg-border">
               <div
                 className="h-full bg-gold transition-[width] duration-500"
                 style={{ width: `${draft.progress_pct}%` }}
@@ -183,21 +185,21 @@ function Row({ draft, onDecided }: { draft: Draft; onDecided: () => void }) {
             </span>
           </div>
         ) : (
-          <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">
+          <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">
             {draft.caption?.replace(/\n/g, "  ") ?? ""}
           </p>
         )}
       </td>
 
-      <td className="whitespace-nowrap px-3 py-2.5 align-top text-xs text-muted-foreground">
+      <td className="whitespace-nowrap px-4 py-3 align-middle text-xs text-muted-foreground">
         {timeAgo(draft.created_at)}
       </td>
 
-      <td className="px-3 py-2.5 align-top">
+      <td className="px-4 py-3 align-middle">
         <div className="flex flex-wrap items-center gap-1.5">
           <StatusBadge draft={draft} />
           {draft.warnings.length > 0 ? (
-            <span className="inline-flex items-center gap-1 rounded border border-gold/40 bg-gold/10 px-1.5 py-0.5 text-[11px]">
+            <span className="inline-flex items-center gap-1 rounded-md border border-gold/40 bg-gold/10 px-1.5 py-0.5 text-[11px]">
               <AlertTriangle className="size-3" />
               {draft.warnings.length}
             </span>
@@ -208,7 +210,7 @@ function Row({ draft, onDecided }: { draft: Draft; onDecided: () => void }) {
       {/* Draining the queue is the common case, so Approve and Reject are here
           as well as in the sheet. `stopPropagation` keeps a decision from also
           opening the draft it just removed. */}
-      <td className="px-3 py-2.5 align-top text-right" onClick={(event) => event.stopPropagation()}>
+      <td className="px-4 py-3 align-middle text-right" onClick={(event) => event.stopPropagation()}>
         {draft.status === "review" ? (
           <div className="flex items-center justify-end gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
             <Button
