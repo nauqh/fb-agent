@@ -35,12 +35,12 @@ IDS = [case["name"] for case in CASES]
 @pytest.mark.parametrize("case", CASES, ids=IDS)
 def test_the_lines_break_where_the_old_renderer_broke_them(case):
     """Word for word. A line count that differs resizes the panel."""
-    assert overlay.plan(case["text"], case["phrases"]).lines == case["lines"]
+    assert overlay.plan(case["text"]).lines == case["lines"]
 
 
 @pytest.mark.parametrize("case", CASES, ids=IDS)
 def test_the_panel_and_hero_match(case):
-    result = overlay.plan(case["text"], case["phrases"])
+    result = overlay.plan(case["text"])
 
     assert result.line_height_px == case["lineHeight"]
     assert result.panel_height_px == case["panelHeight"]
@@ -60,7 +60,7 @@ def test_the_gold_falls_on_the_same_characters(case):
 def test_the_golden_post_reproduces_its_own_geometry():
     """plan.md's recorded numbers, asserted directly rather than by index."""
     case = next(c for c in CASES if c["name"] == "six-lines")
-    result = overlay.plan(case["text"], case["phrases"])
+    result = overlay.plan(case["text"])
 
     assert len(result.lines) == 6
     assert result.line_height_px == 45
@@ -72,7 +72,7 @@ def test_the_golden_post_reproduces_its_own_geometry():
 
 
 def test_short_text_still_fills_the_minimum_panel():
-    result = overlay.plan("One line only.", [])
+    result = overlay.plan("One line only.")
 
     assert len(result.lines) == 1
     assert result.panel_height_px == round(layout.image.height * layout.panel.ratio)
@@ -80,7 +80,7 @@ def test_short_text_still_fills_the_minimum_panel():
 
 def test_the_panel_grows_with_the_line_count():
     heights = [
-        overlay.plan(" ".join(["word"] * count), []).panel_height_px
+        overlay.plan(" ".join(["word"] * count)).panel_height_px
         for count in (2, 40, 200)
     ]
 
@@ -89,7 +89,7 @@ def test_the_panel_grows_with_the_line_count():
 
 
 def test_the_panel_stops_at_max_ratio():
-    result = overlay.plan("The panel grows until it cannot grow further. " * 40, [])
+    result = overlay.plan("The panel grows until it cannot grow further. " * 40)
 
     assert result.panel_height_px == round(layout.image.height * layout.panel.max_ratio)
     assert result.is_clipped, "text past the ceiling is drawn outside the clip path"
@@ -97,15 +97,15 @@ def test_the_panel_stops_at_max_ratio():
 
 def test_the_font_never_shrinks_to_fit():
     """There is no autofit. The panel moves; the type does not."""
-    short = overlay.plan("Two words.", [])
-    long = overlay.plan("The panel grows until it cannot grow further. " * 40, [])
+    short = overlay.plan("Two words.")
+    long = overlay.plan("The panel grows until it cannot grow further. " * 40)
 
     assert short.font_size_px == long.font_size_px == layout.text.font_size_px
 
 
 def test_the_panel_and_hero_always_add_up_to_the_image():
     for case in CASES:
-        result = overlay.plan(case["text"], case["phrases"])
+        result = overlay.plan(case["text"])
         assert result.panel_height_px + result.hero_height_px == layout.image.height
 
 
@@ -132,7 +132,7 @@ def test_the_measurer_is_reused_across_calls():
 
 
 def test_an_empty_overlay_produces_no_lines():
-    assert overlay.plan("   ", []).lines == []
+    assert overlay.plan("   ").lines == []
 
 
 # --- wrapping edge cases -----------------------------------------------------
@@ -140,7 +140,7 @@ def test_an_empty_overlay_produces_no_lines():
 
 def test_a_word_too_wide_for_a_line_is_broken_rather_than_clipped():
     """The one case wrapping cannot solve. Losing the tail silently is worse."""
-    result = overlay.plan("Pneumonoultramicroscopicsilicovolcanoconiosis" * 3, [])
+    result = overlay.plan("Pneumonoultramicroscopicsilicovolcanoconiosis" * 3)
 
     assert len(result.lines) > 1
     assert "".join(result.lines).count("Pneumo") == 3
@@ -154,7 +154,7 @@ def test_no_line_exceeds_the_measured_width():
     )
 
     for case in CASES:
-        for line in overlay.plan(case["text"], case["phrases"]).lines:
+        for line in overlay.plan(case["text"]).lines:
             assert measurer.width(line, layout.text.font_size_px) <= budget
 
 
@@ -233,38 +233,53 @@ def test_segments_always_rebuild_the_line_exactly():
             assert "".join(part.text for part in parts) == line
 
 
-def test_a_phrase_split_by_the_wrap_is_reported():
-    """The other way to lose the gold, and the one nothing else catches.
+# --- gold that survives a line break -----------------------------------------
 
-    `generate.py` warns when a phrase is not verbatim in the hook. A
-    phrase that *is* verbatim can still land across a line break, and because
-    segmentation runs per line it then matches nothing and renders no gold —
-    visible only by looking at the picture.
+
+def test_a_phrase_split_by_the_wrap_still_renders_gold():
+    """This used to produce a warning instead of a highlight.
+
+    Segmentation ran per line, so a phrase the wrap divided matched neither
+    half and rendered nothing. It fired on three of six phrases in one real
+    run — common enough to train the operator to skim a box that also carries
+    the rules that matter.
     """
     case = next(c for c in CASES if c["name"] == "tharp")
-    text, lines = case["text"], case["lines"]
+    lines = case["lines"]
 
-    # "1957 and was" spans the break between line 1 and line 2.
-    spanning = " ".join([lines[0].split()[-1], lines[1].split()[0]])
-    assert spanning in overlay.normalise(text)
+    # The last word of line 1 plus the first of line 2, so the phrase is cut
+    # exactly at the wrap.
+    tail, head = lines[0].split()[-1], lines[1].split()[0]
+    spanning = f"{tail} {head}"
+    coloured = overlay.segment_lines(lines, [spanning])
 
-    assert overlay.split_by_wrap(text, lines, [spanning]) == [spanning]
-    assert overlay.split_by_wrap(text, lines, ["Marie Tharp"]) == []
+    gold = ["".join(p.text for p in runs if p.highlight) for runs in coloured]
+    assert gold[0].endswith(tail), "the first half did not render gold"
+    assert gold[1].startswith(head), "the second half did not render gold"
+    assert f"{gold[0]} {gold[1]}" == spanning, "the halves do not rebuild the phrase"
 
 
-def test_a_phrase_absent_from_the_overlay_is_not_blamed_on_the_wrap():
-    """That one is `generate.py`'s warning. Reporting it twice hides the real one."""
+def test_a_phrase_absent_from_the_text_still_renders_nothing():
+    """No rendering trick fixes an invented phrase — that stays `generate.py`'s warning."""
     case = next(c for c in CASES if c["name"] == "tharp")
+    coloured = overlay.segment_lines(case["lines"], ["Ada Lovelace"])
 
-    assert overlay.split_by_wrap(case["text"], case["lines"], ["Ada Lovelace"]) == []
+    assert not any(part.highlight for runs in coloured for part in runs)
 
 
 @pytest.mark.parametrize("case", CASES, ids=IDS)
-def test_the_fixture_s_own_phrases_all_survive_the_wrap(case):
-    """A parity case that lost a highlight would be testing the wrong thing."""
-    result = overlay.plan(case["text"], case["phrases"])
+def test_colouring_never_edits_the_line(case):
+    """Every character survives the pass, in order. A dropped one edits the post."""
+    coloured = overlay.segment_lines(case["lines"], case["phrases"])
 
-    assert result.lost_highlights == []
+    assert ["".join(p.text for p in runs) for runs in coloured] == case["lines"]
+
+
+@pytest.mark.parametrize("case", CASES, ids=IDS)
+def test_whole_line_colouring_agrees_with_the_old_per_line_result(case):
+    """Where a phrase fits on one line, nothing changed. Only the split case moved."""
+    for line, runs in zip(case["lines"], overlay.segment_lines(case["lines"], case["phrases"])):
+        assert runs == overlay.segment(line, case["phrases"])
 
 
 def test_a_quoted_phrase_keeps_the_space_in_front_of_it():
@@ -280,4 +295,4 @@ def test_a_quoted_phrase_keeps_the_space_in_front_of_it():
     )
 
     assert overlay.normalise(written) == written
-    assert '"girl talk."' in " ".join(overlay.plan(written, []).lines)
+    assert '"girl talk."' in " ".join(overlay.plan(written).lines)

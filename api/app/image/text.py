@@ -211,8 +211,52 @@ class Segment:
     highlight: bool
 
 
+def segment_lines(lines: list[str], phrases: list[str]) -> list[list[Segment]]:
+    """Colour every line, matching phrases against the **whole** text first.
+
+    This is the difference between a phrase that survives a line break and one
+    that vanishes at it. Segmenting each line on its own means `mapped the ocean
+    floor` matches nothing once the wrap puts `mapped the` on one line and
+    `ocean floor` on the next — neither half is the phrase, so neither renders
+    gold, and the operator gets a warning about a picture that is otherwise
+    fine. It fired on three of six phrases in a real run.
+
+    So the phrases are found once, against the joined text, and the resulting
+    runs are then sliced onto the lines. Gold continues across the break and
+    reads as the continuous text it is.
+    """
+    joined = " ".join(lines)
+    runs = segment(joined, phrases)
+
+    # Walk the runs and the lines together, spending one run across as many
+    # lines as it covers. The separator between lines is the single space that
+    # `join` put there, which is also the space the wrap consumed.
+    out: list[list[Segment]] = []
+    index, offset = 0, 0
+    for line in lines:
+        current: list[Segment] = []
+        remaining = len(line)
+        while remaining > 0 and index < len(runs):
+            run = runs[index]
+            available = len(run.text) - offset
+            take = min(available, remaining)
+            current.append(Segment(run.text[offset : offset + take], run.highlight))
+            remaining -= take
+            offset += take
+            if offset >= len(run.text):
+                index, offset = index + 1, 0
+        out.append(_merge([part for part in current if part.text]))
+
+        # Step over the one separator space, which belongs to no line.
+        if index < len(runs):
+            offset += 1
+            if offset >= len(runs[index].text):
+                index, offset = index + 1, 0
+    return out
+
+
 def segment(line: str, phrases: list[str]) -> list[Segment]:
-    """Split a line into gold and white runs.
+    """Split one string into gold and white runs.
 
     Longest phrase first, so `ocean floor` wins over `ocean` where both were
     marked and the shorter one would otherwise consume the prefix and leave
@@ -254,24 +298,16 @@ def _merge(segments: list[Segment]) -> list[Segment]:
     return merged
 
 
-def split_by_wrap(text: str, lines: list[str], phrases: list[str]) -> list[str]:
-    """Phrases that are verbatim in the overlay but land across a line break.
+"""`split_by_wrap` lived here until 2026-08-06.
 
-    Segmentation runs per line, so a phrase the wrap divided matches nothing on
-    either side and renders no gold at all. `generate.py` already warns about a
-    phrase that is not verbatim in the hook; this is the other way to lose
-    the highlight, and it is invisible until someone looks at the picture.
-    """
-    normalised = normalise(text)
-    lost: list[str] = []
-    for phrase in phrases:
-        if not phrase.strip():
-            continue
-        in_source = phrase.lower() in normalised.lower()
-        on_a_line = any(phrase.lower() in line.lower() for line in lines)
-        if in_source and not on_a_line:
-            lost.append(phrase)
-    return lost
+It reported phrases the wrap had divided, because segmentation ran per line and
+a divided phrase then rendered no gold. It fired on three of six phrases in one
+real run — a warning that common, about a post that was otherwise correct, only
+teaches the operator to skim the box that also carries the rules that matter.
+
+`segment_lines` matches against the whole text instead, so gold now continues
+across a break and there is nothing left to report.
+"""
 
 
 # --- the plan ----------------------------------------------------------------
@@ -289,8 +325,6 @@ class OverlayPlan:
     content_height_px: int
     """What the text wants, before `max_ratio` gets a say."""
 
-    lost_highlights: list[str]
-
     @property
     def is_clipped(self) -> bool:
         """Whether the text needs more panel than `max_ratio` allows.
@@ -303,8 +337,11 @@ class OverlayPlan:
         return self.content_height_px > self.panel_height_px
 
 
-def plan(text: str, phrases: list[str], layout: Layout | None = None) -> OverlayPlan:
+def plan(text: str, layout: Layout | None = None) -> OverlayPlan:
     """Wrap the overlay and size the panel around it.
+
+    Takes no phrases: highlighting is a colouring pass over the lines this
+    returns, and it does not move any of them. `segment_lines` does that.
 
     The panel is a floor that grows, not a fixed band: `panel.ratio` is the
     minimum share of the image it takes and `panel.max_ratio` the most. The font
@@ -334,5 +371,4 @@ def plan(text: str, phrases: list[str], layout: Layout | None = None) -> Overlay
         panel_height_px=panel_height,
         hero_height_px=layout.image.height - panel_height,
         content_height_px=content,
-        lost_highlights=split_by_wrap(text, lines, phrases),
     )

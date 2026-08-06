@@ -363,5 +363,5 @@ def test_the_text_drawn_on_the_image_is_the_text_the_rules_guard(page):
     assert "?" not in result.output.hook
 
     # And it is that same corrected string the compositor lays out.
-    plan = overlay.plan(result.output.hook, result.output.highlight_phrases)
+    plan = overlay.plan(result.output.hook)
     assert " ".join(plan.lines).startswith("Marie Tharp")

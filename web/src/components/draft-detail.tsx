@@ -409,17 +409,6 @@ export function DraftDetail({ draftId }: { draftId: number }) {
               />
             </Field>
 
-            {/* The writer produced this, and it is what a refused hero has to be
-                corrected in before paying for another one. */}
-            <Field label="Image prompt" hint="Applies on regenerate">
-              <Textarea
-                value={form.image_prompt}
-                rows={5}
-                className="text-xs leading-relaxed"
-                onChange={(event) => setForm({ ...form, image_prompt: event.target.value })}
-              />
-            </Field>
-
             <Separator />
 
             <div className="flex flex-wrap items-center justify-between gap-3">

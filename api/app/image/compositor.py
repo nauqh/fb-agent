@@ -21,7 +21,7 @@ from pathlib import Path
 import resvg_py
 from PIL import Image
 
-from app.image.text import OverlayPlan, Segment, segment
+from app.image.text import OverlayPlan, Segment, segment_lines
 from app.settings import API_DIR, Layout
 from app.settings import layout as default_layout
 
@@ -64,10 +64,11 @@ def panel_svg(plan: OverlayPlan, phrases: list[str], layout: Layout) -> str:
     x = (padding.left_px + (width - padding.right_px)) / 2
     start_y = plan.font_size_px + padding.top_px
 
+    coloured = segment_lines(plan.lines, phrases)
     lines = "".join(
         f'<tspan x="{x}" dy="{0 if i == 0 else plan.line_height_px}">'
-        f"{_tspans(segment(line, phrases), layout)}</tspan>"
-        for i, line in enumerate(plan.lines)
+        f"{_tspans(runs, layout)}</tspan>"
+        for i, runs in enumerate(coloured)
     )
 
     return (

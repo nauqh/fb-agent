@@ -348,29 +348,24 @@ def test_a_stale_image_warning_does_not_outlive_the_fix(client, written, monkeyp
 
 
 def test_rebuilding_replaces_image_warnings_rather_than_stacking_them(
-    client, written, illustrated, monkeypatch
+    client, written, monkeypatch
 ):
     """Seen on the first real post: two identical complaints after one rebuild.
 
     Image warnings are regenerated every time the picture is, so the old ones
     have to go. Warnings from the writer are not this step's to delete.
     """
-    long_overlay = DraftContent(
-        **{**GOOD.model_dump(), "hook": (
-            "In 1952, geologist Marie Tharp mapped the ocean floor by hand and "
-            "discovered the massive Mid-Atlantic Ridge rift valley beneath it."
-        ), "highlight_phrases": ["mapped the ocean floor"]}
-    )
+    from app.image import hero
 
-    class Result:
-        output = long_overlay
+    def refuse(*_a, **_k):
+        raise hero.HeroError("the model returned no image")
 
-    monkeypatch.setattr(generate.writer, "write", lambda *a, **k: Result())
+    monkeypatch.setattr(hero, "generate", refuse)
     client.post("/generate", json={"page_ids": [1], "sources": [_rss().model_dump(mode="json")]})
 
     first = client.get("/drafts/1").json()["warnings"]
     image_warnings = [w for w in first if w.startswith(generate.IMAGE_WARNING)]
-    assert len(image_warnings) == 1, "the split-highlight warning did not fire"
+    assert len(image_warnings) == 1, "the refusal was not reported"
 
     after = client.post("/drafts/1/image").json()["warnings"]
 

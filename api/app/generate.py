@@ -217,16 +217,8 @@ def build_image(session: Session, draft: Draft, page: Page) -> list[str]:
         return [f"{IMAGE_WARNING}no hook, so there is nothing to draw."]
 
     try:
-        plan = overlay.plan(draft.hook, draft.highlight_phrases)
-        warnings = (
-            [
-                f"{IMAGE_WARNING}{len(plan.lost_highlights)} highlight phrase(s) "
-                f"fall across a line break and render no gold: "
-                f"{plan.lost_highlights[:3]}"
-            ]
-            if plan.lost_highlights
-            else []
-        )
+        plan = overlay.plan(draft.hook)
+        warnings: list[str] = []
 
         if draft.hero_image_path:
             image_bytes = media.store.path(draft.hero_image_path).read_bytes()
