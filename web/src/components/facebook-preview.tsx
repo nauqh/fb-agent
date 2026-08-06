@@ -54,7 +54,10 @@ export function FacebookPreview({
   firstComment: string;
 }) {
   return (
-    <div className="space-y-3">
+    /* Side by side once there is room. They are read that way — you see the
+       post, then you open the comment — and stacking a 1,800-character body
+       under the feed card pushed the card off the top of the screen. */
+    <div className="grid items-start gap-4 lg:grid-cols-2">
       <Card title="Feed post">
         <div className="flex items-center gap-2 px-3 py-2.5">
           <Avatar name={pageName} />
@@ -99,9 +102,7 @@ export function FacebookPreview({
           <div className="flex gap-2 px-3 py-3">
             <Avatar name={pageName} size="sm" />
             <div className="min-w-0 flex-1">
-              {/* Capped and scrollable: the body runs 1,500-2,100 characters and
-                  would otherwise push the feed card off the top of the column. */}
-              <div className="max-h-72 overflow-y-auto rounded-2xl bg-muted px-3 py-2">
+              <div className="rounded-2xl bg-muted px-3 py-2">
                 <p className="text-xs font-semibold">{pageName}</p>
                 <p className="mt-0.5 whitespace-pre-wrap text-sm leading-relaxed">
                   {firstComment}
