@@ -15,6 +15,8 @@ import {
 import { toast } from "sonner";
 
 import { ComposedImage } from "@/components/composed-image";
+import { HookField } from "@/components/hook-field";
+import { FacebookPreview } from "@/components/facebook-preview";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -56,6 +58,7 @@ export function DraftDetail({ draftId }: { draftId: number }) {
   const [saving, setSaving] = useState(false);
   const [deciding, setDeciding] = useState(false);
   const [imageWork, setImageWork] = useState<"recomposite" | "hero" | null>(null);
+  const [pane, setPane] = useState<"image" | "post">("image");
 
   const { data: pages } = useQuery(() => listPages(), []);
 
@@ -189,45 +192,97 @@ export function DraftDetail({ draftId }: { draftId: number }) {
   /** A failed run has nothing to approve, and the server refuses it with a 409. */
   const failed = draft.status === "failed";
 
+  /**
+   * The composited PNG whenever one exists — including while it is stale.
+   *
+   * It used to fall back to `ComposedImage` the moment anything was edited, so
+   * touching a highlight chip replaced a real photograph with the mock's
+   * generated background. That reads as the picture breaking. A slightly out of
+   * date real composite is more use than an accurate drawing of nothing, and
+   * the old app agreed: editing there never disturbed the stored image.
+   *
+   * The approximation is for a draft that has no composite at all.
+   *
+   * Held as a value because both panes draw it: on its own under Image, and
+   * inside the feed card under Post.
+   */
+  const picture = draft.composed_image_path ? (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={`/api/media/${draft.composed_image_path}`}
+      alt={`Composed image for draft ${draft.id}`}
+      className="w-full"
+    />
+  ) : (
+    <ComposedImage
+      overlayText={form?.hook ?? draft.hook}
+      highlightPhrases={form?.highlight_phrases ?? draft.highlight_phrases}
+      watermarkPath={page?.watermark_image_path ?? null}
+      seed={draft.id}
+    />
+  );
+
   return (
     <div className="grid gap-8 pb-16 lg:grid-cols-[340px_minmax(0,1fr)]">
       {/* Sticky against the detail pane's own scroll, so the image stays in
           view while the copy below it moves. */}
       <div className="space-y-3 lg:sticky lg:top-0 lg:self-start">
-        {/* The real composite once one exists, and only while it is still
-            current. An edited overlay makes the stored PNG stale, so the
-            approximation comes back — showing a picture that no longer matches
-            the copy beside it is worse than admitting it is a preview. */}
-        {draft.composed_image_path && !dirty ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={`/api/media/${draft.composed_image_path}`}
-            alt={`Composed image for draft ${draft.id}`}
-            className="w-full rounded border"
+        {/* Image or Post, rather than a tab that replaces the editor. The old
+            app made the preview its own screen, so you left the fields to look
+            at it and it only ever showed text you had finished writing. Here it
+            re-renders while you type. */}
+        <div className="flex gap-1 rounded-md bg-muted p-0.5 text-xs">
+          {(["image", "post"] as const).map((value) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setPane(value)}
+              className={cn(
+                "flex-1 rounded px-2 py-1 capitalize transition-colors",
+                pane === value
+                  ? "bg-background font-medium shadow-sm"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {value}
+            </button>
+          ))}
+        </div>
+
+        {pane === "post" ? (
+          <FacebookPreview
+            pageName={page?.name ?? "Page"}
+            image={picture}
+            caption={form?.caption ?? draft.caption ?? ""}
+            hashtags={form?.hashtags ?? draft.hashtags}
+            firstComment={form?.first_comment ?? draft.first_comment ?? ""}
           />
         ) : (
-          <ComposedImage
-            overlayText={form?.hook ?? draft.hook}
-            highlightPhrases={form?.highlight_phrases ?? draft.highlight_phrases}
-            watermarkPath={page?.watermark_image_path ?? null}
-            seed={draft.id}
-          />
+          <>
+            <div className="overflow-hidden rounded border">{picture}</div>
+            <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+              <span className="font-mono">896 × 1120</span>
+              <span>
+                {draft.hero_image_path ? "hero" : "no hero"}
+                <span className="mx-1">·</span>
+                {draft.composed_image_path ? "composed" : "not composed"}
+              </span>
+            </div>
+            {/* Says something only when the picture is not what the fields now
+                say. A current composite needs no caption — it is what it
+                looks like. */}
+            {!draft.composed_image_path ? (
+              <p className="text-[11px] text-muted-foreground">Preview, not yet composed.</p>
+            ) : dirty ? (
+              <p className="text-[11px] text-muted-foreground">
+                Edited — save, then recomposite to update this.
+              </p>
+            ) : null}
+          </>
         )}
-        <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-          <span className="font-mono">896 × 1120</span>
-          <span>
-            {draft.hero_image_path ? "hero" : "no hero"}
-            <span className="mx-1">·</span>
-            {draft.composed_image_path ? "composed" : "not composed"}
-          </span>
-        </div>
-        {/* Only says something when the picture is *not* the real one. The
-            composite needs no caption — it is what it looks like. */}
-        {draft.composed_image_path && !dirty ? null : (
-          <p className="text-[11px] text-muted-foreground">
-            {dirty ? "Preview — save, then recomposite." : "Preview, not yet composed."}
-          </p>
-        )}
+
+        {/* Outside the switch: these act on the picture, and the picture is in
+            both panes. */}
         <div className="space-y-2">
           <Button
             variant="outline"
@@ -327,50 +382,15 @@ export function DraftDetail({ draftId }: { draftId: number }) {
               hint={`${words(form.hook)} words · on the image · limit 65, no question`}
               flagged={words(form.hook) > 65 || form.hook.includes("?")}
             >
-              <Textarea
+              {/* Select the words and press the button. The chips this replaced
+                  asked the operator to retype text already on screen, exactly,
+                  and a phrase off by one character renders nothing. */}
+              <HookField
                 value={form.hook}
-                rows={4}
-                onChange={(event) => setForm({ ...form, hook: event.target.value })}
-              />
-            </Field>
-
-            <Field label="Highlight phrases" hint={`${form.highlight_phrases.length} · 5–8 expected`}>
-              <div className="flex flex-wrap gap-1.5">
-                {form.highlight_phrases.map((phrase) => {
-                  const present = form.hook.includes(phrase);
-                  return (
-                    <span
-                      key={phrase}
-                      className={cn(
-                        "inline-flex items-center gap-1 rounded px-2 py-1 text-xs",
-                        present
-                          ? "bg-gold/20 text-foreground"
-                          : "bg-destructive/10 text-destructive line-through",
-                      )}
-                      title={present ? undefined : "Not an exact substring — it will not render"}
-                    >
-                      {phrase}
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setForm({
-                            ...form,
-                            highlight_phrases: form.highlight_phrases.filter(
-                              (candidate) => candidate !== phrase,
-                            ),
-                          })
-                        }
-                        aria-label={`Remove ${phrase}`}
-                      >
-                        <X className="size-3" />
-                      </button>
-                    </span>
-                  );
-                })}
-              </div>
-              <AddPhrase
-                onAdd={(phrase) =>
-                  setForm({ ...form, highlight_phrases: [...form.highlight_phrases, phrase] })
+                phrases={form.highlight_phrases}
+                onChange={(hook) => setForm({ ...form, hook })}
+                onPhrasesChange={(highlight_phrases) =>
+                  setForm({ ...form, highlight_phrases })
                 }
               />
             </Field>
@@ -529,27 +549,6 @@ function Field({
       </div>
       {children}
     </div>
-  );
-}
-
-function AddPhrase({ onAdd }: { onAdd: (phrase: string) => void }) {
-  const [value, setValue] = useState("");
-  return (
-    <form
-      onSubmit={(event) => {
-        event.preventDefault();
-        if (!value.trim()) return;
-        onAdd(value.trim());
-        setValue("");
-      }}
-    >
-      <Input
-        value={value}
-        onChange={(event) => setValue(event.target.value)}
-        placeholder="Add a phrase, exactly as it appears above"
-        className="h-8 text-xs"
-      />
-    </form>
   );
 }
 
