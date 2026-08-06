@@ -7,8 +7,8 @@ import { ScreenHeader } from "@/components/screen";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import { getLayout } from "@/lib/api/config";
 import { listPages, listPromptFiles } from "@/lib/api/pages";
-import { LAYOUT } from "@/lib/fixtures/pages";
 import { useQuery } from "@/lib/use-query";
 import { cn } from "@/lib/utils";
 
@@ -25,6 +25,7 @@ import { cn } from "@/lib/utils";
 export default function SettingsScreen() {
   const { data: pages } = useQuery(() => listPages(), []);
   const { data: prompts } = useQuery(() => listPromptFiles(), []);
+  const { data: layout } = useQuery(() => getLayout(), []);
   const page = pages?.[0];
 
   if (!page) {
@@ -55,38 +56,30 @@ export default function SettingsScreen() {
 
         <Separator />
 
-        <div className="grid gap-6 sm:grid-cols-2">
-          <div className="space-y-2">
-            <Label>Watermark</Label>
-            {page.watermark_image_path ? (
-              <>
-                <div className="flex items-center gap-2">
-                  <span className="rounded bg-black px-2 py-1.5">
-                    {/* eslint-disable-next-line @next/next/no-img-element -- the
-                        committed asset at its own 350×74, not a content image. */}
-                    <img
-                      src="/watermarks/history-retraced.png"
-                      alt={`${page.name} watermark`}
-                      className="h-4 w-auto"
-                    />
-                  </span>
-                  <code className="text-xs">{page.watermark_image_path}</code>
-                </div>
-                <p className="text-xs leading-relaxed text-muted-foreground">
-                  350×74 white-on-transparent, committed beside the font because the renderer
-                  cannot work without it. A missing file is an error — the old compositor
-                  silently printed the name as text instead, and nobody noticed for months.
-                </p>
-              </>
-            ) : (
-              <>
-                <p className="text-sm text-destructive">missing</p>
-                <p className="text-xs leading-relaxed text-muted-foreground">
-                  Nothing to composite. This is a broken Page, not a styling choice.
-                </p>
-              </>
-            )}
-          </div>
+        <div className="space-y-2">
+          <Label>Watermark</Label>
+          {page.watermark_image_path ? (
+            <div className="flex items-center gap-3">
+              {/* On black, because that is the only background it is ever drawn
+                  against and it is white ink. */}
+              <span className="rounded-md bg-black px-3 py-2">
+                {/* eslint-disable-next-line @next/next/no-img-element -- a
+                    committed asset at its natural ratio, not a content image. */}
+                <img
+                  src={`/api/${page.watermark_image_path}`}
+                  alt={`${page.name} watermark`}
+                  className="h-10 w-auto"
+                />
+              </span>
+              <code className="text-xs text-muted-foreground">
+                {page.watermark_image_path}
+              </code>
+            </div>
+          ) : (
+            <p className="text-sm text-destructive">
+              missing — nothing to composite over
+            </p>
+          )}
         </div>
 
         <Separator />
@@ -94,9 +87,8 @@ export default function SettingsScreen() {
         <div className="space-y-3">
           <div>
             <h3 className="text-sm font-medium">Prompts</h3>
-            <p className="pt-1 text-xs leading-relaxed text-muted-foreground">
-              Files in <code>api/prompts/</code>. Edited in your editor, reviewed in git — they
-              were columns once, and every copy drifted against the code it was pasted from.
+            <p className="pt-1 text-xs text-muted-foreground">
+              Files in <code>api/prompts/</code>, edited in your editor.
             </p>
           </div>
 
@@ -113,15 +105,28 @@ export default function SettingsScreen() {
           <div>
             <h3 className="text-sm font-medium">Composed Image</h3>
             <p className="pt-1 text-xs text-muted-foreground">
-              <code>api/config/layout.yml</code>. One form, one size, identical for every Page.
+              <code>api/config/layout.yml</code>, read back from the server.
             </p>
           </div>
-          <dl className="grid grid-cols-2 gap-x-6 gap-y-2 rounded-lg border p-4 text-xs sm:grid-cols-4">
-            <Constant label="Size" value={`${LAYOUT.width} × ${LAYOUT.height}`} />
-            <Constant label="Panel floor" value={`${LAYOUT.panelRatio * 100}%`} />
-            <Constant label="Font" value={`Arial Bold ${LAYOUT.fontSizePx}px`} />
-            <Constant label="Highlight" value={LAYOUT.highlightColor} swatch />
-          </dl>
+          {layout ? (
+            <dl className="grid grid-cols-2 gap-x-6 gap-y-3 rounded-lg border p-4 text-xs sm:grid-cols-4">
+              <Constant
+                label="Size"
+                value={`${layout.image.width} × ${layout.image.height}`}
+              />
+              <Constant
+                label="Panel"
+                value={`${Math.round(layout.panel.ratio * 100)}–${Math.round(layout.panel.max_ratio * 100)}%`}
+              />
+              <Constant
+                label="Font"
+                value={`${layout.font.family} ${layout.font.weight} ${layout.text.font_size_px}px`}
+              />
+              <Constant label="Highlight" value={layout.highlight.color} swatch />
+            </dl>
+          ) : (
+            <Skeleton className="h-24 rounded-lg" />
+          )}
         </div>
       </section>
     </div>

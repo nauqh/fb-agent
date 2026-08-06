@@ -6,19 +6,6 @@ import { LAYOUT } from "@/lib/fixtures/pages";
 import { cn } from "@/lib/utils";
 
 /**
- * The committed watermark, copied to `public/` for the preview only.
- *
- * The API composites from `api/assets/watermarks/`; the browser cannot read
- * that path, and re-drawing the wordmark in SVG would be a second version of a
- * logo that already exists — and one drawn in whatever face the renderer
- * happened to resolve.
- *
- * Kept in step with `page.watermark_image_path` by hand, which is a seam worth
- * noticing: this is the only place the two can silently disagree.
- */
-const WATERMARK_PREVIEW = "/watermarks/history-retraced-stacked.png";
-
-/**
  * A live preview of the Composed Image: the real hero, with the panel drawn
  * here rather than fetched.
  *
@@ -57,9 +44,11 @@ export function ComposedImage({
   /** The generated hero, if one exists. A gradient stands in when it does not. */
   heroSrc?: string | null;
   /**
-   * `page.watermark_image_path`, relative to `API_DIR`. Null is not a fallback:
-   * the asset is committed at `api/assets/watermarks/`, so a Page without one is
-   * a broken Page and this says so instead of quietly printing the name.
+   * `page.watermark_image_path`, relative to `API_DIR` — and therefore also the
+   * URL under `/api/`, which is why this preview draws the same file the
+   * compositor does rather than a copy under `public/` that had to be synced by
+   * hand. Null is not a fallback: the asset is committed, so a Page without one
+   * is a broken Page and this says so instead of quietly printing the name.
    */
   watermarkPath: string | null;
   /** Varies the hero gradient so two drafts do not look identical. */
@@ -119,7 +108,7 @@ export function ComposedImage({
             // a loader and an intrinsic size for nothing here.
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={WATERMARK_PREVIEW}
+              src={`/api/${watermarkPath}`}
               alt=""
               className="w-full drop-shadow"
             />

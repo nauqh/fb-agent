@@ -6,6 +6,7 @@ import { AlertTriangle, Check, Loader2, TriangleAlert, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { approveDraft, listDrafts, rejectDraft } from "@/lib/api/drafts";
+import { listPages } from "@/lib/api/pages";
 import { timeAgo } from "@/lib/format";
 import type { Draft, DraftStatus } from "@/lib/types";
 import { useQuery } from "@/lib/use-query";
@@ -38,6 +39,7 @@ const FILTERS: { value: DraftStatus | "all"; label: string }[] = [
  */
 export function ReviewList() {
   const { status, setStatus } = useReviewFilter();
+  const { data: pages } = useQuery(() => listPages(), []);
 
   /**
    * `generating` rows are folded into every filter.
@@ -97,17 +99,16 @@ export function ReviewList() {
         ) : drafts?.length === 0 ? (
           <p className="py-20 text-center text-sm text-muted-foreground">Queue is empty.</p>
         ) : (
-          <table className="w-full min-w-[860px]">
+          <table className="w-full min-w-[980px]">
             <thead>
               <tr className="border-b bg-muted/30 text-left text-[11px] uppercase tracking-wide text-muted-foreground">
                 <th className="w-32 px-5 py-3 font-medium">
                   <span className="sr-only">Image</span>
                 </th>
                 <th className="px-2 py-3 font-medium">Post</th>
-                {/* Status and Created sit together at the right rather than in
-                    two spread-out columns. On a wide screen they used to drift
-                    so far from the row they read as unrelated. */}
-                <th className="w-56 px-5 py-3 font-medium">Status</th>
+                <th className="w-44 px-5 py-3 font-medium">Page</th>
+                <th className="w-32 px-5 py-3 font-medium">Created</th>
+                <th className="w-40 px-5 py-3 font-medium">Status</th>
                 <th className="w-24 px-5 py-3 text-right font-medium">
                   <span className="sr-only">Actions</span>
                 </th>
@@ -115,7 +116,12 @@ export function ReviewList() {
             </thead>
             <tbody className="divide-y">
               {drafts?.map((draft) => (
-                <Row key={draft.id} draft={draft} onDecided={refresh} />
+                <Row
+                  key={draft.id}
+                  draft={draft}
+                  pageName={pages?.find((p) => p.id === draft.page_id)?.name ?? ""}
+                  onDecided={refresh}
+                />
               ))}
             </tbody>
           </table>
@@ -125,7 +131,15 @@ export function ReviewList() {
   );
 }
 
-function Row({ draft, onDecided }: { draft: Draft; onDecided: () => void }) {
+function Row({
+  draft,
+  pageName,
+  onDecided,
+}: {
+  draft: Draft;
+  pageName: string;
+  onDecided: () => void;
+}) {
   const router = useRouter();
   const [deciding, setDeciding] = useState(false);
   const generating = draft.status === "generating";
@@ -195,8 +209,16 @@ function Row({ draft, onDecided }: { draft: Draft; onDecided: () => void }) {
         ) : null}
       </td>
 
-      {/* Status over the timestamp, in one block. Two spread columns put them
-          at opposite ends of a wide row and neither read as belonging to it. */}
+      {/* Page, Created and Status as their own columns, which is the old app's
+          layout. They line up down the queue, which is the point of a table. */}
+      <td className="px-5 py-4 align-middle text-[13px]">
+        <span className="line-clamp-1">{pageName}</span>
+      </td>
+
+      <td className="whitespace-nowrap px-5 py-4 align-middle text-[13px] text-muted-foreground">
+        {timeAgo(draft.created_at)}
+      </td>
+
       <td className="px-5 py-4 align-middle">
         <div className="flex flex-wrap items-center gap-1.5">
           <StatusBadge draft={draft} />
@@ -207,9 +229,6 @@ function Row({ draft, onDecided }: { draft: Draft; onDecided: () => void }) {
             </span>
           ) : null}
         </div>
-        <p className="mt-1.5 whitespace-nowrap text-[13px] text-muted-foreground">
-          {timeAgo(draft.created_at)}
-        </p>
       </td>
 
       {/* Draining the queue is the common case, so Approve and Reject are here

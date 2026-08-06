@@ -14,8 +14,8 @@ from sqlmodel import Session
 
 from app import generate
 from app.db import get_engine, init_db
-from app.routes import drafts, pages, prompts, sources
-from app.settings import layout, settings
+from app.routes import config, drafts, pages, prompts, sources
+from app.settings import API_DIR, layout, settings
 
 
 @asynccontextmanager
@@ -39,6 +39,19 @@ app.mount(
     name="media",
 )
 
+# The committed assets — watermarks, the font — served so the browser can show
+# the same file the compositor draws with. `page.watermark_image_path` is
+# already relative to API_DIR, so `/assets/...` addresses it directly.
+#
+# Without this the frontend kept its own copy under `web/public/watermarks/`,
+# hand-synced, and the two disagreed the moment the Page pointed somewhere new.
+app.mount(
+    "/assets",
+    StaticFiles(directory=str(API_DIR / "assets"), check_dir=False),
+    name="assets",
+)
+
+app.include_router(config.router)
 app.include_router(drafts.router)
 app.include_router(pages.router)
 app.include_router(prompts.router)
