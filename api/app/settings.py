@@ -188,7 +188,7 @@ class Settings(BaseSettings):
 
     gemini_api_key: str = ""
     gemini_text_model: str = "gemini-3.5-flash"
-    gemini_image_model: str = "gemini-2.5-flash-image"
+    gemini_image_model: str = "gemini-3.1-flash-image"
 
     metricool_api_token: str = ""
     metricool_user_id: str = ""

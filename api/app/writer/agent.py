@@ -102,7 +102,7 @@ def build_agent(page: Page, model: object | None = None) -> Agent:
     return agent
 
 
-FALLBACK_MODELS = ("gemini-2.5-flash", "gemini-flash-latest")
+FALLBACK_MODELS = ("gemini-flash-latest",)
 """Tried in order when the configured model is unavailable.
 
 Ported from the old repo, which kept the same chain
@@ -110,14 +110,20 @@ Ported from the old repo, which kept the same chain
 503 "experiencing high demand" three times while this was being built, and one
 of those killed a real run.
 
-`gemini-2.0-flash` was the third link until 2026-08-06, when it started
-answering **404 "no longer available"** — the same rot the old repo hit on the
-image side (`376afdc`). It was still in `models.list()` while refusing to
-generate, so the list is not evidence; each link here was checked by actually
-generating from it.
+**Every pinned version has now rotted out of this chain, both on 2026-08-06.**
+`gemini-2.0-flash` went first, answering 404 "no longer available" — the same
+rot the old repo hit on the image side (`376afdc`). `gemini-2.5-flash` went
+hours later, and its wording is the lesson: *"no longer available to new
+users."* It kept working on the project the key had always belonged to and
+404'd on a project created that afternoon, so a pinned model can be alive for
+you and dead for a clone. Neither was detectable from `models.list()`, which
+went on listing both.
 
-`gemini-flash-latest` is an alias rather than a version on purpose. Google
-repoints it, so the last link cannot rot the way the pinned one did.
+That leaves one link, and it is an alias on purpose. Google repoints
+`gemini-flash-latest`, so it cannot rot the way the pinned ones did. Adding a
+pinned version back would buy a second link that expires silently on somebody
+else's project — worse than no link, because it fails only where nobody is
+looking.
 """
 
 TRANSIENT_CODES = ("500", "502", "503", "504", "429")
