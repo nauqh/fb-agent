@@ -208,8 +208,11 @@ export function DraftDetail({ draftId }: { draftId: number }) {
     />
   );
 
+  // No bottom padding of its own — the drawer supplies it. This carried
+  // `pb-16` from when the detail was a full page needing clearance above the
+  // viewport edge, which inside the drawer was just dead space under Approve.
   return (
-    <div className="space-y-6 pb-16">
+    <div className="space-y-6">
       {/* `pr-10` keeps the status badge clear of the sheet's close button. */}
       <div className="flex flex-wrap items-center justify-between gap-3 pr-10">
         <div className="min-w-0">

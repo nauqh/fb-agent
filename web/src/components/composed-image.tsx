@@ -8,12 +8,15 @@ import { cn } from "@/lib/utils";
 /**
  * The committed watermark, copied to `public/` for the preview only.
  *
- * The API composites from `api/assets/watermarks/history-retraced.png`; the
- * browser cannot read that path, and re-drawing the wordmark in SVG would be a
- * second version of a logo that already exists. This copy goes away the moment
- * the preview is replaced by the composed PNG the API actually serves.
+ * The API composites from `api/assets/watermarks/`; the browser cannot read
+ * that path, and re-drawing the wordmark in SVG would be a second version of a
+ * logo that already exists — and one drawn in whatever face the renderer
+ * happened to resolve.
+ *
+ * Kept in step with `page.watermark_image_path` by hand, which is a seam worth
+ * noticing: this is the only place the two can silently disagree.
  */
-const WATERMARK_PREVIEW = "/watermarks/history-retraced.png";
+const WATERMARK_PREVIEW = "/watermarks/history-retraced-stacked.png";
 
 /**
  * A live preview of the Composed Image: the real hero, with the panel drawn

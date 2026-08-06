@@ -27,7 +27,13 @@ PAGE = {
     # Supabase project 404s every watermark path — this one was recovered from
     # the *previous* project. See docs/decisions.md, "The watermark becomes a
     # committed file".
-    "watermark_image_path": "assets/watermarks/history-retraced.png",
+    #
+    # The stacked wordmark, not the single-line one: on a 138px cap
+    # "HistoryRetraced" across one line renders too small to read, which is what
+    # the real posts show it stacked for. Transparent and white-on-red, derived
+    # from the committed JPEG — that original is opaque white paper with black
+    # ink, so pasting it would put a card over the hero.
+    "watermark_image_path": "assets/watermarks/history-retraced-stacked.png",
 }
 
 
