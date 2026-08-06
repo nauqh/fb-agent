@@ -236,7 +236,7 @@ def test_segments_always_rebuild_the_line_exactly():
 def test_a_phrase_split_by_the_wrap_is_reported():
     """The other way to lose the gold, and the one nothing else catches.
 
-    `generate.py` warns when a phrase is not verbatim in `overlay_text`. A
+    `generate.py` warns when a phrase is not verbatim in the hook. A
     phrase that *is* verbatim can still land across a line break, and because
     segmentation runs per line it then matches nothing and renders no gold —
     visible only by looking at the picture.

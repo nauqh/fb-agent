@@ -39,7 +39,6 @@ export type DraftEdit = Partial<
     | "hook"
     | "caption"
     | "first_comment"
-    | "overlay_text"
     | "highlight_phrases"
     | "hashtags"
     | "image_prompt"

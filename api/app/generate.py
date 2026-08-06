@@ -155,7 +155,6 @@ def _run_one(session: Session, draft_id: int) -> None:
         draft.hook = content.hook
         draft.caption = content.caption
         draft.first_comment = content.first_comment
-        draft.overlay_text = content.overlay_text
         draft.highlight_phrases = content.highlight_phrases
         draft.hashtags = content.hashtags
         draft.image_prompt = content.image_prompt
@@ -214,11 +213,11 @@ def build_image(session: Session, draft: Draft, page: Page) -> list[str]:
     overlay edit reuses `hero_image_path`, so editing the text is free and only
     a genuinely new picture is charged for.
     """
-    if not draft.overlay_text:
-        return [f"{IMAGE_WARNING}no overlay text, so nothing was composed."]
+    if not draft.hook:
+        return [f"{IMAGE_WARNING}no hook, so there is nothing to draw."]
 
     try:
-        plan = overlay.plan(draft.overlay_text, draft.highlight_phrases)
+        plan = overlay.plan(draft.hook, draft.highlight_phrases)
         warnings = (
             [
                 f"{IMAGE_WARNING}{len(plan.lost_highlights)} highlight phrase(s) "
@@ -261,11 +260,11 @@ def _highlight_warnings(content) -> list[str]:
     *compositor*, not about the brand — see design.md on `overlay.txt` being a
     contract with the renderer.
     """
-    missing = [p for p in content.highlight_phrases if p not in content.overlay_text]
+    missing = [p for p in content.highlight_phrases if p not in content.hook]
     if missing:
         return [
-            f"{len(missing)} highlight phrase(s) are not verbatim in the overlay "
-            f"text and will render no gold: {missing[:3]}"
+            f"{len(missing)} highlight phrase(s) are not verbatim in the hook "
+            f"and will render no gold: {missing[:3]}"
         ]
     return []
 

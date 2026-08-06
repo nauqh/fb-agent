@@ -117,7 +117,7 @@ function Row({ draft, selected }: { draft: Draft; selected: boolean }) {
       <p className="line-clamp-2 pt-1 text-xs leading-snug">
         {generating
           ? (draft.topic ?? "Writing…")
-          : (draft.overlay_text ?? draft.topic ?? "Untitled")}
+          : (draft.hook ?? draft.topic ?? "Untitled")}
       </p>
 
       {generating ? (

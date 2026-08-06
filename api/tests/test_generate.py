@@ -15,7 +15,6 @@ GOOD = DraftContent(
     first_comment=(
         "Marie Tharp (1920-2006) worked in ink.\n\n" + "She redrew the sea floor. " * 62
     ),
-    overlay_text="Marie Tharp mapped the ocean floor in 1957.",
     highlight_phrases=["Marie Tharp", "1957"],
     hashtags=[],
     image_prompt="A woman at a drafting table.",
@@ -357,7 +356,7 @@ def test_rebuilding_replaces_image_warnings_rather_than_stacking_them(
     have to go. Warnings from the writer are not this step's to delete.
     """
     long_overlay = DraftContent(
-        **{**GOOD.model_dump(), "overlay_text": (
+        **{**GOOD.model_dump(), "hook": (
             "In 1952, geologist Marie Tharp mapped the ocean floor by hand and "
             "discovered the massive Mid-Atlantic Ridge rift valley beneath it."
         ), "highlight_phrases": ["mapped the ocean floor"]}

@@ -80,12 +80,10 @@ export const DRAFTS: Draft[] = [
     source_item_id: 107,
     topic: null,
     status: "review",
-    hook: "In 1925 a con man called Victor Lustig walked into the Hôtel de Crillon with forged government stationery and sold the Eiffel Tower for scrap metal. The dealer who bought it was too humiliated to go to the police. So Lustig waited a month, came back to Paris, and sold it again.",
+    hook: "In 1925 Victor Lustig sold the Eiffel Tower for scrap metal. The buyer was too ashamed to report it — so Lustig came back a month later and sold it again.",
     caption:
       "🗼 The Eiffel Tower was only ever meant to stand for twenty years, and by 1925 the city was openly complaining about the cost of painting it.\n📰 Victor Lustig read that complaint in a newspaper and had ministry stationery forged the same week.\n🤝 He invited six scrap dealers to a confidential meeting and explained that the demolition contract could not be announced publicly.\n💰 André Poisson paid for the tower — and then paid a bribe on top, because that was how he expected the deal to work.\n🔁 Poisson was too ashamed to report it, so Lustig came back and ran the whole thing a second time.",
     first_comment: LUSTIG_BODY,
-    overlay_text:
-      "In 1925 Victor Lustig sold the Eiffel Tower for scrap metal. The buyer was too ashamed to report it — so Lustig came back a month later and sold it again.",
     highlight_phrases: ["1925", "Victor Lustig", "Eiffel Tower", "scrap metal", "sold it again"],
     hashtags: ["#history", "#historyretraced", "#eiffeltower", "#truecrime", "#1920s"],
     image_prompt:
@@ -105,12 +103,10 @@ export const DRAFTS: Draft[] = [
     source_item_id: 103,
     topic: null,
     status: "review",
-    hook: "In 690 AD Wu Zetian stopped ruling through her husband and her sons, declared a dynasty of her own, and took the imperial throne outright. She was sixty-six, and she remains the only woman in three thousand years of Chinese history to reign as emperor rather than as regent.",
+    hook: "In 690 AD Wu Zetian declared herself Emperor of China. She was the only woman ever to hold the title, she took it at sixty-six, and she kept it for fifteen years.",
     caption:
       "🏯 Wu Zetian entered the palace at thirteen as a junior concubine, the lowest rank that came with a name.\n📜 When her first emperor died she was sent to a convent — and his son brought her back to court within two years.\n🩸 The histories accuse her of strangling her own daughter to frame a rival, and every one of them was written by men she had removed from office.\n⚖️ She ran the examination system on merit rather than birth, which cost the great families the posts they had assumed were theirs.\n🪦 Her tomb outside Xi'an carries a memorial tablet seven metres high, and it is completely blank.",
     first_comment: WU_BODY,
-    overlay_text:
-      "In 690 AD Wu Zetian declared herself Emperor of China. She was the only woman ever to hold the title, she took it at sixty-six, and she kept it for fifteen years.",
     highlight_phrases: [
       "690 AD",
       "Wu Zetian",
@@ -137,12 +133,10 @@ export const DRAFTS: Draft[] = [
     source_item_id: null,
     topic: "Hedy Lamarr and frequency hopping",
     status: "approved",
-    hook: "In 1942 Hedy Lamarr patented the frequency-hopping system that Bluetooth, GPS and Wi-Fi still run on. The United States Navy filed the patent away, told her she would be more useful selling war bonds, and did not build it for twenty years.",
+    hook: "In 1942 Hedy Lamarr patented the frequency-hopping system that Bluetooth and GPS still use. The Navy filed it away and told her to sell war bonds instead.",
     caption:
       "🎬 Hedy Lamarr was the most photographed face at MGM and the co-holder of US Patent 2,292,387 in the same year.\n💣 She learned about torpedo guidance at her first husband's arms-dealing dinners, where she was seated as decoration.\n🎹 Her co-inventor George Antheil solved the synchronisation problem with a slotted paper roll, borrowed from player pianos.\n🚫 The Navy shelved it and sent her on a bond tour, where she raised twenty-five million dollars.\n📶 The patent had expired by the time the principle turned up underneath Bluetooth and GPS.",
     first_comment: LAMARR_BODY,
-    overlay_text:
-      "In 1942 Hedy Lamarr patented the frequency-hopping system that Bluetooth and GPS still use. The Navy filed it away and told her to sell war bonds instead.",
     highlight_phrases: [
       "1942",
       "Hedy Lamarr",
@@ -168,12 +162,10 @@ export const DRAFTS: Draft[] = [
     source_item_id: 102,
     topic: null,
     status: "rejected",
-    hook: "In 1917 the United States Radium Corporation taught its dial painters to shape their brushes with their lips. The paint was radium. The company kept saying it was harmless for seven years after its own consultants said otherwise.",
+    hook: "In 1917 the Radium Girls were taught to point their brushes with their lips. The company called the paint harmless for seven more years.",
     caption:
       "⌚ The dial painters earned three times a normal factory wage, and the work was advertised as clean.\n💋 The company taught lip-pointing — roll the brush between your lips, dip, paint — several hundred times a day.\n🦴 Radium behaves like calcium, so the bones took it in and kept it.\n🩺 Dr Theodore Blum described a pattern of dying jawbones in 1924 that he had never seen before.\n⚖️ Five women sued in 1927, and their testimony rewrote American occupational disease law.",
     first_comment: RADIUM_BODY,
-    overlay_text:
-      "In 1917 the Radium Girls were taught to point their brushes with their lips. The company called the paint harmless for seven more years.",
     highlight_phrases: ["1917", "Radium Girls", "with their lips", "harmless", "seven more years"],
     hashtags: ["#history", "#historyretraced", "#radiumgirls", "#labourhistory", "#1920s"],
     image_prompt:
@@ -193,12 +185,10 @@ export const DRAFTS: Draft[] = [
     source_item_id: 104,
     topic: null,
     status: "review",
-    hook: "Before refrigeration, Boston sold winter. Frederic Tudor cut New England lakes into blocks, packed them in sawdust, and shipped ice to Calcutta across the equator. Two thirds of every cargo melted on the way, and he made a fortune on the third that arrived.",
+    hook: "Before refrigeration, Boston sold winter. Frederic Tudor shipped lake ice to Calcutta in sawdust. Two thirds melted on the way, and he got rich on the rest.",
     caption:
       "🧊 Frederic Tudor's first ice cargo sailed in 1806, and nobody in the Caribbean knew what to do with it.\n🪵 Sawdust was the breakthrough — a waste product from Maine's mills that turned out to be an excellent insulator.\n🚢 A shipment to Calcutta took four months and crossed the equator twice.\n📉 Two thirds of every load melted, and the surviving third still undercut every local alternative.\n🏦 He was jailed for debt twice before the business made him one of Boston's richest men.",
     first_comment: null,
-    overlay_text:
-      "Before refrigeration, Boston sold winter. Frederic Tudor shipped lake ice to Calcutta in sawdust. Two thirds melted on the way, and he got rich on the rest.",
     highlight_phrases: ["Boston sold winter", "Frederic Tudor", "Calcutta", "sawdust", "Two thirds melted"],
     hashtags: ["#history", "#historyretraced", "#boston", "#trade", "#19thcentury"],
     image_prompt:
@@ -218,12 +208,10 @@ export const DRAFTS: Draft[] = [
     source_item_id: 106,
     topic: null,
     status: "review",
-    hook: "What happens when a country declares war on a bird and loses? In 1932 Australia sent artillery with two Lewis guns after twenty thousand emus, and withdrew after six days.",
+    hook: "In 1932 Australia sent artillery to fight twenty thousand emus. After six days and twenty-five hundred rounds, the army withdrew.",
     caption:
       "🦤 Twenty thousand emus walked into the Western Australian wheat belt after the 1932 harvest.\n🔫 The government's answer was the Seventh Heavy Battery, two Lewis guns and ten thousand rounds.\n🏃 The emus scattered on the first burst and learned to post sentinels within days.\n📊 Six days and twenty-five hundred rounds produced a body count nobody could agree on.\n🏳️ The operation was withdrawn, and the government went back to paying a bounty.",
     first_comment: EMU_BODY,
-    overlay_text:
-      "In 1932 Australia sent artillery to fight twenty thousand emus. After six days and twenty-five hundred rounds, the army withdrew.",
     highlight_phrases: ["1932", "Australia", "twenty thousand emus", "six days", "the army withdrew"],
     hashtags: ["#history", "#historyretraced", "#australia", "#emuwar", "#1930s"],
     image_prompt:

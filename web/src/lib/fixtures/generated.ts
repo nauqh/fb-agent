@@ -13,7 +13,6 @@ export type WrittenDraft = Pick<
   | "hook"
   | "caption"
   | "first_comment"
-  | "overlay_text"
   | "highlight_phrases"
   | "hashtags"
   | "image_prompt"
@@ -55,12 +54,10 @@ Robert Muirhead, who had hired all three, wrote the investigation and was carefu
 
 export const WRITTEN: WrittenDraft[] = [
   {
-    hook: "Marie Tharp mapped the floor of the Atlantic Ocean by hand, from soundings she was forbidden to collect because women were thought unlucky at sea. In 1953 her plots revealed a rift valley running the length of the mid-ocean ridge. Her colleague told her it was girl talk and made her draw it again.",
+    hook: "Marie Tharp mapped the Atlantic sea floor by hand and found a rift valley that proved continental drift. She was told it was girl talk and made to draw it twice.",
     caption:
       "🗺️ Marie Tharp turned columns of echo-sounder readings into the first picture of the ocean floor, profile by profile, in ink.\n🚢 She was not allowed on the research ships — the data came back to her in rolls from someone else's voyage.\n🏔️ A continuous rift valley appeared down the centre of the mid-Atlantic ridge, thousands of miles long.\n😤 Bruce Heezen called it girl talk and made her redo the work; the valley was still there.\n🌍 An earthquake map in the same office fell exactly inside her rift, and continental drift stopped being a joke.",
     first_comment: THARP_BODY,
-    overlay_text:
-      "Marie Tharp mapped the Atlantic sea floor by hand and found a rift valley that proved continental drift. She was told it was girl talk and made to draw it twice.",
     highlight_phrases: [
       "Marie Tharp",
       "by hand",
@@ -74,12 +71,10 @@ export const WRITTEN: WrittenDraft[] = [
       "Photorealistic documentary photograph, 1950s research office: a woman leaning over a vast hand-drawn ocean chart on a drafting table, dividers in hand, angled desk lamp, paper rolls stacked behind her. Medium close-up, face readable, natural light. Keep the top-right quadrant clean.",
   },
   {
-    hook: "The iron mine under Kiruna was going to swallow the town, so Sweden decided to move the town instead. Since 2022 whole buildings have been lifted onto transporters and driven three kilometres east at walking pace, including a timber church from 1912 that made the trip in two halves.",
+    hook: "Sweden is moving an entire town. Kiruna sits on an iron mine that is swallowing it, so the buildings are being driven three kilometres east at walking pace.",
     caption:
       "⛏️ Kiruna sits on the largest underground iron ore mine in the world, and the ore runs directly beneath the town centre.\n🏘️ In 2004 the choice was to stop mining or move the settlement, and the town voted to move.\n🚚 Around twenty of the oldest buildings were lifted whole and driven east on modular transporters.\n⛪ Kiruna Church, voted Sweden's most beautiful building, was cut in two and moved in 2025 with the town walking behind it.\n🚧 The old centre is being demolished behind a fence that moves closer every year.",
     first_comment: KIRUNA_BODY,
-    overlay_text:
-      "Sweden is moving an entire town. Kiruna sits on an iron mine that is swallowing it, so the buildings are being driven three kilometres east at walking pace.",
     highlight_phrases: [
       "moving an entire town",
       "Kiruna",
@@ -92,12 +87,10 @@ export const WRITTEN: WrittenDraft[] = [
       "Photorealistic documentary photograph, northern Sweden: a large timber building on a modular transporter moving along a widened road through snow-lined terrain, workers in high-visibility jackets walking alongside. Mid-shot, flat overcast arctic light, faces readable. Keep the top-right quadrant clean.",
   },
   {
-    hook: "In December 1900 three lighthouse keepers vanished from Eilean Mor. The lamp was cleaned and ready, the beds were unmade, and the clock had stopped. Two oilskin coats were missing from their hooks and the third was still hanging there.",
+    hook: "In December 1900 three keepers vanished from Eilean Mor. The lamp was ready, the clock had stopped, and one oilskin coat was still on its hook.",
     caption:
       "🌊 A passing steamer noted the Flannan Isles light was dark on 15 December 1900, and nothing was done for eleven days.\n🚪 The relief keeper found the gate shut, the door closed, the beds unmade and the clock stopped.\n🧥 Two sets of oilskins were gone and one was still on its hook — the detail the story has never let go of.\n🪨 The west landing, a hundred and ten feet up, was wrecked, with a one-ton block shifted and iron railings bent flat.\n📖 The screaming and weeping in the logbook were invented by a poem decades later.",
     first_comment: EILEAN_MOR_BODY,
-    overlay_text:
-      "In December 1900 three keepers vanished from Eilean Mor. The lamp was ready, the clock had stopped, and one oilskin coat was still on its hook.",
     highlight_phrases: [
       "December 1900",
       "three keepers",

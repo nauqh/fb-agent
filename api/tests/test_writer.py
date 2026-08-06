@@ -26,7 +26,6 @@ GOOD = {
         "drift that Bruce Heezen (1924-1977) had dismissed as girl talk before he "
         "came to accept it. " * 9
     ),
-    "overlay_text": "Marie Tharp mapped the ocean floor in 1957.",
     "highlight_phrases": ["Marie Tharp", "1957", "ocean floor"],
     "hashtags": ["#history"],
     "image_prompt": "A woman at a drafting table, 1950s, documentary photograph.",
@@ -330,3 +329,39 @@ def test_a_supplied_model_is_never_swapped_for_a_real_one(page, monkeypatch):
     model, _ = _responder(GOOD)
 
     assert writer.write(page, None, topic="x", model=model).output.hook == GOOD["hook"]
+
+
+# --- one field, so the rules and the renderer cannot disagree ----------------
+
+
+def test_there_is_no_second_field_holding_the_panel_text():
+    """`overlay_text` sat beside `hook` holding the same string until 2026-08-06.
+
+    Both prompts gave them identical rules, so the model returned the hook
+    twice. Restoring it reopens the hole below.
+    """
+    assert "overlay_text" not in writer.DraftContent.model_fields
+
+
+def test_the_text_drawn_on_the_image_is_the_text_the_rules_guard(page):
+    """The hole the merge closed.
+
+    `validators.check` ran on `hook` while the compositor drew `overlay_text`,
+    so the panel — the one part of the post a reader cannot scroll past — was
+    the only copy no brand rule touched. A 200-word question could reach a
+    finished image. Now a hook that breaks a rule is retried before anything is
+    drawn from it.
+    """
+    from app.image import text as overlay
+
+    asked = {**GOOD, "hook": "Did Marie Tharp map the ocean floor?"}
+    model, calls = _responder(asked, GOOD)
+
+    result = writer.write(page, None, topic="x", model=model)
+
+    assert len(calls) == 2, "the panel text was accepted without correction"
+    assert "?" not in result.output.hook
+
+    # And it is that same corrected string the compositor lays out.
+    plan = overlay.plan(result.output.hook, result.output.highlight_phrases)
+    assert " ".join(plan.lines).startswith("Marie Tharp")

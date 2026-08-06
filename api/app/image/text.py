@@ -259,7 +259,7 @@ def split_by_wrap(text: str, lines: list[str], phrases: list[str]) -> list[str]:
 
     Segmentation runs per line, so a phrase the wrap divided matches nothing on
     either side and renders no gold at all. `generate.py` already warns about a
-    phrase that is not verbatim in `overlay_text`; this is the other way to lose
+    phrase that is not verbatim in the hook; this is the other way to lose
     the highlight, and it is invisible until someone looks at the picture.
     """
     normalised = normalise(text)

@@ -27,9 +27,21 @@ rule is wrong, not the model — see plan.md's risk table.
 
 
 class DraftContent(BaseModel):
-    """What the writer returns. Mirrors the columns it fills on `Draft`."""
+    """What the writer returns. Mirrors the columns it fills on `Draft`.
 
-    hook: str = Field(description="Text for the image panel. Under 65 words, no questions.")
+    There used to be an `overlay_text` beside `hook`, described as "the hook
+    unless there is reason to differ". There never was a reason: both prompts
+    gave them the same rules, and the model returned the same string twice. What
+    the split actually bought was a hole — `validators.check` ran on `hook` while
+    the compositor drew `overlay_text`, so the panel text was the one thing on
+    the post no rule guarded. One field, validated, drawn.
+    """
+
+    hook: str = Field(
+        description=(
+            "The text drawn on the image panel. Under 65 words, no questions."
+        )
+    )
     caption: str = Field(description="The recap: at most 5 points, each opening with an emoji.")
     first_comment: str = Field(
         description=(
@@ -37,9 +49,8 @@ class DraftContent(BaseModel):
             "by a blank line."
         )
     )
-    overlay_text: str = Field(description="Panel text. The hook unless there is reason to differ.")
     highlight_phrases: list[str] = Field(
-        description="5-8 short substrings copied verbatim out of overlay_text."
+        description="5-8 short substrings copied verbatim out of the hook."
     )
     hashtags: list[str] = Field(default_factory=list)
     image_prompt: str = Field(description="A photorealistic hero prompt for this story.")

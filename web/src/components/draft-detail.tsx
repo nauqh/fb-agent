@@ -42,7 +42,6 @@ interface Form {
   hook: string;
   caption: string;
   first_comment: string;
-  overlay_text: string;
   highlight_phrases: string[];
   hashtags: string[];
   image_prompt: string;
@@ -121,7 +120,7 @@ export function DraftDetail({ draftId }: { draftId: number }) {
     try {
       await updateDraft(draftId, form);
       toast.success("Saved.", {
-        description: "The overlay changed — recomposite to see it on the image.",
+        description: "Recomposite to see it on the image.",
       });
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : "Save failed");
@@ -208,7 +207,7 @@ export function DraftDetail({ draftId }: { draftId: number }) {
           />
         ) : (
           <ComposedImage
-            overlayText={form?.overlay_text ?? draft.overlay_text}
+            overlayText={form?.hook ?? draft.hook}
             highlightPhrases={form?.highlight_phrases ?? draft.highlight_phrases}
             watermarkPath={page?.watermark_image_path ?? null}
             seed={draft.id}
@@ -325,7 +324,7 @@ export function DraftDetail({ draftId }: { draftId: number }) {
           <>
             <Field
               label="Hook"
-              hint={`${words(form.hook)} words · limit 65, no question`}
+              hint={`${words(form.hook)} words · on the image · limit 65, no question`}
               flagged={words(form.hook) > 65 || form.hook.includes("?")}
             >
               <Textarea
@@ -335,21 +334,10 @@ export function DraftDetail({ draftId }: { draftId: number }) {
               />
             </Field>
 
-            <Field
-              label="Overlay text"
-              hint="Rendered on the panel"
-            >
-              <Textarea
-                value={form.overlay_text}
-                rows={3}
-                onChange={(event) => setForm({ ...form, overlay_text: event.target.value })}
-              />
-            </Field>
-
             <Field label="Highlight phrases" hint={`${form.highlight_phrases.length} · 5–8 expected`}>
               <div className="flex flex-wrap gap-1.5">
                 {form.highlight_phrases.map((phrase) => {
-                  const present = form.overlay_text.includes(phrase);
+                  const present = form.hook.includes(phrase);
                   return (
                     <span
                       key={phrase}
@@ -589,7 +577,6 @@ function toForm(draft: Draft): Form {
     hook: draft.hook ?? "",
     caption: draft.caption ?? "",
     first_comment: draft.first_comment ?? "",
-    overlay_text: draft.overlay_text ?? "",
     highlight_phrases: [...draft.highlight_phrases],
     hashtags: [...draft.hashtags],
     image_prompt: draft.image_prompt ?? "",

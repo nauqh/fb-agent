@@ -82,7 +82,6 @@ class DraftEdit(BaseModel):
     hook: str | None = None
     caption: str | None = None
     first_comment: str | None = None
-    overlay_text: str | None = None
     highlight_phrases: list[str] | None = None
     hashtags: list[str] | None = None
     image_prompt: str | None = None

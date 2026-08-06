@@ -73,7 +73,6 @@ export interface Draft {
   hook: string | null;
   caption: string | null;
   first_comment: string | null;
-  overlay_text: string | null;
   highlight_phrases: string[];
   hashtags: string[];
 

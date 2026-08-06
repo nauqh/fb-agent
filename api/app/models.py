@@ -154,9 +154,16 @@ class Draft(SQLModel, table=True):
     status: DraftStatus = Field(default=DraftStatus.GENERATING, index=True)
 
     hook: str | None = None
+    """The text on the image panel. Also the only text a brand rule guards.
+
+    `overlay_text` used to sit beside this, holding the same string — the writer
+    filled both from prompts that gave them identical rules. It was dropped on
+    2026-08-06 because the split had a cost and no benefit: validation ran here
+    and the compositor drew the other one.
+    """
+
     caption: str | None = None
     first_comment: str | None = None
-    overlay_text: str | None = None
     highlight_phrases: list[str] = Field(default_factory=list, sa_column=Column(JSON))
     hashtags: list[str] = Field(default_factory=list, sa_column=Column(JSON))
 
