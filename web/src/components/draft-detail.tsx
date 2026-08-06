@@ -222,13 +222,13 @@ export function DraftDetail({ draftId }: { draftId: number }) {
             {draft.composed_image_path ? "composed" : "not composed"}
           </span>
         </div>
-        <p className="text-[11px] leading-relaxed text-muted-foreground">
-          {draft.composed_image_path && !dirty
-            ? "The composited PNG, measured with fontTools and rasterised by resvg."
-            : dirty
-              ? "Preview of your unsaved edits. Save, then Recomposite to redraw the real image."
-              : "Approximate. The real panel is measured with fontTools and rasterised by resvg, so line breaks and panel height will differ."}
-        </p>
+        {/* Only says something when the picture is *not* the real one. The
+            composite needs no caption — it is what it looks like. */}
+        {draft.composed_image_path && !dirty ? null : (
+          <p className="text-[11px] text-muted-foreground">
+            {dirty ? "Preview — save, then recomposite." : "Preview, not yet composed."}
+          </p>
+        )}
         <div className="space-y-2">
           <Button
             variant="outline"
@@ -255,6 +255,9 @@ export function DraftDetail({ draftId }: { draftId: number }) {
             className="w-full text-muted-foreground"
             disabled={imageWork !== null}
             onClick={() => void redoImage("hero")}
+            // The one button that spends money. Said on hover rather than in a
+            // paragraph under it — the warning belongs on the trigger.
+            title="Buys a new image from Gemini."
           >
             {imageWork === "hero" ? (
               <Loader2 className="size-3.5 animate-spin" />
@@ -263,10 +266,6 @@ export function DraftDetail({ draftId }: { draftId: number }) {
             )}
             Regenerate hero
           </Button>
-          <p className="text-[11px] leading-relaxed text-muted-foreground">
-            Recompositing is free — it redraws the panel over the stored hero. Regenerating
-            pays for a new image.
-          </p>
         </div>
       </div>
 
@@ -300,9 +299,6 @@ export function DraftDetail({ draftId }: { draftId: number }) {
               Generation stopped
             </p>
             <p className="text-xs leading-relaxed text-muted-foreground">{draft.error}</p>
-            <p className="text-xs text-muted-foreground">
-              The row survives with its text intact, so nothing was lost silently.
-            </p>
           </div>
         ) : null}
 
@@ -317,9 +313,6 @@ export function DraftDetail({ draftId }: { draftId: number }) {
                 <li key={warning}>— {warning}</li>
               ))}
             </ul>
-            <p className="pt-0.5 text-xs text-muted-foreground">
-              Each was enforced and retried twice before it landed here. Your call.
-            </p>
           </div>
         ) : null}
 
@@ -339,7 +332,7 @@ export function DraftDetail({ draftId }: { draftId: number }) {
 
             <Field
               label="Overlay text"
-              hint="Rendered on the panel. Highlight phrases must appear here verbatim."
+              hint="Rendered on the panel"
             >
               <Textarea
                 value={form.overlay_text}
@@ -425,10 +418,7 @@ export function DraftDetail({ draftId }: { draftId: number }) {
 
             {/* The writer produced this, and it is what a refused hero has to be
                 corrected in before paying for another one. */}
-            <Field
-              label="Image prompt"
-              hint="Sent to Gemini for the hero. Editing it changes nothing until you regenerate."
-            >
+            <Field label="Image prompt" hint="Applies on regenerate">
               <Textarea
                 value={form.image_prompt}
                 rows={5}
@@ -461,9 +451,7 @@ export function DraftDetail({ draftId }: { draftId: number }) {
               {decided ? (
                 <div className="flex items-center gap-3">
                   <p className="text-xs text-muted-foreground">
-                    {draft.status === "approved"
-                      ? "Approved — awaiting the Metricool push, which is v2."
-                      : "Rejected."}
+                    {draft.status === "approved" ? "Approved." : "Rejected."}
                   </p>
                   <Button variant="outline" size="sm" onClick={() => void returnToReview(draftId)}>
                     Return to queue
@@ -482,8 +470,7 @@ export function DraftDetail({ draftId }: { draftId: number }) {
                   </Button>
                   {failed ? (
                     <p className="text-xs text-muted-foreground">
-                      This run failed, so there is nothing to approve. Reject it to clear
-                      the queue, then generate again.
+                      Failed — nothing to approve.
                     </p>
                   ) : (
                     <Button
@@ -524,9 +511,8 @@ function Generating({ draft }: { draft: Draft }) {
           />
         </div>
         <p className="text-center text-sm">{draft.progress_step}</p>
-        <p className="text-center text-xs leading-relaxed text-muted-foreground">
-          The row was inserted before generation started, so this page is polling it. Leaving
-          the screen does not cancel anything.
+        <p className="text-center text-xs text-muted-foreground">
+          Leaving this screen does not cancel it.
         </p>
       </div>
     </div>
