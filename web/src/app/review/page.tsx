@@ -1,9 +1,7 @@
-import { Empty } from "@/components/screen";
-
+/**
+ * Nothing. The queue is the layout, and it is the whole screen when no draft is
+ * open — there is no empty pane left to fill with "pick a Draft".
+ */
 export default function ReviewIndex() {
-  return (
-    <div className="flex h-full flex-col">
-      <Empty>Pick a Draft from the queue.</Empty>
-    </div>
-  );
+  return null;
 }

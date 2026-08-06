@@ -1,4 +1,4 @@
-import { DraftDetail } from "@/components/draft-detail";
+import { DraftSheet } from "@/components/draft-sheet";
 
 /**
  * `params` is a Promise in Next 16 — synchronous access was removed. The page
@@ -6,5 +6,5 @@ import { DraftDetail } from "@/components/draft-detail";
  */
 export default async function ReviewDetailPage({ params }: PageProps<"/review/[id]">) {
   const { id } = await params;
-  return <DraftDetail draftId={Number(id)} />;
+  return <DraftSheet draftId={Number(id)} />;
 }

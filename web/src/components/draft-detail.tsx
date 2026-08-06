@@ -227,7 +227,8 @@ export function DraftDetail({ draftId }: { draftId: number }) {
 
   return (
     <div className="space-y-6 pb-16">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      {/* `pr-10` keeps the status badge clear of the sheet's close button. */}
+      <div className="flex flex-wrap items-center justify-between gap-3 pr-10">
         <div className="min-w-0">
           <h2 className="flex items-center gap-2 text-base font-medium">
             <span className="font-mono text-sm text-muted-foreground">#{draft.id}</span>

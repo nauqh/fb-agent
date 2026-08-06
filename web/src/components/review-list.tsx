@@ -22,6 +22,15 @@ const FILTERS: { value: DraftStatus | "all"; label: string }[] = [
   { value: "all", label: "All" },
 ];
 
+/**
+ * The queue, as the whole screen.
+ *
+ * It used to be a 300px column with the draft permanently beside it, which
+ * charged every screen for a list nobody reads while editing and left the rows
+ * too narrow to say anything. Now the draft opens in a sheet over the top, so
+ * the queue can be a grid of cards with the composed image on each — the one
+ * thing that actually identifies a post at a glance.
+ */
 export function ReviewList() {
   const params = useParams<{ id?: string }>();
   const selectedId = params.id ? Number(params.id) : null;
@@ -54,15 +63,15 @@ export function ReviewList() {
   );
 
   return (
-    <div className="flex h-full min-h-0 flex-col rounded-lg border">
-      <div className="flex flex-wrap gap-1 border-b p-2">
+    <div className="flex min-h-0 flex-1 flex-col gap-4">
+      <div className="flex flex-wrap gap-1">
         {FILTERS.map((filter) => (
           <button
             key={filter.value}
             type="button"
             onClick={() => setStatus(filter.value)}
             className={cn(
-              "rounded-md px-2 py-1 text-xs transition-colors",
+              "rounded-md px-2.5 py-1 text-xs transition-colors",
               status === filter.value
                 ? "bg-foreground text-background"
                 : "text-muted-foreground hover:bg-muted",
@@ -73,22 +82,20 @@ export function ReviewList() {
         ))}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-1.5">
+      <div className="min-h-0 flex-1 overflow-y-auto pb-8">
         {loading && !drafts ? (
-          <div className="space-y-1.5 p-1">
-            {Array.from({ length: 4 }).map((_, index) => (
-              <Skeleton key={index} className="h-16 rounded-md" />
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+            {Array.from({ length: 8 }).map((_, index) => (
+              <Skeleton key={index} className="h-28 rounded-lg" />
             ))}
           </div>
         ) : drafts?.length === 0 ? (
-          <p className="px-3 py-10 text-center text-xs text-muted-foreground">
-            Queue is empty.
-          </p>
+          <p className="py-16 text-center text-sm text-muted-foreground">Queue is empty.</p>
         ) : (
-          <ul className="space-y-0.5">
+          <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
             {drafts?.map((draft) => (
               <li key={draft.id}>
-                <Row draft={draft} selected={draft.id === selectedId} />
+                <Card draft={draft} selected={draft.id === selectedId} />
               </li>
             ))}
           </ul>
@@ -98,43 +105,58 @@ export function ReviewList() {
   );
 }
 
-function Row({ draft, selected }: { draft: Draft; selected: boolean }) {
+function Card({ draft, selected }: { draft: Draft; selected: boolean }) {
   const generating = draft.status === "generating";
 
   return (
     <Link
       href={`/review/${draft.id}`}
       className={cn(
-        "block rounded-md px-3 py-2.5 transition-colors",
-        selected ? "bg-muted" : "hover:bg-muted/60",
+        "flex gap-3 rounded-lg border p-2.5 transition-colors hover:bg-muted/50",
+        selected && "ring-2 ring-foreground/20",
       )}
     >
-      <div className="flex items-center justify-between gap-2">
-        <span className="font-mono text-[11px] text-muted-foreground">#{draft.id}</span>
-        <StatusMark draft={draft} />
+      {/* The picture is what identifies a post. 4:5 so the tile keeps the
+          composite's shape whether or not one has been drawn yet. */}
+      <div className="aspect-[4/5] w-16 shrink-0 overflow-hidden rounded bg-muted">
+        {draft.composed_image_path ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={`/api/media/${draft.composed_image_path}`}
+            alt=""
+            className="size-full object-cover"
+          />
+        ) : null}
       </div>
 
-      <p className="line-clamp-2 pt-1 text-xs leading-snug">
-        {generating
-          ? (draft.topic ?? "Writing…")
-          : (draft.hook ?? draft.topic ?? "Untitled")}
-      </p>
-
-      {generating ? (
-        <div className="pt-2">
-          <div className="h-0.5 w-full overflow-hidden rounded-full bg-border">
-            <div
-              className="h-full bg-gold transition-[width] duration-500"
-              style={{ width: `${draft.progress_pct}%` }}
-            />
-          </div>
-          <p className="pt-1 text-[10px] tabular-nums text-muted-foreground">
-            {draft.progress_step} · {draft.progress_pct}%
-          </p>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex items-center justify-between gap-2">
+          <span className="font-mono text-[11px] text-muted-foreground">#{draft.id}</span>
+          <StatusMark draft={draft} />
         </div>
-      ) : (
-        <p className="pt-1 text-[10px] text-muted-foreground">{timeAgo(draft.created_at)}</p>
-      )}
+
+        <p className="line-clamp-3 pt-1 text-xs leading-snug">
+          {generating ? (draft.topic ?? "Writing…") : (draft.hook ?? draft.topic ?? "Untitled")}
+        </p>
+
+        {generating ? (
+          <div className="mt-auto pt-2">
+            <div className="h-0.5 w-full overflow-hidden rounded-full bg-border">
+              <div
+                className="h-full bg-gold transition-[width] duration-500"
+                style={{ width: `${draft.progress_pct}%` }}
+              />
+            </div>
+            <p className="pt-1 text-[10px] tabular-nums text-muted-foreground">
+              {draft.progress_step} · {draft.progress_pct}%
+            </p>
+          </div>
+        ) : (
+          <p className="mt-auto pt-1 text-[10px] text-muted-foreground">
+            {timeAgo(draft.created_at)}
+          </p>
+        )}
+      </div>
     </Link>
   );
 }
