@@ -67,6 +67,15 @@ class Page(SQLModel, table=True):
     facebook_page_id: str = Field(unique=True, index=True)
     metricool_blog_id: str | None = None
 
+    avatar_image_path: str | None = None
+    """The page's profile picture, relative to `API_DIR`. Round, on white.
+
+    Not the watermark: that is a white-ink wordmark for stamping onto a
+    photograph, and a circular crop of it is a fragment of a word on a black
+    disc. This is the same wordmark on white, which is what Facebook shows
+    beside the page name and what the queue and the feed preview both draw.
+    """
+
     watermark_image_path: str | None = None
     """The page's own logo, relative to `API_DIR` — a committed asset, not
     media_root, which is gitignored and would lose it on clone.

@@ -34,7 +34,6 @@ import {
 } from "@/lib/api/drafts";
 import { listPages } from "@/lib/api/pages";
 import { chars, timeAgo, words } from "@/lib/format";
-import { currentReviewFilter } from "@/lib/review-filter";
 import type { Draft } from "@/lib/types";
 import { useQuery } from "@/lib/use-query";
 import { cn } from "@/lib/utils";
@@ -139,9 +138,9 @@ export function DraftDetail({ draftId }: { draftId: number }) {
       if (action === "approve") await approveDraft(draftId);
       else await rejectDraft(draftId);
 
-      // Advance to whatever the queue shows next under the current filter, so
-      // approving in sequence drains it without a trip back to the index.
-      const remaining = await listDrafts({ status: currentReviewFilter() });
+      // Advance to the next draft still awaiting a decision, so approving in
+      // sequence drains the queue without a trip back to the index.
+      const remaining = await listDrafts({ status: "review" });
       const next = remaining.find((candidate) => candidate.id !== draftId);
 
       toast(action === "approve" ? `Approved — #${draftId} left the queue.` : `Rejected #${draftId}.`, {
@@ -389,6 +388,7 @@ export function DraftDetail({ draftId }: { draftId: number }) {
         <TabsContent value="preview" className="mt-6">
           <FacebookPreview
             pageName={page?.name ?? "Page"}
+            avatarPath={page?.avatar_image_path}
             image={picture}
             caption={form?.caption ?? draft.caption ?? ""}
             hashtags={form?.hashtags ?? draft.hashtags}

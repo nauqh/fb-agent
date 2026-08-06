@@ -1,29 +1,17 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { AlertTriangle, Check, Loader2, TriangleAlert, X } from "lucide-react";
-import { toast } from "sonner";
+import { AlertTriangle, Loader2, TriangleAlert } from "lucide-react";
 
-import { approveDraft, listDrafts, rejectDraft } from "@/lib/api/drafts";
+import { listDrafts } from "@/lib/api/drafts";
 import { listPages } from "@/lib/api/pages";
 import { timeAgo } from "@/lib/format";
-import type { Draft, DraftStatus } from "@/lib/types";
+import type { Draft, Page } from "@/lib/types";
 import { useQuery } from "@/lib/use-query";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
+import { ViewFullButton } from "@/components/image-lightbox";
+import { PageBadge } from "@/components/page-badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useReviewFilter } from "@/lib/review-filter";
-
-const FILTERS: { value: DraftStatus | "all"; label: string }[] = [
-  { value: "review", label: "Needs review" },
-  { value: "approved", label: "Approved" },
-  { value: "rejected", label: "Rejected" },
-  // Its own tab, not folded into "Needs review": a run that produced nothing is
-  // not awaiting a decision, and it used to sit in the queue looking ready.
-  { value: "failed", label: "Failed" },
-  { value: "all", label: "All" },
-];
 
 /**
  * The queue: one table, one row per draft, click a row to open it.
@@ -38,7 +26,6 @@ const FILTERS: { value: DraftStatus | "all"; label: string }[] = [
  * repeated down the page.
  */
 export function ReviewList() {
-  const { status, setStatus } = useReviewFilter();
   const { data: pages } = useQuery(() => listPages(), []);
 
   /**
@@ -47,17 +34,9 @@ export function ReviewList() {
    * A run in flight is not "needs review" yet, but hiding it means pressing
    * Generate appears to do nothing — the queue has to show the work arriving.
    */
-  const { data: drafts, loading, refresh } = useQuery(
-    async () => {
-      const [matching, generating] = await Promise.all([
-        listDrafts({ status }),
-        status === "generating" || status === "all"
-          ? Promise.resolve([])
-          : listDrafts({ status: "generating" }),
-      ]);
-      return [...generating, ...matching];
-    },
-    [status],
+  const { data: drafts, loading } = useQuery(
+    () => listDrafts(),
+    [],
     {
       intervalMs: 2_000,
       // Only while something is in flight. With a settled queue the store
@@ -69,23 +48,6 @@ export function ReviewList() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
-      <div className="flex flex-wrap gap-1">
-        {FILTERS.map((filter) => (
-          <button
-            key={filter.value}
-            type="button"
-            onClick={() => setStatus(filter.value)}
-            className={cn(
-              "rounded-md px-2.5 py-1 text-xs transition-colors",
-              status === filter.value
-                ? "bg-foreground text-background"
-                : "text-muted-foreground hover:bg-muted",
-            )}
-          >
-            {filter.label}
-          </button>
-        ))}
-      </div>
 
       {/* Hugs its rows. A `flex-1` container left a tall empty bordered box
           under a two-draft queue, which read as something failing to load. */}
@@ -99,19 +61,15 @@ export function ReviewList() {
         ) : drafts?.length === 0 ? (
           <p className="py-20 text-center text-sm text-muted-foreground">Queue is empty.</p>
         ) : (
-          <table className="w-full min-w-[980px]">
+          <table className="w-full min-w-[720px]">
             <thead>
               <tr className="border-b bg-muted/30 text-left text-[11px] uppercase tracking-wide text-muted-foreground">
-                <th className="w-32 px-5 py-3 font-medium">
-                  <span className="sr-only">Image</span>
+                <th className="w-40 px-5 py-3 font-medium">
+                  <span className="sr-only">Post</span>
                 </th>
-                <th className="px-2 py-3 font-medium">Post</th>
-                <th className="w-44 px-5 py-3 font-medium">Page</th>
+                <th className="px-5 py-3 font-medium">Page</th>
                 <th className="w-32 px-5 py-3 font-medium">Created</th>
                 <th className="w-40 px-5 py-3 font-medium">Status</th>
-                <th className="w-24 px-5 py-3 text-right font-medium">
-                  <span className="sr-only">Actions</span>
-                </th>
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -119,8 +77,7 @@ export function ReviewList() {
                 <Row
                   key={draft.id}
                   draft={draft}
-                  pageName={pages?.find((p) => p.id === draft.page_id)?.name ?? ""}
-                  onDecided={refresh}
+                  page={pages?.find((candidate) => candidate.id === draft.page_id)}
                 />
               ))}
             </tbody>
@@ -131,51 +88,34 @@ export function ReviewList() {
   );
 }
 
-function Row({
-  draft,
-  pageName,
-  onDecided,
-}: {
-  draft: Draft;
-  pageName: string;
-  onDecided: () => void;
-}) {
+function Row({ draft, page }: { draft: Draft; page?: Page }) {
   const router = useRouter();
-  const [deciding, setDeciding] = useState(false);
   const generating = draft.status === "generating";
-
-  async function decide(action: "approve" | "reject") {
-    setDeciding(true);
-    try {
-      if (action === "approve") await approveDraft(draft.id);
-      else await rejectDraft(draft.id);
-      toast(action === "approve" ? `Approved #${draft.id}.` : `Rejected #${draft.id}.`);
-      onDecided();
-    } catch (cause) {
-      toast.error(cause instanceof Error ? cause.message : "Action failed");
-    } finally {
-      setDeciding(false);
-    }
-  }
 
   return (
     <tr
       className={cn("group", generating ? "bg-muted/10" : "cursor-pointer hover:bg-muted/30")}
       onClick={generating ? undefined : () => router.push(`/review/${draft.id}`)}
     >
-      <td className="px-5 py-4 align-top">
+      <td className="w-40 px-5 py-4 align-top">
         {/* The composite at a size you can actually judge. It is the product —
             a 48px chip of it told you a picture existed and nothing else. 4:5
             whether or not one has been drawn, so rows keep their height as
             pictures arrive. */}
-        <div className="aspect-[4/5] w-[88px] overflow-hidden rounded-lg border bg-muted shadow-sm">
+        <div className="group/thumb relative aspect-[4/5] w-[120px] overflow-hidden rounded-lg border bg-muted shadow-sm">
           {draft.composed_image_path ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={`/api/media/${draft.composed_image_path}`}
-              alt=""
-              className="size-full object-cover"
-            />
+            <>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={`/api/media/${draft.composed_image_path}`}
+                alt=""
+                className="size-full object-cover"
+              />
+              <ViewFullButton
+                src={`/api/media/${draft.composed_image_path}`}
+                alt={`Draft ${draft.id} composed image`}
+              />
+            </>
           ) : generating ? (
             <div className="flex size-full items-center justify-center">
               <Loader2 className="size-4 animate-spin text-muted-foreground" />
@@ -184,35 +124,15 @@ function Row({
         </div>
       </td>
 
-      {/* `max-w-0` is what makes the clamps work: without it the cell grows to
-          fit the text and nothing ever truncates. */}
-      <td className="max-w-0 px-2 py-4 align-middle">
-        {/* The hook only. The old app's second line was the brand label, which
-            on a one-page install is the same string on every row; the caption
-            went there instead and turned the queue into a wall of body text you
-            have to read past to find the post you want. */}
-        <p className="line-clamp-2 text-[15px] font-medium leading-snug">
-          {generating ? (draft.topic ?? "Writing…") : (draft.hook ?? draft.topic ?? "Untitled")}
-        </p>
-        {generating ? (
-          <div className="mt-3 flex items-center gap-2">
-            <div className="h-1 w-40 overflow-hidden rounded-full bg-border">
-              <div
-                className="h-full bg-gold transition-[width] duration-500"
-                style={{ width: `${draft.progress_pct}%` }}
-              />
-            </div>
-            <span className="text-xs tabular-nums text-muted-foreground">
-              {draft.progress_step} · {draft.progress_pct}%
-            </span>
-          </div>
-        ) : null}
-      </td>
 
       {/* Page, Created and Status as their own columns, which is the old app's
           layout. They line up down the queue, which is the point of a table. */}
-      <td className="px-5 py-4 align-middle text-[13px]">
-        <span className="line-clamp-1">{pageName}</span>
+      <td className="px-5 py-4 align-middle">
+        <PageBadge
+          name={page?.name ?? ""}
+          avatarPath={page?.avatar_image_path}
+          className="text-[13px]"
+        />
       </td>
 
       <td className="whitespace-nowrap px-5 py-4 align-middle text-[13px] text-muted-foreground">
@@ -229,42 +149,30 @@ function Row({
             </span>
           ) : null}
         </div>
-      </td>
-
-      {/* Draining the queue is the common case, so Approve and Reject are here
-          as well as in the sheet. `stopPropagation` keeps a decision from also
-          opening the draft it just removed. */}
-      <td className="px-5 py-4 align-middle text-right" onClick={(event) => event.stopPropagation()}>
-        {draft.status === "review" ? (
-          <div className="flex items-center justify-end gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
-            <Button
-              variant="ghost"
-              size="icon"
-              disabled={deciding}
-              onClick={() => void decide("reject")}
-              title="Reject"
-            >
-              <X className="size-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-gold hover:bg-gold/10 hover:text-gold"
-              disabled={deciding}
-              onClick={() => void decide("approve")}
-              title="Approve"
-            >
-              {deciding ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
-            </Button>
+        {generating ? (
+          <div className="mt-2 w-40">
+            <div className="h-1 overflow-hidden rounded-full bg-border">
+              <div
+                className="h-full bg-gold transition-[width] duration-500"
+                style={{ width: `${draft.progress_pct}%` }}
+              />
+            </div>
+            <p className="pt-1 text-[11px] tabular-nums text-muted-foreground">
+              {draft.progress_step} · {draft.progress_pct}%
+            </p>
           </div>
         ) : null}
       </td>
+
     </tr>
   );
 }
 
 function StatusBadge({ draft }: { draft: Draft }) {
-  if (draft.error) {
+  // Keyed on `status`, never on `error`. A row the startup sweep touched while
+  // its task was still running kept a stale error string, and this rendered a
+  // finished draft as failed on the strength of it.
+  if (draft.status === "failed") {
     return (
       <span className="inline-flex items-center gap-1 rounded border border-destructive/40 bg-destructive/10 px-1.5 py-0.5 text-[11px] text-destructive">
         <TriangleAlert className="size-3" />

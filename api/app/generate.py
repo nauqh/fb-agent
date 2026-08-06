@@ -177,6 +177,10 @@ def _run_one(session: Session, draft_id: int) -> None:
         # invisible to SQLAlchemy and never reaches the row.
         draft.warnings = draft.warnings + build_image(session, draft, page)
 
+        # Cleared on success, or a row the startup sweep marked while this task
+        # was still running keeps "Interrupted by a restart" forever and the
+        # queue renders a finished draft as failed.
+        draft.error = None
         draft.status = DraftStatus.REVIEW
         _progress(session, draft, "done", 100)
 

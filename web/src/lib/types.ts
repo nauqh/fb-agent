@@ -30,6 +30,7 @@ export interface Page {
    * compositor treated a missing file as "no logo" and printed the name as text,
    * and the logo vanished from output for months without one failed post.
    */
+  avatar_image_path: string | null;
   watermark_image_path: string | null;
   created_at: string;
   updated_at: string;

@@ -12,9 +12,19 @@ const stamp = new Intl.DateTimeFormat("en-GB", {
   timeStyle: "short",
 });
 
+/**
+ * SQLite stores a naive datetime, so the API returns `2026-08-06T15:22:48`
+ * with no offset and `new Date()` reads it as *local* time. Everything the API
+ * writes is UTC, so say so — without this a draft made a minute ago showed as
+ * "10 hours ago" on a UTC+7 machine.
+ */
+export function asUtc(iso: string): Date {
+  return new Date(/(?:Z|[+-]\d{2}:?\d{2})$/.test(iso) ? iso : `${iso}Z`);
+}
+
 export function timeAgo(iso: string | null): string {
   if (!iso) return "—";
-  const seconds = (Date.now() - new Date(iso).getTime()) / 1000;
+  const seconds = (Date.now() - asUtc(iso).getTime()) / 1000;
   const units: [Intl.RelativeTimeFormatUnit, number][] = [
     ["minute", 60],
     ["hour", 3_600],

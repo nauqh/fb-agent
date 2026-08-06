@@ -3,6 +3,8 @@
 import type { ReactNode } from "react";
 import { MessageCircle, Share2, ThumbsUp } from "lucide-react";
 
+import { PageAvatar } from "@/components/page-badge";
+
 /**
  * The draft as Facebook will show it: the feed post, then the first comment.
  *
@@ -18,21 +20,10 @@ import { MessageCircle, Share2, ThumbsUp } from "lucide-react";
  * one structural thing an operator needs to check.
  */
 
-function Avatar({ name, size = "md" }: { name: string; size?: "sm" | "md" }) {
-  const box = size === "sm" ? "size-7" : "size-9";
-  return (
-    <div
-      className={`${box} flex shrink-0 items-center justify-center rounded-full bg-[#1877f2] text-sm font-semibold text-white`}
-    >
-      {name.slice(0, 1).toUpperCase()}
-    </div>
-  );
-}
-
 function Card({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div className="overflow-hidden rounded-lg border bg-card">
-      <p className="border-b px-3 py-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+      <p className="border-b px-4 py-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
         {title}
       </p>
       {children}
@@ -42,12 +33,14 @@ function Card({ title, children }: { title: string; children: ReactNode }) {
 
 export function FacebookPreview({
   pageName,
+  avatarPath,
   image,
   caption,
   hashtags,
   firstComment,
 }: {
   pageName: string;
+  avatarPath?: string | null;
   image: ReactNode;
   caption: string;
   hashtags: string[];
@@ -57,41 +50,41 @@ export function FacebookPreview({
     /* Side by side once there is room. They are read that way — you see the
        post, then you open the comment — and stacking a 1,800-character body
        under the feed card pushed the card off the top of the screen. */
-    <div className="grid items-start gap-4 lg:grid-cols-2">
+    <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
       <Card title="Feed post">
-        <div className="flex items-center gap-2 px-3 py-2.5">
-          <Avatar name={pageName} />
+        <div className="flex items-center gap-2.5 px-4 py-3">
+          <PageAvatar name={pageName} avatarPath={avatarPath} size="md" />
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold leading-tight">{pageName}</p>
-            <p className="text-[11px] text-muted-foreground">Just now · 🌐</p>
+            <p className="truncate text-[15px] font-semibold leading-tight">{pageName}</p>
+            <p className="text-xs text-muted-foreground">Just now · 🌐</p>
           </div>
         </div>
 
         {caption.trim() ? (
-          <p className="whitespace-pre-wrap px-3 pb-2 text-sm leading-relaxed">{caption}</p>
+          <p className="whitespace-pre-wrap px-4 pb-2.5 text-[15px] leading-relaxed">{caption}</p>
         ) : (
-          <p className="px-3 pb-2 text-sm italic text-muted-foreground">No recap yet.</p>
+          <p className="px-4 pb-2.5 text-[15px] italic text-muted-foreground">No recap yet.</p>
         )}
 
         {hashtags.length > 0 ? (
-          <p className="px-3 pb-2.5 text-sm leading-relaxed text-[#1877f2]">
+          <p className="px-4 pb-3 text-[15px] leading-relaxed text-[#1877f2]">
             {hashtags.join(" ")}
           </p>
         ) : null}
 
         {image}
 
-        <div className="flex items-center justify-around border-t px-2 py-1 text-xs font-medium text-muted-foreground">
+        <div className="flex items-center justify-around border-t px-2 py-1.5 text-sm font-medium text-muted-foreground">
           <span className="flex items-center gap-1.5 px-2 py-1.5">
-            <ThumbsUp className="size-3.5" />
+            <ThumbsUp className="size-4" />
             Like
           </span>
           <span className="flex items-center gap-1.5 px-2 py-1.5">
-            <MessageCircle className="size-3.5" />
+            <MessageCircle className="size-4" />
             Comment
           </span>
           <span className="flex items-center gap-1.5 px-2 py-1.5">
-            <Share2 className="size-3.5" />
+            <Share2 className="size-4" />
             Share
           </span>
         </div>
@@ -99,12 +92,12 @@ export function FacebookPreview({
 
       <Card title="First comment">
         {firstComment.trim() ? (
-          <div className="flex gap-2 px-3 py-3">
-            <Avatar name={pageName} size="sm" />
+          <div className="flex gap-2.5 px-4 py-4">
+            <PageAvatar name={pageName} avatarPath={avatarPath} size="sm" />
             <div className="min-w-0 flex-1">
               <div className="rounded-2xl bg-muted px-3 py-2">
-                <p className="text-xs font-semibold">{pageName}</p>
-                <p className="mt-0.5 whitespace-pre-wrap text-sm leading-relaxed">
+                <p className="text-[13px] font-semibold">{pageName}</p>
+                <p className="mt-1 whitespace-pre-wrap text-[15px] leading-relaxed">
                   {firstComment}
                 </p>
               </div>
@@ -112,7 +105,7 @@ export function FacebookPreview({
             </div>
           </div>
         ) : (
-          <p className="px-3 py-5 text-sm italic text-muted-foreground">No first comment yet.</p>
+          <p className="px-4 py-6 text-[15px] italic text-muted-foreground">No first comment yet.</p>
         )}
       </Card>
     </div>
