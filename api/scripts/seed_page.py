@@ -23,7 +23,9 @@ PAGE = {
     "name": "History Retraced",
     "facebook_page_id": "569035169625026",
     "metricool_blog_id": "4605385",
-    "avatar_image_path": "assets/pages/history-retraced.jpg",
+    # Trimmed to the wordmark: the original sat in a 400x400 field of paper,
+    # so a round crop of it was mostly white.
+    "avatar_image_path": "assets/pages/history-retraced.png",
     # Relative to API_DIR. Committed, unlike media/, because the current
     # Supabase project 404s every watermark path — this one was recovered from
     # the *previous* project. See docs/decisions.md, "The watermark becomes a

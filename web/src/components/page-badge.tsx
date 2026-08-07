@@ -44,7 +44,9 @@ export function PageAvatar({
   avatarPath?: string | null;
   size?: "sm" | "md";
 }) {
-  const box = size === "sm" ? "size-6" : "size-9";
+  // Bigger than a favicon: the mark is a two-line wordmark, so at 24px the
+  // second line is a smudge.
+  const box = size === "sm" ? "size-9" : "size-11";
 
   if (avatarPath) {
     return (
@@ -52,7 +54,7 @@ export function PageAvatar({
       <img
         src={`/api/${avatarPath}`}
         alt=""
-        className={cn(box, "shrink-0 rounded-full border bg-white object-cover")}
+        className={cn(box, "shrink-0 rounded-full border bg-white object-contain")}
       />
     );
   }
@@ -62,7 +64,7 @@ export function PageAvatar({
       className={cn(
         box,
         "flex shrink-0 items-center justify-center rounded-full bg-[#1877f2] font-semibold text-white",
-        size === "sm" ? "text-[11px]" : "text-sm",
+        size === "sm" ? "text-sm" : "text-base",
       )}
     >
       {name.slice(0, 1).toUpperCase()}

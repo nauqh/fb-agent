@@ -47,6 +47,7 @@ export function ViewFullButton({ src, alt }: { src: string; alt: string }) {
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent
+          showCloseButton={false}
           className="w-auto max-w-[min(96vw,1100px)] border-0 bg-transparent p-0 ring-0"
           onClick={(event) => event.stopPropagation()}
         >

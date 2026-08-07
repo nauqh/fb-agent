@@ -5,7 +5,7 @@ import { AlertTriangle, Loader2, TriangleAlert } from "lucide-react";
 
 import { listDrafts } from "@/lib/api/drafts";
 import { listPages } from "@/lib/api/pages";
-import { timeAgo } from "@/lib/format";
+import { fullDate } from "@/lib/format";
 import type { Draft, Page } from "@/lib/types";
 import { useQuery } from "@/lib/use-query";
 import { cn } from "@/lib/utils";
@@ -61,14 +61,15 @@ export function ReviewList() {
         ) : drafts?.length === 0 ? (
           <p className="py-20 text-center text-sm text-muted-foreground">Queue is empty.</p>
         ) : (
-          <table className="w-full min-w-[720px]">
+          <table className="w-full min-w-[980px]">
             <thead>
               <tr className="border-b bg-muted/30 text-left text-[11px] uppercase tracking-wide text-muted-foreground">
-                <th className="w-40 px-5 py-3 font-medium">
-                  <span className="sr-only">Post</span>
+                <th className="w-36 px-5 py-3 font-medium">
+                  <span className="sr-only">Image</span>
                 </th>
-                <th className="px-5 py-3 font-medium">Page</th>
-                <th className="w-32 px-5 py-3 font-medium">Created</th>
+                <th className="px-2 py-3 font-medium">Post</th>
+                <th className="w-56 px-5 py-3 font-medium">Page</th>
+                <th className="w-44 px-5 py-3 font-medium">Created</th>
                 <th className="w-40 px-5 py-3 font-medium">Status</th>
               </tr>
             </thead>
@@ -97,7 +98,7 @@ function Row({ draft, page }: { draft: Draft; page?: Page }) {
       className={cn("group", generating ? "bg-muted/10" : "cursor-pointer hover:bg-muted/30")}
       onClick={generating ? undefined : () => router.push(`/review/${draft.id}`)}
     >
-      <td className="w-40 px-5 py-4 align-top">
+      <td className="px-5 py-4 align-top">
         {/* The composite at a size you can actually judge. It is the product —
             a 48px chip of it told you a picture existed and nothing else. 4:5
             whether or not one has been drawn, so rows keep their height as
@@ -125,6 +126,16 @@ function Row({ draft, page }: { draft: Draft; page?: Page }) {
       </td>
 
 
+      {/* Title over the page name, as the old app had it. The title is the
+          hook's first sentence: the writer produces no separate one, and the
+          whole 65-word hook is a paragraph, not a row label. */}
+      <td className="max-w-0 px-2 py-4 align-middle">
+        <p className="line-clamp-1 text-[15px] font-medium leading-snug">{title(draft)}</p>
+        <p className="mt-0.5 line-clamp-1 text-[13px] text-muted-foreground">
+          {page?.name ?? ""}
+        </p>
+      </td>
+
       {/* Page, Created and Status as their own columns, which is the old app's
           layout. They line up down the queue, which is the point of a table. */}
       <td className="px-5 py-4 align-middle">
@@ -136,7 +147,7 @@ function Row({ draft, page }: { draft: Draft; page?: Page }) {
       </td>
 
       <td className="whitespace-nowrap px-5 py-4 align-middle text-[13px] text-muted-foreground">
-        {timeAgo(draft.created_at)}
+        {fullDate(draft.created_at)}
       </td>
 
       <td className="px-5 py-4 align-middle">
@@ -168,29 +179,64 @@ function Row({ draft, page }: { draft: Draft; page?: Page }) {
   );
 }
 
+/**
+ * A pill per status, coloured by what it means rather than decoratively.
+ *
+ * Amber is the queue itself — the thing this screen exists for — so it draws
+ * the eye. Green is the only end state that is good; red is the only one that
+ * lost work. Rejected is deliberately grey: a decision that was made, not a
+ * problem to fix.
+ *
+ * Keyed on `status`, never on `error`. A row the startup sweep touched while
+ * its task was still running kept a stale error string, and an earlier version
+ * of this rendered a finished draft as failed on the strength of it.
+ */
+const STATUS: Record<string, { label: string; className: string }> = {
+  generating: {
+    label: "Generating",
+    className: "border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300",
+  },
+  review: {
+    label: "Pending review",
+    className: "border-amber-500/30 bg-amber-500/15 text-amber-700 dark:text-amber-300",
+  },
+  approved: {
+    label: "Approved",
+    className: "border-emerald-500/30 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
+  },
+  rejected: {
+    label: "Rejected",
+    className: "border-transparent bg-muted text-muted-foreground",
+  },
+  failed: {
+    label: "Failed",
+    className: "border-destructive/30 bg-destructive/10 text-destructive",
+  },
+};
+
 function StatusBadge({ draft }: { draft: Draft }) {
-  // Keyed on `status`, never on `error`. A row the startup sweep touched while
-  // its task was still running kept a stale error string, and this rendered a
-  // finished draft as failed on the strength of it.
-  if (draft.status === "failed") {
-    return (
-      <span className="inline-flex items-center gap-1 rounded border border-destructive/40 bg-destructive/10 px-1.5 py-0.5 text-[11px] text-destructive">
-        <TriangleAlert className="size-3" />
-        failed
-      </span>
-    );
-  }
+  const tone = STATUS[draft.status] ?? {
+    label: draft.status,
+    className: "border-border bg-muted text-muted-foreground",
+  };
+
   return (
     <span
       className={cn(
-        "rounded border px-1.5 py-0.5 text-[11px]",
-        draft.status === "generating" && "border-gold/40 bg-gold/10",
-        draft.status === "review" && "border-foreground/20 bg-foreground/5",
-        (draft.status === "approved" || draft.status === "rejected") &&
-          "border-transparent bg-muted text-muted-foreground",
+        "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium",
+        tone.className,
       )}
     >
-      {draft.status}
+      {draft.status === "failed" ? <TriangleAlert className="size-3" /> : null}
+      {tone.label}
     </span>
   );
+}
+
+/** The hook is a paragraph; a row wants its first sentence. */
+function title(draft: Draft): string {
+  const source = draft.hook ?? draft.topic ?? "";
+  if (!source) return "Untitled";
+  const [first] = source.split(/(?<=[.!?])\s/);
+  return (first ?? source).trim();
 }

@@ -46,7 +46,7 @@ export function timeAgo(iso: string | null): string {
  * schedule is written against.
  */
 export function fullDate(iso: string | null): string {
-  return iso ? stamp.format(new Date(iso)) : "—";
+  return iso ? stamp.format(asUtc(iso)) : "—";
 }
 
 export function metric(value: number | null): string {
