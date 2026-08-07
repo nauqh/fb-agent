@@ -155,3 +155,47 @@
     @apply font-sans;
   }
 }
+/**
+ * A minimal scrollbar.
+ *
+ * The platform default is a wide light-grey trough that reads as a UI element
+ * in its own right — on the Review queue it sat beside the drawer's own
+ * scroller and the two competed. This is a thin thumb, no track, and it takes
+ * its colour from the theme so dark mode needs no second rule.
+ *
+ * `scrollbar-width`/`scrollbar-color` are the standard properties; the WebKit
+ * block below repeats it for Chrome and Safari, which still want the old
+ * pseudo-elements. Both are needed, and neither is a fallback for the other.
+ */
+@layer base {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--border);
+    border-radius: 9999px;
+    /* Inset by a transparent border so the thumb reads as floating rather than
+       filling a channel. */
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--muted-foreground);
+  }
+
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+}

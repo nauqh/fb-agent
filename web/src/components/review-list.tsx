@@ -101,7 +101,7 @@ export function ReviewList() {
         {loading && !drafts ? (
           <div className="space-y-2 p-4">
             {Array.from({ length: 5 }).map((_, index) => (
-              <Skeleton key={index} className="h-28 rounded-lg" />
+              <Skeleton key={index} className="h-20 rounded-lg" />
             ))}
           </div>
         ) : drafts?.length === 0 ? (
@@ -110,7 +110,7 @@ export function ReviewList() {
           <table className="w-full min-w-[980px]">
             <thead>
               <tr className="border-b bg-muted/30 text-left text-[11px] uppercase tracking-wide text-muted-foreground">
-                <th className="w-36 px-5 py-3 font-medium">
+                <th className="w-24 px-5 py-3 font-medium">
                   <span className="sr-only">Image</span>
                 </th>
                 <th className="px-2 py-3 font-medium">Post</th>
@@ -159,11 +159,12 @@ function Row({
       onClick={generating ? undefined : () => router.push(`/review/${draft.id}`)}
     >
       <td className="px-5 py-4 align-top">
-        {/* The composite at a size you can actually judge. It is the product —
-            a 48px chip of it told you a picture existed and nothing else. 4:5
-            whether or not one has been drawn, so rows keep their height as
+        {/* Big enough to recognise the post, small enough that ten rows fit a
+            screen. 120px made each row taller than the text it carried; the eye
+            button opens it full size when the composite itself is the question.
+            4:5 whether or not one has been drawn, so rows keep their height as
             pictures arrive. */}
-        <div className="group/thumb relative aspect-[4/5] w-[120px] overflow-hidden rounded-lg border bg-muted shadow-sm">
+        <div className="group/thumb relative aspect-[4/5] w-[72px] overflow-hidden rounded-lg border bg-muted shadow-sm">
           {draft.composed_image_path ? (
             <>
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -360,33 +361,42 @@ function RowMenu({ draft, onChanged }: { draft: Draft; onChanged: () => void }) 
 }
 
 /**
- * A pill per status. Outlined, not filled.
+ * A pill per status: plain green, plain red, white type.
  *
- * Two louder versions came before this one — tinted backgrounds that read as
- * neon, then solid fills that shouted — and a queue is mostly one status, so
- * whatever the majority looks like becomes the texture of the whole screen. A
- * thin border with coloured type says the same thing and lets the pictures
- * carry the page.
+ * Several versions on the way here, and the failures rhyme. An alpha tint over
+ * white and a pale 50/800 pair both read as *nearly* a colour — washed out
+ * rather than green — while a bare outline was too faint to scan down a column.
+ * A flat 600 fill is simply the colour it claims to be.
  *
- * Colour only where it means something: green for the one end state that is
- * good, red for the one that lost work. Pending review and Rejected are plain,
- * being respectively the common case and a decision already made.
+ * A queue is mostly one status, so whatever the majority looks like becomes the
+ * texture of the whole screen. That is why Pending review and Rejected are
+ * neutral grey, and colour is spent only on the two worth stopping for: green
+ * for the one end state that is good, red for the one that lost work.
  *
  * Keyed on `status`, never on `error`. A row the startup sweep touched while
  * its task was still running kept a stale error string, and an earlier version
  * of this rendered a finished draft as failed on the strength of it.
  */
 const STATUS: Record<string, { label: string; className: string }> = {
-  generating: { label: "Generating", className: "border-border text-muted-foreground" },
-  review: { label: "Pending review", className: "border-border text-foreground" },
+  generating: {
+    label: "Generating",
+    className: "border-border bg-muted text-muted-foreground",
+  },
+  review: {
+    label: "Pending review",
+    className: "border-border bg-muted text-foreground",
+  },
   approved: {
     label: "Approved",
-    className: "border-emerald-600/35 text-emerald-700 dark:text-emerald-400",
+    className: "border-transparent bg-green-600 text-white",
   },
-  rejected: { label: "Rejected", className: "border-border text-muted-foreground" },
+  rejected: {
+    label: "Rejected",
+    className: "border-border bg-muted text-muted-foreground",
+  },
   failed: {
     label: "Failed",
-    className: "border-red-600/35 text-red-700 dark:text-red-400",
+    className: "border-transparent bg-red-600 text-white",
   },
 };
 
