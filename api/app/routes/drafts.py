@@ -11,7 +11,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
-from app import generate
+from app import generate, media
 from app.db import get_session
 from app.models import Draft, DraftStatus, Page, SourceItemBase
 from app.writer import validators
@@ -172,6 +172,35 @@ def rebuild_image(
     kept = [w for w in draft.warnings if not w.startswith(generate.IMAGE_WARNING)]
     draft.warnings = kept + fresh
     return _save(session, draft)
+
+
+@router.delete("/drafts/{draft_id}", status_code=204)
+def delete_draft(draft_id: int, session: Session = Depends(get_session)) -> None:
+    """Gone for good, along with its pictures.
+
+    Distinct from Reject, which is a decision that stays on the record and can
+    be undone. This is for a row nobody should have to look at again — a failed
+    run, a duplicate, a test.
+
+    The files go too. They are named after the draft and nothing else points at
+    them, so keeping them would leave `media/` growing with pictures no row can
+    reach. A missing file is not an error here: the row may never have got one.
+    """
+    draft = session.get(Draft, draft_id)
+    if draft is None:
+        raise HTTPException(status_code=404, detail=f"No draft {draft_id}")
+    if draft.status == DraftStatus.GENERATING:
+        raise HTTPException(
+            status_code=409,
+            detail="That draft is still being written. Wait for it to finish.",
+        )
+
+    for stored in (draft.hero_image_path, draft.composed_image_path):
+        if stored:
+            media.store.path(stored).unlink(missing_ok=True)
+
+    session.delete(draft)
+    session.commit()
 
 
 @router.post("/drafts/{draft_id}/approve")

@@ -1,6 +1,6 @@
 import type { Draft, DraftStatus } from "@/lib/types";
 import type { LiveSourceItem } from "@/lib/api/sources";
-import { get, patch, post } from "@/lib/api/client";
+import { del, get, patch, post } from "@/lib/api/client";
 
 /**
  * `POST /generate`, `GET /drafts`, `GET /drafts/{id}`, `PATCH /drafts/{id}`,
@@ -107,4 +107,14 @@ export async function generate(request: GenerateRequest): Promise<number[]> {
  */
 export async function regenerateHero(id: number): Promise<Draft> {
   return post<Draft>(`/drafts/${id}/image?new_hero=true`, {});
+}
+
+/**
+ * Gone for good, pictures and all.
+ *
+ * Reject is the reversible one — a decision that stays on the record. This is
+ * for a row nobody should have to look at again.
+ */
+export async function deleteDraft(id: number): Promise<void> {
+  await del(`/drafts/${id}`);
 }

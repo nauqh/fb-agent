@@ -2,9 +2,18 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Loader2, TriangleAlert } from "lucide-react";
+import {
+  AlertTriangle,
+  Loader2,
+  MoreHorizontal,
+  Pencil,
+  Rocket,
+  Trash2,
+  X,
+} from "lucide-react";
+import { toast } from "sonner";
 
-import { listDrafts } from "@/lib/api/drafts";
+import { deleteDraft, listDrafts, rejectDraft } from "@/lib/api/drafts";
 import { listPages } from "@/lib/api/pages";
 import { fullDate } from "@/lib/format";
 import type { Draft, Page } from "@/lib/types";
@@ -13,6 +22,21 @@ import { cn } from "@/lib/utils";
 import { ViewFullButton } from "@/components/image-lightbox";
 import { PageBadge } from "@/components/page-badge";
 import { QUEUE_PAGE_SIZE, QueuePagination } from "@/components/queue-pagination";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 
 /**
@@ -37,7 +61,7 @@ export function ReviewList() {
    * A run in flight is not "needs review" yet, but hiding it means pressing
    * Generate appears to do nothing — the queue has to show the work arriving.
    */
-  const { data: drafts, loading } = useQuery(
+  const { data: drafts, loading, refresh } = useQuery(
     () => listDrafts(),
     [],
     {
@@ -93,6 +117,9 @@ export function ReviewList() {
                 <th className="w-56 px-5 py-3 font-medium">Page</th>
                 <th className="w-44 px-5 py-3 font-medium">Created</th>
                 <th className="w-40 px-5 py-3 font-medium">Status</th>
+                <th className="w-16 px-5 py-3 text-right font-medium">
+                  <span className="sr-only">Actions</span>
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -101,6 +128,7 @@ export function ReviewList() {
                   key={draft.id}
                   draft={draft}
                   page={pages?.find((candidate) => candidate.id === draft.page_id)}
+                  onChanged={refresh}
                 />
               ))}
             </tbody>
@@ -113,7 +141,15 @@ export function ReviewList() {
   );
 }
 
-function Row({ draft, page }: { draft: Draft; page?: Page }) {
+function Row({
+  draft,
+  page,
+  onChanged,
+}: {
+  draft: Draft;
+  page?: Page;
+  onChanged: () => void;
+}) {
   const router = useRouter();
   const generating = draft.status === "generating";
 
@@ -204,59 +240,169 @@ function Row({ draft, page }: { draft: Draft; page?: Page }) {
         ) : null}
       </td>
 
+      {/* The row opens the draft; this must not, so every branch stops the
+          click before it reaches the <tr>. */}
+      <td className="px-5 py-4 align-middle text-right" onClick={(e) => e.stopPropagation()}>
+        {generating ? null : <RowMenu draft={draft} onChanged={onChanged} />}
+      </td>
     </tr>
   );
 }
 
+function RowMenu({ draft, onChanged }: { draft: Draft; onChanged: () => void }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+
+  async function run(work: () => Promise<unknown>, done: string) {
+    setBusy(true);
+    try {
+      await work();
+      toast(done);
+      onChanged();
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Action failed");
+    } finally {
+      setBusy(false);
+      setConfirming(false);
+    }
+  }
+
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            disabled={busy}
+            aria-label="Actions"
+            className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
+          >
+            {busy ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <MoreHorizontal className="size-4" />
+            )}
+          </Button>
+        </DropdownMenuTrigger>
+
+        <DropdownMenuContent>
+          <DropdownMenuItem onSelect={() => router.push(`/review/${draft.id}`)}>
+            <Pencil className="size-4" />
+            Review
+          </DropdownMenuItem>
+
+          {/* Disabled rather than hidden: publishing is the point of the whole
+              app and its absence is worth stating. Nothing pushes to Facebook
+              in v1 — the old system still does that. */}
+          <DropdownMenuItem
+            disabled
+            title="Not in v1 — the old system still publishes."
+          >
+            <Rocket className="size-4" />
+            Publish now
+          </DropdownMenuItem>
+
+          <DropdownMenuSeparator />
+
+          {draft.status === "rejected" ? null : (
+            <DropdownMenuItem
+              destructive
+              onSelect={() => void run(() => rejectDraft(draft.id), "Rejected.")}
+            >
+              <X className="size-4" />
+              Reject
+            </DropdownMenuItem>
+          )}
+
+          <DropdownMenuItem
+            destructive
+            onSelect={(event) => {
+              // The menu closes on select, so the dialog has to be opened after
+              // it goes rather than from inside it.
+              event.preventDefault();
+              setConfirming(true);
+            }}
+          >
+            <Trash2 className="size-4" />
+            Delete
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      {/* Reject is undoable and needs no ceremony. Delete removes the row and
+          both pictures with no way back, so it asks first. */}
+      <Dialog open={confirming} onOpenChange={setConfirming}>
+        <DialogContent className="sm:max-w-md">
+          <DialogTitle>Delete this draft?</DialogTitle>
+          <DialogDescription>
+            The draft and its images are removed for good. Reject instead if you
+            only want it out of the queue.
+          </DialogDescription>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setConfirming(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={busy}
+              onClick={() => void run(() => deleteDraft(draft.id), "Deleted.")}
+            >
+              {busy ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
 /**
- * A pill per status, coloured by what it means rather than decoratively.
+ * A pill per status. Outlined, not filled.
  *
- * Amber is the queue itself — the thing this screen exists for — so it draws
- * the eye. Green is the only end state that is good; red is the only one that
- * lost work. Rejected is deliberately grey: a decision that was made, not a
- * problem to fix.
+ * Two louder versions came before this one — tinted backgrounds that read as
+ * neon, then solid fills that shouted — and a queue is mostly one status, so
+ * whatever the majority looks like becomes the texture of the whole screen. A
+ * thin border with coloured type says the same thing and lets the pictures
+ * carry the page.
+ *
+ * Colour only where it means something: green for the one end state that is
+ * good, red for the one that lost work. Pending review and Rejected are plain,
+ * being respectively the common case and a decision already made.
  *
  * Keyed on `status`, never on `error`. A row the startup sweep touched while
  * its task was still running kept a stale error string, and an earlier version
  * of this rendered a finished draft as failed on the strength of it.
  */
 const STATUS: Record<string, { label: string; className: string }> = {
-  generating: {
-    label: "Generating",
-    className: "border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300",
-  },
-  review: {
-    label: "Pending review",
-    className: "border-amber-500/30 bg-amber-500/15 text-amber-700 dark:text-amber-300",
-  },
+  generating: { label: "Generating", className: "border-border text-muted-foreground" },
+  review: { label: "Pending review", className: "border-border text-foreground" },
   approved: {
     label: "Approved",
-    className: "border-emerald-500/30 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
+    className: "border-emerald-600/35 text-emerald-700 dark:text-emerald-400",
   },
-  rejected: {
-    label: "Rejected",
-    className: "border-transparent bg-muted text-muted-foreground",
-  },
+  rejected: { label: "Rejected", className: "border-border text-muted-foreground" },
   failed: {
     label: "Failed",
-    className: "border-destructive/30 bg-destructive/10 text-destructive",
+    className: "border-red-600/35 text-red-700 dark:text-red-400",
   },
 };
 
 function StatusBadge({ draft }: { draft: Draft }) {
   const tone = STATUS[draft.status] ?? {
     label: draft.status,
-    className: "border-border bg-muted text-muted-foreground",
+    className: "border-border text-muted-foreground",
   };
 
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium",
+        "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium",
         tone.className,
       )}
     >
-      {draft.status === "failed" ? <TriangleAlert className="size-3" /> : null}
       {tone.label}
     </span>
   );

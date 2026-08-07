@@ -53,3 +53,9 @@ export function post<T>(path: string, body: unknown): Promise<T> {
 export function patch<T>(path: string, body: unknown): Promise<T> {
   return request<T>(path, { method: "PATCH", body: JSON.stringify(body) });
 }
+
+/** No return type: the one DELETE here answers 204, which has no body to parse. */
+export async function del(path: string): Promise<void> {
+  const response = await fetch(`${BASE}${path}`, { method: "DELETE" });
+  if (!response.ok) throw new Error(await detail(response));
+}

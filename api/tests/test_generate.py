@@ -458,3 +458,33 @@ def test_a_draft_stays_generating_until_its_image_exists(client, written, monkey
 
     assert seen == ["generating"], "the queue must not call it reviewable yet"
     assert client.get("/drafts/1").json()["status"] == "review", "and it settles after"
+
+
+def test_deleting_a_draft_takes_its_pictures_with_it(client, written, illustrated):
+    """Otherwise `media/` grows with files no row can reach."""
+    from app import media
+
+    client.post("/generate", json={"page_ids": [1], "topic": "x"})
+    row = client.get("/drafts/1").json()
+    files = [
+        media.store.path(row["hero_image_path"]),
+        media.store.path(row["composed_image_path"]),
+    ]
+    assert all(f.exists() for f in files)
+
+    assert client.delete("/drafts/1").status_code == 204
+
+    assert client.get("/drafts/1").status_code == 404
+    assert not any(f.exists() for f in files), "the pictures outlived the row"
+
+
+def test_a_draft_still_generating_cannot_be_deleted(client, session):
+    """Its background task is still writing to the row."""
+    session.add(Draft(page_id=1, status=DraftStatus.GENERATING))
+    session.commit()
+
+    assert client.delete("/drafts/1").status_code == 409
+
+
+def test_deleting_something_that_is_not_there_says_so(client):
+    assert client.delete("/drafts/999").status_code == 404
