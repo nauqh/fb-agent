@@ -26,7 +26,6 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   approveDraft,
   getDraft,
-  listDrafts,
   regenerateHero,
   rejectDraft,
   returnToReview,
@@ -49,7 +48,15 @@ interface Form {
   image_prompt: string;
 }
 
-export function DraftDetail({ draftId }: { draftId: number }) {
+export function DraftDetail({
+  draftId,
+  onDecided,
+}: {
+  draftId: number;
+  /** Close the drawer. Supplied by `DraftSheet` so a decision animates out the
+   *  same way a dismissal does. */
+  onDecided?: () => void;
+}) {
   const router = useRouter();
   const [editor, setEditor] = useState<{ key: string; form: Form | null }>({
     key: "",
@@ -138,21 +145,23 @@ export function DraftDetail({ draftId }: { draftId: number }) {
       if (action === "approve") await approveDraft(draftId);
       else await rejectDraft(draftId);
 
-      // Advance to the next draft still awaiting a decision, so approving in
-      // sequence drains the queue without a trip back to the index.
-      const remaining = await listDrafts({ status: "review" });
-      const next = remaining.find((candidate) => candidate.id !== draftId);
-
       toast(action === "approve" ? "Approved — it left the queue." : "Rejected.", {
         action: {
           label: "Undo",
           onClick: () => {
-            void returnToReview(draftId).then(() => router.push(`/review/${draftId}`));
+            // Puts the row back in the queue and leaves it there. Reopening the
+            // drawer would undo the decision *and* the dismissal, which is one
+            // more thing than was asked for.
+            void returnToReview(draftId);
           },
         },
       });
 
-      router.push(next ? `/review/${next.id}` : "/review");
+      // Back to the queue, never on to the next draft. Deciding one thing
+      // should not open another — the row leaving the list is the feedback, and
+      // the operator picks what to look at next.
+      if (onDecided) onDecided();
+      else router.push("/review");
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : "Action failed");
     } finally {

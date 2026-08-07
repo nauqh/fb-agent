@@ -26,13 +26,20 @@ export function DraftSheet({ draftId }: { draftId: number }) {
   const router = useRouter();
   const [closing, setClosing] = useState(false);
 
+  /** Slide out, then navigate. Shared so a decision closes the same way a
+   *  dismissal does — approving used to jump straight to the next draft's URL,
+   *  which swapped the contents underneath an open drawer. */
+  function close() {
+    if (closing) return;
+    setClosing(true);
+    setTimeout(() => router.push("/review"), CLOSE_MS);
+  }
+
   return (
     <Drawer
       open={!closing}
       onOpenChange={(next) => {
-        if (next || closing) return;
-        setClosing(true);
-        setTimeout(() => router.push("/review"), CLOSE_MS);
+        if (!next) close();
       }}
     >
       <DrawerContent>
@@ -40,7 +47,7 @@ export function DraftSheet({ draftId }: { draftId: number }) {
         <DrawerDescription>Review and edit draft {draftId}.</DrawerDescription>
         {/* The drawer scrolls, not the page behind it. */}
         <div className="min-h-0 flex-1 overflow-y-auto px-7 py-6">
-          <DraftDetail draftId={draftId} />
+          <DraftDetail draftId={draftId} onDecided={close} />
         </div>
       </DrawerContent>
     </Drawer>
