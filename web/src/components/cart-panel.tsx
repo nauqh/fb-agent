@@ -6,7 +6,6 @@ import { Sparkles, X } from "lucide-react";
 
 import { sourceKey, useCart } from "@/lib/cart";
 import { Button } from "@/components/ui/button";
-import { isFactual } from "@/lib/types";
 
 /**
  * The Cart, pinned beside the source grids.
@@ -49,9 +48,6 @@ export function CartPanel() {
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-xs font-medium">{item.author}</p>
                   <p className="line-clamp-2 text-xs text-muted-foreground">{item.text}</p>
-                  <p className="pt-1 text-[10px] uppercase tracking-wide text-muted-foreground/70">
-                    {isFactual(item.kind) ? "binds the story" : "style only"}
-                  </p>
                 </div>
                 <button
                   type="button"

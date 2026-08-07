@@ -25,7 +25,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import type { SourceKind } from "@/lib/types";
-import { isFactual } from "@/lib/types";
 import { chars, fullDate, metric, timeAgo } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -64,12 +63,10 @@ interface SourceCardProps {
 /**
  * One browsable Source Item.
  *
- * The card states which way the subject binds, because that is the single most
- * consequential thing about a Source Item and it is invisible otherwise: a
- * competitor post (`competitor_post`) is borrowed for *tone*, an RSS item or tweet
- * binds the *story*.
- * Getting it backwards produces confident, well-formed output about the wrong
- * subject, and nothing downstream catches it.
+ * How a kind binds the writer — a competitor post is borrowed for tone, an RSS
+ * item or tweet binds the story — is no longer stated here. It is still true,
+ * and `SourceKind.is_factual` still decides it server-side; the card said so in
+ * two words that raised more questions than they answered.
  *
  * Clicking the card ticks it, as it always has — the grid is a bulk picker and
  * ticking is the frequent action, so it keeps the whole surface. Reading the
@@ -81,7 +78,6 @@ interface SourceCardProps {
 export function SourceCard({ selected, pending, onToggle, ...item }: SourceCardProps) {
   const [open, setOpen] = useState(false);
   const { author, text, url, image_url, published_at, reactions, comments, shares, used } = item;
-  const factual = isFactual(item.kind);
 
   return (
     <div className="relative h-full">
@@ -111,9 +107,7 @@ export function SourceCard({ selected, pending, onToggle, ...item }: SourceCardP
               ) : null}
             </p>
             <p className="text-xs text-muted-foreground">
-              <span className={cn(factual ? "text-foreground/70" : "")}>
-                {factual ? "Binds the story" : "Style only"}
-              </span>
+              {KIND_LABEL[item.kind]}
               <span className="mx-1.5">·</span>
               {timeAgo(published_at)}
             </p>
@@ -192,8 +186,6 @@ export function SourceCard({ selected, pending, onToggle, ...item }: SourceCardP
             <DialogTitle className="truncate pr-8">{author ?? "Unknown"}</DialogTitle>
             <DialogDescription>
               {KIND_LABEL[item.kind]}
-              <span className="mx-1.5">·</span>
-              {factual ? "Binds the story" : "Style only"}
               <span className="mx-1.5">·</span>
               {fullDate(published_at)}
             </DialogDescription>

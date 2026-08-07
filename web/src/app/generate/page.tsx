@@ -14,7 +14,6 @@ import { Separator } from "@/components/ui/separator";
 import { generate } from "@/lib/api/drafts";
 import { listPages } from "@/lib/api/pages";
 import { sourceKey, useCart } from "@/lib/cart";
-import { isFactual } from "@/lib/types";
 import { useQuery } from "@/lib/use-query";
 import { cn } from "@/lib/utils";
 
@@ -106,19 +105,7 @@ export default function GenerateScreen() {
               {cart.items.map((item) => (
                 <li key={sourceKey(item)} className="flex items-start gap-3 px-4 py-3">
                   <div className="min-w-0 flex-1">
-                    <p className="flex items-center gap-2 text-sm font-medium">
-                      {item.author}
-                      <span
-                        className={cn(
-                          "rounded px-1.5 py-0.5 text-[10px] font-normal uppercase tracking-wide",
-                          isFactual(item.kind)
-                            ? "bg-foreground/10 text-foreground/70"
-                            : "bg-muted text-muted-foreground",
-                        )}
-                      >
-                        {isFactual(item.kind) ? "binds the story" : "style only"}
-                      </span>
-                    </p>
+                    <p className="text-sm font-medium">{item.author}</p>
                     <p className="line-clamp-2 pt-0.5 text-sm text-muted-foreground">
                       {item.text}
                     </p>
