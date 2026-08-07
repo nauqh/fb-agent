@@ -187,7 +187,19 @@ class Settings(BaseSettings):
     timezone: str = "Asia/Ho_Chi_Minh"
 
     gemini_api_key: str = ""
-    gemini_text_model: str = "gemini-2.5-flash"
+    gemini_text_model: str = "gemini-3.5-flash"
+    """Verified against the key before being set, which is the only way to know.
+
+    `gemini-2.5-flash` was the default here for exactly one session and answered
+    404 *"no longer available to new users"* — the third pinned id to rot in this
+    repo, after `gemini-2.0-flash` and a retired image model. It was still listed
+    by `models.list()` while 404ing on use, so the catalogue is not evidence; a
+    real call is.
+
+    This is a pinned version and will rot the same way eventually. When it does,
+    `gemini-flash-latest` is the alias to fall back to — Google repoints it, so
+    it cannot expire on somebody else's schedule.
+    """
     gemini_image_model: str = "gemini-2.5-flash-image"
     gemini_image_fallback_models: str = ""
     """Comma-separated, tried in order after the configured model. Empty disables.
