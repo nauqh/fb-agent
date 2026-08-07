@@ -16,7 +16,6 @@ Two things are deliberate and easy to undo by accident:
 """
 
 import io
-from pathlib import Path
 
 import resvg_py
 from PIL import Image

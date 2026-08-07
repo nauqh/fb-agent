@@ -94,17 +94,6 @@ export interface Draft {
   updated_at: string;
 }
 
-/**
- * Whether the *subject* binds the writer.
- *
- * Derived from `kind`, never stored — a stored copy is a second truth, and when
- * it drifts the model still returns confident, well-formed output about the
- * wrong story. Mirrors `SourceKind.is_factual` in models.py.
- */
-export function isFactual(kind: SourceKind): boolean {
-  return kind !== "competitor_post";
-}
-
 /** A prompt file on disk, as Settings displays it. Not a table. */
 export interface PromptFile {
   filename: string;
