@@ -18,5 +18,10 @@ node_modules/
 *.db-shm
 *.db.bak
 api/media/
+# Every .env variant, not just the two names we happen to use today: a
+# hand-made backup like .env.bak sits outside an exact-name rule and is
+# committable, which is a key in the history.
 .env
-.env.local
+.env.*
+# ...except the committed template, which carries no values.
+!.env.example
