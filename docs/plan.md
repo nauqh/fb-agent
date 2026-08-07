@@ -378,6 +378,23 @@ text through `layout.yml` reproduces its 6 line breaks word for word, its 45px
 line height, its 300px panel and its 820px hero. Keep that post as the golden
 fixture rather than inventing one.
 
+### Outcome — one trap, and it was a rule applied too widely
+
+- **`gemini-3.1-flash-image` answered 503 "high demand" and the run was over.**
+  The hero step deliberately retried nothing, on the reasoning that "a second
+  attempt is a second charge". That reasoning is sound for a *refusal* — the call
+  completed, returned a well-formed empty response, and was billed — and false
+  for a 503, which never reached a model and cost nothing. One rule had been
+  written for both failures because both arrive as an exception.
+
+  Fixed the same way Phase 3 fixed it for text, with two differences. The image
+  chain **cannot end on an alias**: Google publishes `gemini-flash-latest` for
+  text but no `-latest` for any image model, so every link is a pinned version
+  that will rot the way `gemini-2.0-flash` did above. And a fallback is
+  **reported** — a backup image model draws in a different style, so the swap
+  becomes a Draft warning instead of silent brand drift. `is_transient` now lives
+  in `app/transient.py`, shared, rather than copied per call site.
+
 ---
 
 ## Phase 5 — Review actions

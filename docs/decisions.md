@@ -70,6 +70,13 @@ value, so it becomes env (`GEMINI_TEXT_MODEL`, `GEMINI_IMAGE_MODEL`) — note
 these did already override the *code* defaults, so the code default is the value
 that must not be trusted.
 
+The hero has since moved up to `gemini-3.1-flash-image`, and the model carried
+over is now where it falls back to (`GEMINI_IMAGE_FALLBACK_MODELS`) — chosen as
+the backup precisely because it is the one the old system actually drew heroes
+on, so its output is known acceptable for this brand rather than merely
+available. See [design.md](design.md#configuration) on why every link in that
+chain is a pinned version that will eventually rot.
+
 ## Cut, with the evidence
 
 Each of these was verified against the running code or production data, not
