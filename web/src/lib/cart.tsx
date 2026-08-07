@@ -15,7 +15,8 @@ import type { LiveSourceItem } from "@/lib/api/sources";
  *
  * Client state, not persisted: there is no cart table, because nothing about a
  * Cart needs to survive that is not already a row. It lives in the root layout
- * so it survives navigation from Sources to Generate, the only journey it makes.
+ * so it survives navigation away from Sources and back — the Cart panel starts
+ * the run itself, so that is the only journey it makes.
  */
 
 /** Identity of a Source Item before it is a row. Matches the server's dedup key. */

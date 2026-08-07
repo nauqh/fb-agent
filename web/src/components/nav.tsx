@@ -10,7 +10,6 @@ import { cn } from "@/lib/utils";
 
 const LINKS = [
   { href: "/sources", label: "Sources" },
-  { href: "/generate", label: "Generate" },
   { href: "/review", label: "Review" },
   { href: "/settings", label: "Settings" },
 ] as const;
@@ -47,12 +46,7 @@ export function Nav() {
         <nav className="flex items-center gap-1">
           {LINKS.map((link) => {
             const active = pathname.startsWith(link.href);
-            const badge =
-              link.href === "/review"
-                ? queue?.review || null
-                : link.href === "/generate"
-                  ? cart.count || null
-                  : null;
+            const badge = link.href === "/review" ? queue?.review || null : null;
 
             return (
               <Link
@@ -82,6 +76,15 @@ export function Nav() {
         </nav>
 
         <div className="ml-auto flex items-center gap-3 text-xs text-muted-foreground">
+          {/* The Cart used to be a nav item, and its count rode on that link.
+              With the Generate screen gone the Cart lives only on Sources, so
+              without this a Cart filled and then navigated away from is
+              invisible — and it is in-memory state that a reload discards. */}
+          {cart.count ? (
+            <Link href="/sources" className="hover:text-foreground">
+              Cart · {cart.count}
+            </Link>
+          ) : null}
           {queue?.generating ? (
             <span className="inline-flex items-center gap-1.5">
               <span className="size-1.5 animate-pulse rounded-full bg-gold" />

@@ -15,9 +15,9 @@ whose every intermediate state was public to the next node.
 
 ```
         ┌───────────────────────────────┐
-        │  web/   Next.js               │   4 screens, no DB access
-        │  Sources · Generate · Review  │   talks only to /api over fetch
-        │  Settings                     │
+        │  web/   Next.js               │   3 screens, no DB access
+        │  Sources · Review · Settings  │   talks only to /api over fetch
+        │                               │
         └───────────────┬───────────────┘
                         │ HTTP + JSON
         ┌───────────────▼───────────────┐
@@ -406,9 +406,23 @@ what fixed it.
 
 ## Frontend
 
-Four screens — Sources, Generate, Review, Settings — in a fresh Next.js app. It
-holds no database credentials and no Supabase client; every read is `fetch` to
-`/api`. The Cart is client state, a list of ids, and is not persisted.
+Three screens — Sources, Review, Settings — in a fresh Next.js app. It holds no
+database credentials and no Supabase client; every read is `fetch` to `/api`.
+The Cart is client state, holding the items themselves, and is not persisted.
+
+There was a fourth, `Generate`, and removing it is the one frontend decision
+worth recording. It staged a run: the Cart again, the target Page, and
+`N sources × 1 page = N drafts`. The reasoning was that *how many* against
+*which Page* should be visible rather than buried in a page-picker dialog —
+sound for the old app's ten brands, and empty at one, where the Page cannot be
+chosen and the arithmetic multiplies by one. That left a confirmation screen for
+a decision with a single possible answer.
+
+So the Cart panel runs the generation itself and the count moved onto its button
+(`Generate 3 drafts`), which is both the thing the screen existed to show and a
+label on the click that now spends the money. The topic field was the only
+control unique to that screen; it lives in the Cart's empty state, which is when
+a topic run is the only kind available anyway.
 
 Server state is polled, not streamed. Polling is what the old system did and it
 is enough for a run measured in tens of seconds.
