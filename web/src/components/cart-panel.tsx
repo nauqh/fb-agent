@@ -57,7 +57,10 @@ export function CartPanel() {
       toast.success(`${ids.length} draft${ids.length === 1 ? "" : "s"} generating.`, {
         description: "Progress is on the Review screen.",
       });
-      router.push(`/review/${ids[0]}`);
+      // The queue, not the first draft. A run can produce several, and the one
+      // that happened to be first is not more interesting than the rest — the
+      // list shows all of them filling in, and the drawer would cover it.
+      router.push("/review");
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : "Generate failed");
     } finally {

@@ -143,7 +143,7 @@ export function DraftDetail({ draftId }: { draftId: number }) {
       const remaining = await listDrafts({ status: "review" });
       const next = remaining.find((candidate) => candidate.id !== draftId);
 
-      toast(action === "approve" ? `Approved — #${draftId} left the queue.` : `Rejected #${draftId}.`, {
+      toast(action === "approve" ? "Approved — it left the queue." : "Rejected.", {
         action: {
           label: "Undo",
           onClick: () => {
@@ -216,10 +216,7 @@ export function DraftDetail({ draftId }: { draftId: number }) {
           lived here and all of them are already in the row you clicked to get
           here — repeating them costs a line and tells you nothing new.
           `pr-10` keeps the heading clear of the drawer's close button. */}
-      <h2 className="flex items-center gap-2 pr-10 text-base font-medium">
-        <span className="font-mono text-sm text-muted-foreground">#{draft.id}</span>
-        {page?.name}
-      </h2>
+      <h2 className="pr-10 text-base font-medium">{page?.name}</h2>
 
       {draft.error ? (
         <div className="space-y-2 rounded-md border border-destructive/40 bg-destructive/5 p-3">
@@ -451,8 +448,7 @@ function Generating({ draft }: { draft: Draft }) {
   return (
     <div className="flex min-h-72 items-center justify-center rounded-lg border border-dashed p-10">
       <div className="w-full max-w-sm space-y-3">
-        <div className="flex items-center justify-between text-sm">
-          <span className="font-mono text-muted-foreground">#{draft.id}</span>
+        <div className="flex items-center justify-end text-sm">
           <span className="tabular-nums text-muted-foreground">{draft.progress_pct}%</span>
         </div>
         <div className="h-1 w-full overflow-hidden rounded-full bg-border">
