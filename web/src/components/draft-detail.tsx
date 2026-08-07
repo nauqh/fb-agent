@@ -33,7 +33,7 @@ import {
   updateDraft,
 } from "@/lib/api/drafts";
 import { listPages } from "@/lib/api/pages";
-import { chars, timeAgo, words } from "@/lib/format";
+import { chars, words } from "@/lib/format";
 import type { Draft } from "@/lib/types";
 import { useQuery } from "@/lib/use-query";
 import { cn } from "@/lib/utils";
@@ -212,33 +212,14 @@ export function DraftDetail({ draftId }: { draftId: number }) {
   // viewport edge, which inside the drawer was just dead space under Approve.
   return (
     <div className="space-y-6">
-      {/* `pr-10` keeps the status badge clear of the sheet's close button. */}
-      <div className="flex flex-wrap items-center justify-between gap-3 pr-10">
-        <div className="min-w-0">
-          <h2 className="flex items-center gap-2 text-base font-medium">
-            <span className="font-mono text-sm text-muted-foreground">#{draft.id}</span>
-            {page?.name}
-          </h2>
-          {/* A topic is a whole sentence and pushed the date off the line.
-              Clipped with the full text on hover — it identifies the draft,
-              it does not need to be readable here. */}
-          <p className="flex min-w-0 gap-1.5 pt-0.5 text-xs text-muted-foreground">
-            <span className="truncate" title={draft.topic ?? undefined}>
-              {draft.topic ?? `source item ${draft.source_item_id}`}
-            </span>
-            <span>·</span>
-            <span className="shrink-0">{timeAgo(draft.created_at)}</span>
-          </p>
-        </div>
-        <span
-          className={cn(
-            "rounded px-2 py-1 text-xs",
-            decided ? "bg-muted text-muted-foreground" : "bg-foreground/10",
-          )}
-        >
-          {draft.status}
-        </span>
-      </div>
+      {/* Just what the draft is. The status pill, the topic and the age all
+          lived here and all of them are already in the row you clicked to get
+          here — repeating them costs a line and tells you nothing new.
+          `pr-10` keeps the heading clear of the drawer's close button. */}
+      <h2 className="flex items-center gap-2 pr-10 text-base font-medium">
+        <span className="font-mono text-sm text-muted-foreground">#{draft.id}</span>
+        {page?.name}
+      </h2>
 
       {draft.error ? (
         <div className="space-y-2 rounded-md border border-destructive/40 bg-destructive/5 p-3">
