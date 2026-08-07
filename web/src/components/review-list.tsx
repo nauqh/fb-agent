@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Loader2, TriangleAlert } from "lucide-react";
 
 import { listDrafts } from "@/lib/api/drafts";
@@ -11,6 +12,7 @@ import { useQuery } from "@/lib/use-query";
 import { cn } from "@/lib/utils";
 import { ViewFullButton } from "@/components/image-lightbox";
 import { PageBadge } from "@/components/page-badge";
+import { QUEUE_PAGE_SIZE, QueuePagination } from "@/components/queue-pagination";
 import { Skeleton } from "@/components/ui/skeleton";
 
 /**
@@ -27,6 +29,7 @@ import { Skeleton } from "@/components/ui/skeleton";
  */
 export function ReviewList() {
   const { data: pages } = useQuery(() => listPages(), []);
+  const [page, setPage] = useState(1);
 
   /**
    * `generating` rows are folded into every filter.
@@ -46,8 +49,27 @@ export function ReviewList() {
     },
   );
 
+  const total = drafts?.length ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / QUEUE_PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const shown = useMemo(
+    () => drafts?.slice((safePage - 1) * QUEUE_PAGE_SIZE, safePage * QUEUE_PAGE_SIZE) ?? [],
+    [drafts, safePage],
+  );
+
+  // Rejecting the last draft on the last page would otherwise strand the queue
+  // on a page that no longer exists.
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3">
+    // Not `flex-1`: the shell is `h-screen` and does not scroll the page, so a
+    // `flex-1` list sized itself to the viewport and never overflowed — while
+    // the bordered container's `overflow-hidden` quietly clipped every row past
+    // the fold. Nothing scrolled and nothing said so. Sized to its content, the
+    // layout's own `overflow-y-auto` has something to scroll.
+    <div className="flex flex-col gap-3">
 
       {/* Hugs its rows. A `flex-1` container left a tall empty bordered box
           under a two-draft queue, which read as something failing to load. */}
@@ -74,7 +96,7 @@ export function ReviewList() {
               </tr>
             </thead>
             <tbody className="divide-y">
-              {drafts?.map((draft) => (
+              {shown.map((draft) => (
                 <Row
                   key={draft.id}
                   draft={draft}
@@ -84,6 +106,8 @@ export function ReviewList() {
             </tbody>
           </table>
         )}
+
+        <QueuePagination totalItems={total} page={safePage} onPageChange={setPage} />
       </div>
     </div>
   );
