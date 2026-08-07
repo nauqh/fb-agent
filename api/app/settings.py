@@ -187,9 +187,9 @@ class Settings(BaseSettings):
     timezone: str = "Asia/Ho_Chi_Minh"
 
     gemini_api_key: str = ""
-    gemini_text_model: str = "gemini-3.5-flash"
-    gemini_image_model: str = "gemini-3.1-flash-image"
-    gemini_image_fallback_models: str = "gemini-2.5-flash-image"
+    gemini_text_model: str = "gemini-2.5-flash"
+    gemini_image_model: str = "gemini-2.5-flash-image"
+    gemini_image_fallback_models: str = ""
     """Comma-separated, tried in order after the configured model. Empty disables.
 
     Env rather than code because these **will** rot, and unlike the text chain

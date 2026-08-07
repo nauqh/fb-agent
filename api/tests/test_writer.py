@@ -314,8 +314,9 @@ def test_no_pinned_version_is_a_fallback(retired):
 
 
 def test_every_fallback_is_an_alias_so_it_cannot_be_retired():
-    """An alias is repointed by the provider; a pinned version just expires."""
-    assert writer.FALLBACK_MODELS
+    """Vacuous while the list is empty, and that is the point: if a link is ever
+    added back it must be an alias. A provider repoints an alias; a pinned
+    version just expires, and does so silently."""
     assert all(name.endswith("-latest") for name in writer.FALLBACK_MODELS)
 
 

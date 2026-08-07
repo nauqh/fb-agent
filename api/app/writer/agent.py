@@ -115,28 +115,18 @@ def build_agent(page: Page, model: object | None = None) -> Agent:
     return agent
 
 
-FALLBACK_MODELS = ("gemini-flash-latest",)
-"""Tried in order when the configured model is unavailable.
+FALLBACK_MODELS: tuple[str, ...] = ()
+"""Empty: one model, until there is a reason for a second.
 
-Ported from the old repo, which kept the same chain
-(`generate-with-fallback.ts:9`) — and needed it. `gemini-3.5-flash` answered
-503 "experiencing high demand" three times while this was being built, and one
-of those killed a real run.
+The scar is worth keeping even with nothing in the list. Every pinned version
+rotted out of this chain — `gemini-2.0-flash` answered 404 "no longer
+available", then `gemini-2.5-flash` answered *"no longer available to new
+users"*, alive on the project the key belonged to and dead on one created that
+afternoon. Neither was detectable from `models.list()`.
 
-**Every pinned version has now rotted out of this chain, both on 2026-08-06.**
-`gemini-2.0-flash` went first, answering 404 "no longer available" — the same
-rot the old repo hit on the image side (`376afdc`). `gemini-2.5-flash` went
-hours later, and its wording is the lesson: *"no longer available to new
-users."* It kept working on the project the key had always belonged to and
-404'd on a project created that afternoon, so a pinned model can be alive for
-you and dead for a clone. Neither was detectable from `models.list()`, which
-went on listing both.
-
-That leaves one link, and it is an alias on purpose. Google repoints
-`gemini-flash-latest`, so it cannot rot the way the pinned ones did. Adding a
-pinned version back would buy a second link that expires silently on somebody
-else's project — worse than no link, because it fails only where nobody is
-looking.
+So if a link is added back, make it an alias like `gemini-flash-latest`, which
+Google repoints. A pinned one expires on somebody else's schedule and fails only
+where nobody is looking.
 """
 
 @lru_cache(maxsize=4)
