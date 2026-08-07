@@ -15,6 +15,21 @@ from google.genai import types
 from app.settings import Layout, settings
 from app.settings import layout as default_layout
 from app.transient import is_transient
+from app.writer import prompts
+
+NO_TEXT_REMINDER = (
+    "\n\nREMINDER: Your output must be a photograph with ZERO readable text, "
+    "ZERO hashtags, ZERO headline typography, ZERO black bars, and ZERO "
+    "post-card layout. Text overlay is composited in post-processing — not by you."
+)
+"""Appended to every hero prompt, on top of the exclusions in `image.txt`.
+
+Verbatim from `GEMINI_HERO_NO_TEXT_SUFFIX` (`image-prompt.ts:72`). Saying it
+twice is not an oversight: the style block goes in as a system instruction and
+this rides on the prompt itself, and the one thing that ruins a hero beyond
+saving is typography baked into the photograph — the panel is composited over
+it, so a headline in the picture is a headline on the post.
+"""
 
 SUPPORTED_RATIOS: dict[str, float] = {
     "1:1": 1.0,
@@ -81,6 +96,16 @@ def aspect_ratio_for(width: int, height: int) -> str:
 def generate(prompt: str, hero_height_px: int, layout: Layout | None = None) -> Hero:
     """Image bytes for `prompt`, shaped for the hero box, and the model that drew it.
 
+    **`prompt` is the subject, not the brief.** The brief is `prompts/image.txt`
+    — photorealism, mid-shot composition, the card's layers, the exclusions —
+    and it is read here rather than passed in, because it was passed in nowhere:
+    this function took only the writer's per-draft sentence, so every hero this
+    repo has ever drawn was ordered without any of the brand's photography rules.
+    `prompts.image_prompt()` had no callers at all. The old system sent the same
+    block as `systemInstruction` on every call
+    (`facebookImageGenerateService.ts:151`), which is what makes its heroes and
+    these comparable.
+
     **A refusal and an outage are not the same failure, and only one is billed.**
     This used to retry neither, on the reasoning that "a second attempt is a
     second charge". That holds for a refusal — the model answered, the answer was
@@ -101,16 +126,18 @@ def generate(prompt: str, hero_height_px: int, layout: Layout | None = None) -> 
     client = genai.Client(api_key=settings.gemini_api_key)
     ratio = aspect_ratio_for(layout.image.width, hero_height_px)
     config = types.GenerateContentConfig(
+        system_instruction=prompts.image_prompt(layout),
         response_modalities=["IMAGE"],
         image_config=types.ImageConfig(aspect_ratio=ratio),
     )
+    contents = prompt + NO_TEXT_REMINDER
 
     last: Exception | None = None
     for model in settings.image_fallback_chain:
         for attempt in range(ATTEMPTS_PER_MODEL):
             try:
                 response = client.models.generate_content(
-                    model=model, contents=prompt, config=config
+                    model=model, contents=contents, config=config
                 )
             except Exception as error:  # noqa: BLE001 — reported on the row, not raised at the caller
                 # Includes 404 "no longer available", which is how a pinned

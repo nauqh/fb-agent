@@ -43,9 +43,11 @@ class FakeModels:
     def __init__(self, script):
         self.script = list(script)
         self.calls: list[str] = []
+        self.sent: list[tuple[str, object]] = []
 
     def generate_content(self, *, model, contents, config):
         self.calls.append(model)
+        self.sent.append((contents, config))
         outcome = self.script.pop(0)
         if isinstance(outcome, Exception):
             raise outcome
@@ -154,6 +156,46 @@ def test_the_chain_never_lists_the_same_model_twice(monkeypatch):
     )
 
     assert settings.image_fallback_chain == ("primary-image", "backup-image")
+
+
+def test_the_brand_photography_rules_are_sent_with_every_hero(transport):
+    """The bug this guards shipped, silently, for the life of the repo.
+
+    `generate` took only the writer's one-line subject and sent exactly that, so
+    every hero was ordered without photorealism, without the mid-shot rule,
+    without the "keep the top-right clear" instruction the watermark depends on,
+    and without the exclusions — `prompts.image_prompt()` had no callers at all.
+    Nothing failed; the pictures were just quietly off-brand, which is the kind
+    of defect a comparison against the old system would have blamed on the model.
+    """
+    models = transport(_drawn())
+
+    REAL_GENERATE("A woman at a drafting table.", 800)
+
+    [(contents, config)] = models.sent
+    assert "photorealistic" in config.system_instruction.lower(), (
+        "the style block from prompts/image.txt was not sent"
+    )
+    assert "top-right" in config.system_instruction, "nor the rule the watermark needs"
+    assert "A woman at a drafting table." in contents, "the subject still leads"
+    assert "ZERO readable text" in contents, "the no-text reminder rides on the prompt"
+
+
+def test_the_panel_share_in_the_prompt_comes_from_the_layout(transport):
+    """`{panel_pct}` is substituted, not sent as a literal brace.
+
+    The old system hardcoded this number in the prompt and rendered a different
+    one, which is exactly the drift `prompts._tokens` exists to stop.
+    """
+    from app.settings import layout
+
+    models = transport(_drawn())
+
+    REAL_GENERATE("a ship", 800)
+
+    [(_, config)] = models.sent
+    assert "{panel_pct}" not in config.system_instruction
+    assert f"~{round(layout.panel.ratio * 100)}%" in config.system_instruction
 
 
 def test_a_missing_key_fails_before_any_call(monkeypatch):
