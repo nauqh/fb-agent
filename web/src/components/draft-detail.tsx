@@ -347,7 +347,7 @@ export function DraftDetail({ draftId }: { draftId: number }) {
                   />
                 </Field>
 
-                <Field label="Hashtags" hint={`${form.hashtags.length}`}>
+                <Field label="Hashtags" hint={`${form.hashtags.length} · space separated, # added if you omit it`}>
                   <Input
                     value={form.hashtags.join(" ")}
                     onChange={(event) =>

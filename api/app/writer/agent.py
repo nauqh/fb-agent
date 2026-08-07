@@ -8,7 +8,7 @@ rules ran afterwards as warnings nobody had to act on.
 
 from functools import lru_cache
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from pydantic_ai import Agent, ModelRetry, RunContext
 from pydantic_ai.models.google import GoogleModel, GoogleModelSettings
 from pydantic_ai.providers.google import GoogleProvider
@@ -54,8 +54,17 @@ class DraftContent(BaseModel):
     highlight_phrases: list[str] = Field(
         description="5-8 short substrings copied verbatim out of the hook."
     )
-    hashtags: list[str] = Field(default_factory=list)
+    hashtags: list[str] = Field(
+        default_factory=list,
+        description="Each one starting with #, no spaces inside a tag.",
+    )
     image_prompt: str = Field(description="A photorealistic hero prompt for this story.")
+
+    @field_validator("hashtags")
+    @classmethod
+    def _hashes(cls, values: list[str]) -> list[str]:
+        """Normalised rather than retried: a missing `#` is not worth a call."""
+        return validators.normalise_hashtags(values)
 
 
 def _instructions(page: Page, layout: Layout) -> str:

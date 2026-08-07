@@ -14,6 +14,7 @@ from sqlmodel import Session, select
 from app import generate
 from app.db import get_session
 from app.models import Draft, DraftStatus, Page, SourceItemBase
+from app.writer import validators
 
 router = APIRouter(tags=["drafts"])
 
@@ -114,6 +115,11 @@ def update_draft(
         field in changes and changes[field] != getattr(draft, field)
         for field in DRAWN_FIELDS
     )
+
+    if "hashtags" in changes:
+        # The box is free text split on spaces, so this path never sees the
+        # model's schema. Same rule, applied where the edit lands.
+        changes["hashtags"] = validators.normalise_hashtags(changes["hashtags"])
 
     for field, value in changes.items():
         setattr(draft, field, value)
