@@ -149,7 +149,7 @@ def _run_one(session: Session, draft_id: int) -> None:
             else None
         )
 
-        _progress(session, draft, "writing", 20)
+        _progress(session, draft, "writing the post", 20)
         result = writer.write(page, source, draft.topic)
         content = result.output
 
@@ -170,8 +170,13 @@ def _run_one(session: Session, draft_id: int) -> None:
         draft.warnings += validators.advise(content.first_comment)
         draft.warnings += _highlight_warnings(content)
 
-        draft.status = DraftStatus.REVIEW
-        _progress(session, draft, "illustrating", 60)
+        # Deliberately still `generating`. Setting `review` here — before the
+        # hero exists — put a finished-looking row in the queue with a blank
+        # thumbnail, and stopped the client polling, because it polls only while
+        # something is `generating`. The picture then landed twenty seconds
+        # later with nothing left to fetch it, so it never appeared until the
+        # operator reloaded. A draft is not in review until it is whole.
+        _progress(session, draft, "drawing the image", 60)
 
         # Rebound, never `+=`. `warnings` is a plain JSON column with no
         # mutation tracking, so an in-place append after the last commit is

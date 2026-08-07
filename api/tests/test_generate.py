@@ -433,3 +433,28 @@ def test_saving_without_a_hero_does_not_fail(client, written, monkeypatch):
 
     assert after.status_code == 200
     assert after.json()["hook"] == "Saved anyway."
+
+
+def test_a_draft_stays_generating_until_its_image_exists(client, written, monkeypatch):
+    """The row used to say "review" while the hero was still being drawn.
+
+    `status` was set before `build_image`, so the queue showed a finished-looking
+    draft with a blank thumbnail — and the client stops polling once nothing is
+    `generating`, so the picture landed twenty seconds later with nothing left to
+    fetch it. It never appeared until the operator reloaded.
+    """
+    from app.image import hero
+
+    seen: list[str] = []
+
+    def slow(*_a, **_k):
+        # Whatever the row says at the moment the hero is being drawn is what
+        # the queue would have rendered.
+        seen.append(client.get("/drafts/1").json()["status"])
+        raise hero.HeroError("no image today")
+
+    monkeypatch.setattr(hero, "generate", slow)
+    client.post("/generate", json={"page_ids": [1], "topic": "x"})
+
+    assert seen == ["generating"], "the queue must not call it reviewable yet"
+    assert client.get("/drafts/1").json()["status"] == "review", "and it settles after"

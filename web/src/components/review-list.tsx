@@ -142,8 +142,13 @@ function Row({ draft, page }: { draft: Draft; page?: Page }) {
               />
             </>
           ) : generating ? (
-            <div className="flex size-full items-center justify-center">
+            // The empty frame is where the eye goes, so it says what it is
+            // waiting for rather than spinning anonymously.
+            <div className="flex size-full flex-col items-center justify-center gap-2 px-2 text-center">
               <Loader2 className="size-4 animate-spin text-muted-foreground" />
+              <span className="text-[10px] leading-tight text-muted-foreground">
+                {draft.progress_pct >= 60 ? "Drawing the image" : "Writing the post"}
+              </span>
             </div>
           ) : null}
         </div>
