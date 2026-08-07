@@ -110,7 +110,8 @@ render.
 
 Model ids do **not** live there — they are deployment config and change without
 warning (the previous system had to ship `fix(gemini): replace retired image
-fallback model`). `GEMINI_TEXT_MODEL` and `GEMINI_IMAGE_MODEL` go to env.
+fallback model`). `GEMINI_TEXT_MODEL`, `GEMINI_IMAGE_MODEL` and
+`GEMINI_IMAGE_FALLBACK_MODELS` go to env.
 
 Ten of the settings never varied in production anyway — across all 10 page
 rows, the four paddings, `panel_color`, `text_align` and `model_id` each had

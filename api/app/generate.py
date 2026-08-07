@@ -19,6 +19,7 @@ from app.db import get_engine
 from app.image import compositor, hero
 from app.image import text as overlay
 from app.models import Draft, DraftStatus, Page, SourceItem, SourceItemBase, SourceKind
+from app.settings import settings
 from app.sources import rss
 from app.writer import agent as writer
 from app.writer import validators
@@ -227,7 +228,17 @@ def build_image(session: Session, draft: Draft, page: Page) -> list[str]:
         if draft.hero_image_path:
             image_bytes = media.store.path(draft.hero_image_path).read_bytes()
         else:
-            image_bytes = hero.generate(draft.image_prompt or "", plan.hero_height_px)
+            drawn = hero.generate(draft.image_prompt or "", plan.hero_height_px)
+            image_bytes = drawn.data
+            if drawn.model != settings.gemini_image_model:
+                # A backup model draws in a different style, and the operator is
+                # the only one who can judge whether this one is off-brand. A
+                # text fallback needs no such notice; a picture does.
+                warnings.append(
+                    f"{IMAGE_WARNING}drawn by {drawn.model}, not "
+                    f"{settings.gemini_image_model}, which was unavailable. "
+                    "Check it looks right, or rebuild later."
+                )
             draft.hero_image_path = media.store.save(
                 image_bytes, media.filename(draft.id or 0, "hero")
             )

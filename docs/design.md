@@ -68,7 +68,7 @@ Seven, each stated as its interface. Everything else is implementation.
 |---|---|---|
 | `Source` | `fetch(...) -> list[SourceItem]` | three unrelated protocols |
 | `Writer` | `write(page, source) -> DraftContent` | prompt assembly, structured output, brand-rule retries |
-| `HeroImage` | `generate(prompt, w, h) -> bytes` | `google-genai`, model id, safety refusals |
+| `HeroImage` | `generate(prompt, w, h) -> Hero` | `google-genai`, the model chain, retries, safety refusals |
 | `Compositor` | `compose(hero, text, highlights, watermark) -> bytes` | measurement, wrapping, panel geometry, SVG, rasterisation |
 | `MediaStore` | `save(bytes, name) -> url` | where files live and how they become URLs |
 | `Metricool` | `pages()`, `competitors(page)`, `competitor_posts(page)` | auth, blog-id resolution, lookback windows |
@@ -222,7 +222,11 @@ flowchart TD
     Save --> Plan["<b>text.py</b> — measure, wrap,<br/>size the panel<br/><i>pure, no spend</i>"]
     Plan --> Hero["<b>hero.py</b> — Gemini image<br/><i>progress: illustrating, 60%</i>"]
 
-    Hero -->|"refusal or error"| Warn["warning on the row<br/><i>status stays review</i>"]
+    Hero -->|"503 / 429 overloaded"| HeroRetry["retry same model<br/><i>×3, 1s then 2s</i>"]
+    HeroRetry -->|"still down"| HeroFallback["step down<br/>GEMINI_IMAGE_FALLBACK_MODELS"]
+    HeroRetry --> Hero
+    HeroFallback --> Hero
+    Hero -->|"refusal, 4xx, or chain spent"| Warn["warning on the row<br/><i>status stays review</i>"]
     Hero -->|"bytes"| StoreHero["MediaStore: hero_image_path"]
     StoreHero --> Composite["<b>compositor.py</b><br/>hero + panel + gold + watermark"]
     Composite --> StoreOut["MediaStore: composed_image_path"]
@@ -244,6 +248,27 @@ keeping. A writer failure is fatal to the draft — there is no post without cop
 An image failure is **not**: the row stays at `review` with its caption intact
 and the reason in `warnings`, because throwing away a good caption over one
 refused prompt is the more expensive mistake.
+
+A second asymmetry sits inside the hero step, and it is about billing rather than
+severity. **A refusal and an outage are not the same failure.** A refusal is a
+completed call — the model answered, the answer was a well-formed empty response,
+and Google charged for it — so retrying buys the same rejection twice and a
+second model refuses the same prompt for the same reason. A 503 never reached a
+model at all: nothing was generated, nothing was billed, and asking again is
+free. The hero step originally retried neither, reasoning that "a second attempt
+is a second charge"; that is true of the first case and simply false of the
+second, which is how a transient outage came to kill whole runs. The writer
+carries the same scar (`FALLBACK_MODELS` in `writer/agent.py`).
+
+So the image side has the same ladder now, minus the alias at the bottom — see
+[Configuration](#configuration) for why it cannot have one. Both sides share one
+`is_transient` in `app/transient.py`, because "should I ask again" is one
+question and two copies of the answer would drift.
+
+Unlike the text chain, a fallback here is **reported**: `generate()` returns the
+model that drew the picture, and `build_image` turns a swap into a Draft warning.
+A backup text model reads the same; a backup image model draws in a different
+style, and a silent swap is brand drift nobody sees.
 
 `hero_image_path` and `composed_image_path` are separate columns for the same
 reason. Editing the overlay text re-enters the graph at `compositor.py` and
@@ -312,7 +337,13 @@ Four tiers, and the split is deliberate:
   contradict the compositor.
 - **env** — secrets and model ids. Model ids belong here because they get retired
   upstream without notice; the old repo shipped
-  `fix(gemini): replace retired image fallback model`.
+  `fix(gemini): replace retired image fallback model`. That applies twice over to
+  `GEMINI_IMAGE_FALLBACK_MODELS`: the text chain can end on `gemini-flash-latest`,
+  an alias Google repoints, but **there is no `-latest` alias for any image
+  model** — only pinned versions (`gemini-3.1-flash-image`, `gemini-3-pro-image`,
+  `gemini-2.5-flash-image`). Every image link therefore expires on someone else's
+  schedule, and a rotted one answers 404, which is not transient and so surfaces
+  instead of being spent as three attempts and a silent step sideways.
 - **`page` rows** — identity: name, the two external ids, watermark file.
 
 ### The three prompt files

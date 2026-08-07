@@ -54,6 +54,8 @@ interface SourceCardProps {
   reactions?: number | null;
   comments?: number | null;
   shares?: number | null;
+  /** A Draft already came from this one. Competitor posts only. */
+  used?: boolean;
   selected: boolean;
   pending?: boolean;
   onToggle: () => void;
@@ -78,7 +80,7 @@ interface SourceCardProps {
  */
 export function SourceCard({ selected, pending, onToggle, ...item }: SourceCardProps) {
   const [open, setOpen] = useState(false);
-  const { author, text, url, image_url, published_at, reactions, comments, shares } = item;
+  const { author, text, url, image_url, published_at, reactions, comments, shares, used } = item;
   const factual = isFactual(item.kind);
 
   return (
@@ -91,11 +93,23 @@ export function SourceCard({ selected, pending, onToggle, ...item }: SourceCardP
           "group flex h-full w-full flex-col gap-3 rounded-lg border p-4 text-left transition-colors",
           "hover:border-foreground/25 disabled:opacity-60",
           selected && "border-gold bg-gold/[0.06] hover:border-gold",
+          // Dimmed, not hidden or disabled. A post worth writing twice exists —
+          // a different angle on the same story — so this is a warning, not a
+          // rule. Hiding it would also make the grid shrink for reasons the
+          // operator cannot see.
+          used && !selected && "opacity-55",
         )}
       >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 space-y-1">
-            <p className="truncate text-sm font-medium">{author ?? "Unknown"}</p>
+            <p className="flex items-center gap-1.5 truncate text-sm font-medium">
+              {author ?? "Unknown"}
+              {used ? (
+                <span className="shrink-0 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-normal text-muted-foreground">
+                  used
+                </span>
+              ) : null}
+            </p>
             <p className="text-xs text-muted-foreground">
               <span className={cn(factual ? "text-foreground/70" : "")}>
                 {factual ? "Binds the story" : "Style only"}

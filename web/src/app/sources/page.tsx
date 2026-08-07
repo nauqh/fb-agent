@@ -25,7 +25,7 @@ const PAGE_ID = 1;
 export default function SourcesScreen() {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <ScreenHeader title="Sources" hint="Tick what you want to write from." />
+      <ScreenHeader title="Sources" />
 
       <Tabs
         defaultValue="competitors"
@@ -89,7 +89,7 @@ function CompetitorsTab() {
     <>
       <div className="flex items-center justify-between gap-3 pb-3">
         <p className="text-xs text-muted-foreground">
-          Synced from Metricool, sorted by reactions. Which pages are Competitors is configured in
+          Synced from Metricool, newest first. Which pages are Competitors is configured in
           Metricool — never here.
         </p>
         <Button variant="outline" size="sm" disabled={syncing || loading} onClick={sync}>

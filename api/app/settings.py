@@ -189,11 +189,35 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     gemini_text_model: str = "gemini-3.5-flash"
     gemini_image_model: str = "gemini-3.1-flash-image"
+    gemini_image_fallback_models: str = "gemini-2.5-flash-image"
+    """Comma-separated, tried in order after the configured model. Empty disables.
+
+    Env rather than code because these **will** rot, and unlike the text chain
+    there is no alias to hide behind. The writer can end on `gemini-flash-latest`,
+    which Google repoints; there is no `-latest` for an image model, so every
+    link here is a pinned version that expires on somebody else's schedule. The
+    old repo already shipped `fix(gemini): replace retired image fallback model`
+    once — see design.md on why model ids are deployment config.
+
+    `gemini-2.5-flash-image` is the default because it is the model the old system
+    actually shipped heroes on (decisions.md), so its output is known to be
+    acceptable for this brand rather than merely available.
+    """
 
     metricool_api_token: str = ""
     metricool_user_id: str = ""
 
     x_bearer_token: str = ""
+
+    @property
+    def image_fallback_chain(self) -> tuple[str, ...]:
+        """The configured model first, then the fallbacks. Never empty."""
+        rest = (
+            name.strip()
+            for name in self.gemini_image_fallback_models.split(",")
+            if name.strip() and name.strip() != self.gemini_image_model
+        )
+        return (self.gemini_image_model, *rest)
 
     def missing_secrets(self) -> list[str]:
         """Named, never valued. Reported by /health so a blank .env is obvious."""

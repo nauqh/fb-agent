@@ -5,6 +5,7 @@ from sqlmodel import Session, func, select
 
 from app import generate
 from app.models import Draft, DraftStatus, SourceItem, SourceItemBase, SourceKind
+from app.settings import settings
 from app.writer.agent import DraftContent
 
 CURATED = "https://www.smithsonianmag.com/history/a-story-180987410/"
@@ -340,7 +341,9 @@ def test_a_stale_image_warning_does_not_outlive_the_fix(client, written, monkeyp
     client.post("/generate", json={"page_ids": [1], "sources": [_rss().model_dump(mode="json")]})
     assert any(w.startswith(generate.IMAGE_WARNING) for w in client.get("/drafts/1").json()["warnings"])
 
-    monkeypatch.setattr(hero, "generate", lambda *a, **k: illustrated)
+    monkeypatch.setattr(
+        hero, "generate", lambda *a, **k: hero.Hero(illustrated, settings.gemini_image_model)
+    )
     fixed = client.post("/drafts/1/image?new_hero=true").json()
 
     assert fixed["composed_image_path"]

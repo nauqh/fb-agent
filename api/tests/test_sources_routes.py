@@ -5,6 +5,8 @@ curated-feed guard, dedup, and not rewriting an existing row — moved to
 tests/test_generate.py when generate became the only write point.
 """
 
+from datetime import datetime, timezone
+
 from sqlmodel import Session, func, select
 
 from app.models import SourceItem, SourceItemBase, SourceKind
@@ -44,26 +46,34 @@ def test_browsing_rss_writes_nothing(client, engine, monkeypatch):
     assert _count(engine) == 0
 
 
-def test_competitor_posts_are_written_on_arrival_and_sorted_by_reactions(
+def test_competitor_posts_are_written_on_arrival_and_sorted_newest_first(
     client, engine, monkeypatch
 ):
-    """The one kind that browsing *does* write — they arrive by sync."""
+    """The one kind that browsing *does* write — they arrive by sync.
+
+    Newest first, not most-reacted. Reactions are a stable ranking, so the same
+    winners sat at the top every day and the tab exists to find something new;
+    and because nothing prunes this table, `grid_limit` applied to a
+    reaction-sorted set meant a fresh post could never enter the grid at all.
+    """
     monkeypatch.setattr(
         routes.metricool,
         "fetch_competitor_posts",
         lambda page, **_: [
             SourceItemBase(
                 kind=SourceKind.COMPETITOR_POST,
-                external_id="quiet",
+                external_id="older-but-louder",
                 synced_for_page_id=page.id,
-                reactions=12,
+                reactions=9_000,
+                published_at=datetime(2026, 8, 1, tzinfo=timezone.utc),
                 text="…",
             ),
             SourceItemBase(
                 kind=SourceKind.COMPETITOR_POST,
-                external_id="loud",
+                external_id="newer-but-quieter",
                 synced_for_page_id=page.id,
-                reactions=9_000,
+                reactions=12,
+                published_at=datetime(2026, 8, 5, tzinfo=timezone.utc),
                 text="…",
             ),
         ],
@@ -71,7 +81,10 @@ def test_competitor_posts_are_written_on_arrival_and_sorted_by_reactions(
 
     rows = client.get("/sources/competitors", params={"page_id": 1}).json()
 
-    assert [row["external_id"] for row in rows] == ["loud", "quiet"]
+    assert [row["external_id"] for row in rows] == [
+        "newer-but-quieter",
+        "older-but-louder",
+    ]
     assert _count(engine, SourceKind.COMPETITOR_POST) == 2
 
 
@@ -163,3 +176,45 @@ def test_a_metricool_failure_is_502_not_an_empty_grid(client, monkeypatch):
 
 def test_competitors_for_an_unknown_page_is_404(client):
     assert client.get("/sources/competitors", params={"page_id": 99}).status_code == 404
+
+
+def test_a_competitor_post_already_written_from_is_flagged(
+    client, engine, session, page, monkeypatch
+):
+    """Otherwise the grid keeps offering a post that has already been published.
+
+    Derived per request rather than stored: a stored copy is a second truth, and
+    when it drifts the operator writes the same story twice.
+    """
+    from app.models import Draft
+
+    monkeypatch.setattr(
+        routes.metricool,
+        "fetch_competitor_posts",
+        lambda page, **_: [
+            SourceItemBase(
+                kind=SourceKind.COMPETITOR_POST,
+                external_id="spent",
+                synced_for_page_id=page.id,
+                text="…",
+            ),
+            SourceItemBase(
+                kind=SourceKind.COMPETITOR_POST,
+                external_id="fresh",
+                synced_for_page_id=page.id,
+                text="…",
+            ),
+        ],
+    )
+    client.get("/sources/competitors", params={"page_id": 1})
+
+    spent = session.exec(
+        select(SourceItem).where(SourceItem.external_id == "spent")
+    ).one()
+    session.add(Draft(page_id=1, source_item_id=spent.id))
+    session.commit()
+
+    rows = client.get("/sources/competitors", params={"page_id": 1}).json()
+    used = {row["external_id"]: row["used"] for row in rows}
+
+    assert used == {"spent": True, "fresh": False}

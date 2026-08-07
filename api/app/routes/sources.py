@@ -19,11 +19,23 @@ from pydantic import BaseModel
 from sqlmodel import Session, func, select
 
 from app.db import get_session
-from app.models import Page, SourceItem, SourceItemBase, SourceKind
+from app.models import Draft, Page, SourceItem, SourceItemBase, SourceKind
 from app.settings import sources as sources_config
 from app.sources import metricool, rss, x
 
 router = APIRouter(prefix="/sources", tags=["sources"])
+
+
+class StoredSourceItem(SourceItemBase):
+    """A stored Source Item, plus whether a Draft has already used it.
+
+    `used` is derived per request rather than stored, for the same reason
+    `SourceKind.is_factual` is: a stored copy is a second truth, and when it
+    drifts the grid quietly offers the operator a post they already published.
+    """
+
+    id: int
+    used: bool = False
 
 
 class FeedFailureOut(BaseModel):
@@ -48,7 +60,7 @@ def get_competitor_posts(
     page_id: int = Query(...),
     refresh: bool = Query(False, description="Force a Metricool sync"),
     session: Session = Depends(get_session),
-) -> list[SourceItem]:
+) -> list[StoredSourceItem]:
     """Stored competitor posts. Syncs when there are none, or when asked.
 
     It used to sync on every read, which cost **5.5s and 1.6MB** for 500 posts
@@ -89,10 +101,34 @@ def get_competitor_posts(
         select(SourceItem)
         .where(SourceItem.kind == SourceKind.COMPETITOR_POST)
         .where(SourceItem.synced_for_page_id == page_id)
-        .order_by(SourceItem.reactions.desc())  # type: ignore[union-attr]
+        # Newest first, not most-reacted.
+        #
+        # This tab exists to find something *new* to write from, and reactions
+        # are a stable ranking: the same winners sit at the top every day, so
+        # the operator reads the same grid every morning. Worse, nothing prunes
+        # this table — rows accumulate week after week — so once sixty older
+        # posts out-performed this week's, `limit` meant a genuinely new post
+        # could never enter the grid at all.
+        #
+        # Reactions are still on the card, where they inform a choice rather
+        # than deciding what is visible.
+        .order_by(SourceItem.published_at.desc())  # type: ignore[union-attr]
         .limit(sources_config.competitors.grid_limit)
     ).all()
-    return list(rows)
+
+    return _with_used(session, rows)
+
+
+def _with_used(session: Session, rows) -> list[StoredSourceItem]:
+    """Flag the ones a Draft already came from, so the grid stops re-offering them."""
+    spent = set(
+        session.exec(
+            select(Draft.source_item_id).where(Draft.source_item_id.is_not(None))  # type: ignore[union-attr]
+        ).all()
+    )
+    return [
+        StoredSourceItem(**row.model_dump(), used=row.id in spent) for row in rows
+    ]
 
 
 @router.get("/rss")

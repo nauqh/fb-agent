@@ -50,6 +50,8 @@ export interface SourceItem {
   image_url: string | null;
   published_at: string | null;
   /** Null for tweets and RSS items. */
+  /** A Draft already came from this one. Server-derived, competitor posts only. */
+  used?: boolean;
   reactions: number | null;
   comments: number | null;
   shares: number | null;

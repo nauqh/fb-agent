@@ -60,7 +60,11 @@ def illustrated(monkeypatch):
     Image.new("RGB", (1280, 720), (40, 70, 120)).save(buffer, format="PNG")
     png = buffer.getvalue()
 
-    monkeypatch.setattr(hero, "generate", lambda *a, **k: png)
+    monkeypatch.setattr(
+        hero,
+        "generate",
+        lambda *a, **k: hero.Hero(png, settings.gemini_image_model),
+    )
     return png
 
 
