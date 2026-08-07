@@ -1,6 +1,6 @@
 import type { Draft, DraftStatus } from "@/lib/types";
 import type { LiveSourceItem } from "@/lib/api/sources";
-import { del, get, patch, post } from "@/lib/api/client";
+import { del, delJson, get, patch, post, upload } from "@/lib/api/client";
 
 /**
  * `POST /generate`, `GET /drafts`, `GET /drafts/{id}`, `PATCH /drafts/{id}`,
@@ -42,6 +42,9 @@ export type DraftEdit = Partial<
     | "highlight_phrases"
     | "hashtags"
     | "image_prompt"
+    | "inset_size_px"
+    | "inset_x_ratio"
+    | "inset_y_ratio"
   >
 >;
 
@@ -107,6 +110,22 @@ export async function generate(request: GenerateRequest): Promise<number[]> {
  */
 export async function regenerateHero(id: number): Promise<Draft> {
   return post<Draft>(`/drafts/${id}/image?new_hero=true`, {});
+}
+
+/**
+ * Put a picture in the circular inset.
+ *
+ * The one upload in the app, and the one image that costs nothing: the inset is
+ * a file the operator picked, never a generation. The server re-encodes it and
+ * redraws the card around it, so the response is the finished row.
+ */
+export async function uploadInset(id: number, file: File): Promise<Draft> {
+  return upload<Draft>(`/drafts/${id}/inset`, file);
+}
+
+/** Take the circle off. Answers with the redrawn draft, not 204. */
+export async function removeInset(id: number): Promise<Draft> {
+  return delJson<Draft>(`/drafts/${id}/inset`);
 }
 
 /**

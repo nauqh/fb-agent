@@ -205,7 +205,9 @@ No queue. The sequence, for each (source × page) pair:
 
 Two model calls, and they fail differently. **Only the two orange steps cost
 money**; everything downstream of the hero is arithmetic and rasterising, and
-can be re-run for free.
+can be re-run for free. The circular inset is not on this diagram because
+nothing here produces it: it is uploaded afterwards, from the drawer, and
+re-composites for free like any other edit.
 
 ```mermaid
 flowchart TD
@@ -228,7 +230,7 @@ flowchart TD
     HeroFallback --> Hero
     Hero -->|"refusal, 4xx, or chain spent"| Warn["warning on the row<br/><i>status stays review</i>"]
     Hero -->|"bytes"| StoreHero["MediaStore: hero_image_path"]
-    StoreHero --> Composite["<b>compositor.py</b><br/>hero + panel + gold + watermark"]
+    StoreHero --> Composite["<b>compositor.py</b><br/>hero + panel + gold + watermark<br/>+ inset, if one was uploaded"]
     Composite --> StoreOut["MediaStore: composed_image_path"]
 
     StoreOut --> Review["status = review<br/><i>progress: done, 100%</i>"]
@@ -242,6 +244,23 @@ flowchart TD
     class Write,Hero paid
     class Failed,Warn bad
 ```
+
+The one picture nothing on that diagram produces is the **circular inset** — the
+disc that sits, by default, on the seam between the hero and the panel. It is
+uploaded from the drawer, so it costs nothing, cannot fail a run, and does not
+exist until somebody puts it there. `POST /drafts/{id}/inset` stores the file and
+re-composites. The old app offered Upload beside a Generate tab and defaulted to
+Upload; only Upload is ported.
+
+Size and position live on the row — `inset_size_px`, `inset_x_ratio`,
+`inset_y_ratio` — because they depend on what is in the picture rather than on
+the brand, and changing either is a free redraw like any text edit. Position is
+a *ratio* of the card, as `centerXRatio`/`centerYRatio` were, and **null is not
+zero**: it means the default, which cannot be written down as a number because
+the panel grows with the copy and the seam is therefore at a different height on
+every draft. `compositor.inset_centre` resolves it per axis at draw time, and
+the preview mirrors that split — a defaulted disc is rendered inside the hero,
+where the seam is a flexbox edge, and a placed one against the card.
 
 The asymmetry between the two failure paths is the design decision worth
 keeping. A writer failure is fatal to the draft — there is no post without copy.

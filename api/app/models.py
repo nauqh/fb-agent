@@ -181,6 +181,36 @@ class Draft(SQLModel, table=True):
     composed_image_path: str | None = None
     """Kept apart so re-compositing an edit does not re-pay for image generation."""
 
+    inset_image_path: str | None = None
+    """The circular inset: a picture the operator uploaded, cropped to a disc.
+
+    Null is the normal case — no upload, no circle, and the card is the one it
+    was before. Nothing generates this: it is the one image in the app that
+    comes from a person rather than a model, which is why there is no prompt
+    column beside it.
+    """
+
+    inset_size_px: int | None = None
+    """Diameter of the disc. Null takes `layout.portrait.size_px`.
+
+    Per-draft because it is the one thing about the inset that depends on the
+    picture in it: a head-and-shoulders portrait reads at 140px and a wide
+    photograph of two people does not. Clamped on write — see
+    `Layout.portrait.clamp`.
+    """
+
+    inset_x_ratio: float | None = None
+    inset_y_ratio: float | None = None
+    """Centre of the disc, as fractions of card width and height. Null is the seam.
+
+    Ratios rather than pixels, which is what the old app stored
+    (`centerXRatio`/`centerYRatio`) and is the only thing that survives the card
+    changing size. **Null is not 0** — it means "wherever the default is", and
+    the default cannot be written down as a number here because the seam moves:
+    the panel grows with the copy, so `hero_height_px` is different for every
+    draft. `compositor.compose` resolves it at draw time.
+    """
+
     warnings: list[str] = Field(default_factory=list, sa_column=Column(JSON))
     """Brand rules still failing after the writer exhausted its retries."""
 

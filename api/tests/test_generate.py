@@ -488,3 +488,280 @@ def test_a_draft_still_generating_cannot_be_deleted(client, session):
 
 def test_deleting_something_that_is_not_there_says_so(client):
     assert client.delete("/drafts/999").status_code == 404
+
+
+# --- the circular inset ------------------------------------------------------
+
+
+def _generate(client):
+    client.post("/generate", json={"page_ids": [1], "topic": "x"})
+    return client.get("/drafts/1").json()
+
+
+def _upload(client, data: bytes, name: str = "face.png", kind: str = "image/png"):
+    return client.post("/drafts/1/inset", files={"file": (name, data, kind)})
+
+
+def test_a_fresh_draft_has_no_circle(client, written, illustrated):
+    """Nothing generates the inset — a run never produces one."""
+    draft = _generate(client)
+
+    assert draft["inset_image_path"] is None
+    assert draft["inset_size_px"] is None
+    assert draft["composed_image_path"], "the card composes without it"
+
+
+def test_uploading_a_picture_puts_it_in_the_circle(client, written, illustrated, a_photograph):
+    before = _generate(client)
+
+    draft = _upload(client, a_photograph).json()
+
+    assert draft["inset_image_path"], "the upload was not stored"
+    assert draft["composed_image_path"] != before["composed_image_path"], (
+        "the card was not redrawn around it"
+    )
+
+
+def test_the_upload_is_re_encoded_rather_than_stored_as_sent(
+    client, written, illustrated, a_photograph
+):
+    """A JPEG in, a PNG on disk. The container the camera chose decides nothing."""
+    import io
+
+    from PIL import Image
+
+    from app import media
+
+    jpeg = io.BytesIO()
+    Image.open(io.BytesIO(a_photograph)).convert("RGB").save(jpeg, format="JPEG")
+    _generate(client)
+
+    draft = _upload(client, jpeg.getvalue(), "face.jpg", "image/jpeg").json()
+
+    stored = media.store.path(draft["inset_image_path"])
+    assert stored.suffix == ".png"
+    assert Image.open(stored).format == "PNG"
+
+
+def test_a_file_that_is_not_an_image_is_refused_at_the_upload(client, written, illustrated):
+    """Rather than at the composite, an hour later, as a warning on the row."""
+    _generate(client)
+
+    response = _upload(client, b"this is not a picture", "notes.txt", "text/plain")
+
+    assert response.status_code == 422
+    assert client.get("/drafts/1").json()["inset_image_path"] is None
+
+
+def test_removing_the_circle_redraws_the_card(client, written, illustrated, a_photograph):
+    _generate(client)
+    with_circle = _upload(client, a_photograph).json()
+
+    without = client.delete("/drafts/1/inset").json()
+
+    assert without["inset_image_path"] is None
+    assert without["composed_image_path"] != with_circle["composed_image_path"]
+
+
+def test_removing_the_circle_forgets_where_it_was(
+    client, written, illustrated, a_photograph
+):
+    """Otherwise the next upload lands wherever the last picture wanted to be."""
+    _generate(client)
+    _upload(client, a_photograph)
+    client.patch("/drafts/1", json={"inset_size_px": 300, "inset_x_ratio": 0.2})
+
+    client.delete("/drafts/1/inset")
+    fresh = _upload(client, a_photograph).json()
+
+    assert fresh["inset_size_px"] is None
+    assert fresh["inset_x_ratio"] is None
+    assert fresh["inset_y_ratio"] is None
+
+
+def test_replacing_the_picture_keeps_where_it_was(
+    client, written, illustrated, a_photograph
+):
+    """The point of Replace: a better crop of the same face, in the same place."""
+    _generate(client)
+    _upload(client, a_photograph)
+    placed = client.patch(
+        "/drafts/1", json={"inset_size_px": 300, "inset_x_ratio": 0.2, "inset_y_ratio": 0.4}
+    ).json()
+
+    replaced = _upload(client, a_photograph).json()
+
+    assert replaced["inset_image_path"] != placed["inset_image_path"]
+    assert replaced["inset_size_px"] == 300
+    assert replaced["inset_x_ratio"] == 0.2
+    assert replaced["inset_y_ratio"] == 0.4
+
+
+def test_moving_the_circle_redraws_the_card(client, written, illustrated, a_photograph):
+    _generate(client)
+    before = _upload(client, a_photograph).json()
+
+    after = client.patch("/drafts/1", json={"inset_x_ratio": 0.3, "inset_y_ratio": 0.3}).json()
+
+    assert (after["inset_x_ratio"], after["inset_y_ratio"]) == (0.3, 0.3)
+    assert after["composed_image_path"] != before["composed_image_path"]
+
+
+def test_a_position_off_the_card_is_clamped_to_it(client, written, illustrated):
+    _generate(client)
+
+    out = client.patch("/drafts/1", json={"inset_x_ratio": 4.0, "inset_y_ratio": -2.0}).json()
+
+    assert (out["inset_x_ratio"], out["inset_y_ratio"]) == (1.0, 0.0)
+
+
+def test_resizing_redraws_the_card(client, written, illustrated, a_photograph):
+    _generate(client)
+    before = _upload(client, a_photograph).json()
+
+    after = client.patch("/drafts/1", json={"inset_size_px": 260}).json()
+
+    assert after["inset_size_px"] == 260
+    assert after["composed_image_path"] != before["composed_image_path"]
+
+
+def test_a_size_outside_the_bounds_is_clamped_on_save(client, written, illustrated):
+    """The row is read back into a slider, so it must not hold what it cannot draw."""
+    from app.settings import layout
+
+    _generate(client)
+
+    assert client.patch("/drafts/1", json={"inset_size_px": 5}).json()["inset_size_px"] == (
+        layout.portrait.min_px
+    )
+    assert client.patch("/drafts/1", json={"inset_size_px": 9000}).json()["inset_size_px"] == (
+        round(layout.image.width * layout.portrait.max_width_ratio)
+    )
+
+
+def test_uploading_to_a_draft_still_generating_is_refused(client, session):
+    session.add(Draft(page_id=1, status=DraftStatus.GENERATING))
+    session.commit()
+
+    assert _upload(client, b"anything").status_code == 409
+
+
+def test_deleting_a_draft_takes_its_inset_too(client, written, illustrated, a_photograph):
+    from app import media
+
+    _generate(client)
+    uploaded = media.store.path(_upload(client, a_photograph).json()["inset_image_path"])
+    assert uploaded.exists()
+
+    client.delete("/drafts/1")
+
+    assert not uploaded.exists()
+
+
+def test_the_circle_straddles_the_seam():
+    """Half on the photograph, half on the panel — the whole point of it.
+
+    Geometry is the old app's (`brand-image-layout.ts:125-140`), so this checks
+    the two numbers a port gets wrong: which pixel the disc is centred on, and
+    that it is a disc rather than a square.
+    """
+    import io
+
+    from PIL import Image
+
+    from app.image import compositor
+    from app.image import text as overlay
+    from app.settings import layout
+
+    def png(size, colour):
+        buffer = io.BytesIO()
+        Image.new("RGB", size, colour).save(buffer, format="PNG")
+        return buffer.getvalue()
+
+    plan = overlay.plan("Marie Tharp mapped the ocean floor in 1957.")
+    composed = Image.open(
+        io.BytesIO(
+            compositor.compose(
+                png((1280, 720), (40, 70, 120)),
+                plan,
+                [],
+                None,
+                compositor.Inset(png((1024, 1024), (200, 120, 40))),
+            )
+        )
+    ).convert("RGB")
+
+    width = layout.image.width
+    margin = round(width * layout.image.edge_margin_ratio)
+    ring = layout.portrait.ring_size(None, width)
+    centre_x = width - margin - ring // 2
+
+    assert composed.getpixel((centre_x, plan.hero_height_px))[0] > 150, (
+        "the disc is not centred on the seam"
+    )
+    # Just below the seam, a ring's width to the left of the disc: panel, so
+    # black. A square inset would put portrait pixels in the corner instead.
+    assert composed.getpixel((centre_x - ring, plan.hero_height_px + 4)) == (0, 0, 0)
+
+
+def test_a_position_puts_the_disc_where_it_was_asked_for():
+    """Ratios of the whole card, as the old app stored them."""
+    import io
+
+    from PIL import Image
+
+    from app.image import compositor
+    from app.image import text as overlay
+    from app.settings import layout
+
+    def png(size, colour):
+        buffer = io.BytesIO()
+        Image.new("RGB", size, colour).save(buffer, format="PNG")
+        return buffer.getvalue()
+
+    plan = overlay.plan("Marie Tharp mapped the ocean floor in 1957.")
+    composed = Image.open(
+        io.BytesIO(
+            compositor.compose(
+                png((1280, 720), (40, 70, 120)),
+                plan,
+                [],
+                None,
+                compositor.Inset(
+                    png((1024, 1024), (200, 120, 40)), x_ratio=0.25, y_ratio=0.3
+                ),
+            )
+        )
+    ).convert("RGB")
+
+    x = round(layout.image.width * 0.25)
+    y = round(layout.image.height * 0.3)
+    assert composed.getpixel((x, y))[0] > 150, "the disc is not where it was placed"
+
+    # And no longer in the corner it defaults to.
+    margin = round(layout.image.edge_margin_ratio * layout.image.width)
+    ring = layout.portrait.ring_size(None, layout.image.width)
+    corner = composed.getpixel((layout.image.width - margin - ring // 2, plan.hero_height_px))
+    assert corner[0] < 150, "the disc was drawn in the default place as well"
+
+
+def test_a_bigger_size_draws_a_bigger_disc():
+    """The one thing the size is for. Measured, not asserted from the argument."""
+    import io
+
+    from PIL import Image
+
+    from app.image import compositor
+    from app.settings import layout
+
+    def png(size, colour):
+        buffer = io.BytesIO()
+        Image.new("RGB", size, colour).save(buffer, format="PNG")
+        return buffer.getvalue()
+
+    face = png((512, 512), (200, 120, 40))
+    small = compositor.circular_portrait(face, layout, 120)
+    large = compositor.circular_portrait(face, layout, 300)
+
+    assert small.width == 120 + layout.portrait.ring_pad_px * 2
+    assert large.width == 300 + layout.portrait.ring_pad_px * 2

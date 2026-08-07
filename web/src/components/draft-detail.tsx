@@ -1,10 +1,11 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   Check,
+  ImagePlus,
   Loader2,
   RotateCcw,
   Sparkles,
@@ -13,7 +14,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { ComposedImage } from "@/components/composed-image";
+import { ComposedImage, clampInset } from "@/components/composed-image";
 import { HookField } from "@/components/hook-field";
 import { FacebookPreview } from "@/components/facebook-preview";
 import { Button } from "@/components/ui/button";
@@ -28,10 +29,13 @@ import {
   getDraft,
   regenerateHero,
   rejectDraft,
+  removeInset,
   returnToReview,
   updateDraft,
+  uploadInset,
 } from "@/lib/api/drafts";
 import { listPages } from "@/lib/api/pages";
+import { LAYOUT } from "@/lib/fixtures/pages";
 import { chars, words } from "@/lib/format";
 import type { Draft } from "@/lib/types";
 import { useQuery } from "@/lib/use-query";
@@ -46,6 +50,10 @@ interface Form {
   highlight_phrases: string[];
   hashtags: string[];
   image_prompt: string;
+  /** Null means "the default", which is what the server stores for an untouched draft. */
+  inset_size_px: number | null;
+  inset_x_ratio: number | null;
+  inset_y_ratio: number | null;
 }
 
 export function DraftDetail({
@@ -64,8 +72,9 @@ export function DraftDetail({
   });
   const [saving, setSaving] = useState(false);
   const [deciding, setDeciding] = useState(false);
-  const [imageWork, setImageWork] = useState<"hero" | null>(null);
+  const [imageWork, setImageWork] = useState<"hero" | "inset" | null>(null);
   const [view, setView] = useState<View>("edit");
+  const filePicker = useRef<HTMLInputElement>(null);
 
   const { data: pages } = useQuery(() => listPages(), []);
 
@@ -77,7 +86,7 @@ export function DraftDetail({
    * nothing left to watch, and a Draft under edit should not be re-read from
    * under the operator.
    */
-  const { data: draft, error } = useQuery(() => getDraft(draftId), [draftId], {
+  const { data: draft, error, refresh } = useQuery(() => getDraft(draftId), [draftId], {
     intervalMs: 900,
     pollWhile: (row) => row === null || row.status === "generating",
   });
@@ -105,6 +114,59 @@ export function DraftDetail({
     () => (draft && form ? JSON.stringify(toForm(draft)) !== JSON.stringify(form) : false),
     [draft, form],
   );
+
+  /**
+   * Drag the circle, or click anywhere on the card to put it there — the same
+   * gesture the old app had (`circular-inset-dialog.tsx:360-372`), where a press
+   * both moves the inset and begins the drag.
+   *
+   * **On `window`, not on the card.** The obvious version — `onPointerMove` on
+   * the card, with `setPointerCapture` — receives exactly one move and then goes
+   * silent, verified with a counter in the handler: the press lands, the first
+   * move lands, and every move after it stops reaching the element even though
+   * the pointer never leaves it and capture reports as held. Listening on the
+   * window sidesteps whatever swallows them, and it is the more correct place
+   * anyway: a drag that continues off the edge of the card is still that drag.
+   *
+   * Above the early returns because hooks cannot be conditional; the effect does
+   * nothing until a press sets `dragging`.
+   */
+  const [dragging, setDragging] = useState(false);
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!dragging) return;
+
+    const move = (event: PointerEvent) => {
+      const box = cardRef.current?.getBoundingClientRect();
+      if (!box) return;
+      // Updated from the previous state rather than from `form` in scope, so
+      // the listeners do not have to be torn down and rebuilt on every frame of
+      // the drag — and cannot write back a form from before it started.
+      setEditor((prev) =>
+        prev.form
+          ? {
+              ...prev,
+              form: {
+                ...prev.form,
+                inset_x_ratio: clamp01((event.clientX - box.left) / box.width),
+                inset_y_ratio: clamp01((event.clientY - box.top) / box.height),
+              },
+            }
+          : prev,
+      );
+    };
+    const stop = () => setDragging(false);
+
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", stop);
+    window.addEventListener("pointercancel", stop);
+    return () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", stop);
+      window.removeEventListener("pointercancel", stop);
+    };
+  }, [dragging]);
 
   if (error) {
     return <Panel>Could not load draft {draftId}: {error}</Panel>;
@@ -174,6 +236,7 @@ export function DraftDetail({
    *
    * Redrawing the panel is free and now happens on save; buying a hero is a
    * `google-genai` call, so it stays a button the operator presses on purpose.
+   * The inset below it is free — an upload, not a generation.
    */
   async function redoImage(kind: "hero") {
     setImageWork(kind);
@@ -184,6 +247,29 @@ export function DraftDetail({
       });
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : "Image work failed");
+    } finally {
+      setImageWork(null);
+    }
+  }
+
+  /**
+   * Put a picture in the circle, or take it out. `null` removes.
+   *
+   * Immediate rather than staged into the form like the slider is, because a
+   * `File` is not something the form can hold and save later — and the server
+   * redraws the card in the same call, so the picture beside this button is
+   * correct the moment it returns. `refresh` is what pulls the new row: the
+   * poll has already stopped by the time a draft is reviewable.
+   */
+  async function changeInset(file: File | null) {
+    setImageWork("inset");
+    try {
+      if (file) await uploadInset(draftId, file);
+      else await removeInset(draftId);
+      await refresh();
+      toast.success(file ? "Inset added." : "Inset removed.");
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Inset failed");
     } finally {
       setImageWork(null);
     }
@@ -212,6 +298,12 @@ export function DraftDetail({
       highlightPhrases={form?.highlight_phrases ?? draft.highlight_phrases}
       watermarkPath={page?.watermark_image_path ?? null}
       heroSrc={draft.hero_image_path ? `/api/media/${draft.hero_image_path}` : null}
+      insetSrc={draft.inset_image_path ? `/api/media/${draft.inset_image_path}` : null}
+      // From the form, not the row: the slider and the drag have to move the
+      // circle as they happen, which is the only way to choose either.
+      insetSizePx={form?.inset_size_px ?? draft.inset_size_px}
+      insetXRatio={form ? form.inset_x_ratio : draft.inset_x_ratio}
+      insetYRatio={form ? form.inset_y_ratio : draft.inset_y_ratio}
       seed={draft.id}
     />
   );
@@ -267,7 +359,31 @@ export function DraftDetail({
             {/* Sticky against the pane's own scroll, so the image stays in
                 view while the copy beside it moves. */}
             <div className="space-y-3 lg:sticky lg:top-0 lg:self-start">
-              <div className="overflow-hidden rounded border">{picture}</div>
+              <div
+                className={cn(
+                  "overflow-hidden rounded border",
+                  // `touch-none` or a drag on a phone scrolls the drawer
+                  // instead of moving the circle.
+                  draft.inset_image_path && "cursor-crosshair touch-none",
+                )}
+                ref={cardRef}
+                onPointerDown={(event) => {
+                  // The press is itself a placement, so a click puts the circle
+                  // where you clicked without any dragging at all. The window
+                  // listeners take it from here.
+                  if (!draft.inset_image_path || !form) return;
+                  event.preventDefault();
+                  const box = event.currentTarget.getBoundingClientRect();
+                  setForm({
+                    ...form,
+                    inset_x_ratio: clamp01((event.clientX - box.left) / box.width),
+                    inset_y_ratio: clamp01((event.clientY - box.top) / box.height),
+                  });
+                  setDragging(true);
+                }}
+              >
+                {picture}
+              </div>
               <div className="flex items-center justify-between text-[11px] text-muted-foreground">
                 <span className="font-mono">896 × 1120</span>
                 <span>
@@ -293,9 +409,9 @@ export function DraftDetail({
               already done — and left the PNG stale for anyone who did not
               know to press it. */}
           <Button
-            variant="ghost"
+            variant="outline"
             size="sm"
-            className="w-full text-muted-foreground"
+            className="w-full"
             disabled={imageWork !== null}
             onClick={() => void redoImage("hero")}
             // The one button that spends money. Said on hover rather than in a
@@ -309,6 +425,101 @@ export function DraftDetail({
             )}
             Regenerate hero
           </Button>
+          {/* The inset sits under the picture rather than in the copy column:
+              it is the one control whose whole feedback is the image, and the
+              slider is useless without it in view. */}
+          <div className="space-y-2 rounded-md border p-3">
+            <div className="flex items-baseline justify-between">
+              <Label className="text-xs">Circular inset</Label>
+              <span className="text-[11px] tabular-nums text-muted-foreground">
+                {draft.inset_image_path ? `${clampInset(form?.inset_size_px)}px` : "none"}
+              </span>
+            </div>
+
+            {draft.inset_image_path && form ? (
+              // Free and instant: the preview redraws as it moves, and Save
+              // bakes it into the PNG like every other edit.
+              <>
+                <input
+                  type="range"
+                  className="w-full accent-foreground"
+                  min={LAYOUT.portraitMinPx}
+                  max={Math.round(LAYOUT.width * LAYOUT.portraitMaxWidthRatio)}
+                  step={2}
+                  value={clampInset(form.inset_size_px)}
+                  onChange={(event) =>
+                    setForm({ ...form, inset_size_px: Number(event.target.value) })
+                  }
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Drag the circle on the image, or click where you want it.
+                </p>
+              </>
+            ) : (
+              <p className="text-[11px] leading-relaxed text-muted-foreground">
+                Upload a picture to put a circle on the seam. Nothing generates
+                this one.
+              </p>
+            )}
+
+            <div className="flex gap-1">
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1"
+                disabled={imageWork !== null}
+                onClick={() => filePicker.current?.click()}
+              >
+                {imageWork === "inset" ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <ImagePlus className="size-3.5" />
+                )}
+                {draft.inset_image_path ? "Replace" : "Upload"}
+              </Button>
+              {draft.inset_image_path ? (
+                <>
+                  {/* Back to the seam. Nulls rather than the ratios it would
+                      resolve to, because the seam moves with the panel and a
+                      number pinned today is wrong after the next hook edit. */}
+                  {form && (form.inset_x_ratio !== null || form.inset_y_ratio !== null) ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-muted-foreground"
+                      onClick={() =>
+                        setForm({ ...form, inset_x_ratio: null, inset_y_ratio: null })
+                      }
+                    >
+                      Reset
+                    </Button>
+                  ) : null}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-muted-foreground"
+                    disabled={imageWork !== null}
+                    onClick={() => void changeInset(null)}
+                  >
+                    Remove
+                  </Button>
+                </>
+              ) : null}
+            </div>
+
+            <input
+              ref={filePicker}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                // Cleared so picking the same file twice still fires a change.
+                event.target.value = "";
+                if (file) void changeInset(file);
+              }}
+            />
+          </div>
             </div>
 
             <div className="min-w-0 space-y-6">
@@ -506,6 +717,11 @@ function Field({
   );
 }
 
+/** Ratios are fractions of the card, and the server clamps to the same range. */
+function clamp01(value: number): number {
+  return Math.min(1, Math.max(0, value));
+}
+
 function Panel({ children }: { children: React.ReactNode }) {
   return (
     <div className="rounded-lg border border-dashed p-10 text-center text-sm text-muted-foreground">
@@ -522,5 +738,8 @@ function toForm(draft: Draft): Form {
     highlight_phrases: [...draft.highlight_phrases],
     hashtags: [...draft.hashtags],
     image_prompt: draft.image_prompt ?? "",
+    inset_size_px: draft.inset_size_px,
+    inset_x_ratio: draft.inset_x_ratio,
+    inset_y_ratio: draft.inset_y_ratio,
   };
 }

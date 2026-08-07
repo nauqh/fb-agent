@@ -83,6 +83,17 @@ export interface Draft {
   hero_image_path: string | null;
   composed_image_path: string | null;
 
+  /** The uploaded circular inset. Null is the normal case — no circle. */
+  inset_image_path: string | null;
+  /** Its diameter. Null takes the default from `layout.yml`. */
+  inset_size_px: number | null;
+  /**
+   * Its centre, as fractions of card width and height. Null is not 0 — it means
+   * the default, which is the seam, and the seam moves with the panel height.
+   */
+  inset_x_ratio: number | null;
+  inset_y_ratio: number | null;
+
   /** Brand rules still failing after the writer exhausted its retries. */
   warnings: string[];
 

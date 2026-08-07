@@ -1,8 +1,9 @@
-"""Hero + black panel + gold highlights + watermark, at 896×1120.
+"""Hero + black panel + gold highlights + watermark + inset, at 896×1120.
 
 The rasterising half. `text.py` decided every number this file uses; here it
 only draws. Geometry is ported from `image-composite.ts` — cover-crop the hero,
-panel below it, watermark top-right of the hero inset by the edge margin.
+panel below it, watermark top-right of the hero inset by the edge margin, and
+the circular portrait bottom-right, straddling the seam between the two.
 
 Two things are deliberate and easy to undo by accident:
 
@@ -16,9 +17,10 @@ Two things are deliberate and easy to undo by accident:
 """
 
 import io
+from typing import NamedTuple
 
 import resvg_py
-from PIL import Image
+from PIL import Image, ImageDraw
 
 from app.image.text import OverlayPlan, Segment, segment_lines
 from app.settings import API_DIR, Layout
@@ -135,11 +137,97 @@ def _watermark(path: str | None, box_px: int) -> Image.Image | None:
     return image
 
 
+SUPERSAMPLE = 4
+"""Draw the disc and its ring this much larger, then shrink.
+
+PIL has no antialiased ellipse. A circle drawn at final size against a black
+panel has visibly stepped edges at feed size; the old app got smooth ones for
+free because sharp rasterised an SVG mask. Four is where the stair-stepping
+stops being visible at 140px.
+"""
+
+
+def circular_portrait(
+    data: bytes, layout: Layout, size_px: int | None = None
+) -> Image.Image:
+    """The inset: a cover-cropped picture in a disc, with a ring around it.
+
+    The ring is a stroke *centred on the circle edge*, matching the old app's
+    `buildCircularPortrait` — half of it sits over the picture and half outside,
+    which is why the canvas is `ring_pad_px` larger on every side. It is black,
+    so the half that crosses the panel disappears into it and the disc reads as
+    a cut-out rather than a sticker.
+
+    `size_px` is the draft's chosen diameter, clamped here as well as on write:
+    a row can predate a change to the bounds in `layout.yml`.
+    """
+    portrait = layout.portrait
+    diameter = portrait.clamp(size_px, layout.image.width)
+    size = portrait.ring_size(size_px, layout.image.width)
+
+    try:
+        source = Image.open(io.BytesIO(data)).convert("RGBA")
+    except OSError as error:
+        raise CompositeError(f"the inset portrait did not decode ({error})") from error
+
+    face = _cover(source, diameter, diameter)
+    mask = Image.new("L", (diameter * SUPERSAMPLE,) * 2, 0)
+    ImageDraw.Draw(mask).ellipse(
+        (0, 0, diameter * SUPERSAMPLE - 1, diameter * SUPERSAMPLE - 1), fill=255
+    )
+    face.putalpha(mask.resize((diameter, diameter), Image.LANCZOS))
+
+    canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    canvas.paste(face, (portrait.ring_pad_px, portrait.ring_pad_px), face)
+
+    ring = Image.new("RGBA", (size * SUPERSAMPLE,) * 2, (0, 0, 0, 0))
+    centre = size * SUPERSAMPLE / 2
+    radius = (diameter / 2 + portrait.border_width_px / 2) * SUPERSAMPLE
+    ImageDraw.Draw(ring).ellipse(
+        (centre - radius, centre - radius, centre + radius, centre + radius),
+        outline=portrait.border_color,
+        width=round(portrait.border_width_px * SUPERSAMPLE),
+    )
+    canvas.alpha_composite(ring.resize((size, size), Image.LANCZOS))
+    return canvas
+
+
+class Inset(NamedTuple):
+    """The uploaded circle and where it goes. One argument, because the three
+    travel together and a `compose(..., None, None, None)` says nothing."""
+
+    data: bytes
+    size_px: int | None = None
+    x_ratio: float | None = None
+    y_ratio: float | None = None
+
+
+def inset_centre(
+    inset: Inset, plan: OverlayPlan, layout: Layout
+) -> tuple[int, int]:
+    """Where the disc's centre lands, in card pixels.
+
+    A null ratio resolves *here* rather than on the row, because the default
+    depends on the draft: the panel grows with the copy, so the seam is at a
+    different height on every card. Bottom-right at the edge margin, centred on
+    the seam — `portraitTop`/`portraitLeft` in `brand-image-layout.ts:139-140`,
+    converted from a corner to a centre.
+    """
+    width, height = layout.image.width, layout.image.height
+    ring = layout.portrait.ring_size(inset.size_px, width)
+    margin = round(width * layout.image.edge_margin_ratio)
+
+    x = width - margin - ring / 2 if inset.x_ratio is None else inset.x_ratio * width
+    y = plan.hero_height_px if inset.y_ratio is None else inset.y_ratio * height
+    return round(x), round(y)
+
+
 def compose(
     hero: bytes,
     plan: OverlayPlan,
     phrases: list[str],
     watermark_path: str | None,
+    inset: Inset | None = None,
     layout: Layout | None = None,
 ) -> bytes:
     """The finished PNG. Everything variable was decided before this call."""
@@ -164,12 +252,22 @@ def compose(
     canvas.paste(_cover(source, width, plan.hero_height_px), (0, 0))
     canvas.paste(render_panel(plan, phrases, layout), (0, plan.hero_height_px))
 
+    margin = round(width * layout.image.edge_margin_ratio)
+
     box = min(layout.watermark.max_px, round(width * 0.22))
     mark = _watermark(watermark_path, box)
     if mark is not None:
-        margin = round(width * layout.image.edge_margin_ratio)
         top = max(8, round(plan.hero_height_px * layout.watermark.top_ratio))
         canvas.paste(mark, (width - mark.width - margin, top), mark)
+
+    if inset is not None:
+        # Default is centred on the seam: half on the photograph, half on the
+        # panel. That overlap is the effect — a disc wholly inside the hero is a
+        # sticker, and one wholly inside the panel is an avatar. The operator
+        # can drag it anywhere from there.
+        disc = circular_portrait(inset.data, layout, inset.size_px)
+        x, y = inset_centre(inset, plan, layout)
+        canvas.alpha_composite(disc, (x - disc.width // 2, y - disc.height // 2))
 
     out = io.BytesIO()
     canvas.convert("RGB").save(out, format="PNG")

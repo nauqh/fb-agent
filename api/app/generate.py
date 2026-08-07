@@ -219,9 +219,10 @@ def build_image(session: Session, draft: Draft, page: Page) -> list[str]:
     point: `POST /drafts/{id}/image` calls it again without re-billing the
     writer.
 
-    The two paths are stored separately on purpose. Re-compositing after an
-    overlay edit reuses `hero_image_path`, so editing the text is free and only
-    a genuinely new picture is charged for.
+    The paths are stored separately on purpose. Re-compositing after an overlay
+    edit reuses `hero_image_path`, so editing the text is free and only a
+    genuinely new picture is charged for. `inset_image_path` is free either way
+    — it is an upload, not a generation.
     """
     if not draft.hook:
         return [f"{IMAGE_WARNING}no hook, so there is nothing to draw."]
@@ -253,6 +254,7 @@ def build_image(session: Session, draft: Draft, page: Page) -> list[str]:
             plan,
             draft.highlight_phrases,
             page.watermark_image_path,
+            _inset(draft),
         )
         draft.composed_image_path = media.store.save(
             composed, media.filename(draft.id or 0, "composed")
@@ -263,6 +265,22 @@ def build_image(session: Session, draft: Draft, page: Page) -> list[str]:
 
     except Exception as error:  # noqa: BLE001 — a warning, not a dead draft
         return [f"{IMAGE_WARNING}{type(error).__name__}: {error}"[:300]]
+
+
+def _inset(draft: Draft) -> compositor.Inset | None:
+    """The uploaded circle, if there is one. Nothing generates this.
+
+    A file the operator chose, so a run never waits on it and never pays for
+    it: a fresh draft has no inset, and one appears when somebody uploads it.
+    """
+    if not draft.inset_image_path:
+        return None
+    return compositor.Inset(
+        media.store.path(draft.inset_image_path).read_bytes(),
+        draft.inset_size_px,
+        draft.inset_x_ratio,
+        draft.inset_y_ratio,
+    )
 
 
 def _highlight_warnings(content) -> list[str]:

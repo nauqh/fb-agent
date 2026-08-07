@@ -5,15 +5,26 @@ the client polls `GET /drafts/{id}` until `status` leaves `generating`. The row
 is the job record, which is why progress lives on it.
 """
 
+import io
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    HTTPException,
+    Query,
+    UploadFile,
+)
+from PIL import Image
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
 from app import generate, media
 from app.db import get_session
 from app.models import Draft, DraftStatus, Page, SourceItemBase
+from app.settings import layout
 from app.writer import validators
 
 router = APIRouter(tags=["drafts"])
@@ -86,9 +97,18 @@ class DraftEdit(BaseModel):
     highlight_phrases: list[str] | None = None
     hashtags: list[str] | None = None
     image_prompt: str | None = None
+    inset_size_px: int | None = None
+    inset_x_ratio: float | None = None
+    inset_y_ratio: float | None = None
 
 
-DRAWN_FIELDS = ("hook", "highlight_phrases")
+DRAWN_FIELDS = (
+    "hook",
+    "highlight_phrases",
+    "inset_size_px",
+    "inset_x_ratio",
+    "inset_y_ratio",
+)
 """The only edits that change the picture. Caption and body are not on it."""
 
 
@@ -120,6 +140,20 @@ def update_draft(
         # The box is free text split on spaces, so this path never sees the
         # model's schema. Same rule, applied where the edit lands.
         changes["hashtags"] = validators.normalise_hashtags(changes["hashtags"])
+
+    # Clamped where the edit lands, not only where it is drawn: the row is read
+    # back into a slider and a drag handle, and a value they would never render
+    # is a control that lies about what it is set to.
+    if changes.get("inset_size_px") is not None:
+        changes["inset_size_px"] = layout.portrait.clamp(
+            changes["inset_size_px"], layout.image.width
+        )
+    for axis in ("inset_x_ratio", "inset_y_ratio"):
+        # 0-1 of the card, as the old app stored it. Off the edge is allowed
+        # right up to it: half a disc hanging off the corner is a legitimate
+        # crop, and the old editor clamped to exactly this.
+        if changes.get(axis) is not None:
+            changes[axis] = min(1.0, max(0.0, changes[axis]))
 
     for field, value in changes.items():
         setattr(draft, field, value)
@@ -174,6 +208,94 @@ def rebuild_image(
     return _save(session, draft)
 
 
+MAX_INSET_BYTES = 8 * 1024 * 1024
+"""A phone photograph is 3-5MB. Bounded because the body is read into memory."""
+
+
+@router.post("/drafts/{draft_id}/inset")
+async def upload_inset(
+    draft_id: int,
+    file: UploadFile = File(description="Any image. Cropped to a circle when drawn."),
+    session: Session = Depends(get_session),
+) -> Draft:
+    """Put a picture in the circle, and redraw the card around it.
+
+    The one image in the app that comes from a person rather than a model, and
+    the only reason the inset exists at all: the old app offered Upload beside
+    Generate and defaulted to Upload (`circular-inset-dialog.tsx`).
+
+    Re-encoded to PNG rather than stored as sent. The upload decides nothing
+    about how it is drawn — the compositor cover-crops it to a disc at the
+    draft's size — so keeping the original container buys nothing and keeps
+    whatever the camera attached to it. Decoding here also means a file that is
+    not an image is a 422 on the upload rather than a broken composite later.
+    """
+    draft = _require(session, draft_id)
+    page = session.get(Page, draft.page_id)
+    if page is None:
+        raise HTTPException(status_code=404, detail=f"No page {draft.page_id}")
+
+    data = await file.read(MAX_INSET_BYTES + 1)
+    if len(data) > MAX_INSET_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"That image is over {MAX_INSET_BYTES // (1024 * 1024)}MB.",
+        )
+
+    try:
+        picture = Image.open(io.BytesIO(data))
+        picture.load()
+    except Exception as error:  # noqa: BLE001 — any decode failure is the same answer
+        raise HTTPException(
+            status_code=422, detail=f"That file is not an image Pillow can read ({error})."
+        ) from error
+
+    buffer = io.BytesIO()
+    picture.convert("RGB").save(buffer, format="PNG")
+    draft.inset_image_path = media.store.save(
+        buffer.getvalue(), media.filename(draft_id, "inset")
+    )
+    return _redrawn(session, draft, page)
+
+
+@router.delete("/drafts/{draft_id}/inset")
+def remove_inset(draft_id: int, session: Session = Depends(get_session)) -> Draft:
+    """Take the circle off. Returns the draft, not 204, because the card changed.
+
+    Size and position go with it, so the next upload starts on the seam at the
+    default diameter rather than inheriting geometry chosen for a picture that
+    is no longer there. Replacing keeps them, which is the point of Replace.
+
+    The file is left on disk: an approved composite may already have been drawn
+    with it, and the row that points at that composite has no way to say which
+    inset went into it. Deleting the draft still takes it.
+    """
+    draft = _require(session, draft_id)
+    page = session.get(Page, draft.page_id)
+    if page is None:
+        raise HTTPException(status_code=404, detail=f"No page {draft.page_id}")
+
+    draft.inset_image_path = None
+    draft.inset_size_px = None
+    draft.inset_x_ratio = None
+    draft.inset_y_ratio = None
+    return _redrawn(session, draft, page)
+
+
+def _redrawn(session: Session, draft: Draft, page: Page) -> Draft:
+    """Save, and rebuild the composite around whatever the inset now is.
+
+    Free — the hero is reused and only the panel and the disc are redrawn — so
+    there is nothing to weigh and no button to press. Same rule as `PATCH`:
+    the stored PNG always matches the stored row.
+    """
+    if draft.hero_image_path:
+        fresh = generate.build_image(session, draft, page)
+        kept = [w for w in draft.warnings if not w.startswith(generate.IMAGE_WARNING)]
+        draft.warnings = kept + fresh
+    return _save(session, draft)
+
+
 @router.delete("/drafts/{draft_id}", status_code=204)
 def delete_draft(draft_id: int, session: Session = Depends(get_session)) -> None:
     """Gone for good, along with its pictures.
@@ -195,7 +317,11 @@ def delete_draft(draft_id: int, session: Session = Depends(get_session)) -> None
             detail="That draft is still being written. Wait for it to finish.",
         )
 
-    for stored in (draft.hero_image_path, draft.composed_image_path):
+    for stored in (
+        draft.hero_image_path,
+        draft.composed_image_path,
+        draft.inset_image_path,
+    ):
         if stored:
             media.store.path(stored).unlink(missing_ok=True)
 

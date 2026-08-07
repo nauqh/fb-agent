@@ -139,4 +139,18 @@ export const LAYOUT = {
   edgeMarginRatio: 0.02,
   /** Watermark width cap. Capped again at 0.22 × width by the compositor. */
   watermarkMaxPx: 138,
+  /**
+   * The circular inset. `portraitSizePx` is the default diameter, not a cap —
+   * the draft carries its own `inset_size_px` between the two bounds, and the
+   * slider in the drawer is these numbers.
+   *
+   * The preview draws the ring outside the disc rather than astride it: a 2px
+   * difference on a black panel, against negative outline offsets in container
+   * units for no visible gain.
+   */
+  portraitSizePx: 140,
+  portraitMinPx: 40,
+  portraitMaxWidthRatio: 0.45,
+  portraitBorderPx: 2,
+  portraitBorderColor: "#000000",
 } as const;

@@ -82,12 +82,15 @@ erDiagram
         text hook
         text caption "the recap"
         text first_comment
-        text overlay_text
         json highlight_phrases
         json hashtags
         text image_prompt
         text hero_image_path
         text composed_image_path
+        text inset_image_path "the uploaded circular inset, or null"
+        int inset_size_px "its diameter; null takes the layout default"
+        float inset_x_ratio "its centre, as a fraction of the card"
+        float inset_y_ratio "null on either axis means the seam, not zero"
         json warnings
         text progress_step
         int progress_pct

@@ -78,6 +78,34 @@ class WatermarkLayout(Frozen):
     top_ratio: float
 
 
+class PortraitLayout(Frozen):
+    size_px: int
+    min_px: int
+    max_width_ratio: float
+    ring_pad_px: int
+    border_width_px: int
+    border_color: str
+
+    def clamp(self, size_px: int | None, image_width: int) -> int:
+        """The diameter actually drawn. `None` means the default.
+
+        Both ends matter: below `min_px` the disc is a smudge, and above
+        `max_width_ratio` it stops being an inset and starts being the picture.
+        Applied on write *and* on draw, because a row can predate a change to
+        either bound.
+        """
+        return round(
+            min(
+                image_width * self.max_width_ratio,
+                max(self.min_px, self.size_px if size_px is None else size_px),
+            )
+        )
+
+    def ring_size(self, size_px: int | None, image_width: int) -> int:
+        """The drawn size: disc plus the padding the stroke needs on each side."""
+        return self.clamp(size_px, image_width) + self.ring_pad_px * 2
+
+
 class FontLayout(Frozen):
     family: str
     weight: str
@@ -95,6 +123,7 @@ class Layout(Frozen):
     text: TextLayout
     highlight: HighlightLayout
     watermark: WatermarkLayout
+    portrait: PortraitLayout
     font: FontLayout
 
     @property

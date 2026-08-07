@@ -13,7 +13,13 @@ const BASE = "/api";
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${BASE}${path}`, {
     ...init,
-    headers: init?.body ? { "Content-Type": "application/json" } : undefined,
+    // Only for a JSON string body. A `FormData` body must go out without this:
+    // the browser sets `multipart/form-data` *plus the boundary*, and a
+    // hand-written Content-Type has no boundary, so the server parses nothing.
+    headers:
+      typeof init?.body === "string"
+        ? { "Content-Type": "application/json" }
+        : undefined,
   });
 
   if (!response.ok) {
@@ -54,8 +60,20 @@ export function patch<T>(path: string, body: unknown): Promise<T> {
   return request<T>(path, { method: "PATCH", body: JSON.stringify(body) });
 }
 
-/** No return type: the one DELETE here answers 204, which has no body to parse. */
+/** A file, as multipart. The one request in the app that does not send JSON. */
+export function upload<T>(path: string, file: File): Promise<T> {
+  const body = new FormData();
+  body.append("file", file);
+  return request<T>(path, { method: "POST", body });
+}
+
+/** No return type: this DELETE answers 204, which has no body to parse. */
 export async function del(path: string): Promise<void> {
   const response = await fetch(`${BASE}${path}`, { method: "DELETE" });
   if (!response.ok) throw new Error(await detail(response));
+}
+
+/** For a DELETE that answers with the row it changed rather than 204. */
+export function delJson<T>(path: string): Promise<T> {
+  return request<T>(path, { method: "DELETE" });
 }

@@ -68,6 +68,18 @@ def illustrated(monkeypatch):
     return png
 
 
+@pytest.fixture
+def a_photograph() -> bytes:
+    """What an operator uploads for the circle. A real PNG, not a sentinel."""
+    import io
+
+    from PIL import Image
+
+    buffer = io.BytesIO()
+    Image.new("RGB", (1200, 900), (200, 120, 40)).save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
 @pytest.fixture(autouse=True)
 def media_root(tmp_path, monkeypatch):
     """Written images go to the test's own directory, not `api/media`.

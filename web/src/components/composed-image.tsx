@@ -36,6 +36,10 @@ export function ComposedImage({
   highlightPhrases,
   watermarkPath,
   heroSrc,
+  insetSrc,
+  insetSizePx,
+  insetXRatio,
+  insetYRatio,
   seed = 0,
   className,
 }: {
@@ -43,6 +47,21 @@ export function ComposedImage({
   highlightPhrases: string[];
   /** The generated hero, if one exists. A gradient stands in when it does not. */
   heroSrc?: string | null;
+  /**
+   * The uploaded circular inset. Absent is the normal case: no upload, no
+   * circle, and nothing stands in for it.
+   */
+  insetSrc?: string | null;
+  /** Its diameter in card pixels. Undefined takes the default. */
+  insetSizePx?: number | null;
+  /**
+   * Its centre as fractions of the card. Null on either axis means the default
+   * for that axis, which is the seam — and the seam is a flexbox edge here, not
+   * a number, so a defaulted disc is rendered inside the hero and a placed one
+   * against the card.
+   */
+  insetXRatio?: number | null;
+  insetYRatio?: number | null;
   /**
    * `page.watermark_image_path`, relative to `API_DIR` — and therefore also the
    * URL under `/api/`, which is why this preview draws the same file the
@@ -62,13 +81,44 @@ export function ComposedImage({
 
   const hue = (seed * 47) % 360;
 
+  /**
+   * The disc, and the two places it can live.
+   *
+   * `inset_y_ratio` null means the seam, and the seam is a flexbox edge rather
+   * than a number here — the panel sizes itself to its text, so nothing in this
+   * component knows where it falls. So a defaulted disc renders *inside* the
+   * hero, where `bottom-0` is the seam by construction, and a placed one renders
+   * against the card at a percentage. Same split per axis as `inset_centre` on
+   * the server, so a half-set position looks the same in both.
+   */
+  const width = clampInset(insetSizePx) + LAYOUT.portraitBorderPx * 2;
+  const disc = insetSrc ? (
+    <div
+      className="absolute z-10 aspect-square rounded-full"
+      style={{
+        width: `${(width / LAYOUT.width) * 100}%`,
+        backgroundColor: LAYOUT.portraitBorderColor,
+        padding: `${(LAYOUT.portraitBorderPx / LAYOUT.width) * 100}%`,
+        ...(insetXRatio == null
+          ? { right: `${LAYOUT.edgeMarginRatio * 100}%` }
+          : { left: `${insetXRatio * 100}%`, translate: "-50%" }),
+        ...(insetYRatio == null
+          ? { bottom: 0, translate: `${insetXRatio == null ? "0" : "-50%"} 50%` }
+          : { top: `${insetYRatio * 100}%`, translate: `${insetXRatio == null ? "0" : "-50%"} -50%` }),
+      }}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={insetSrc} alt="" className="size-full rounded-full object-cover" />
+    </div>
+  ) : null;
+
   return (
     <div
       className={cn(
         // Container query unit `cqw` is what keeps the type scaling with the
         // card instead of the viewport — the panel must look the same in the
         // 180px list thumbnail and the 380px detail view.
-        "@container flex flex-col overflow-hidden rounded-md border bg-black",
+        "@container relative flex flex-col overflow-hidden rounded-md border bg-black",
         className,
       )}
       style={{ aspectRatio: `${LAYOUT.width} / ${LAYOUT.height}` }}
@@ -118,6 +168,10 @@ export function ComposedImage({
             </p>
           )}
         </div>
+
+        {/* On the seam by default: `bottom-0` is the hero's own edge, and the
+            50% translate puts half the disc onto the panel. */}
+        {insetYRatio == null ? disc : null}
       </div>
 
       {/* Panel. `min-height` is the 20% floor; the content pushes it taller. */}
@@ -146,7 +200,28 @@ export function ComposedImage({
           ))
         )}
       </div>
+
+      {/* Placed by the operator: against the card, not the hero, because the
+          disc can now be anywhere including entirely on the panel. */}
+      {insetYRatio == null ? null : disc}
     </div>
+  );
+}
+
+/**
+ * The inset diameter the compositor would use, in card pixels.
+ *
+ * The same clamp as `PortraitLayout.clamp`, and it has to be here as well as
+ * there: the slider moves this preview on every drag, long before a save exists
+ * to clamp anything, and a preview that draws a size the PNG will not is worse
+ * than no preview.
+ */
+export function clampInset(sizePx: number | null | undefined): number {
+  return Math.round(
+    Math.min(
+      LAYOUT.width * LAYOUT.portraitMaxWidthRatio,
+      Math.max(LAYOUT.portraitMinPx, sizePx ?? LAYOUT.portraitSizePx),
+    ),
   );
 }
 

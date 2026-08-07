@@ -53,8 +53,27 @@ watermark:
     # without one failed post.
     max_px: 138 # capped again at 0.22 × width
     top_ratio: 0.014 # × hero height, floor 8px
-    # Seam portrait inset is not ported: portrait_inset_enabled is false on all
-    # ten production pages.
+
+portrait:
+    # The circular inset: a picture the operator uploads, straddling the
+    # hero/panel seam at the bottom-right, inset by edge_margin.
+    #
+    # Geometry is the old app's (brand-image-layout.ts:125-140 and
+    # portrait-inset-shared.ts:5-17), which is where every number below comes
+    # from — the ring is a stroke centred on the circle edge, so it needs 2px of
+    # canvas outside the disc and gets 3.
+    #
+    # Nothing here generates the picture. The old app offered Upload and
+    # Generate; only Upload is ported, so the inset is the one image in the app
+    # that costs nothing and comes from a person. Its *size* is per-draft and
+    # lives on the row, because it depends on what is in the picture rather than
+    # on the brand.
+    size_px: 140 # DEFAULT_PORTRAIT_SIZE_PX in the old app — the default, not a cap
+    min_px: 40 # MIN_INSET_SIZE_PX; below this the disc is a smudge
+    max_width_ratio: 0.45 # MAX_INSET_DIAMETER_RATIO — 403px at 896 wide
+    ring_pad_px: 3
+    border_width_px: 2 # the old app's default was 4, which read as a heavy outline
+    border_color: "#000000" # reads as a cut-out where it crosses the panel
 
 font:
     # family must match the TTF name table. resvg substitutes silently otherwise:
