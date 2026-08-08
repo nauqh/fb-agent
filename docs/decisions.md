@@ -207,6 +207,34 @@ are the same kind of thing: a fixed input the renderer cannot work without.
 Versioned with the code that reads them, so they cannot evaporate again, and a
 clone is complete. A missing file should be an error, never a quiet fallback.
 
+## A run generates its drafts in parallel
+
+Decided 2026-08-08. `run_drafts` loops its ids sequentially, so two ticked
+sources cost ~260s for work that is two independent ~130s calls. It becomes a
+`ThreadPoolExecutor` with a **session per draft** — SQLAlchemy Sessions are not
+thread-safe, and `_run_one` commits five times per draft. Concurrency is a
+setting, defaulting to **3**.
+
+Three things make this cheap rather than a rewrite:
+
+**The path is already exercised.** Two Generate clicks today spawn two
+`run_drafts` in FastAPI's threadpool, each with its own Session. Threads off the
+main loop, `run_sync` inside them, and concurrent SQLite writes are all live in
+production already — this only does inside one run what two clicks already do.
+
+**SQLite needs one line.** Every `_progress` commits, and the default rollback
+journal admits one writer, so the rest meet `database is locked` and lean on
+`busy_timeout`. `PRAGMA journal_mode=WAL` in `_configure_sqlite` — the one line
+db.py's own docstring predicted. Commits are milliseconds against drafts that
+take minutes, so contention after that is noise. Still safe for
+`sweep_stranded`, which needs one *process*, not one thread.
+
+**The cap is about Gemini, not threads.** Each draft is a text call plus an
+image call, and the writer's fallback chain steps *models* on a transient error
+without ever backing off — so a 429 burns the chain and fails the draft rather
+than waiting. Three is a rate-limit budget. Going wider means adding backoff
+first.
+
 ## Deferred to v2
 
 - Approve → Metricool push. Metricool's servers fetch the image URL themselves
