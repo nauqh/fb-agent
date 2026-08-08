@@ -17,6 +17,10 @@ dependencies = [
     "httpx>=0.28",
     "pyyaml>=6.0",
     "feedparser>=6.0.14",
+    # Windows ships no tz database, so `ZoneInfo("Asia/Ho_Chi_Minh")` raises
+    # there — and the publish path needs it to stamp a naive local time for
+    # Metricool. Harmless on Linux, where zoneinfo prefers the system copy.
+    "tzdata>=2026.1",
 ]
 
 [dependency-groups]

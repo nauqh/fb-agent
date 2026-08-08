@@ -97,6 +97,12 @@ export interface Draft {
   /** Brand rules still failing after the writer exhausted its retries. */
   warnings: string[];
 
+  /**
+   * What Metricool called the post it queued, or null if it was never pushed.
+   * There is no scheduled time beside it — Metricool's planner owns that.
+   */
+  metricool_post_id: string | null;
+
   progress_step: string | null;
   progress_pct: number;
   error: string | null;
@@ -110,4 +116,29 @@ export interface PromptFile {
   filename: string;
   chars: number;
   body: string;
+}
+
+/**
+ * One row of Metricool's planner.
+ *
+ * Not a `Draft`, and not stored anywhere: most of these were queued by the old
+ * system, which is still what publishes History Retraced. Mapping them onto our
+ * own model would invent a `hook` and `highlight_phrases` for a post somebody
+ * wrote in Metricool's composer.
+ */
+export interface ScheduledPost {
+  id: string;
+  /** Naive local time, as the planner stores it — never converted to UTC. */
+  published_at: string;
+  timezone: string;
+  text: string;
+  first_comment: string | null;
+  image_url: string | null;
+  network: string;
+  /** Metricool's word: `PUBLISHED`, `PENDING`, `ERROR`, `DRAFT`. */
+  status: string;
+  public_url: string | null;
+  is_draft: boolean;
+  /** Ours, when the post came from this app. Null for everything else. */
+  draft_id: number | null;
 }

@@ -214,6 +214,17 @@ class Draft(SQLModel, table=True):
     warnings: list[str] = Field(default_factory=list, sa_column=Column(JSON))
     """Brand rules still failing after the writer exhausted its retries."""
 
+    metricool_post_id: str | None = Field(default=None, index=True)
+    """What Metricool called the post it queued. The whole of our publish state.
+
+    There is no `scheduled_at` beside it, and that is ADR-0001 rather than an
+    omission: the old system mirrored every scheduled post into a table with a
+    five-value status enum, a due-post cron and a stale-`PROCESSING` recovery
+    path, and production held **0 rows against 237 approved drafts**. Metricool's
+    planner is the source of truth for when a post goes out; this column exists
+    only so we can ask it about ours.
+    """
+
     progress_step: str | None = None
     progress_pct: int = 0
     error: str | None = None

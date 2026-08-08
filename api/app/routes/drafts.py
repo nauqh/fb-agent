@@ -24,6 +24,8 @@ from sqlmodel import Session, select
 from app import generate, media
 from app.db import get_session
 from app.models import Draft, DraftStatus, Page, SourceItemBase
+from app.publish import metricool as publisher
+from app.publish import storage
 from app.settings import layout
 from app.writer import validators
 
@@ -327,6 +329,94 @@ def delete_draft(draft_id: int, session: Session = Depends(get_session)) -> None
 
     session.delete(draft)
     session.commit()
+
+
+class PublishRequest(BaseModel):
+    when: datetime | None = None
+    """Local time to publish. `None` means as soon as Metricool will take it."""
+
+
+@router.post("/drafts/{draft_id}/publish")
+def publish_draft(
+    draft_id: int,
+    request: PublishRequest | None = None,
+    session: Session = Depends(get_session),
+) -> Draft:
+    """Upload the composite, hand the post to Metricool, record what it is called.
+
+    Separate from Approve, and it stays separate. Approve is a queue movement
+    with an undo — `unapprove` exists and the toast offers it. This is the step
+    that cannot be taken back, so it is its own button and its own decision.
+
+    Order matters: the picture goes up **first**. Metricool stores a link and
+    Facebook fetches it when the post is due, so scheduling against a URL that
+    does not resolve yet produces a post that looks correct in the planner and
+    goes out broken.
+
+    Publishing twice is refused rather than allowed to make a duplicate — the
+    id is on the row, and the planner is where a scheduled post is changed
+    (ADR-0001).
+    """
+    draft = _require(session, draft_id)
+
+    if draft.metricool_post_id:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"That draft is already in Metricool as post "
+                f"{draft.metricool_post_id}. Change it there."
+            ),
+        )
+    if draft.status == DraftStatus.FAILED:
+        raise HTTPException(
+            status_code=409, detail="That draft failed and has nothing to publish."
+        )
+    if not draft.composed_image_path:
+        raise HTTPException(
+            status_code=409,
+            detail="That draft has no composed image, so there is nothing to post.",
+        )
+
+    page = session.get(Page, draft.page_id)
+    if page is None:
+        raise HTTPException(status_code=404, detail=f"No page {draft.page_id}")
+    if not page.metricool_blog_id:
+        raise HTTPException(
+            status_code=409,
+            detail=f"{page.name} has no metricool_blog_id to publish against.",
+        )
+
+    composite = media.store.path(draft.composed_image_path).read_bytes()
+
+    try:
+        url = storage.upload(composite, f"{draft_id}.jpg")
+        normalized = publisher.normalize_image(url, page.metricool_blog_id)
+        post_id = publisher.schedule(
+            page.metricool_blog_id,
+            _post_text(draft),
+            draft.first_comment,
+            normalized,
+            request.when if request else None,
+        )
+    except (storage.StorageError, publisher.PublishError) as error:
+        # 502: the failure is upstream, and the draft is untouched and still
+        # publishable once whatever broke is fixed.
+        raise HTTPException(status_code=502, detail=str(error)) from error
+
+    draft.metricool_post_id = post_id or "queued"
+    return _save(session, draft)
+
+
+def _post_text(draft: Draft) -> str:
+    """The caption and its hashtags, which is what Facebook shows.
+
+    The hook is not here: it is drawn *on the image*, and repeating it as the
+    caption prints the same sentence twice on one post. The first comment goes
+    to Metricool separately, as `firstCommentText`.
+    """
+    caption = (draft.caption or "").strip()
+    tags = " ".join(draft.hashtags)
+    return f"{caption}\n\n{tags}".strip() if tags else caption
 
 
 @router.post("/drafts/{draft_id}/approve")

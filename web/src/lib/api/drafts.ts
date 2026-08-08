@@ -129,6 +129,20 @@ export async function removeInset(id: number): Promise<Draft> {
 }
 
 /**
+ * Hand the post to Metricool. The one action with no undo.
+ *
+ * Uploads the composite, then schedules — in that order, because Metricool
+ * stores a link and Facebook fetches it when the post is due. Metricool
+ * publishes and posts the first comment itself; after this call the post is
+ * changed in its planner, not here (ADR-0001).
+ *
+ * `when` is a local time. Omitted means as soon as Metricool will take it.
+ */
+export async function publishDraft(id: number, when?: string): Promise<Draft> {
+  return post<Draft>(`/drafts/${id}/publish`, when ? { when } : {});
+}
+
+/**
  * Gone for good, pictures and all.
  *
  * Reject is the reversible one — a decision that stays on the record. This is

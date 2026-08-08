@@ -248,6 +248,33 @@ class Settings(BaseSettings):
     metricool_api_token: str = ""
     metricool_user_id: str = ""
 
+    metricool_publish_as_draft: bool = True
+    """Push to Metricool's planner as a draft rather than a queued post.
+
+    On by default, and it should stay on until a real push has been watched
+    through end to end. The difference between the two values is the difference
+    between a row in a planner and a post on a page with an audience — there is
+    no dry run for the second one, and no undo that happens before people see it.
+    """
+
+    supabase_url: str = ""
+    supabase_service_key: str = ""
+    supabase_bucket: str = "fb-agent-media"
+    """Where a composite goes so that Metricool can fetch it.
+
+    **Not a MediaStore.** Heroes, insets and working composites stay on local
+    disk; exactly one JPEG per publish is uploaded here, because that is the only
+    file anything outside this machine ever needs to read. Measured before
+    choosing: a composite is 1.21MB as PNG and 0.27MB as JPEG, so publishing
+    twice a day costs ~16MB a month against a 1GB free tier.
+
+    The bucket must be **public**. A signed URL would expire, and Metricool does
+    not take its own copy — verified against the live API, which echoed both a
+    JPEG and a PNG back unchanged rather than re-hosting them, contradicting
+    their own documentation. Facebook fetches the URL when the post goes out, so
+    it has to still resolve then.
+    """
+
     x_bearer_token: str = ""
 
     @property
@@ -267,6 +294,8 @@ class Settings(BaseSettings):
             "METRICOOL_API_TOKEN": self.metricool_api_token,
             "METRICOOL_USER_ID": self.metricool_user_id,
             "X_BEARER_TOKEN": self.x_bearer_token,
+            "SUPABASE_URL": self.supabase_url,
+            "SUPABASE_SERVICE_KEY": self.supabase_service_key,
         }
         return sorted(name for name, value in required.items() if not value)
 
