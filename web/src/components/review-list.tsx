@@ -13,9 +13,9 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { deleteDraft, listDrafts, rejectDraft } from "@/lib/api/drafts";
+import { deleteDraft, listDrafts, publishDraft, rejectDraft } from "@/lib/api/drafts";
 import { listPages } from "@/lib/api/pages";
-import { fullDate } from "@/lib/format";
+import { dayHeading, dayKey, timeOfDay } from "@/lib/format";
 import type { Draft, Page } from "@/lib/types";
 import { useQuery } from "@/lib/use-query";
 import { cn } from "@/lib/utils";
@@ -122,16 +122,41 @@ export function ReviewList() {
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y">
-              {shown.map((draft) => (
-                <Row
-                  key={draft.id}
-                  draft={draft}
-                  page={pages?.find((candidate) => candidate.id === draft.page_id)}
-                  onChanged={refresh}
-                />
-              ))}
-            </tbody>
+            {/*
+              A `tbody` per day, which is what the element is for — a table may
+              hold several, and each gets its own heading row without breaking
+              the column alignment that makes this a table rather than cards.
+
+              Grouping happens *within* the page, not across the queue. A day
+              can therefore straddle two pages, and that is the right trade:
+              paging by day would make page size depend on how much was
+              generated that day, and one heavy batch would be a single
+              enormous page.
+            */}
+            {groupByDay(shown).map(([day, rows]) => (
+              <tbody key={day} className="divide-y">
+                <tr className="border-b bg-muted/20">
+                  <td
+                    colSpan={6}
+                    className="px-5 py-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
+                  >
+                    {dayHeading(rows[0].created_at)}
+                    <span className="ml-2 font-normal tabular-nums opacity-70">
+                      {rows.length} draft{rows.length === 1 ? "" : "s"}
+                    </span>
+                  </td>
+                </tr>
+
+                {rows.map((draft) => (
+                  <Row
+                    key={draft.id}
+                    draft={draft}
+                    page={pages?.find((candidate) => candidate.id === draft.page_id)}
+                    onChanged={refresh}
+                  />
+                ))}
+              </tbody>
+            ))}
           </table>
         )}
 
@@ -139,6 +164,18 @@ export function ReviewList() {
       </div>
     </div>
   );
+}
+
+/** Consecutive runs, not a map: the queue is already sorted newest first. */
+function groupByDay(drafts: Draft[]): [string, Draft[]][] {
+  const days: [string, Draft[]][] = [];
+  for (const draft of drafts) {
+    const key = dayKey(draft.created_at);
+    const last = days[days.length - 1];
+    if (last && last[0] === key) last[1].push(draft);
+    else days.push([key, [draft]]);
+  }
+  return days;
 }
 
 function Row({
@@ -212,8 +249,11 @@ function Row({
         />
       </td>
 
-      <td className="whitespace-nowrap px-5 py-4 align-middle text-[13px] text-muted-foreground">
-        {fullDate(draft.created_at)}
+      {/* Time only: the date is stated once by the day heading above, and
+          repeating it on every row is the column reading the same string
+          twenty times. */}
+      <td className="whitespace-nowrap px-5 py-4 align-middle text-[13px] tabular-nums text-muted-foreground">
+        {timeOfDay(draft.created_at)}
       </td>
 
       <td className="px-5 py-4 align-middle">
@@ -254,6 +294,7 @@ function RowMenu({ draft, onChanged }: { draft: Draft; onChanged: () => void }) 
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [publishing, setPublishing] = useState(false);
 
   async function run(work: () => Promise<unknown>, done: string) {
     setBusy(true);
@@ -266,6 +307,7 @@ function RowMenu({ draft, onChanged }: { draft: Draft; onChanged: () => void }) 
     } finally {
       setBusy(false);
       setConfirming(false);
+      setPublishing(false);
     }
   }
 
@@ -294,16 +336,23 @@ function RowMenu({ draft, onChanged }: { draft: Draft; onChanged: () => void }) 
             Review
           </DropdownMenuItem>
 
-          {/* Disabled rather than hidden: publishing is the point of the whole
-              app and its absence is worth stating. Nothing pushes to Facebook
-              in v1 — the old system still does that. */}
-          <DropdownMenuItem
-            disabled
-            title="Not in v1 — the old system still publishes."
-          >
-            <Rocket className="size-4" />
-            Publish now
-          </DropdownMenuItem>
+          {draft.metricool_post_id ? (
+            <DropdownMenuItem disabled title="Change it in Metricool's planner.">
+              <Rocket className="size-4" />
+              In Metricool
+            </DropdownMenuItem>
+          ) : (
+            <DropdownMenuItem
+              disabled={draft.status === "failed" || !draft.composed_image_path}
+              onSelect={(event) => {
+                event.preventDefault();
+                setPublishing(true);
+              }}
+            >
+              <Rocket className="size-4" />
+              Publish now
+            </DropdownMenuItem>
+          )}
 
           <DropdownMenuSeparator />
 
@@ -331,6 +380,34 @@ function RowMenu({ draft, onChanged }: { draft: Draft; onChanged: () => void }) 
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+
+      {/* The one action with no undo of any kind. Reject and even Delete only
+          affect our own row; this hands the post to Metricool, and from there
+          it goes to a page with an audience on a schedule we no longer own. */}
+      <Dialog open={publishing} onOpenChange={setPublishing}>
+        <DialogContent className="sm:max-w-md">
+          <DialogTitle>Publish to Metricool?</DialogTitle>
+          <DialogDescription>
+            The image is uploaded and the post is handed to Metricool, which
+            publishes it and posts the first comment. After that it is changed in
+            Metricool&apos;s planner, not here.
+          </DialogDescription>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setPublishing(false)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={busy}
+              onClick={() =>
+                void run(() => publishDraft(draft.id), "Handed to Metricool.")
+              }
+            >
+              {busy ? <Loader2 className="size-4 animate-spin" /> : <Rocket className="size-4" />}
+              Publish
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Reject is undoable and needs no ceremony. Delete removes the row and
           both pictures with no way back, so it asks first. */}

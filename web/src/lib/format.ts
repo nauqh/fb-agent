@@ -60,3 +60,46 @@ export function chars(value: string | null | undefined): string {
 export function words(value: string | null | undefined): number {
   return value?.trim() ? value.trim().split(/\s+/).length : 0;
 }
+
+const dayKeyStamp = new Intl.DateTimeFormat("en-CA", {
+  timeZone: PAGE_TIMEZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+const dayHeadingStamp = new Intl.DateTimeFormat("en-GB", {
+  timeZone: PAGE_TIMEZONE,
+  weekday: "long",
+  day: "numeric",
+  month: "short",
+});
+const timeStamp = new Intl.DateTimeFormat("en-GB", {
+  timeZone: PAGE_TIMEZONE,
+  timeStyle: "short",
+});
+
+/**
+ * `2026-08-08` in the Page's zone — the key rows are grouped by.
+ *
+ * The zone matters more here than anywhere else on the screen. Grouping on the
+ * browser's day would put a draft made at 06:00 in Ho Chi Minh City under the
+ * previous date for anyone in Europe, so the same queue would break into
+ * different days depending on who opened it.
+ */
+export function dayKey(iso: string): string {
+  return dayKeyStamp.format(asUtc(iso));
+}
+
+/** `Today`, `Yesterday`, or `Friday, 7 Aug`. */
+export function dayHeading(iso: string): string {
+  const day = dayKey(iso);
+  const now = Date.now();
+  if (day === dayKeyStamp.format(new Date(now))) return "Today";
+  if (day === dayKeyStamp.format(new Date(now - 86_400_000))) return "Yesterday";
+  return dayHeadingStamp.format(asUtc(iso));
+}
+
+/** `14:30`. For a row whose date is already stated by its group heading. */
+export function timeOfDay(iso: string | null): string {
+  return iso ? timeStamp.format(asUtc(iso)) : "—";
+}
