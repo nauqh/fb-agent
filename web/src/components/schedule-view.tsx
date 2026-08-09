@@ -89,7 +89,8 @@ export function ScheduleView() {
           onWeekChange={setWeekStart}
         />
       ) : (
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        // `pr-3` holds the rows off the scrollbar this element owns.
+        <div className="min-h-0 flex-1 overflow-y-auto pr-3">
           <ScheduleList posts={posts ?? []} />
         </div>
       )}

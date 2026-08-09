@@ -195,7 +195,7 @@ export function SourceCard({ selected, pending, onToggle, ...item }: SourceCardP
               `auto` minimum refuses to shrink below its content, and without it
               the row grows past the fixed height and the footer leaves the box
               instead of the text scrolling. */}
-          <div className="min-h-0 space-y-4 overflow-y-auto">
+          <div className="min-h-0 space-y-4 overflow-y-auto pr-3">
             {/* Centred on its own backdrop rather than stretched to the dialog
                 width: the source is a 130px thumbnail (see `SourceThumbnail`)
                 and upscaling it four times only makes the blur bigger. */}

@@ -40,13 +40,16 @@ export default function SourcesScreen() {
             <TabsTrigger value="rss">RSS</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="competitors" className="min-h-0 flex-1 overflow-y-auto">
+          {/* `pr-3` on each pane: these own the scrollbar, and without it the
+              card grid runs right up against the bar. Inside the scroller, so
+              it holds the content off the bar rather than moving the bar. */}
+          <TabsContent value="competitors" className="min-h-0 flex-1 overflow-y-auto pr-3">
             <CompetitorsTab />
           </TabsContent>
-          <TabsContent value="tweets" className="min-h-0 flex-1 overflow-y-auto">
+          <TabsContent value="tweets" className="min-h-0 flex-1 overflow-y-auto pr-3">
             <TweetsTab />
           </TabsContent>
-          <TabsContent value="rss" className="min-h-0 flex-1 overflow-y-auto">
+          <TabsContent value="rss" className="min-h-0 flex-1 overflow-y-auto pr-3">
             <RssTab />
           </TabsContent>
         </div>

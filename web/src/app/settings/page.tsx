@@ -38,7 +38,9 @@ export default function SettingsScreen() {
   }
 
   return (
-    <div className="w-full max-w-3xl pb-16 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+    // `lg:pr-3` — only where this element is the scroller. Below `lg` the page
+    // scrolls instead and the padding would just be a stray inset.
+    <div className="w-full max-w-3xl pb-16 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-3">
       <ScreenHeader title="Settings" />
 
       <section className="space-y-6">
