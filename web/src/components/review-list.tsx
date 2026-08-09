@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   AlertTriangle,
   Loader2,
@@ -95,11 +95,21 @@ export function ReviewList() {
     [drafts, safePage],
   );
 
-  // Rejecting the last draft on the last page would otherwise strand the queue
-  // on a page that no longer exists.
-  useEffect(() => {
-    if (page > totalPages) setPage(totalPages);
-  }, [page, totalPages]);
+  /**
+   * Rejecting the last draft on the last page would otherwise strand the queue
+   * on a page that no longer exists.
+   *
+   * Adjusted during render rather than in an effect — the same correction
+   * `use-query.ts` makes when its key changes, and for the same reason. React
+   * re-runs the component before committing, so the clamp costs no extra
+   * paint, where an effect sets state *after* one and lands a second render.
+   *
+   * `safePage` below already keeps the *render* honest on its own. This exists
+   * so the stored page cannot sit out of range: reject down to one page while
+   * on page five, and a later run that grows the queue back to five would
+   * otherwise jump the operator there without being asked.
+   */
+  if (page > totalPages) setPage(totalPages);
 
   return (
     // Not `flex-1`: the shell is `h-screen` and does not scroll the page, so a
