@@ -2,7 +2,10 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
-import { Nav } from "@/components/nav";
+import { cookies } from "next/headers";
+
+import { Sidebar } from "@/components/sidebar";
+import { COLLAPSE_COOKIE } from "@/lib/sidebar-cookie";
 import { CartProvider } from "@/lib/cart";
 import { Toaster } from "@/components/ui/sonner";
 
@@ -16,7 +19,16 @@ export const metadata: Metadata = {
   description: "Draft factory for History Retraced.",
 };
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  // Read here rather than in the Sidebar so the very first paint is already the
+  // right width. `cookies()` makes this layout dynamic, which costs nothing:
+  // every screen under it is a client component fed by the API anyway.
+  //
+  // Collapsed is the default, so the test is `!== "0"` rather than `=== "1"`:
+  // absent cookie means a rail that has never been touched, and that starts
+  // narrow. Only an explicit "0" — someone having opened it — keeps it wide.
+  const collapsed = (await cookies()).get(COLLAPSE_COOKIE)?.value !== "0";
+
   return (
     <html
       lang="en"
@@ -29,11 +41,14 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         inverts, because two independent scroll areas side by side do not fit
         on a phone.
       */}
-      <body className="flex min-h-full flex-col lg:h-screen lg:overflow-hidden">
+      <body className="flex min-h-full flex-col lg:h-screen lg:flex-row lg:overflow-hidden">
         {/* The Cart sits above the router so it survives Sources → Generate. */}
         <CartProvider>
-          <Nav />
-          <main className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col px-6 py-6 lg:min-h-0 lg:overflow-hidden">
+          <Sidebar defaultCollapsed={collapsed} />
+          {/* `min-w-0`: without it this flex child takes its width from its
+              content, and a wide table inside a screen pushes the rail off the
+              left edge instead of scrolling in its own pane. */}
+          <main className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col px-6 py-6 lg:min-h-0 lg:min-w-0 lg:overflow-hidden">
             {children}
           </main>
           <Toaster position="bottom-right" />
