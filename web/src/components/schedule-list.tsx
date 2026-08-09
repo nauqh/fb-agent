@@ -4,8 +4,8 @@ import { useState } from "react";
 import { ExternalLink, MessageSquareText } from "lucide-react";
 
 import { Empty } from "@/components/screen";
+import { StatusPill, type StatusTone } from "@/components/status-pill";
 import type { ScheduledPost } from "@/lib/types";
-import { cn } from "@/lib/utils";
 
 /**
  * The reading view: what each post actually says.
@@ -79,7 +79,7 @@ function Row({ post }: { post: ScheduledPost }) {
           <p className="min-w-0 flex-1 text-sm font-medium leading-snug">
             {title || <span className="text-muted-foreground">No caption</span>}
           </p>
-          <StatusPill status={post.status} />
+          <PostStatus status={post.status} />
         </div>
 
         {points.length ? (
@@ -193,23 +193,17 @@ function Thumb({ src }: { src: string | null }) {
   );
 }
 
-const STATUS: Record<string, string> = {
-  PUBLISHED: "border-green-600/30 bg-green-600/10 text-green-700 dark:text-green-400",
-  ERROR: "border-transparent bg-red-600 text-white",
-  DRAFT: "border-border bg-muted text-muted-foreground",
+/** Metricool's own words for a planner row, mapped onto the shared pill. */
+const STATUS: Record<string, { label: string; tone: StatusTone }> = {
+  PUBLISHED: { label: "Published", tone: "positive" },
+  ERROR: { label: "Error", tone: "negative" },
+  DRAFT: { label: "Draft", tone: "neutral" },
 };
 
-function StatusPill({ status }: { status: string }) {
-  return (
-    <span
-      className={cn(
-        "shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide",
-        STATUS[status] ?? "border-border bg-muted text-foreground",
-      )}
-    >
-      {status}
-    </span>
-  );
+function PostStatus({ status }: { status: string }) {
+  // Unknown statuses keep Metricool's raw word rather than inventing one.
+  const { label, tone } = STATUS[status] ?? { label: status, tone: "neutral" as const };
+  return <StatusPill tone={tone} label={label} />;
 }
 
 /** Keyed by the date part of the naive local stamp — no timezone maths. */
