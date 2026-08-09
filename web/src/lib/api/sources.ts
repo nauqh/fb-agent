@@ -54,3 +54,50 @@ export async function getRss(pageId: number): Promise<RssFeedResult> {
 export async function getTweet(url: string): Promise<LiveSourceItem> {
   return get<LiveSourceItem>("/sources/tweet", { url });
 }
+
+/** Mirrors `SourcesConfigOut` in api/app/routes/sources.py. */
+export interface SourcesConfig {
+  since_days: number;
+  max_items: number;
+  feeds: { name: string; url: string }[];
+  lookback_days: number;
+  grid_limit: number;
+}
+
+/**
+ * `config/sources.yml`, read back from the server.
+ *
+ * Read rather than restated on this side, for the reason `api/config.ts`
+ * records about `layout.yml`: Settings showing a hand-kept copy of a config
+ * file is a screen that can disagree with the run it claims to describe.
+ */
+export async function getSourcesConfig(pageId: number): Promise<SourcesConfig> {
+  return get<SourcesConfig>("/sources/config", { page_id: pageId });
+}
+
+/** Mirrors `CompetitorOut`. `posts_stored: 0` is the row worth looking at. */
+export interface CompetitorPage {
+  provider_id: string;
+  name: string;
+  followers: number | null;
+  /**
+   * Facebook's CDN, signed and expiring in about four days.
+   *
+   * Safe to render only because this list is never stored — the server re-reads
+   * it live on every request, so the URL reaching the browser is minutes old.
+   * Storing it is what `routes/sources.VOLATILE` exists to undo for posts.
+   */
+  picture: string | null;
+  posts_stored: number;
+}
+
+/**
+ * The Page's competitor set, live from Metricool.
+ *
+ * A separate call from `getSourcesConfig` on purpose — that one is a local file
+ * and cannot fail, this one is a vendor that has 502'd twice, and one request
+ * for both would let Metricool being down blank the feed list as well.
+ */
+export async function getCompetitorPages(pageId: number): Promise<CompetitorPage[]> {
+  return get<CompetitorPage[]>("/sources/competitors/pages", { page_id: pageId });
+}
