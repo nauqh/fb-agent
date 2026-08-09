@@ -173,8 +173,9 @@ The stacked variant is kept as `history-retraced-stacked.jpg` for the switch;
 using it needs the white background removed first.
 
 `watermark_image_path` is relative to `API_DIR`, and the file lives in
-`api/assets/` beside the font — **not** `api/media/`, which is gitignored and
-would drop the logo on a fresh clone.
+`api/assets/` beside the font — **not** in the media bucket, which is where the
+old system kept it and where clearing the bucket turned every logo into a
+`NoSuchKey`. A committed asset is present on a fresh clone and cannot 404.
 
 Config in a module is safe here in a way `brand_key` was not: **nothing points at
 it**. ADR-0003's failure was rows carrying a foreign key into a code constant that

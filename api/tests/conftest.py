@@ -6,6 +6,7 @@ mock past an adapter, the module is the wrong shape.
 """
 
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -80,16 +81,51 @@ def a_photograph() -> bytes:
     return buffer.getvalue()
 
 
+class LocalMediaStore:
+    """A `MediaStore` backed by a directory. The suite's only storage.
+
+    This used to be the app's store. It lives here now because the app has one
+    backend — Supabase — and a second production implementation would exist only
+    to be the thing dev accidentally tested against instead.
+
+    It stays as a *fake* because the alternative is worse: every test that saves
+    a picture would need an HTTP mock, and 244 of them would go from a file
+    write to a round trip through `httpx.MockTransport`. Same reason it keeps
+    `path()`, which is not on the Protocol — tests assert against the file on
+    disk rather than through the object that wrote it.
+    """
+
+    def __init__(self, root: str) -> None:
+        self.root = Path(root)
+
+    def save(self, data: bytes, name: str) -> str:
+        bucket = datetime.now(timezone.utc).strftime("%Y-%m")
+        target = self.root / bucket / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(data)
+        return f"{bucket}/{name}"
+
+    def read(self, stored: str) -> bytes:
+        return self.path(stored).read_bytes()
+
+    def delete(self, stored: str) -> None:
+        self.path(stored).unlink(missing_ok=True)
+
+    def path(self, stored: str) -> Path:
+        return self.root / stored
+
+
 @pytest.fixture(autouse=True)
 def media_root(tmp_path, monkeypatch):
-    """Written images go to the test's own directory, not `api/media`.
+    """Written images go to the test's own directory, never to the bucket.
 
-    `media.store` is built at import from `settings.media_root`, so patching the
-    setting after the fact changes nothing — the object is what has to move.
+    Autouse, and the same shape as `never_buy_an_image`: the real store now
+    talks to Supabase, so a test that slipped past this would write into a real
+    bucket rather than into a directory nobody looks at.
     """
     from app import media
 
-    monkeypatch.setattr(media, "store", media.LocalMediaStore(str(tmp_path / "media")))
+    monkeypatch.setattr(media, "store", LocalMediaStore(str(tmp_path / "media")))
     return tmp_path / "media"
 
 

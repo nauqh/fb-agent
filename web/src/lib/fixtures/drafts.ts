@@ -15,6 +15,24 @@ import { ago } from "./sources";
  * panel is exercised rather than theoretical.
  */
 
+/** A stand-in for what the API computes from a Draft's stored paths.
+ *
+ * The real fields are public Supabase URLs, built server-side. There is no
+ * bucket behind these fixtures, so they point at `/fixtures/*` instead —
+ * present and correctly shaped, which is all the Review screen needs to decide
+ * between a thumbnail and an empty frame.
+ */
+function urls(slug: string | null, options: { inset?: boolean } = {}) {
+  if (slug === null) {
+    return { hero_image_url: null, composed_image_url: null, inset_image_url: null };
+  }
+  return {
+    hero_image_url: `/fixtures/heroes/${slug}.png`,
+    composed_image_url: `/fixtures/composed/${slug}.png`,
+    inset_image_url: options.inset ? `/fixtures/insets/${slug}.png` : null,
+  };
+}
+
 const LUSTIG_BODY = `Victor Lustig (1890–1947) was born in Bohemia and spoke five languages, all of them well enough to be someone else in each. By 1925 he was working the Atlantic liners as "Count" Lustig, and he was in Paris when a newspaper item gave him the idea that made him famous.
 
 The piece was small and bureaucratic: the Eiffel Tower was expensive to maintain, the paint bill was enormous, and the city was quietly wondering what to do about it. Lustig had stationery forged for the Ministry of Posts and Telegraphs, rented a suite at the Hôtel de Crillon, and invited six scrap-metal dealers to a confidential meeting.
@@ -91,6 +109,7 @@ export const DRAFTS: Draft[] = [
     hero_image_path: "heroes/482-lustig.png",
     composed_image_path: "composed/482-lustig.png",
     inset_image_path: "insets/482-lustig.png",
+    ...urls("482-lustig", { inset: true }),
     inset_size_px: null,
     metricool_post_id: null,
     inset_x_ratio: null,
@@ -126,6 +145,7 @@ export const DRAFTS: Draft[] = [
     hero_image_path: "heroes/483-wu.png",
     composed_image_path: "composed/483-wu.png",
     inset_image_path: "insets/483-wu.png",
+    ...urls("483-wu", { inset: true }),
     inset_size_px: null,
     metricool_post_id: null,
     inset_x_ratio: null,
@@ -160,6 +180,7 @@ export const DRAFTS: Draft[] = [
     hero_image_path: "heroes/484-lamarr.png",
     composed_image_path: "composed/484-lamarr.png",
     inset_image_path: "insets/484-lamarr.png",
+    ...urls("484-lamarr", { inset: true }),
     inset_size_px: null,
     metricool_post_id: null,
     inset_x_ratio: null,
@@ -188,6 +209,7 @@ export const DRAFTS: Draft[] = [
     hero_image_path: "heroes/485-radium.png",
     composed_image_path: "composed/485-radium.png",
     inset_image_path: null,
+    ...urls("485-radium"),
     inset_size_px: null,
     metricool_post_id: null,
     inset_x_ratio: null,
@@ -216,6 +238,7 @@ export const DRAFTS: Draft[] = [
     hero_image_path: null,
     composed_image_path: null,
     inset_image_path: null,
+    ...urls(null),
     inset_size_px: null,
     metricool_post_id: null,
     inset_x_ratio: null,
@@ -244,6 +267,7 @@ export const DRAFTS: Draft[] = [
     hero_image_path: "heroes/487-emu.png",
     composed_image_path: "composed/487-emu.png",
     inset_image_path: null,
+    ...urls("487-emu"),
     inset_size_px: null,
     metricool_post_id: null,
     inset_x_ratio: null,

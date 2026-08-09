@@ -232,7 +232,7 @@ def build_image(session: Session, draft: Draft, page: Page) -> list[str]:
         warnings: list[str] = []
 
         if draft.hero_image_path:
-            image_bytes = media.store.path(draft.hero_image_path).read_bytes()
+            image_bytes = media.store.read(draft.hero_image_path)
         else:
             drawn = hero.generate(draft.image_prompt or "", plan.hero_height_px)
             image_bytes = drawn.data
@@ -246,7 +246,7 @@ def build_image(session: Session, draft: Draft, page: Page) -> list[str]:
                     "Check it looks right, or rebuild later."
                 )
             draft.hero_image_path = media.store.save(
-                image_bytes, media.filename(draft.id or 0, "hero")
+                image_bytes, media.filename(draft.id or 0, "hero", "png")
             )
 
         composed = compositor.compose(
@@ -256,15 +256,49 @@ def build_image(session: Session, draft: Draft, page: Page) -> list[str]:
             page.watermark_image_path,
             _inset(draft),
         )
+        superseded = draft.composed_image_path
         draft.composed_image_path = media.store.save(
-            composed, media.filename(draft.id or 0, "composed")
+            composed, media.filename(draft.id or 0, "composed", "jpg")
         )
         session.add(draft)
         session.commit()
+
+        # Only after the row points at the new file. The other order — delete,
+        # then save — turns a failed upload into a draft with no picture at all.
+        # This way the worst case is one file nobody reads.
+        if superseded and superseded != draft.composed_image_path:
+            _discard(superseded)
+
         return warnings
 
     except Exception as error:  # noqa: BLE001 — a warning, not a dead draft
         return [f"{IMAGE_WARNING}{type(error).__name__}: {error}"[:300]]
+
+
+def _discard(stored: str) -> None:
+    """Drop one composite this rebuild replaced. The exact path, never a pattern.
+
+    Every overlay edit and every slider nudge writes a new composite and orphans
+    the last one, which is how seven drafts became 37MB with nothing ever
+    deleted. The bucket's free tier is 1GB and dev shares it, so unbounded is not
+    an option the way it was on a laptop disk.
+
+    Safe to do at all only because a published draft cannot rebuild
+    (`routes/drafts._editable`): Metricool holds a link to the composite and
+    Facebook has not fetched it yet.
+
+    The path comes from the row and is used verbatim. No prefix, no pattern — a
+    `ls | grep | rm` in this repo once swept up an image the operator had
+    uploaded, and object storage has no undo.
+
+    Failure here is deliberately silent. The row is already correct and already
+    committed; reporting a failed cleanup as an image warning would say the
+    picture is broken when it is fine. The cost of the silence is one orphan.
+    """
+    try:
+        media.store.delete(stored)
+    except Exception:  # noqa: BLE001 — a leaked file, not a broken draft
+        pass
 
 
 def _inset(draft: Draft) -> compositor.Inset | None:
@@ -276,7 +310,7 @@ def _inset(draft: Draft) -> compositor.Inset | None:
     if not draft.inset_image_path:
         return None
     return compositor.Inset(
-        media.store.path(draft.inset_image_path).read_bytes(),
+        media.store.read(draft.inset_image_path),
         draft.inset_size_px,
         draft.inset_x_ratio,
         draft.inset_y_ratio,

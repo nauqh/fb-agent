@@ -1,12 +1,15 @@
-"""Getting a Draft out: upload the picture, hand Metricool the words.
+"""Getting a Draft out: hand Metricool the words and a link to the picture.
 
-No network. Both modules take an `httpx.Client`, so the transport is the seam —
+No network. `metricool` takes an `httpx.Client`, so the transport is the seam —
 these tests drive the real request-building and response-handling code with a
 `MockTransport` underneath, rather than stubbing the functions under test.
 
-The rules being pinned are the ones that cost something to relearn: the image
-goes up before the post is scheduled, a `publicationDate` carries no offset, and
-`Accept` stays off the normalize GET.
+The rules being pinned are the ones that cost something to relearn: a
+`publicationDate` carries no offset, `Accept` stays off the normalize GET, and
+a published draft is frozen — which is what allows the post to point at the
+live composite instead of a copy made for the purpose.
+
+Storing the picture is `test_media.py`. Nothing is uploaded here any more.
 """
 
 import io
@@ -18,7 +21,6 @@ from PIL import Image
 
 from app.models import Draft, DraftStatus
 from app.publish import metricool as publisher
-from app.publish import storage
 from app.settings import settings
 
 
@@ -54,64 +56,20 @@ def _png(size=(896, 1120)) -> bytes:
     return buffer.getvalue()
 
 
+def _jpeg() -> bytes:
+    """What a composite is now. Named separately so the fixture is not a lie.
+
+    A PNG stored under a `.jpg` name is the exact mismatch `media._content_type`
+    exists to catch, and the local fake does not catch it — so a fixture that
+    took the shortcut would pass here and be wrong about production.
+    """
+    buffer = io.BytesIO()
+    Image.open(io.BytesIO(_png())).save(buffer, format="JPEG", quality=92)
+    return buffer.getvalue()
+
+
 def _client(handler) -> httpx.Client:
     return httpx.Client(transport=httpx.MockTransport(handler))
-
-
-# --- the upload ---------------------------------------------------------------
-
-
-def test_the_composite_goes_up_as_jpeg_not_png():
-    """4.5× smaller for the same picture, and the only reader is Facebook."""
-    seen = {}
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        seen["body"] = request.content
-        seen["type"] = request.headers.get("content-type")
-        seen["upsert"] = request.headers.get("x-upsert")
-        seen["auth"] = request.headers.get("authorization")
-        return httpx.Response(200, json={"Key": "fb-agent-media/12.jpg"})
-
-    png = _png()
-    url = storage.upload(png, "12.jpg", client=_client(handler))
-
-    assert Image.open(io.BytesIO(seen["body"])).format == "JPEG"
-    assert len(seen["body"]) < len(png), "the whole point of converting"
-    assert seen["type"] == "image/jpeg"
-    assert seen["upsert"] == "true", "re-publishing must overwrite, not accumulate"
-    assert seen["auth"] == "Bearer service-key"
-    assert url == "https://demo.supabase.co/storage/v1/object/public/fb-agent-media/12.jpg"
-
-
-def test_the_public_url_is_unsigned():
-    """A signed URL expires, and Facebook fetches this when the post is due."""
-    assert "token=" not in storage.public_url("12.jpg")
-    assert "/object/public/" in storage.public_url("12.jpg")
-
-
-def test_transparency_is_flattened_onto_white_not_black():
-    """`convert("RGB")` alone composites onto black and says nothing about it."""
-    buffer = io.BytesIO()
-    Image.new("RGBA", (40, 40), (255, 255, 255, 0)).save(buffer, format="PNG")
-
-    flattened = Image.open(io.BytesIO(storage.as_jpeg(buffer.getvalue())))
-
-    assert flattened.getpixel((20, 20)) > (200, 200, 200)
-
-
-def test_an_upload_that_is_refused_says_so_loudly():
-    def handler(_request):
-        return httpx.Response(403, text="new row violates row-level security policy")
-
-    with pytest.raises(storage.StorageError, match="403"):
-        storage.upload(_png(), "12.jpg", client=_client(handler))
-
-
-def test_publishing_without_supabase_configured_is_refused(monkeypatch):
-    monkeypatch.setattr(settings, "supabase_url", "")
-
-    with pytest.raises(storage.StorageError, match="SUPABASE_URL"):
-        storage.upload(_png(), "12.jpg")
 
 
 # --- the schedule -------------------------------------------------------------
@@ -230,13 +188,9 @@ def published(monkeypatch):
     """Both hops recorded, neither performed."""
     calls: dict = {"order": []}
 
-    def upload(png, name, client=None):
-        calls["order"].append("upload")
-        calls["name"] = name
-        return f"https://demo.supabase.co/storage/v1/object/public/b/{name}"
-
     def normalize(url, blog_id, client=None):
         calls["order"].append("normalize")
+        calls["normalized"] = url
         return url
 
     def schedule(blog_id, text, first_comment, image_url, when=None, client=None):
@@ -246,7 +200,6 @@ def published(monkeypatch):
         )
         return "8891"
 
-    monkeypatch.setattr(storage, "upload", upload)
     monkeypatch.setattr(publisher, "normalize_image", normalize)
     monkeypatch.setattr(publisher, "schedule", schedule)
     return calls
@@ -254,7 +207,7 @@ def published(monkeypatch):
 
 @pytest.fixture
 def ready(session, page):
-    """A reviewable Draft with a composite on disk."""
+    """A reviewable Draft with a composite stored."""
     from app import media
 
     draft = Draft(
@@ -264,7 +217,7 @@ def ready(session, page):
         caption="🌊 The recap.",
         first_comment="The body." * 40,
         hashtags=["#history", "#historyretraced"],
-        composed_image_path=media.store.save(_png(), "12-composed.png"),
+        composed_image_path=media.store.save(_jpeg(), "12-composed.jpg"),
     )
     session.add(draft)
     session.commit()
@@ -272,13 +225,25 @@ def ready(session, page):
     return draft
 
 
-def test_publishing_uploads_before_it_schedules(client, ready, published):
-    """A post scheduled against a URL that does not resolve yet goes out broken."""
+def test_publishing_schedules_against_the_composite_itself(client, ready, published):
+    """No copy. The freeze is what makes the live composite a permanent link."""
+    from app import media
+
     response = client.post(f"/drafts/{ready.id}/publish")
 
     assert response.status_code == 200
-    assert published["order"] == ["upload", "normalize", "schedule"]
+    assert published["order"] == ["normalize", "schedule"], "nothing was uploaded"
+    assert published["normalized"] == media.public_url(ready.composed_image_path)
     assert response.json()["metricool_post_id"] == "8891"
+
+
+def test_the_link_metricool_gets_is_the_one_the_browser_showed(client, ready, published):
+    """One file, one URL. A second copy is a second thing that can go stale."""
+    client.post(f"/drafts/{ready.id}/publish")
+
+    assert published["image"] == client.get(f"/drafts/{ready.id}").json()[
+        "composed_image_url"
+    ]
 
 
 def test_the_caption_and_hashtags_are_the_post_the_hook_is_not(client, ready, published):
@@ -309,7 +274,7 @@ def test_a_draft_with_no_image_cannot_be_published(client, session, page, publis
     response = client.post(f"/drafts/{draft.id}/publish")
 
     assert response.status_code == 409
-    assert published["order"] == [], "nothing was uploaded"
+    assert published["order"] == [], "nothing reached Metricool"
 
 
 def test_a_failed_draft_cannot_be_published(client, session, page, ready, published):
@@ -324,9 +289,9 @@ def test_an_upstream_failure_leaves_the_draft_publishable(client, ready, monkeyp
     """502, and no id written: the draft is untouched and can go again."""
 
     def refuse(*_a, **_k):
-        raise storage.StorageError("Supabase refused the upload (403)")
+        raise publisher.PublishError("Metricool refused the image (403)")
 
-    monkeypatch.setattr(storage, "upload", refuse)
+    monkeypatch.setattr(publisher, "normalize_image", refuse)
 
     response = client.post(f"/drafts/{ready.id}/publish")
 
@@ -345,3 +310,54 @@ def test_a_page_with_no_blog_id_cannot_publish(client, session, page, ready, pub
     assert response.status_code == 409
     assert "metricool_blog_id" in response.json()["detail"]
     assert published["order"] == []
+
+
+# A published draft is frozen. ADR-0001 gave the reason — the planner owns a
+# scheduled post — but the rule went unenforced until the composite became the
+# thing Metricool links to. Facebook fetches that link when the post is due, so
+# any edit that redraws, and any delete, would pull the picture out from under a
+# post that has not gone out yet. These pin the four ways in.
+
+
+@pytest.mark.parametrize(
+    "method, path, kwargs",
+    [
+        ("patch", "", {"json": {"hook": "Edited after publishing."}}),
+        ("post", "/image", {}),
+        ("post", "/image?new_hero=true", {}),
+        ("delete", "/inset", {}),
+    ],
+    ids=["patch", "rebuild", "new-hero", "remove-inset"],
+)
+def test_a_published_draft_cannot_be_edited(
+    client, ready, published, method, path, kwargs
+):
+    client.post(f"/drafts/{ready.id}/publish")
+
+    response = getattr(client, method)(f"/drafts/{ready.id}{path}", **kwargs)
+
+    assert response.status_code == 409
+    assert "planner" in response.json()["detail"]
+
+
+def test_editing_a_published_draft_changes_nothing(client, ready, published):
+    """The 409 is the point, but a half-applied edit would be worse than the 409."""
+    client.post(f"/drafts/{ready.id}/publish")
+    before = client.get(f"/drafts/{ready.id}").json()
+
+    client.patch(f"/drafts/{ready.id}", json={"hook": "Edited after publishing."})
+
+    assert client.get(f"/drafts/{ready.id}").json() == before
+
+
+def test_a_published_draft_cannot_be_deleted(client, ready, published):
+    """Deleting the row takes the composite, and Metricool still holds its link."""
+    from app import media
+
+    client.post(f"/drafts/{ready.id}/publish")
+
+    response = client.delete(f"/drafts/{ready.id}")
+
+    assert response.status_code == 409
+    assert client.get(f"/drafts/{ready.id}").status_code == 200
+    assert media.store.path(ready.composed_image_path).exists(), "picture survives"

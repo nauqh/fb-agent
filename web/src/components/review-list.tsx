@@ -13,7 +13,12 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { deleteDraft, listDrafts, publishDraft, rejectDraft } from "@/lib/api/drafts";
+import {
+  deleteDraft,
+  listDrafts,
+  publishDraft,
+  rejectDraft,
+} from "@/lib/api/drafts";
 import { listPages } from "@/lib/api/pages";
 import { dayHeading, dayKey, timeOfDay } from "@/lib/format";
 import type { Draft, Page } from "@/lib/types";
@@ -21,7 +26,11 @@ import { useQuery } from "@/lib/use-query";
 import { cn } from "@/lib/utils";
 import { ViewFullButton } from "@/components/image-lightbox";
 import { PageBadge } from "@/components/page-badge";
-import { QUEUE_PAGE_SIZE, QueuePagination } from "@/components/queue-pagination";
+import { StatusPill, type StatusTone } from "@/components/status-pill";
+import {
+  QUEUE_PAGE_SIZE,
+  QueuePagination,
+} from "@/components/queue-pagination";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -61,23 +70,28 @@ export function ReviewList() {
    * A run in flight is not "needs review" yet, but hiding it means pressing
    * Generate appears to do nothing — the queue has to show the work arriving.
    */
-  const { data: drafts, loading, refresh } = useQuery(
-    () => listDrafts(),
-    [],
-    {
-      intervalMs: 2_000,
-      // Only while something is in flight. With a settled queue the store
-      // notification is enough, and a timer that never stops keeps the page
-      // from ever going idle.
-      pollWhile: (rows) => rows === null || rows.some((row) => row.status === "generating"),
-    },
-  );
+  const {
+    data: drafts,
+    loading,
+    refresh,
+  } = useQuery(() => listDrafts(), [], {
+    intervalMs: 2_000,
+    // Only while something is in flight. With a settled queue the store
+    // notification is enough, and a timer that never stops keeps the page
+    // from ever going idle.
+    pollWhile: (rows) =>
+      rows === null || rows.some((row) => row.status === "generating"),
+  });
 
   const total = drafts?.length ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / QUEUE_PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
   const shown = useMemo(
-    () => drafts?.slice((safePage - 1) * QUEUE_PAGE_SIZE, safePage * QUEUE_PAGE_SIZE) ?? [],
+    () =>
+      drafts?.slice(
+        (safePage - 1) * QUEUE_PAGE_SIZE,
+        safePage * QUEUE_PAGE_SIZE,
+      ) ?? [],
     [drafts, safePage],
   );
 
@@ -94,7 +108,6 @@ export function ReviewList() {
     // the fold. Nothing scrolled and nothing said so. Sized to its content, the
     // layout's own `overflow-y-auto` has something to scroll.
     <div className="flex flex-col gap-3">
-
       {/* Hugs its rows. A `flex-1` container left a tall empty bordered box
           under a two-draft queue, which read as something failing to load. */}
       <div className="overflow-hidden rounded-xl border">
@@ -105,7 +118,9 @@ export function ReviewList() {
             ))}
           </div>
         ) : drafts?.length === 0 ? (
-          <p className="py-20 text-center text-sm text-muted-foreground">Queue is empty.</p>
+          <p className="py-20 text-center text-sm text-muted-foreground">
+            Queue is empty.
+          </p>
         ) : (
           <table className="w-full min-w-[980px]">
             <thead>
@@ -151,7 +166,9 @@ export function ReviewList() {
                   <Row
                     key={draft.id}
                     draft={draft}
-                    page={pages?.find((candidate) => candidate.id === draft.page_id)}
+                    page={pages?.find(
+                      (candidate) => candidate.id === draft.page_id,
+                    )}
                     onChanged={refresh}
                   />
                 ))}
@@ -160,7 +177,11 @@ export function ReviewList() {
           </table>
         )}
 
-        <QueuePagination totalItems={total} page={safePage} onPageChange={setPage} />
+        <QueuePagination
+          totalItems={total}
+          page={safePage}
+          onPageChange={setPage}
+        />
       </div>
     </div>
   );
@@ -192,8 +213,13 @@ function Row({
 
   return (
     <tr
-      className={cn("group", generating ? "bg-muted/10" : "cursor-pointer hover:bg-muted/30")}
-      onClick={generating ? undefined : () => router.push(`/review/${draft.id}`)}
+      className={cn(
+        "group",
+        generating ? "bg-muted/10" : "cursor-pointer hover:bg-muted/30",
+      )}
+      onClick={
+        generating ? undefined : () => router.push(`/review/${draft.id}`)
+      }
     >
       <td className="px-5 py-4 align-top">
         {/* Big enough to recognise the post, small enough that ten rows fit a
@@ -202,16 +228,16 @@ function Row({
             4:5 whether or not one has been drawn, so rows keep their height as
             pictures arrive. */}
         <div className="group/thumb relative aspect-[4/5] w-[72px] overflow-hidden rounded-lg border bg-muted shadow-sm">
-          {draft.composed_image_path ? (
+          {draft.composed_image_url ? (
             <>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={`/api/media/${draft.composed_image_path}`}
+                src={draft.composed_image_url}
                 alt=""
                 className="size-full object-cover"
               />
               <ViewFullButton
-                src={`/api/media/${draft.composed_image_path}`}
+                src={draft.composed_image_url}
                 alt={`Draft ${draft.id} composed image`}
               />
             </>
@@ -221,19 +247,22 @@ function Row({
             <div className="flex size-full flex-col items-center justify-center gap-2 px-2 text-center">
               <Loader2 className="size-4 animate-spin text-muted-foreground" />
               <span className="text-[10px] leading-tight text-muted-foreground">
-                {draft.progress_pct >= 60 ? "Drawing the image" : "Writing the post"}
+                {draft.progress_pct >= 60
+                  ? "Drawing the image"
+                  : "Writing the post"}
               </span>
             </div>
           ) : null}
         </div>
       </td>
 
-
       {/* Title over the page name, as the old app had it. The title is the
           hook's first sentence: the writer produces no separate one, and the
           whole 65-word hook is a paragraph, not a row label. */}
       <td className="max-w-0 px-2 py-4 align-middle">
-        <p className="line-clamp-1 text-[15px] font-medium leading-snug">{title(draft)}</p>
+        <p className="line-clamp-1 text-[15px] font-medium leading-snug">
+          {title(draft)}
+        </p>
         <p className="mt-0.5 line-clamp-1 text-[13px] text-muted-foreground">
           {page?.name ?? ""}
         </p>
@@ -283,14 +312,23 @@ function Row({
 
       {/* The row opens the draft; this must not, so every branch stops the
           click before it reaches the <tr>. */}
-      <td className="px-5 py-4 align-middle text-right" onClick={(e) => e.stopPropagation()}>
+      <td
+        className="px-5 py-4 align-middle text-right"
+        onClick={(e) => e.stopPropagation()}
+      >
         {generating ? null : <RowMenu draft={draft} onChanged={onChanged} />}
       </td>
     </tr>
   );
 }
 
-function RowMenu({ draft, onChanged }: { draft: Draft; onChanged: () => void }) {
+function RowMenu({
+  draft,
+  onChanged,
+}: {
+  draft: Draft;
+  onChanged: () => void;
+}) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -337,7 +375,10 @@ function RowMenu({ draft, onChanged }: { draft: Draft; onChanged: () => void }) 
           </DropdownMenuItem>
 
           {draft.metricool_post_id ? (
-            <DropdownMenuItem disabled title="Change it in Metricool's planner.">
+            <DropdownMenuItem
+              disabled
+              title="Change it in Metricool's planner."
+            >
               <Rocket className="size-4" />
               In Metricool
             </DropdownMenuItem>
@@ -359,7 +400,9 @@ function RowMenu({ draft, onChanged }: { draft: Draft; onChanged: () => void }) 
           {draft.status === "rejected" ? null : (
             <DropdownMenuItem
               destructive
-              onSelect={() => void run(() => rejectDraft(draft.id), "Rejected.")}
+              onSelect={() =>
+                void run(() => rejectDraft(draft.id), "Rejected.")
+              }
             >
               <X className="size-4" />
               Reject
@@ -389,8 +432,8 @@ function RowMenu({ draft, onChanged }: { draft: Draft; onChanged: () => void }) 
           <DialogTitle>Publish to Metricool?</DialogTitle>
           <DialogDescription>
             The image is uploaded and the post is handed to Metricool, which
-            publishes it and posts the first comment. After that it is changed in
-            Metricool&apos;s planner, not here.
+            publishes it and posts the first comment. After that it is changed
+            in Metricool&apos;s planner, not here.
           </DialogDescription>
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setPublishing(false)}>
@@ -402,7 +445,11 @@ function RowMenu({ draft, onChanged }: { draft: Draft; onChanged: () => void }) 
                 void run(() => publishDraft(draft.id), "Handed to Metricool.")
               }
             >
-              {busy ? <Loader2 className="size-4 animate-spin" /> : <Rocket className="size-4" />}
+              {busy ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Rocket className="size-4" />
+              )}
               Publish
             </Button>
           </DialogFooter>
@@ -427,7 +474,11 @@ function RowMenu({ draft, onChanged }: { draft: Draft; onChanged: () => void }) 
               disabled={busy}
               onClick={() => void run(() => deleteDraft(draft.id), "Deleted.")}
             >
-              {busy ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+              {busy ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Trash2 className="size-4" />
+              )}
               Delete
             </Button>
           </DialogFooter>
@@ -438,61 +489,28 @@ function RowMenu({ draft, onChanged }: { draft: Draft; onChanged: () => void }) 
 }
 
 /**
- * A pill per status: plain green, plain red, white type.
- *
- * Several versions on the way here, and the failures rhyme. An alpha tint over
- * white and a pale 50/800 pair both read as *nearly* a colour — washed out
- * rather than green — while a bare outline was too faint to scan down a column.
- * A flat 600 fill is simply the colour it claims to be.
- *
- * A queue is mostly one status, so whatever the majority looks like becomes the
- * texture of the whole screen. That is why Pending review and Rejected are
- * neutral grey, and colour is spent only on the two worth stopping for: green
- * for the one end state that is good, red for the one that lost work.
+ * The look lives in `components/status-pill.tsx`, shared with the Schedule.
+ * What stays here is which draft status means what.
  *
  * Keyed on `status`, never on `error`. A row the startup sweep touched while
  * its task was still running kept a stale error string, and an earlier version
  * of this rendered a finished draft as failed on the strength of it.
  */
-const STATUS: Record<string, { label: string; className: string }> = {
-  generating: {
-    label: "Generating",
-    className: "border-border bg-muted text-muted-foreground",
-  },
-  review: {
-    label: "Pending review",
-    className: "border-border bg-muted text-foreground",
-  },
-  approved: {
-    label: "Approved",
-    className: "border-transparent bg-green-600 text-white",
-  },
-  rejected: {
-    label: "Rejected",
-    className: "border-border bg-muted text-muted-foreground",
-  },
-  failed: {
-    label: "Failed",
-    className: "border-transparent bg-red-600 text-white",
-  },
+const STATUS: Record<string, { label: string; tone: StatusTone }> = {
+  generating: { label: "Generating", tone: "busy" },
+  review: { label: "Pending review", tone: "neutral" },
+  approved: { label: "Approved", tone: "positive" },
+  rejected: { label: "Rejected", tone: "neutral" },
+  failed: { label: "Failed", tone: "negative" },
 };
 
 function StatusBadge({ draft }: { draft: Draft }) {
-  const tone = STATUS[draft.status] ?? {
+  const { label, tone } = STATUS[draft.status] ?? {
     label: draft.status,
-    className: "border-border text-muted-foreground",
+    tone: "neutral" as const,
   };
 
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium",
-        tone.className,
-      )}
-    >
-      {tone.label}
-    </span>
-  );
+  return <StatusPill tone={tone} label={label} />;
 }
 
 /** The hook is a paragraph; a row wants its first sentence. */

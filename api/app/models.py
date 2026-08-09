@@ -7,7 +7,10 @@ schedule state (ADR-0001). Layout lives in config/layout.yml, not on Page.
 from datetime import datetime, timezone
 from enum import StrEnum
 
+from pydantic import computed_field
 from sqlmodel import JSON, Column, Field, SQLModel, UniqueConstraint
+
+from app import media
 
 
 def _now() -> datetime:
@@ -77,8 +80,8 @@ class Page(SQLModel, table=True):
     """
 
     watermark_image_path: str | None = None
-    """The page's own logo, relative to `API_DIR` — a committed asset, not
-    media_root, which is gitignored and would lose it on clone.
+    """The page's own logo, relative to `API_DIR` — a committed asset, not a
+    bucket object, so a clone has it and no fetch can fail on it.
 
     Committed rather than hosted because the hosted one is exactly what failed:
     the old system kept it in Supabase Storage and read it back by key, and when
@@ -231,3 +234,38 @@ class Draft(SQLModel, table=True):
 
     created_at: datetime = Field(default_factory=_now)
     updated_at: datetime = Field(default_factory=_now)
+
+    # Serialised, never stored. The columns above hold a path relative to the
+    # bucket; these are where that path resolves to right now.
+    #
+    # The split is what keeps a row portable. A stored URL welds every draft to
+    # one Supabase project and one bucket name, so changing either — a new
+    # project, a rename, a different region — becomes an UPDATE across the table
+    # instead of an env var. It is also what lets dev and production differ by
+    # one config line rather than by two sets of rows that cannot be swapped.
+    #
+    # Built here rather than in React, which is where the old app built it
+    # (`social-agent/src/lib/facebook/media-url.ts`, from
+    # `NEXT_PUBLIC_SUPABASE_URL` plus a hardcoded bucket constant). One place
+    # knows what a bucket is.
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def hero_image_url(self) -> str | None:
+        return media.public_url(self.hero_image_path) if self.hero_image_path else None
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def composed_image_url(self) -> str | None:
+        return (
+            media.public_url(self.composed_image_path)
+            if self.composed_image_path
+            else None
+        )
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def inset_image_url(self) -> str | None:
+        return (
+            media.public_url(self.inset_image_path) if self.inset_image_path else None
+        )

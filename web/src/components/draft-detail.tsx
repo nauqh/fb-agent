@@ -297,8 +297,8 @@ export function DraftDetail({
       overlayText={form?.hook ?? draft.hook}
       highlightPhrases={form?.highlight_phrases ?? draft.highlight_phrases}
       watermarkPath={page?.watermark_image_path ?? null}
-      heroSrc={draft.hero_image_path ? `/api/media/${draft.hero_image_path}` : null}
-      insetSrc={draft.inset_image_path ? `/api/media/${draft.inset_image_path}` : null}
+      heroSrc={draft.hero_image_url}
+      insetSrc={draft.inset_image_url}
       // From the form, not the row: the slider and the drag have to move the
       // circle as they happen, which is the only way to choose either.
       insetSizePx={form?.inset_size_px ?? draft.inset_size_px}

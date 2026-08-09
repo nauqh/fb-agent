@@ -27,6 +27,17 @@ from app.settings import API_DIR, Layout
 from app.settings import layout as default_layout
 
 
+JPEG_QUALITY = 92
+"""The old system's number (`portrait-inset.ts:79`). 4.5× smaller, no visible loss.
+
+Measured across the composites this repo had accumulated: 1.21MB as PNG against
+0.27MB as JPEG, for the same picture. Nothing reads a composite except the review
+screen and Facebook, and the publish step used to convert to JPEG on the way out
+anyway — so storing PNG meant paying for the large file and then throwing it
+away. Emitting JPEG here deletes that conversion instead of moving it.
+"""
+
+
 class CompositeError(RuntimeError):
     """The image cannot be drawn. Lands on `draft.error`, never swallowed."""
 
@@ -230,7 +241,7 @@ def compose(
     inset: Inset | None = None,
     layout: Layout | None = None,
 ) -> bytes:
-    """The finished PNG. Everything variable was decided before this call."""
+    """The finished JPEG. Everything variable was decided before this call."""
     layout = layout or default_layout
 
     if not plan.lines:
@@ -270,5 +281,10 @@ def compose(
         canvas.alpha_composite(disc, (x - disc.width // 2, y - disc.height // 2))
 
     out = io.BytesIO()
-    canvas.convert("RGB").save(out, format="PNG")
+    # `convert("RGB")` on a canvas that still had transparency would composite
+    # it onto *black* without saying so. Safe here only because the hero and the
+    # panel between them cover every pixel — the same assumption the publish
+    # step's flatten-onto-white made explicit before it was deleted. If a layout
+    # ever leaves a gap, this is where it turns into a black band.
+    canvas.convert("RGB").save(out, format="JPEG", quality=JPEG_QUALITY)
     return out.getvalue()

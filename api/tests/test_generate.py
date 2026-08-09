@@ -390,6 +390,72 @@ def test_saving_the_hook_redraws_the_composite(client, written, illustrated):
     assert after["composed_image_path"] != before, "the picture still shows the old text"
 
 
+def test_a_redraw_takes_the_composite_it_replaced_with_it(
+    client, written, illustrated, media_root
+):
+    """Nothing pointed at the old one, and nothing ever deleted it either.
+
+    Every hook edit and every slider nudge writes a new composite. Seven drafts
+    had left 37MB behind that way, which was untidy on a laptop and is a 1GB
+    free tier in a bucket dev shares with production.
+    """
+    from app import media
+
+    client.post("/generate", json={"page_ids": [1], "sources": [_rss().model_dump(mode="json")]})
+    before = client.get("/drafts/1").json()["composed_image_path"]
+    assert media.store.path(before).exists()
+
+    after = client.patch("/drafts/1", json={"hook": "A different hook entirely."}).json()
+
+    assert not media.store.path(before).exists(), "the superseded composite is gone"
+    assert media.store.path(after["composed_image_path"]).exists(), "the new one is not"
+
+
+def test_the_hero_survives_a_redraw(client, written, illustrated):
+    """The composite is free to remake. The hero is the one that was paid for."""
+    from app import media
+
+    client.post("/generate", json={"page_ids": [1], "sources": [_rss().model_dump(mode="json")]})
+    hero_path = client.get("/drafts/1").json()["hero_image_path"]
+
+    client.patch("/drafts/1", json={"hook": "A different hook entirely."})
+
+    assert media.store.path(hero_path).exists()
+
+
+def test_a_failed_cleanup_does_not_report_the_picture_as_broken(
+    client, written, illustrated, monkeypatch
+):
+    """The row is committed and correct before the delete is attempted."""
+    from app import media
+
+    client.post("/generate", json={"page_ids": [1], "sources": [_rss().model_dump(mode="json")]})
+    before = client.get("/drafts/1").json()["composed_image_path"]
+
+    def refuse(_stored):
+        raise media.MediaError("Supabase refused DELETE (503)")
+
+    monkeypatch.setattr(media.store, "delete", refuse)
+
+    after = client.patch("/drafts/1", json={"hook": "A different hook entirely."}).json()
+
+    assert after["composed_image_path"] != before
+    assert not [w for w in after["warnings"] if "MediaError" in w]
+
+
+def test_the_composite_is_stored_as_jpeg(client, written, illustrated):
+    """1.21MB PNG against 0.27MB JPEG, and the publish step converted it anyway."""
+    from PIL import Image
+
+    from app import media
+
+    client.post("/generate", json={"page_ids": [1], "sources": [_rss().model_dump(mode="json")]})
+    stored = media.store.path(client.get("/drafts/1").json()["composed_image_path"])
+
+    assert stored.suffix == ".jpg"
+    assert Image.open(stored).format == "JPEG"
+
+
 def test_saving_a_highlight_redraws_the_composite(client, written, illustrated):
     """The gold is drawn, so the phrases are a drawn field too."""
     client.post("/generate", json={"page_ids": [1], "sources": [_rss().model_dump(mode="json")]})

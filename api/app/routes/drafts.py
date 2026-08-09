@@ -25,7 +25,6 @@ from app import generate, media
 from app.db import get_session
 from app.models import Draft, DraftStatus, Page, SourceItemBase
 from app.publish import metricool as publisher
-from app.publish import storage
 from app.settings import layout
 from app.writer import validators
 
@@ -131,7 +130,7 @@ def update_draft(
     Free, so there is nothing to weigh: the hero is reused and only the panel is
     redrawn. Buying a *new* hero stays an explicit request.
     """
-    draft = _require(session, draft_id)
+    draft = _editable(session, draft_id)
     changes = edit.model_dump(exclude_unset=True)
     redraw = any(
         field in changes and changes[field] != getattr(draft, field)
@@ -194,7 +193,7 @@ def rebuild_image(
     Synchronous, unlike `/generate`: re-compositing is milliseconds, and a new
     hero is a single call the operator is waiting on anyway.
     """
-    draft = _require(session, draft_id)
+    draft = _editable(session, draft_id)
     page = session.get(Page, draft.page_id)
     if page is None:
         raise HTTPException(status_code=404, detail=f"No page {draft.page_id}")
@@ -232,7 +231,7 @@ async def upload_inset(
     whatever the camera attached to it. Decoding here also means a file that is
     not an image is a 422 on the upload rather than a broken composite later.
     """
-    draft = _require(session, draft_id)
+    draft = _editable(session, draft_id)
     page = session.get(Page, draft.page_id)
     if page is None:
         raise HTTPException(status_code=404, detail=f"No page {draft.page_id}")
@@ -255,7 +254,7 @@ async def upload_inset(
     buffer = io.BytesIO()
     picture.convert("RGB").save(buffer, format="PNG")
     draft.inset_image_path = media.store.save(
-        buffer.getvalue(), media.filename(draft_id, "inset")
+        buffer.getvalue(), media.filename(draft_id, "inset", "png")
     )
     return _redrawn(session, draft, page)
 
@@ -272,7 +271,7 @@ def remove_inset(draft_id: int, session: Session = Depends(get_session)) -> Draf
     with it, and the row that points at that composite has no way to say which
     inset went into it. Deleting the draft still takes it.
     """
-    draft = _require(session, draft_id)
+    draft = _editable(session, draft_id)
     page = session.get(Page, draft.page_id)
     if page is None:
         raise HTTPException(status_code=404, detail=f"No page {draft.page_id}")
@@ -307,17 +306,16 @@ def delete_draft(draft_id: int, session: Session = Depends(get_session)) -> None
     run, a duplicate, a test.
 
     The files go too. They are named after the draft and nothing else points at
-    them, so keeping them would leave `media/` growing with pictures no row can
-    reach. A missing file is not an error here: the row may never have got one.
+    them, so keeping them would leave the bucket growing with pictures no row
+    can reach. A missing file is not an error here: the row may never have got
+    one.
+
+    A published draft cannot be deleted, and that is `_editable` rather than a
+    rule about tidiness: Metricool holds a link to this draft's composite and
+    Facebook has not fetched it yet. Deleting the row would take the picture
+    with it and the post would go out blank.
     """
-    draft = session.get(Draft, draft_id)
-    if draft is None:
-        raise HTTPException(status_code=404, detail=f"No draft {draft_id}")
-    if draft.status == DraftStatus.GENERATING:
-        raise HTTPException(
-            status_code=409,
-            detail="That draft is still being written. Wait for it to finish.",
-        )
+    draft = _editable(session, draft_id)
 
     for stored in (
         draft.hero_image_path,
@@ -325,7 +323,7 @@ def delete_draft(draft_id: int, session: Session = Depends(get_session)) -> None
         draft.inset_image_path,
     ):
         if stored:
-            media.store.path(stored).unlink(missing_ok=True)
+            media.store.delete(stored)
 
     session.delete(draft)
     session.commit()
@@ -342,16 +340,19 @@ def publish_draft(
     request: PublishRequest | None = None,
     session: Session = Depends(get_session),
 ) -> Draft:
-    """Upload the composite, hand the post to Metricool, record what it is called.
+    """Hand Metricool the post and the link to its picture, record what it is called.
 
     Separate from Approve, and it stays separate. Approve is a queue movement
     with an undo — `unapprove` exists and the toast offers it. This is the step
     that cannot be taken back, so it is its own button and its own decision.
 
-    Order matters: the picture goes up **first**. Metricool stores a link and
-    Facebook fetches it when the post is due, so scheduling against a URL that
-    does not resolve yet produces a post that looks correct in the planner and
-    goes out broken.
+    There is no upload step any more, and its disappearance is the whole reason
+    the freeze exists. Metricool stores a *link*; Facebook fetches it when the
+    post is due, days later. That used to mean the composite had to be copied to
+    a name a rebuild could never touch, because the live composite is renamed on
+    every edit and the old one is deleted. Freezing a published draft
+    (`_editable`) makes the live composite permanent instead, so the copy became
+    a second file that only existed to be identical to the first.
 
     Publishing twice is refused rather than allowed to make a duplicate — the
     id is on the row, and the planner is where a scheduled post is changed
@@ -386,10 +387,15 @@ def publish_draft(
             detail=f"{page.name} has no metricool_blog_id to publish against.",
         )
 
-    composite = media.store.path(draft.composed_image_path).read_bytes()
+    # The composite is already a JPEG in a public bucket, so there is nothing to
+    # upload — this is the link to the file `build_image` wrote. It used to be
+    # copied to a stable `{draft_id}.jpg` first, on the reasoning that a rebuild
+    # would otherwise move the picture out from under a scheduled post. The
+    # freeze in `_editable` is what removed the need: a published draft cannot
+    # rebuild, so the composite it points at can no longer change or be deleted.
+    url = media.public_url(draft.composed_image_path)
 
     try:
-        url = storage.upload(composite, f"{draft_id}.jpg")
         normalized = publisher.normalize_image(url, page.metricool_blog_id)
         post_id = publisher.schedule(
             page.metricool_blog_id,
@@ -398,7 +404,7 @@ def publish_draft(
             normalized,
             request.when if request else None,
         )
-    except (storage.StorageError, publisher.PublishError) as error:
+    except publisher.PublishError as error:
         # 502: the failure is upstream, and the draft is untouched and still
         # publishable once whatever broke is fixed.
         raise HTTPException(status_code=502, detail=str(error)) from error
@@ -454,6 +460,40 @@ def _require(session: Session, draft_id: int) -> Draft:
     if draft.status == DraftStatus.GENERATING:
         raise HTTPException(
             status_code=409, detail="That draft is still being written."
+        )
+    return draft
+
+
+def _editable(session: Session, draft_id: int) -> Draft:
+    """`_require`, plus: a draft that has been pushed to Metricool is frozen.
+
+    ADR-0001 already says the planner is where a scheduled post is changed, but
+    nothing enforced it — `metricool_post_id` was read in exactly one place, the
+    refusal to publish twice. So editing a published draft was allowed and did
+    nothing useful: the row changed here while the post Metricool would send
+    stayed as it was.
+
+    It is now also a correctness rule about *storage*, which is why it is a
+    helper rather than a note in a docstring. Metricool holds a link to the
+    composite and Facebook fetches it when the post is due, days later. Every
+    edit that redraws writes a new composite and deletes the one it supersedes
+    — so an edit here would delete the picture out from under a scheduled post,
+    which then goes out with nothing. Freezing the draft is what makes that
+    deletion safe, and is why publishing no longer needs its own copy of the
+    file.
+
+    Status routes are deliberately not covered: approve and reject move a row
+    through a queue and never touch a picture.
+    """
+    draft = _require(session, draft_id)
+    if draft.metricool_post_id:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"That draft is in Metricool as post {draft.metricool_post_id}. "
+                "Change it in the planner — editing it here would not change "
+                "what goes out, and would break the image the post points at."
+            ),
         )
     return draft
 

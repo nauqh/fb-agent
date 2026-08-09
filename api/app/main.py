@@ -5,7 +5,6 @@ docs/plan.md.
 """
 
 from contextlib import asynccontextmanager
-from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
@@ -21,7 +20,6 @@ from app.settings import API_DIR, layout, settings
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     init_db()
-    Path(settings.media_root).mkdir(parents=True, exist_ok=True)
     # A restart mid-run leaves rows at `generating` with nothing filling them.
     # Safe to sweep only because there is exactly one writer process.
     with Session(get_engine()) as session:
@@ -33,11 +31,10 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(title="Facebook Agent", version="0.1.0", lifespan=lifespan)
 
-app.mount(
-    "/media",
-    StaticFiles(directory=settings.media_root, check_dir=False),
-    name="media",
-)
+# There is no `/media` mount. Draft pictures live in a Supabase bucket and the
+# browser fetches them from there directly — the API serves the *URL* on the row
+# (`Draft.composed_image_url`) and never the bytes. Re-adding a mount here would
+# be a second, staler way to reach the same picture.
 
 # The committed assets — watermarks, the font — served so the browser can show
 # the same file the compositor draws with. `page.watermark_image_path` is
@@ -66,7 +63,7 @@ def health() -> dict:
     return {
         "ok": not missing,
         "database": settings.database_path,
-        "media_root": settings.media_root,
+        "media_bucket": settings.supabase_bucket,
         "font_present": layout.font_file.exists(),
         "image_size": f"{layout.image.width}x{layout.image.height}",
         "models": {

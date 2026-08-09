@@ -85,6 +85,20 @@ export interface Draft {
 
   /** The uploaded circular inset. Null is the normal case — no circle. */
   inset_image_path: string | null;
+
+  /**
+   * Where each of the three paths above actually resolves, as a public Supabase
+   * URL. Computed server-side and sent on every Draft — the row stores a
+   * bucket-relative path so that moving project or bucket is an env change
+   * rather than an UPDATE over the table, and nothing here needs to know that.
+   *
+   * Null exactly when the matching `_path` is null. Use `_path` to ask *whether*
+   * there is a picture and `_url` to show one; a `_url` is not a stable
+   * identity, since the same picture can be served from a different bucket.
+   */
+  hero_image_url: string | null;
+  composed_image_url: string | null;
+  inset_image_url: string | null;
   /** Its diameter. Null takes the default from `layout.yml`. */
   inset_size_px: number | null;
   /**

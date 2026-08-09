@@ -211,7 +211,6 @@ class Settings(BaseSettings):
     )
 
     database_path: str = str(API_DIR / "fb_agent.db")
-    media_root: str = str(API_DIR / "media")
     sql_echo: bool = False
     timezone: str = "Asia/Ho_Chi_Minh"
 
