@@ -8,7 +8,24 @@
  * that says what to do next.
  */
 
+import { emit } from "@/lib/store";
+
 const BASE = "/api";
+
+/**
+ * A write, and therefore something every open query needs to hear about.
+ *
+ * `use-query.ts` re-reads on this notification, which is what keeps two views
+ * of the same row in step: the Review queue and an open Draft are separate
+ * queries, so approving inside the sheet used to refresh only the sheet and
+ * leave the queue showing "Pending review" until a reload.
+ *
+ * It fires here rather than in `api/drafts.ts` so it cannot be forgotten on
+ * the next endpoint — the method already says whether a call mutates.
+ */
+function mutated(method?: string): void {
+  if (method && method !== "GET") emit();
+}
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${BASE}${path}`, {
@@ -25,6 +42,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (!response.ok) {
     throw new Error(await detail(response));
   }
+  mutated(init?.method);
   return response.json() as Promise<T>;
 }
 
@@ -71,6 +89,8 @@ export function upload<T>(path: string, file: File): Promise<T> {
 export async function del(path: string): Promise<void> {
   const response = await fetch(`${BASE}${path}`, { method: "DELETE" });
   if (!response.ok) throw new Error(await detail(response));
+  // Its own `fetch`, so it misses the notification in `request`.
+  mutated("DELETE");
 }
 
 /** For a DELETE that answers with the row it changed rather than 204. */
