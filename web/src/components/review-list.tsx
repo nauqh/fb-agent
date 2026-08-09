@@ -19,8 +19,8 @@ import {
   publishDraft,
   rejectDraft,
 } from "@/lib/api/drafts";
-import { listPages } from "@/lib/api/pages";
 import { dayHeading, dayKey, timeOfDay } from "@/lib/format";
+import { usePageScope } from "@/lib/page-scope";
 import type { Draft, Page } from "@/lib/types";
 import { useQuery } from "@/lib/use-query";
 import { cn } from "@/lib/utils";
@@ -57,11 +57,14 @@ import { Skeleton } from "@/components/ui/skeleton";
  * screen that a table fits in a third of.
  *
  * The columns are the old app's minus Page, which had a filter dropdown there
- * because it ran ten brands. v1 runs one, so the column would be the same value
- * repeated down the page.
+ * because it ran ten brands. That reasoning outlived the one-Page assumption it
+ * was written under: the queue is scoped to the switcher's Page, so the column
+ * is still one value repeated down the table, and the filter it would need is
+ * already in the header.
  */
 export function ReviewList() {
-  const { data: pages } = useQuery(() => listPages(), []);
+  // `page`/`setPage` below is the *pagination* page. The Page is `pageId`.
+  const { pages, pageId } = usePageScope();
   const [page, setPage] = useState(1);
 
   /**
@@ -74,7 +77,8 @@ export function ReviewList() {
     data: drafts,
     loading,
     refresh,
-  } = useQuery(() => listDrafts(), [], {
+  } = useQuery(() => listDrafts({ page_id: pageId! }), [pageId], {
+    enabled: pageId !== null,
     intervalMs: 2_000,
     // Only while something is in flight. With a settled queue the store
     // notification is enough, and a timer that never stops keeps the page

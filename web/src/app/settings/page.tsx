@@ -8,7 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getLayout } from "@/lib/api/config";
-import { listPages, listPromptFiles } from "@/lib/api/pages";
+import { listPromptFiles } from "@/lib/api/pages";
+import { usePageScope } from "@/lib/page-scope";
 import { useQuery } from "@/lib/use-query";
 import { cn } from "@/lib/utils";
 
@@ -23,10 +24,9 @@ import { cn } from "@/lib/utils";
  * somewhere a diff can be read.
  */
 export default function SettingsScreen() {
-  const { data: pages } = useQuery(() => listPages(), []);
+  const { page } = usePageScope();
   const { data: prompts } = useQuery(() => listPromptFiles(), []);
   const { data: layout } = useQuery(() => getLayout(), []);
-  const page = pages?.[0];
 
   if (!page) {
     return (

@@ -11,10 +11,16 @@ import { get } from "@/lib/api/client";
  * unreachable, which is the honest failure.
  */
 export async function getSchedule(
+  pageId: number,
   daysBack = 7,
   daysAhead = 30,
 ): Promise<ScheduledPost[]> {
   return get<ScheduledPost[]>("/schedule", {
+    // Required, not defaulted. The server defaults it to 1 so a curl works, but
+    // a planner belongs to one Metricool blog and this screen shows whichever
+    // Page the switcher is on — a silent default here would show History
+    // Retraced's queue under The Fact Feed's name.
+    page_id: pageId,
     days_back: daysBack,
     days_ahead: daysAhead,
   });

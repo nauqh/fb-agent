@@ -9,6 +9,7 @@ import { Empty } from "@/components/screen";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getSchedule } from "@/lib/api/schedule";
+import { usePageScope } from "@/lib/page-scope";
 import { useQuery } from "@/lib/use-query";
 import { cn } from "@/lib/utils";
 
@@ -24,11 +25,18 @@ export function ScheduleView() {
   const [mode, setMode] = useState<"week" | "list">("week");
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
 
-  const { data: posts, error, loading } = useQuery(() => getSchedule(30, 30), [], {
-    // Somebody else's planner, changing without us. Slow: nothing here is a job
-    // in flight being watched.
-    intervalMs: 60_000,
-  });
+  const { pageId } = usePageScope();
+
+  const { data: posts, error, loading } = useQuery(
+    () => getSchedule(pageId!, 30, 30),
+    [pageId],
+    {
+      enabled: pageId !== null,
+      // Somebody else's planner, changing without us. Slow: nothing here is a
+      // job in flight being watched.
+      intervalMs: 60_000,
+    },
+  );
 
   if (error) {
     return (

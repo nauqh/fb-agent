@@ -16,11 +16,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getRss, getCompetitorPosts, getTweet } from "@/lib/api/sources";
 import type { LiveSourceItem } from "@/lib/fixtures/sources";
 import { useCart } from "@/lib/cart";
+import { usePageScope } from "@/lib/page-scope";
 import { emit } from "@/lib/store";
 import { useQuery } from "@/lib/use-query";
 
-/** The Page every competitor set belongs to. One Page in v1, so it is a constant. */
-const PAGE_ID = 1;
+// The Page every competitor set and feed list belongs to used to be `const
+// PAGE_ID = 1`. It comes from the switcher now — the competitor sets do not
+// overlap at all (18 pages against 24, zero in common) and neither do the
+// feeds, so a stale id here would show one Page's grid under another's name.
 
 export default function SourcesScreen() {
   return (
@@ -60,7 +63,15 @@ export default function SourcesScreen() {
 
 function CompetitorsTab() {
   const cart = useCart();
-  const { data, loading, error, refresh } = useQuery(() => getCompetitorPosts(PAGE_ID), []);
+  const { pageId } = usePageScope();
+  // `pageId` is in the deps *and* gates the query: null means the Pages have
+  // not landed yet, and firing against a guessed id would show the wrong
+  // Page's competitors for a beat before correcting itself.
+  const { data, loading, error, refresh } = useQuery(
+    () => getCompetitorPosts(pageId!),
+    [pageId],
+    { enabled: pageId !== null },
+  );
   const [syncing, setSyncing] = useState(false);
 
   /**
@@ -71,9 +82,10 @@ function CompetitorsTab() {
    * on its own only when it has nothing stored.
    */
   async function sync() {
+    if (pageId === null) return;
     setSyncing(true);
     try {
-      await getCompetitorPosts(PAGE_ID, true);
+      await getCompetitorPosts(pageId, true);
       emit();
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : "Sync failed");
@@ -129,14 +141,21 @@ function CompetitorsTab() {
 
 function RssTab() {
   const cart = useCart();
-  const { data, loading, error, refresh } = useQuery(() => getRss(PAGE_ID), []);
+  const { pageId } = usePageScope();
+  const { data, loading, error, refresh } = useQuery(() => getRss(pageId!), [pageId], {
+    enabled: pageId !== null,
+  });
   const [refreshing, setRefreshing] = useState(false);
 
   return (
     <>
       <div className="flex items-center justify-between gap-3 pb-3">
         <p className="text-xs text-muted-foreground">
-          Seven curated feeds, 7-day window. Nothing here exists in the database yet.
+          {/* Was "Seven curated feeds" — a number that was only ever true of
+              History Retraced, and went stale the moment a Page with five was
+              configured. The count is in `config/sources.yml`, not here. */}
+          This Page&rsquo;s curated feeds, 7-day window. Nothing here exists in the
+          database yet.
         </p>
         <Button
           variant="outline"

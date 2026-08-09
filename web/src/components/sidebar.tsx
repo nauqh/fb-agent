@@ -15,6 +15,7 @@ import {
 import { Logo } from "@/components/logo";
 import { listDrafts } from "@/lib/api/drafts";
 import { useCart } from "@/lib/cart";
+import { usePageScope } from "@/lib/page-scope";
 import {
   Tooltip,
   TooltipContent,
@@ -82,16 +83,21 @@ export function Sidebar({
   // Drafts still needing a decision, and rows currently in flight — the two
   // numbers that tell the operator there is work waiting without opening the
   // screen.
+  // Scoped to the selected Page, like the queue itself. A badge reading 3 over
+  // a Review screen showing 0 is the kind of wrong that gets ignored rather
+  // than reported.
+  const { pageId } = usePageScope();
   const { data: queue } = useQuery(
     async () => {
       const [review, generating] = await Promise.all([
-        listDrafts({ status: "review" }),
-        listDrafts({ status: "generating" }),
+        listDrafts({ status: "review", page_id: pageId! }),
+        listDrafts({ status: "generating", page_id: pageId! }),
       ]);
       return { review: review.length, generating: generating.length };
     },
-    [],
+    [pageId],
     {
+      enabled: pageId !== null,
       intervalMs: 4_000,
       pollWhile: (counts) => counts === null || counts.generating > 0,
     },

@@ -6,9 +6,8 @@ import { Loader2, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { generate } from "@/lib/api/drafts";
-import { listPages } from "@/lib/api/pages";
 import { sourceKey, useCart } from "@/lib/cart";
-import { useQuery } from "@/lib/use-query";
+import { usePageScope } from "@/lib/page-scope";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -43,8 +42,10 @@ export function CartPanel() {
   const [topic, setTopic] = useState("");
   const [running, setRunning] = useState(false);
 
-  const { data: pages } = useQuery(() => listPages(), []);
-  const page = pages?.[0];
+  // The switcher's Page, not `pages[0]`. Generate writes `draft.page_id`, so
+  // this is the one place where reading the wrong Page produces a row that
+  // looks right and is not.
+  const { page } = usePageScope();
 
   // A topic run and a source run are exclusive: a ticked Cart is what the
   // operator meant, and the topic box is only reachable while it is empty.
