@@ -27,38 +27,32 @@ export default function SourcesScreen() {
     <div className="flex min-h-0 flex-1 flex-col">
       <ScreenHeader title="Sources" />
 
-      <Tabs
-        defaultValue="competitors"
-        className="grid min-h-0 flex-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px]"
-      >
-        <div className="flex min-h-0 flex-col gap-4">
-          {/* `*:` reaches the triggers, so the width and padding live in one
-              place instead of being repeated on each of the three. */}
-          <TabsList className="shrink-0 gap-1.5 p-1 *:min-w-28 *:px-4">
-            <TabsTrigger value="competitors">Competitors</TabsTrigger>
-            <TabsTrigger value="tweets">Tweets</TabsTrigger>
-            <TabsTrigger value="rss">RSS</TabsTrigger>
-          </TabsList>
+      {/* One column now. The Cart used to be a 320px column here, which cost
+          the grid 344px of width for a panel that is empty most of the time;
+          it is a dock under the tabs instead, and the grid has the full width. */}
+      <Tabs defaultValue="competitors" className="flex min-h-0 flex-1 flex-col gap-4">
+        {/* `*:` reaches the triggers, so the width and padding live in one
+            place instead of being repeated on each of the three. */}
+        <TabsList className="shrink-0 gap-1.5 p-1 *:min-w-28 *:px-4">
+          <TabsTrigger value="competitors">Competitors</TabsTrigger>
+          <TabsTrigger value="tweets">Tweets</TabsTrigger>
+          <TabsTrigger value="rss">RSS</TabsTrigger>
+        </TabsList>
 
-          {/* `pr-3` on each pane: these own the scrollbar, and without it the
-              card grid runs right up against the bar. Inside the scroller, so
-              it holds the content off the bar rather than moving the bar. */}
-          <TabsContent value="competitors" className="min-h-0 flex-1 overflow-y-auto pr-3">
-            <CompetitorsTab />
-          </TabsContent>
-          <TabsContent value="tweets" className="min-h-0 flex-1 overflow-y-auto pr-3">
-            <TweetsTab />
-          </TabsContent>
-          <TabsContent value="rss" className="min-h-0 flex-1 overflow-y-auto pr-3">
-            <RssTab />
-          </TabsContent>
-        </div>
+        {/* `pr-3` on each pane: these own the scrollbar, and without it the
+            card grid runs right up against the bar. Inside the scroller, so
+            it holds the content off the bar rather than moving the bar. */}
+        <TabsContent value="competitors" className="min-h-0 flex-1 overflow-y-auto pr-3">
+          <CompetitorsTab />
+        </TabsContent>
+        <TabsContent value="tweets" className="min-h-0 flex-1 overflow-y-auto pr-3">
+          <TweetsTab />
+        </TabsContent>
+        <TabsContent value="rss" className="min-h-0 flex-1 overflow-y-auto pr-3">
+          <RssTab />
+        </TabsContent>
 
-        {/* The Cart is a full-height column now that the shell is bounded —
-            no viewport arithmetic to keep in sync with the header. */}
-        <div className="min-h-0 lg:h-full">
-          <CartPanel />
-        </div>
+        <CartPanel />
       </Tabs>
     </div>
   );
@@ -118,7 +112,7 @@ function CompetitorsTab() {
       ) : loading ? (
         <CardGridSkeleton />
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
+        <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(360px,1fr))]">
           {data?.map((item) => (
             <SourceCard
               key={item.id}
@@ -190,7 +184,7 @@ function RssTab() {
       ) : loading ? (
         <CardGridSkeleton />
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
+        <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(360px,1fr))]">
           {data?.items.map((item) => (
             <SourceCard
               key={item.external_id}
@@ -250,7 +244,7 @@ function TweetsTab() {
           Paste a tweet URL. There is no feed to browse — a tweet is one lookup at a time.
         </p>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
+        <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(360px,1fr))]">
           {found.map((item) => (
             <SourceCard
               key={item.external_id}
@@ -300,7 +294,7 @@ function useElapsedSeconds() {
 
 function CardGridSkeleton() {
   return (
-    <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
+    <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(360px,1fr))]">
       {Array.from({ length: 6 }).map((_, index) => (
         <Skeleton key={index} className="h-44 rounded-lg" />
       ))}

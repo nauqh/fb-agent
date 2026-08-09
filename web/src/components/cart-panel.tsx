@@ -14,7 +14,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 /**
- * The Cart, pinned beside the source grids. Starts the run itself.
+ * The Cart, a dock under the source grids. Starts the run itself.
+ *
+ * It was a 320px column beside the grid, which cost the grid 344px of width
+ * for a panel that is empty most of the time. As a dock it costs one row of
+ * height and the grid gets the full width — three columns at 1440 instead of
+ * two, and four above 1900.
+ *
+ * Always on screen, never hidden when empty, for two reasons: the topic field
+ * below only applies while the Cart *is* empty, so a dock that hides would
+ * stranded it in some header; and Generate is the screen's primary action, which
+ * was the one thing the pinned column got right and a scrolling Cart would lose.
  *
  * It used to navigate to a `/generate` screen instead. That screen showed the
  * same cart again, a Page that could not be changed, and `N sources × 1 page =
@@ -71,100 +81,81 @@ export function CartPanel() {
   // No fetch for the items: the Cart holds them, so there is nothing to
   // resolve. This used to call GET /sources?ids= to turn ids back into rows.
   return (
-    /**
-     * Sized to its contents, not to the column.
-     *
-     * It used to be `h-full`, which drew a 764px bordered box around 194px of
-     * empty state — the frame claimed the whole screen to say "nothing ticked
-     * yet". `lg:h-fit` ends it where its content ends.
-     *
-     * `lg:max-h-full` is the other half and matters more than it looks: the
-     * shell is `h-screen` and clips, so a Cart free to grow past the viewport
-     * would simply have its Generate button cut off with nothing to scroll.
-     * Percentage max-height needs a definite parent, which is what the grid
-     * cell's `lg:h-full` on the wrapper provides — so the old full height
-     * survives as the ceiling rather than the floor, and the list inside
-     * scrolls once it is reached.
-     */
-    <aside className="flex min-h-0 w-full flex-col rounded-lg border lg:h-fit lg:max-h-full">
-      <div className="flex items-center justify-between border-b px-4 py-3">
-        <h2 className="text-sm font-medium">
-          Cart{cart.count > 0 ? <span className="text-muted-foreground"> · {cart.count}</span> : null}
-        </h2>
-        {cart.count > 0 ? (
-          <Button variant="ghost" size="sm" className="-mr-2 h-7" onClick={cart.clear}>
-            Clear
-          </Button>
-        ) : null}
-      </div>
+    <aside className="flex shrink-0 items-center gap-3 rounded-lg border p-2">
+      {cart.count === 0 ? (
+        <>
+          <Label htmlFor="topic" className="shrink-0 pl-1 text-xs text-muted-foreground">
+            Tick a source, or write from a topic
+          </Label>
+          <Input
+            id="topic"
+            value={topic}
+            onChange={(event) => setTopic(event.target.value)}
+            placeholder="The Great Molasses Flood, Boston 1919"
+            className="max-w-sm flex-1 text-xs"
+          />
+          {/* The distinction the operator is actually making by typing here, so
+              it stays next to the box rather than moving to a tooltip. */}
+          <p className="hidden min-w-0 flex-1 truncate text-[11px] text-muted-foreground xl:block">
+            A topic-only Draft has no Source Item — nothing binds the story except the topic
+            itself.
+          </p>
+        </>
+      ) : (
+        <>
+          <span className="shrink-0 pl-1 text-sm font-medium">
+            Cart <span className="text-muted-foreground">· {cart.count}</span>
+          </span>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-2">
-        {cart.count === 0 ? (
-          <div className="space-y-4 px-2 py-6">
-            <p className="text-center text-xs text-muted-foreground">
-              Tick a competitor post, a tweet or an RSS item.
-            </p>
-            <div className="space-y-2 border-t pt-4">
-              <Label htmlFor="topic" className="text-xs">
-                Or write from a topic
-              </Label>
-              <Input
-                id="topic"
-                value={topic}
-                onChange={(event) => setTopic(event.target.value)}
-                placeholder="The Great Molasses Flood, Boston 1919"
-                className="text-xs"
-              />
-              <p className="text-[11px] text-muted-foreground">
-                A topic-only Draft has no Source Item — nothing binds the story except the
-                topic itself.
-              </p>
-            </div>
-          </div>
-        ) : (
-          <ul className="space-y-1">
+          {/* The ticked items, as chips. A row rather than the column's stacked
+              list: the dock is one row tall, and the author is what identifies
+              a Source Item at a glance — the body text needed two lines to say
+              less. Scrolls sideways rather than wrapping, so the dock's height
+              cannot depend on how many are ticked. */}
+          <ul className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto">
             {cart.items.map((item) => (
               <li
                 key={sourceKey(item)}
-                className="group flex items-start gap-2 rounded-md p-2 hover:bg-muted/60"
+                className="flex shrink-0 items-center gap-1 rounded-full border bg-muted/40 py-1 pr-1 pl-2.5"
               >
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-xs font-medium">{item.author}</p>
-                  <p className="line-clamp-2 text-xs text-muted-foreground">{item.text}</p>
-                </div>
+                <span className="max-w-40 truncate text-xs" title={item.text}>
+                  {item.author}
+                </span>
                 <button
                   type="button"
                   onClick={() => cart.remove(item)}
-                  className="rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100"
-                  aria-label="Remove from cart"
+                  className="rounded-full p-0.5 text-muted-foreground hover:text-foreground"
+                  aria-label={`Remove ${item.author} from cart`}
                 >
-                  <X className="size-3.5" />
+                  <X className="size-3" />
                 </button>
               </li>
             ))}
           </ul>
-        )}
-      </div>
 
-      <div className="border-t p-3">
-        {/* The count is on the button because it is the only thing the removed
-            screen showed that the operator could not already see, and this is
-            now the click that spends money. */}
-        <Button
-          className="w-full bg-gold text-gold-foreground hover:bg-gold/90"
-          disabled={draftCount === 0 || running || !page}
-          onClick={run}
-        >
-          {running ? (
-            <Loader2 className="size-4 animate-spin" />
-          ) : (
-            <Sparkles className="size-4" />
-          )}
-          {draftCount === 0
-            ? "Generate"
-            : `Generate ${draftCount} draft${draftCount === 1 ? "" : "s"}`}
-        </Button>
-      </div>
+          <Button variant="ghost" size="sm" className="shrink-0" onClick={cart.clear}>
+            Clear
+          </Button>
+        </>
+      )}
+
+      {/* The count is on the button because it is the only thing the removed
+          screen showed that the operator could not already see, and this is
+          now the click that spends money. */}
+      <Button
+        className="shrink-0 bg-gold text-gold-foreground hover:bg-gold/90"
+        disabled={draftCount === 0 || running || !page}
+        onClick={run}
+      >
+        {running ? (
+          <Loader2 className="size-4 animate-spin" />
+        ) : (
+          <Sparkles className="size-4" />
+        )}
+        {draftCount === 0
+          ? "Generate"
+          : `Generate ${draftCount} draft${draftCount === 1 ? "" : "s"}`}
+      </Button>
     </aside>
   );
 }
