@@ -10,6 +10,11 @@ dependencies = [
     "pydantic-ai>=2.22",
     "pydantic-settings>=2.6",
     "sqlmodel>=0.0.22",
+    # Supabase Postgres. `[binary]` so a deploy needs no libpq and no compiler
+    # — the pure-python build wants both. psycopg 3, not psycopg2: the URL is
+    # `postgresql+psycopg://`, and psycopg2 would silently be a different
+    # driver behind the same-looking DSN.
+    "psycopg[binary]>=3.2",
     "google-genai>=1.0",
     "resvg-py>=0.3.3",
     "fonttools>=4.60",

@@ -1,7 +1,11 @@
 # Data model
 
-SQLite on stock settings, via SQLModel. No `user_id` (ADR-0002). No schedule
-table (ADR-0001). No `brand_key` (ADR-0003).
+Supabase Postgres, via SQLModel. No `user_id` (ADR-0002). No schedule table
+(ADR-0001). No `brand_key` (ADR-0003).
+
+Enum columns are stored as `VARCHAR`, never as a native Postgres enum — see
+`models._stored_enum`, which carries the reasoning. Adding a member stays an
+edit to the class rather than an `ALTER TYPE` no migration tool would run.
 
 **Three tables.** The old system had eight, plus a 54-column templates table.
 Everything removed was one of three things: configuration duplicated across

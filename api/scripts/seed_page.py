@@ -1,4 +1,5 @@
-"""Insert the pages. Idempotent — safe to re-run after deleting the db file.
+"""Insert the pages. Idempotent — it checks before every insert, so re-running
+it against the live database is a no-op rather than a duplicate.
 
 The values below were read from the old system's `facebook_post_templates` rows
 and cross-checked live against Metricool `/admin/simpleProfiles`. There is
@@ -6,10 +7,11 @@ nothing left to migrate: the prompts are files (`api/prompts/`), the layout is
 `config/layout.yml`, and the watermarks are committed assets under
 `api/assets/watermarks/`.
 
-Pages are seeded here rather than inserted by hand precisely because the
-database is disposable — the project convention is delete-and-reseed, and
-`fb_agent.db` currently sits on a disk the host wipes on redeploy. A row that
-only ever existed as a manual `INSERT` is a row a fresh clone does not have.
+Pages are seeded by a committed script rather than inserted by hand so that the
+two rows are reproducible: a row that only ever existed as a manual `INSERT`
+against one database is a row nobody can rebuild. That mattered more when the
+database was disposable, and still matters — this is what stands up a Page on a
+new Supabase project.
 
     uv run python scripts/seed_page.py
 """

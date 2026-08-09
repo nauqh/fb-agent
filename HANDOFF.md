@@ -1,6 +1,6 @@
 # Handoff
 
-**Updated:** 2026-08-09 · **Next focus:** the `fb_agent.db` persistence question, then deploy
+**Updated:** 2026-08-10 · **Next focus:** authentication on the API, then the Railway deploy
 
 Conventions and integration traps live in `CLAUDE.md`, which loads automatically.
 This file is state: what is proven, what is mid-flight, what to do next.
@@ -96,22 +96,58 @@ composites from the dev bucket, `896x1120`, zero failed requests.
 
 ## The next task
 
-**`fb_agent.db` is still SQLite on a disk Railway wipes on redeploy.** None of
-the media work touched this. Deploying as-is loses every draft while their
-pictures survive in the bucket — orphan files, no rows. Two options: a Railway
-volume (keeps SQLite, single instance, no automatic backups), or the Postgres
-already sitting unused in the same Supabase project. This is the decision that
-blocks everything else, including:
+**The API has no authentication and no CORS middleware.** Grepped and confirmed
+empty. Every route is unauthenticated, including the ones that spend money
+(`POST /generate` calls Gemini) and the one that publishes to a real Facebook
+page. The database being locked down does not help: requests arrive *through*
+the API, which holds the `postgres` credential. A shared-secret header is about
+twenty lines and is the last thing standing between this and a public Railway
+domain. `METRICOOL_PUBLISH_AS_DRAFT=true` is the only thing currently stopping a
+stranger's request from reaching a page.
 
-- **Seeding the production bucket**, which is still empty:
+Then the deploy itself: root directory `api`, start command
+`uvicorn app.main:app --host 0.0.0.0 --port $PORT`, **one replica**
+(`generate.sweep_stranded` assumes a single writer), and the same `.env` values —
+`DATABASE_URL` on the session pooler, `SUPABASE_BUCKET=fb-agent-media`.
 
-  ```
-  cd api
-  uv run python scripts/seed_media_bucket.py --from fb-agent-media-dev --to fb-agent-media --copy
-  ```
+## Done on 2026-08-10 — the database moved
 
-  Deferred, not blocked: until the database question is answered it is a guess
-  about which rows reach production at all.
+**Supabase Postgres, session pooler on `:5432`.** 2 pages / 954 source items /
+6 drafts, ids and their gaps preserved, sequences resynced to 3 / 955 / 15.
+Verified in a browser: Review renders all six composites from the production
+bucket, zero broken images, zero console errors.
+
+Three things that were not obvious:
+
+- **The old rows stored enum *names*** (`COMPETITOR_POST`); `_stored_enum` uses
+  `values_callable`, so Postgres stores *values* (`competitor_post`). Reading the
+  old file through the new mapping raised `LookupError` before a row copied. The
+  migration lowercased a copy of the file, asserting first that every stored
+  token really was its own member name.
+- **`sa_type=String` looked correct and was not.** 264 tests passed while a
+  stored `SourceKind` loaded back as a bare `str`, so `kind.is_factual` — asked
+  on every generate run — would have raised `AttributeError` in production. The
+  suite missed it because tests *construct* rows rather than reload them. Fixed
+  with `SAEnum(native_enum=False, length=32)`; the regression test reloads.
+- **RLS was already on** all three tables with zero policies, so `anon` is
+  denied everything despite Supabase's default grants. The app is unaffected: it
+  connects as `postgres`, which owns the tables and has `BYPASSRLS`. Left as-is
+  by decision. `relforcerowsecurity` must stay `false` — forcing it would lock
+  out our own API.
+
+SQLite is gone from the application entirely. `app/db.py` refuses a non-Postgres
+URL. The suite still uses a throwaway SQLite file, but `tests/conftest.py` builds
+that engine itself and assigns `db._engine`, so it is not a configuration the app
+supports. The pre-migration `fb_agent.db` was moved out of the repo into the
+session scratchpad, not deleted.
+
+**The production bucket is seeded**: 13 objects, all verified by unauthenticated
+public fetch against byte counts, nothing deleted from `fb-agent-media-dev`.
+`SUPABASE_BUCKET=fb-agent-media` in `.env`.
+
+**There is no sandbox any more.** One database and one bucket means a local
+Generate writes production rows and production objects. Only
+`METRICOOL_PUBLISH_AS_DRAFT=true` keeps output off a real page.
 
 `seed_media_bucket.py` rewrites **no rows**. A stored path is `<yyyy-mm>/<name>`
 and means the same thing in either bucket, which is the whole reason rows hold a
@@ -126,9 +162,9 @@ machinery went with it** — the `/media` mount, `media_root`, the `mkdir`, the
 The earlier `migrate_media_to_supabase.py` was deleted with them: it read local
 disk, and there is no longer any local disk to read.
 
-**So `fb-agent-media-dev` is the only copy of six paid Gemini heroes.** They
-cannot be regenerated identically. That is the argument for seeding production
-sooner rather than later, whatever the database ends up being.
+`fb-agent-media-dev` was the only copy of six paid Gemini heroes, which cannot
+be regenerated identically. It is no longer: they are in `fb-agent-media` too,
+byte-verified. Keep the dev bucket as the backup — nothing writes to it now.
 
 Measured numbers, so they don't get re-litigated:
 

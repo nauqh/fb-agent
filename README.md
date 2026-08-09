@@ -1,7 +1,7 @@
 # fb-agent
 
 Generates Facebook posts for **History Retraced** from competitor posts, tweets, and
-RSS items. Python + FastAPI + SQLite, with a Next.js frontend. More pages are
+RSS items. Python + FastAPI + Supabase Postgres, with a Next.js frontend. More pages are
 inserts, not a rewrite — [why](docs/data-model.md#one-page-in-v1).
 
 A rebuild of the Next.js/Supabase system at `../social-agent`, which is still
@@ -17,8 +17,11 @@ uv run python scripts/seed_page.py     # once; idempotent
 uv run fastapi dev app/main.py
 ```
 
-Schema changed? Delete `api/fb_agent.db` and re-seed. There is no migration tool
-until the move to Supabase.
+Schema changed? There is still no migration tool: `create_all` adds missing
+tables and never alters existing ones, so a new column is a hand-written
+`ALTER TABLE ADD COLUMN` against Supabase. Delete-and-reseed stopped being the
+escape hatch when the database moved off the laptop — it is now shared, and it
+holds the only copy of the drafts.
 
 The page watermark is committed at `api/assets/watermarks/` — recovered from the
 previous Supabase project, [provenance here](docs/data-model.md#layout-is-config-not-data).

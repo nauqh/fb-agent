@@ -13,7 +13,8 @@ const stamp = new Intl.DateTimeFormat("en-GB", {
 });
 
 /**
- * SQLite stores a naive datetime, so the API returns `2026-08-06T15:22:48`
+ * The columns are `timestamp without time zone`, so the API returns
+ * `2026-08-06T15:22:48`
  * with no offset and `new Date()` reads it as *local* time. Everything the API
  * writes is UTC, so say so — without this a draft made a minute ago showed as
  * "10 hours ago" on a UTC+7 machine.

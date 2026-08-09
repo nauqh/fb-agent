@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from enum import StrEnum
 
 from pydantic import computed_field
+from sqlalchemy import Enum as SAEnum
 from sqlmodel import JSON, Column, Field, SQLModel, UniqueConstraint
 
 from app import media
@@ -15,6 +16,33 @@ from app import media
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _stored_enum(enum: type) -> SAEnum:
+    """How an enum column is stored: `VARCHAR`, never a native Postgres type.
+
+    Three things have to hold at once, and the obvious spellings each break one:
+
+    - **The two backends must build the same schema.** Left to its default,
+      SQLAlchemy emits `CREATE TYPE … AS ENUM` on Postgres and a plain string on
+      SQLite, so the offline test suite would be exercising a schema production
+      does not have.
+    - **Adding a value must not need a migration.** A native enum makes it an
+      `ALTER TYPE`, which `create_all` will never perform, in a repo that has
+      deliberately chosen to run no migration tool. `create_constraint` is left
+      off for the same reason — a `CHECK` would need altering too.
+    - **It must load back as the enum, not as `str`.** `sa_type=String` gets the
+      first two and silently loses this one: `SourceKind.is_factual` is a
+      property, `sources/__init__.py` asks for it on a value read from the
+      database, and a bare string raises `AttributeError` mid-run. The tests did
+      not catch it — they construct their rows rather than reloading them — so
+      it would have shipped.
+
+    `length` is fixed rather than derived. SQLAlchemy sizes the column to the
+    longest *current* value, so a longer member added later silently needs an
+    `ALTER TABLE` on Postgres; 32 is clear of every value either enum has.
+    """
+    return SAEnum(enum, native_enum=False, length=32, values_callable=lambda e: [m.value for m in e])
 
 
 class SourceKind(StrEnum):
@@ -112,7 +140,15 @@ class SourceItemBase(SQLModel):
     the adapters from being able to supply it.
     """
 
-    kind: SourceKind = Field(index=True)
+    kind: SourceKind = Field(index=True, sa_type=_stored_enum(SourceKind))
+    """Stored as `VARCHAR`, loaded back as `SourceKind` — see `_stored_enum`.
+
+    Loading it back as the enum is load-bearing rather than tidy: `is_factual`
+    is a property on this class, and `sources/__init__.py` asks for it to decide
+    whether a Source Item's subject binds. A plain string there is an
+    `AttributeError` in the middle of a generate run.
+    """
+
     external_id: str
     author: str | None = None
     """Competitor page name, X handle, or publisher."""
@@ -163,7 +199,10 @@ class Draft(SQLModel, table=True):
     """Null means the draft came from a topic rather than a Source Item."""
 
     topic: str | None = None
-    status: DraftStatus = Field(default=DraftStatus.GENERATING, index=True)
+    status: DraftStatus = Field(
+        default=DraftStatus.GENERATING, index=True, sa_type=_stored_enum(DraftStatus)
+    )
+
 
     hook: str | None = None
     """The text on the image panel. Also the only text a brand rule guards.

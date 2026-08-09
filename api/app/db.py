@@ -1,18 +1,31 @@
-"""SQLite, stock settings, one file.
+"""Supabase Postgres, one connection URL. There is no other backend.
 
-No journal-mode tuning: v1 is one operator on local disk, and the workload
-never justified it. If two processes ever contend badly, WAL is one line.
+The local SQLite file is gone — migrated to Supabase on 2026-08-10, 2 pages /
+954 source items / 6 drafts, ids preserved. It was right for a laptop-only v1
+and wrong the moment anything deployed: Railway's filesystem is ephemeral, so
+every redeploy dropped the drafts while their pictures stayed in the bucket as
+orphans.
 
-No migration tool either. `init_db()` calls `create_all`, which creates missing
-tables and *never alters existing ones* — a schema change means deleting the db
-file and letting it rebuild. That is the intended workflow for v1; Alembic
-arrives with the move to Supabase, when rows start being worth keeping.
+`get_engine` refuses a non-Postgres URL rather than quietly building an engine
+for it. That is the whole reason this module is short: with two backends, every
+question about behaviour had to be asked twice, and the enum bug that shipped
+into review — a column that round-tripped as `str` on one and as the enum on the
+other — was invisible precisely because the two disagreed.
+
+The test suite still runs on a throwaway SQLite file, but it builds that engine
+itself (`tests/conftest.py`) and assigns `_engine` directly. So SQLite is a
+testing convenience with no representation in the app's own configuration, and
+`DATABASE_URL` has exactly one legal shape.
+
+Still no migration tool. `init_db()` calls `create_all`, which creates missing
+tables and **never alters existing ones**, so a schema change is a manual
+`ALTER TABLE` — as the inset columns already were. Deliberate, and the cost is
+now higher than it was: Postgres holds rows worth keeping, so "delete the file
+and let it rebuild" is no longer the escape hatch it was on SQLite.
 """
 
 from collections.abc import Iterator
-from pathlib import Path
 
-from sqlalchemy import event
 from sqlalchemy.engine import Engine
 from sqlmodel import Session, SQLModel, create_engine
 
@@ -22,38 +35,38 @@ from app.settings import settings
 _engine: Engine | None = None
 
 
-def _configure_sqlite(dbapi_connection, _record) -> None:
-    """Applied to every connection, not just the first.
-
-    Neither of these is a performance knob:
-
-    `foreign_keys` is off by default in SQLite and is per-connection. Without
-    it, every foreign key declared in models.py is decorative — a draft can
-    point at a page id that does not exist and nothing complains.
-
-    `busy_timeout` defaults to 0, meaning a locked database fails instantly
-    rather than waiting. Five seconds covers the one real case: a script (the
-    Phase 1 page seed) running while the dev server is up.
-    """
-    cursor = dbapi_connection.cursor()
-    cursor.execute("PRAGMA foreign_keys=ON")
-    cursor.execute("PRAGMA busy_timeout=5000")
-    cursor.close()
-
-
 def get_engine() -> Engine:
     global _engine
     if _engine is None:
-        path = Path(settings.database_path)
-        path.parent.mkdir(parents=True, exist_ok=True)
+        url = settings.database_url
+        if not url:
+            raise RuntimeError(
+                "DATABASE_URL is not set. There is no local database to fall "
+                "back to — see /health, which names it as a missing secret."
+            )
+        if not url.startswith("postgresql"):
+            # Loud, because the quiet version of this is a second database
+            # nobody meant to create. A typo'd scheme used to be a working app
+            # pointed at an empty SQLite file.
+            raise RuntimeError(
+                f"DATABASE_URL must be a postgresql:// URL; got {url.split(':', 1)[0]}://"
+            )
+
         _engine = create_engine(
-            f"sqlite:///{path}",
-            # FastAPI runs background tasks on a different thread to the request
-            # that spawned them, and a generate run outlives its request.
-            connect_args={"check_same_thread": False},
+            url,
             echo=settings.sql_echo,
+            # Supabase's pooler closes idle connections on its own, and a dead
+            # one is handed out as a live one — `pool_pre_ping` costs a round
+            # trip on checkout and turns that into a reconnect rather than an
+            # error on the first query after an idle spell.
+            pool_pre_ping=True,
+            # One uvicorn, one replica (`generate.sweep_stranded` depends on
+            # exactly one writer). Small pool, recycled well inside the pooler's
+            # own idle timeout.
+            pool_size=5,
+            max_overflow=5,
+            pool_recycle=1800,
         )
-        event.listen(_engine, "connect", _configure_sqlite)
     return _engine
 
 

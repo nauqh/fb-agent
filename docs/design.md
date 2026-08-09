@@ -26,11 +26,11 @@ whose every intermediate state was public to the next node.
         │   routes  ──► generate  ──►   │──► Gemini (text, image)
         │              sources    ──►   │──► Metricool · x.com · RSS
         │              compositor       │
-        │              media store  ──► │──► ./media on local disk
+        │              media store  ──► │──► Supabase Storage, public bucket
         │              db               │
         └───────────────┬───────────────┘
                         │
-                 fb_agent.db   SQLite, one file
+                 Supabase Postgres   session pooler, :5432
 ```
 
 Two processes, one machine. No queue, no worker, no Redis, no cron — see
@@ -76,20 +76,30 @@ Seven, each stated as its interface. Everything else is implementation.
 
 Persistence is **SQLModel** — the table classes in `models.py` are both the
 schema and the API-facing types, so there is no second set of DTOs to keep in
-sync. There is no migration tool: `create_all` creates missing tables and never
-alters existing ones, so during v1 a schema change means **deleting the db file
-and letting it rebuild**. That is the intended workflow while there is one
-operator and nothing worth keeping. Alembic arrives with the move to Supabase.
+sync. There is still no migration tool: `create_all` creates missing tables and
+never alters existing ones, so a schema change is a hand-written `ALTER TABLE
+ADD COLUMN`, as the inset columns already were. "Delete it and let it rebuild"
+was the v1 workflow and is gone — the database is shared and holds the only copy
+of the drafts. Alembic was considered at the Supabase move and declined: one
+operator and three tables did not earn a migrations directory.
 
-SQLite runs on stock settings — no WAL, no journal tuning. One operator, local
-disk, and a write pattern of single-row updates never justified it; WAL is one
-line if two processes ever contend badly.
+The store moved to **Supabase Postgres** on 2026-08-10 (2 pages, 954 source
+items, 6 drafts, ids preserved). SQLite was right for a laptop-only v1 and wrong
+the moment anything deployed: Railway's filesystem is ephemeral, so a redeploy
+dropped the drafts while their pictures stayed in the bucket as orphans.
 
-Two pragmas are set on **every** connection, and neither is a performance knob:
-`foreign_keys=ON`, which is per-connection and off by default — without it every
-foreign key in `models.py` is decorative — and `busy_timeout=5000`, because the
-default of 0 fails instantly on a locked database instead of waiting, and the
-Phase 1 seed script will run while the dev server is up.
+`app/db.py` **refuses** a non-Postgres URL rather than building an engine for
+it. One backend keeps every behavioural question answerable once — the enum
+column that round-tripped as `str` on one backend and as the enum on the other
+was invisible precisely because two disagreed. The connection is the session
+pooler on `:5432`; the transaction pooler on `:6543` breaks psycopg's prepared
+statements, and the direct host is IPv6-only.
+
+The test suite still runs on a throwaway SQLite file per test, but it builds
+that engine itself in `tests/conftest.py` and assigns `db._engine` directly —
+so SQLite is a property of the suite (offline, ~60s) with no representation in
+the app's configuration. The two schemas agree only because the enum columns are
+pinned to `VARCHAR`.
 
 ### `Source` — the one real seam
 
@@ -460,7 +470,8 @@ callers use.
 - `GenerateRun` — fakes for `Writer`, `HeroImage`, `Compositor` and
   `MediaStore`; asserts the rows, the progress transitions, and that a failure
   leaves an `error` rather than a stuck row.
-- Routes — FastAPI `TestClient` against a temp SQLite file.
+- Routes — FastAPI `TestClient` against a temp SQLite file built by the fixture,
+  never by `app.db`, which is Postgres-only.
 
 No mocking library reaches past an interface. If a test wants to, the module is
 the wrong shape.

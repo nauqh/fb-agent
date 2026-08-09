@@ -831,3 +831,24 @@ def test_a_bigger_size_draws_a_bigger_disc():
 
     assert small.width == 120 + layout.portrait.ring_pad_px * 2
     assert large.width == 300 + layout.portrait.ring_pad_px * 2
+
+
+def test_source_kind_survives_a_database_round_trip(session):
+    """`is_factual` is a property on the enum, and the writer asks a *stored*
+    row for it — see sources/__init__.py. Stored as a bare string it comes back
+    as `str` and that call is an AttributeError mid-run.
+
+    Regression: pinning these columns with `sa_type=String` did exactly that,
+    and every existing test passed, because they all construct their rows
+    rather than reloading them.
+    """
+    session.add(SourceItem(kind=SourceKind.RSS, external_id="round-trip", text="t"))
+    session.commit()
+    session.expire_all()
+
+    stored = session.exec(
+        select(SourceItem).where(SourceItem.external_id == "round-trip")
+    ).one()
+
+    assert isinstance(stored.kind, SourceKind)
+    assert stored.kind.is_factual is True

@@ -62,7 +62,9 @@ def health() -> dict:
     missing = settings.missing_secrets()
     return {
         "ok": not missing,
-        "database": settings.database_path,
+        # Host and database only. This endpoint is unauthenticated and the URL
+        # now carries a password.
+        "database": settings.database_summary,
         "media_bucket": settings.supabase_bucket,
         "font_present": layout.font_file.exists(),
         "image_size": f"{layout.image.width}x{layout.image.height}",

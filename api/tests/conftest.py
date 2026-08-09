@@ -11,7 +11,8 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlmodel import Session
+from sqlalchemy import event
+from sqlmodel import Session, SQLModel, create_engine
 
 API_DIR = Path(__file__).resolve().parent.parent
 if str(API_DIR) not in sys.path:
@@ -129,12 +130,52 @@ def media_root(tmp_path, monkeypatch):
     return tmp_path / "media"
 
 
+def _configure_sqlite(dbapi_connection, _record) -> None:
+    """Applied to every connection, not just the first. Neither is a perf knob.
+
+    `foreign_keys` is off by default in SQLite and is per-connection. Without
+    it, every foreign key declared in models.py is decorative — a draft can
+    point at a page id that does not exist and nothing complains, so a test
+    would pass on data Postgres rejects. Postgres enforces them unasked.
+
+    `busy_timeout` defaults to 0, meaning a locked database fails instantly
+    rather than waiting; a generate run commits from a background thread.
+    """
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.execute("PRAGMA busy_timeout=5000")
+    cursor.close()
+
+
 @pytest.fixture
 def engine(tmp_path, monkeypatch):
-    monkeypatch.setattr(settings, "database_path", str(tmp_path / "test.db"))
-    monkeypatch.setattr(db_module, "_engine", None)
-    db_module.init_db()
-    yield db_module.get_engine()
+    """A throwaway SQLite file per test. The only SQLite anywhere in this repo.
+
+    Built here rather than by handing `app.db` a `sqlite://` URL, because that
+    module is Postgres-only and rejects anything else. That refusal is the
+    point: the app has exactly one backend, and SQLite is a property of the
+    suite — offline, ~60s, no shared state between tests — not a second
+    configuration the app supports.
+
+    The two schemas agree because the enum columns are pinned to `VARCHAR` in
+    models.py. Left as native Postgres enums, Postgres would build a schema this
+    file cannot, and the suite could never have caught the bug that made a
+    stored `SourceKind` load back as a bare `str`.
+
+    `check_same_thread` is off because FastAPI runs background tasks on a
+    different thread to the request that spawned them, and a generate run
+    outlives its request.
+    """
+    engine = create_engine(
+        f"sqlite:///{tmp_path / 'test.db'}",
+        connect_args={"check_same_thread": False},
+    )
+    event.listen(engine, "connect", _configure_sqlite)
+    # Assigned, not configured: `get_engine` would refuse this URL.
+    monkeypatch.setattr(db_module, "_engine", engine)
+    SQLModel.metadata.create_all(engine)
+    yield engine
+    engine.dispose()
     monkeypatch.setattr(db_module, "_engine", None)
 
 

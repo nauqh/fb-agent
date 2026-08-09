@@ -210,9 +210,41 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    database_path: str = str(API_DIR / "fb_agent.db")
+    database_url: str = ""
+    """SQLAlchemy URL. Supabase Postgres — there is no local file any more.
+
+    Required, with no default, and that is the point: `database_path` used to
+    default to `api/fb_agent.db`, so a misconfigured deploy came up *working*
+    against an empty database it had just created, seeded nothing, and showed
+    empty screens with no error. A blank value now fails the same way a missing
+    API key does, by name, on `/health`.
+
+    Use the **session** pooler, port 5432:
+
+        postgresql+psycopg://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres
+
+    Not the transaction pooler on 6543 — it does not support prepared
+    statements, which psycopg uses by default, and the failure is intermittent
+    rather than immediate. Not the direct `db.<ref>.supabase.co` host either:
+    Supabase serves that over IPv6 only on projects of this age, and Railway
+    egress is IPv4, so it fails to resolve from where this actually runs.
+    """
+
     sql_echo: bool = False
     timezone: str = "Asia/Ho_Chi_Minh"
+
+    @property
+    def database_summary(self) -> str:
+        """Host and database name, never the password.
+
+        `/health` reported `database_path` verbatim, which was harmless while it
+        was a filename. A URL with credentials in it is not, and the endpoint is
+        unauthenticated.
+        """
+        if not self.database_url:
+            return ""
+        _, _, tail = self.database_url.rpartition("@")
+        return tail or "(malformed)"
 
     gemini_api_key: str = ""
     gemini_text_model: str = "gemini-3.5-flash"
@@ -289,6 +321,7 @@ class Settings(BaseSettings):
     def missing_secrets(self) -> list[str]:
         """Named, never valued. Reported by /health so a blank .env is obvious."""
         required = {
+            "DATABASE_URL": self.database_url,
             "GEMINI_API_KEY": self.gemini_api_key,
             "METRICOOL_API_TOKEN": self.metricool_api_token,
             "METRICOOL_USER_ID": self.metricool_user_id,
