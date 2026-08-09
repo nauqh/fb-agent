@@ -160,6 +160,13 @@ def fetch_competitors(page: Page, timeout: float = 20.0) -> list[dict]:
             "provider_id": str(row.get("providerId") or ""),
             "name": row.get("displayName") or row.get("screenName") or "Competitor",
             "followers": row.get("followers"),
+            # Facebook's CDN, signed and expiring — the `oe` parameter runs
+            # about four days out. Safe to hand to the browser only because
+            # this list is read live on every request and never stored, which
+            # is exactly the opposite of what `routes/sources.VOLATILE` exists
+            # to work around for competitor *posts*. Store this and the logos
+            # go dead within the week.
+            "picture": row.get("picture"),
         }
         for row in rows
     ]

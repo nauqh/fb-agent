@@ -20,6 +20,7 @@ from sqlmodel import Session, func, select
 
 from app.db import get_session
 from app.models import Draft, Page, SourceItem, SourceItemBase, SourceKind
+from app.settings import Feed
 from app.settings import sources as sources_config
 from app.sources import metricool, rss, x
 
@@ -159,6 +160,131 @@ def get_rss(
             for failure in feed.failures
         ],
     )
+
+
+class SourcesConfigOut(BaseModel):
+    """`config/sources.yml`, read back for the Settings screen.
+
+    Served from the parsed model rather than described a second time on the
+    client, for the reason `routes/config.py` gives about `layout.yml`: a screen
+    whose whole job is to show what a run is configured with must not show a
+    hand-kept copy that can disagree with it.
+
+    Deliberately **separate** from the competitor list below. This half is a
+    local file and cannot fail; that half is a vendor call that has 502'd twice.
+    Bundling them would let Metricool being down blank the feed list too.
+    """
+
+    since_days: int
+    max_items: int
+    feeds: list[Feed]
+    """This Page's, not every Page's — the beats do not overlap."""
+
+    lookback_days: int
+    grid_limit: int
+
+
+@router.get("/config")
+def get_sources_config(
+    page_id: int = Query(...),
+    session: Session = Depends(get_session),
+) -> SourcesConfigOut:
+    page = session.get(Page, page_id)
+    if page is None:
+        raise HTTPException(status_code=404, detail=f"No page {page_id}")
+
+    try:
+        feeds = sources_config.feeds_for(page.name)
+    except KeyError as error:
+        # Same 500 as the RSS grid gives, and for the same reason: a Page with
+        # no feeds is a misconfiguration, and an empty list here would render as
+        # a tidy "no feeds" that looks deliberate.
+        raise HTTPException(status_code=500, detail=str(error.args[0])) from error
+
+    return SourcesConfigOut(
+        since_days=sources_config.rss.since_days,
+        max_items=sources_config.rss.max_items,
+        feeds=list(feeds),
+        lookback_days=sources_config.competitors.lookback_days,
+        grid_limit=sources_config.competitors.grid_limit,
+    )
+
+
+class CompetitorOut(BaseModel):
+    """One configured competitor, and whether it is actually producing."""
+
+    provider_id: str
+    name: str
+    followers: int | None = None
+    picture: str | None = None
+    """Facebook's CDN, signed and expiring in about four days. Passed straight
+    through and never stored — this list is re-read live on every request, so
+    the URL is always fresh. See the note in `sources/metricool.py`."""
+
+    posts_stored: int
+    """How many of this competitor's posts are stored for this Page.
+
+    Zero is the interesting value and the reason this endpoint exists: a
+    competitor configured in Metricool that has published nothing looks exactly
+    like one that was never configured, from every other screen. Counted from
+    stored rows rather than a second posts fetch — the sync already paid 1.6MB
+    for them, and they are what the grid shows.
+    """
+
+
+@router.get("/competitors/pages")
+def get_competitor_pages(
+    page_id: int = Query(...),
+    session: Session = Depends(get_session),
+) -> list[CompetitorOut]:
+    """This Page's competitor set, live from Metricool.
+
+    The list is Metricool's and is not stored (see `CONTEXT.md`: the agent
+    stores their posts, never the list itself), so this reads it every time.
+    `fetch_competitors` was written for exactly this question and had no caller
+    until now.
+
+    Joined to stored posts on the competitor's display name. That is the same
+    field the posts carry as `ownerDisplayName`, and it matches exactly: across
+    both Pages, 48 configured competitors and 40 distinct post authors, every
+    author resolved and none unmatched in either direction.
+    """
+    page = session.get(Page, page_id)
+    if page is None:
+        raise HTTPException(status_code=404, detail=f"No page {page_id}")
+
+    try:
+        competitors = metricool.fetch_competitors(page)
+    except metricool.MetricoolError as error:
+        # 502: the competitor set is somebody else's, and the screen says so
+        # rather than pretending the set is empty.
+        raise HTTPException(status_code=502, detail=str(error)) from error
+
+    counts = dict(
+        session.exec(
+            select(SourceItem.author, func.count(SourceItem.id))  # type: ignore[arg-type]
+            .where(
+                SourceItem.kind == SourceKind.COMPETITOR_POST,
+                SourceItem.synced_for_page_id == page_id,
+            )
+            .group_by(SourceItem.author)  # type: ignore[arg-type]
+        ).all()
+    )
+
+    rows = [
+        CompetitorOut(
+            provider_id=competitor["provider_id"],
+            name=competitor["name"],
+            followers=competitor["followers"],
+            picture=competitor.get("picture"),
+            posts_stored=counts.get(competitor["name"], 0),
+        )
+        for competitor in competitors
+    ]
+    # Silent ones first: they are the finding, and at the bottom of twenty-six
+    # rows they would be exactly as invisible as they are today.
+    rows.sort(key=lambda row: (row.posts_stored, -(row.followers or 0)))
+    return rows
 
 
 @router.get("/tweet")
