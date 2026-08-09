@@ -18,10 +18,13 @@ and the current state of play is `HANDOFF.md`.
 ```
 api/   uv run pytest -q          # 238 at time of writing
 web/   npx tsc --noEmit
-web/   npx eslint src            # one pre-existing error in review-list.tsx:87
+web/   npx eslint src            # clean — keep it that way
 ```
 
-`review-list.tsx:87` (`set-state-in-effect`) predates the current work. Leave it.
+`eslint src` exits 0. It carried one standing `set-state-in-effect` error in
+`review-list.tsx` for a long time, described here as pre-existing and to be left
+alone; it was neither hard nor a false positive once read. A new error is a new
+error — do not add a note here instead of fixing it.
 
 ## Verify in a browser, not just in tests
 
