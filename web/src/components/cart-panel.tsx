@@ -71,7 +71,22 @@ export function CartPanel() {
   // No fetch for the items: the Cart holds them, so there is nothing to
   // resolve. This used to call GET /sources?ids= to turn ids back into rows.
   return (
-    <aside className="flex h-full min-h-0 w-full flex-col rounded-lg border">
+    /**
+     * Sized to its contents, not to the column.
+     *
+     * It used to be `h-full`, which drew a 764px bordered box around 194px of
+     * empty state — the frame claimed the whole screen to say "nothing ticked
+     * yet". `lg:h-fit` ends it where its content ends.
+     *
+     * `lg:max-h-full` is the other half and matters more than it looks: the
+     * shell is `h-screen` and clips, so a Cart free to grow past the viewport
+     * would simply have its Generate button cut off with nothing to scroll.
+     * Percentage max-height needs a definite parent, which is what the grid
+     * cell's `lg:h-full` on the wrapper provides — so the old full height
+     * survives as the ceiling rather than the floor, and the list inside
+     * scrolls once it is reached.
+     */
+    <aside className="flex min-h-0 w-full flex-col rounded-lg border lg:h-fit lg:max-h-full">
       <div className="flex items-center justify-between border-b px-4 py-3">
         <h2 className="text-sm font-medium">
           Cart{cart.count > 0 ? <span className="text-muted-foreground"> · {cart.count}</span> : null}
