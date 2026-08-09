@@ -498,7 +498,7 @@ function RowMenu({
  */
 const STATUS: Record<string, { label: string; tone: StatusTone }> = {
   generating: { label: "Generating", tone: "busy" },
-  review: { label: "Pending review", tone: "neutral" },
+  review: { label: "Pending review", tone: "waiting" },
   approved: { label: "Approved", tone: "positive" },
   rejected: { label: "Rejected", tone: "neutral" },
   failed: { label: "Failed", tone: "negative" },

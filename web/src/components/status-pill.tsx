@@ -14,22 +14,37 @@ import { cn } from "@/lib/utils";
  * so the hue is stated at full strength in 6px and the surface is free to stay
  * light. Colour and weight stop being the same dial.
  *
- * Colour is still spent only where it earns attention. `approved` and
- * `published` are the end states worth seeing; `failed` and `error` lost work.
- * Pending, rejected and draft stay grey — they are the background hum of the
- * queue, not events.
+ * Colour is spent only where it earns attention. `approved` and `published` are
+ * the end states worth seeing; `failed` and `error` lost work; `review` is the
+ * one row that is *waiting on the operator*, which is the whole point of the
+ * queue. `rejected` and `draft` stay grey, because they are settled — nothing
+ * is owed on them.
+ *
+ * Pending review and Rejected shared the grey until it was pointed out that
+ * they read as the same thing at a glance, which is exactly backwards: one is
+ * the work, the other is the discard pile.
  *
  * Shared by the Review queue and the Schedule so the two cannot drift into
  * different ideas of what a status looks like, which is exactly what had
  * happened: one solid red, the other a tinted outline.
  */
 
-export type StatusTone = "neutral" | "positive" | "negative" | "busy";
+export type StatusTone = "neutral" | "waiting" | "positive" | "negative" | "busy";
 
 const TONE: Record<StatusTone, { pill: string; dot: string }> = {
   neutral: {
     pill: "border-border bg-muted text-muted-foreground",
     dot: "bg-muted-foreground/40",
+  },
+  /**
+   * Blue, not amber. Amber is a hair from the gold `busy` already wears, and
+   * "waiting for you" sitting next to "working on it" in the same queue has to
+   * be told apart at a glance. Blue is also the one hue here that carries no
+   * verdict — this row is neither good news nor bad, only unread.
+   */
+  waiting: {
+    pill: "border-blue-600/25 bg-blue-500/10 text-blue-700 dark:text-blue-400",
+    dot: "bg-blue-500",
   },
   positive: {
     pill: "border-green-600/25 bg-green-500/10 text-green-700 dark:text-green-400",
