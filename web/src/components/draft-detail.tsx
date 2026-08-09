@@ -204,6 +204,13 @@ export function DraftDetail({
   async function decide(action: "approve" | "reject") {
     setDeciding(true);
     try {
+      // A decision closes the drawer, and the form goes with it. Anything typed
+      // and not saved would be silently discarded — including a highlight,
+      // which is the one edit whose whole feedback is the picture and so is the
+      // easiest to believe is already stored. Rejecting saves too: it is
+      // reversible, and a draft that comes back should come back as it looked.
+      if (dirty && form) await updateDraft(draftId, form);
+
       if (action === "approve") await approveDraft(draftId);
       else await rejectDraft(draftId);
 
@@ -264,6 +271,15 @@ export function DraftDetail({
   async function changeInset(file: File | null) {
     setImageWork("inset");
     try {
+      // Save first, and this is the fix for a bug that survived the rewrite.
+      // The server redraws the card from the **row**; the preview above draws
+      // from the form. So uploading with an unsaved highlight baked the *old*
+      // gold into the PNG while the preview kept showing the new gold — two
+      // pictures that disagree, with nothing on screen saying so. Publish then
+      // ships the PNG. Intermittent in exactly the way it was reported: it
+      // depended on whether a Save happened to land before the upload.
+      if (dirty && form) await updateDraft(draftId, form);
+
       if (file) await uploadInset(draftId, file);
       else await removeInset(draftId);
       await refresh();
