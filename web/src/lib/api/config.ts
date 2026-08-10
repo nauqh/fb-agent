@@ -29,6 +29,20 @@ export interface Layout {
   font: { family: string; weight: string; path: string };
 }
 
-export async function getLayout(): Promise<Layout> {
-  return get<Layout>("/layout");
+/**
+ * What `GET /layout` answers: the resolved layout, and which fields the Page
+ * overrides rather than inheriting from `layout.yml`.
+ *
+ * The envelope is not decoration — `overridden` is what lets a screen mark a
+ * changed field and offer a reset that means "back to the file". It is derived
+ * from the stored row rather than by diffing against the defaults, because a
+ * Page that sets a value *to* the current default has still overridden it.
+ */
+export interface LayoutOut {
+  layout: Layout;
+  overridden: string[];
+}
+
+export async function getLayout(pageId?: number): Promise<LayoutOut> {
+  return get<LayoutOut>("/layout", pageId != null ? { page_id: pageId } : {});
 }

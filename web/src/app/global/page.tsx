@@ -12,6 +12,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   addToPool,
   getAllowance,
   removeFromPool,
@@ -101,17 +107,17 @@ export default function GlobalScreen() {
             <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-xs sm:grid-cols-4">
               <Constant
                 label="Size"
-                value={`${layout.image.width} × ${layout.image.height}`}
+                value={`${layout.layout.image.width} × ${layout.layout.image.height}`}
               />
               <Constant
                 label="Panel"
-                value={`${Math.round(layout.panel.ratio * 100)}–${Math.round(layout.panel.max_ratio * 100)}%`}
+                value={`${Math.round(layout.layout.panel.ratio * 100)}–${Math.round(layout.layout.panel.max_ratio * 100)}%`}
               />
               <Constant
                 label="Font"
-                value={`${layout.font.family} ${layout.font.weight} ${layout.text.font_size_px}px`}
+                value={`${layout.layout.font.family} ${layout.layout.font.weight} ${layout.layout.text.font_size_px}px`}
               />
-              <Constant label="Highlight" value={layout.highlight.color} swatch />
+              <Constant label="Highlight" value={layout.layout.highlight.color} swatch />
             </dl>
           ) : (
             <Skeleton className="h-16 rounded-lg" />
@@ -337,14 +343,32 @@ function PoolTable({
   const shown = rows.slice((current - 1) * POOL_PAGE_SIZE, current * POOL_PAGE_SIZE);
 
   return (
+    // The rail has its own provider and this screen is not inside it, so the
+    // header hints need one here or Radix throws at render.
+    <TooltipProvider>
     <div className="overflow-x-auto">
       <table className="w-full min-w-[46rem] text-xs">
         <thead>
           <tr className="border-b text-left text-muted-foreground">
             <th className="pb-2 font-normal">Page</th>
-            <th className="pb-2 font-normal">In brand</th>
-            <th className="pb-2 font-normal">Read by</th>
-            <th className="pb-2 text-right font-normal">Posts</th>
+            <th className="pb-2 font-normal">
+              <HeaderHint hint="Which Metricool profile this competitor is filed under — where one of the account's 100 slots was spent. It does not limit who can read it.">
+                In brand
+              </HeaderHint>
+            </th>
+            <th className="pb-2 font-normal">
+              <HeaderHint hint="Which of your Pages actually see this competitor's posts. A Page with no assignments of its own reads the set it is filed under, shown here as “default”.">
+                Read by
+              </HeaderHint>
+            </th>
+            <th className="pb-2 text-right font-normal">
+              <HeaderHint
+                align="end"
+                hint="How many of this competitor's posts are stored from the last syncs. “none” means it is configured but has published nothing we picked up — a dead source looks identical to an unconfigured one everywhere else."
+              >
+                Posts
+              </HeaderHint>
+            </th>
             <th className="pb-2" />
           </tr>
         </thead>
@@ -379,16 +403,7 @@ function PoolTable({
               </td>
               <td className="py-2 pr-3 text-muted-foreground">{row.page_name}</td>
               <td className="py-2 pr-3">
-                {row.assigned_page_ids.length === 0 ? (
-                  // Not an error: a Page with no assignments at all still reads
-                  // its own brand's set through the fallback. Settings is where
-                  // that gets decided, so this points there rather than warning.
-                  <span className="text-muted-foreground">not assigned</span>
-                ) : (
-                  row.assigned_page_ids
-                    .map((id) => nameOf.get(id) ?? id)
-                    .join(", ")
-                )}
+                <ReadBy row={row} nameOf={nameOf} />
               </td>
               <td
                 className={cn(
@@ -422,7 +437,80 @@ function PoolTable({
         onPageChange={setPage}
       />
     </div>
+    </TooltipProvider>
   );
+}
+
+/**
+ * A column heading that explains itself on hover.
+ *
+ * These columns each mean something the word alone does not carry — "In brand"
+ * is where a slot was spent rather than who may use it, "Posts" counts what was
+ * stored rather than what exists. Dotted underline so it reads as explicable
+ * rather than as a link.
+ */
+function HeaderHint({
+  hint,
+  align = "start",
+  children,
+}: {
+  hint: string;
+  align?: "start" | "center" | "end";
+  children: React.ReactNode;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="cursor-help border-b border-dotted border-muted-foreground/60">
+          {children}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent align={align}>{hint}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+/**
+ * Who actually reads this competitor.
+ *
+ * Not the same as its assignments, which is why this is not a `join(", ")`. A
+ * Page falls back to the set it is filed under until it has an assignment of
+ * its own (`routes/sources._visible_to`), so an unassigned competitor is often
+ * still being read — by the brand it sits in. This column used to print "not
+ * assigned" for every one of them: measured when this was written, that was 88
+ * of 92 rows, and 44 of those were being read every day.
+ *
+ * `reads_by_default` and the assignment list cannot both apply. A Page holding
+ * any assignment has left the fallback, so a Page that assigned *this* row can
+ * never also be reading it by default.
+ */
+function ReadBy({
+  row,
+  nameOf,
+}: {
+  row: CompetitorPage;
+  nameOf: Map<number, string>;
+}) {
+  const assigned = row.assigned_page_ids.map((id) => nameOf.get(id) ?? String(id));
+
+  if (assigned.length > 0) return <>{assigned.join(", ")}</>;
+
+  if (row.reads_by_default) {
+    return (
+      <span className="text-muted-foreground">
+        {row.page_name}{" "}
+        {/* Marked, because it is a different fact from an assignment: it holds
+            only until someone assigns anything to this Page, at which point
+            this competitor silently stops being read. */}
+        <span className="opacity-70">(default)</span>
+      </span>
+    );
+  }
+
+  // The genuine empty state, and worth a red: the Page it sits under has
+  // assignments and none of them is this, so nothing reads it — while it goes
+  // on spending one of the hundred. Measured at 44 of 92 when this was written.
+  return <span className="text-destructive">not read</span>;
 }
 
 /** Frees a slot in Metricool. Assignments naming it are left alone — re-adding

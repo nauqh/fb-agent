@@ -347,6 +347,20 @@ class CompetitorOut(BaseModel):
     two are different states and the screen has to say which is in force.
     """
 
+    reads_by_default: bool = False
+    """Whether the Page this sits under reads it *without* an assignment.
+
+    True when that Page holds no assignments at all, so `_visible_to` is still
+    on the provenance fallback for it. Sent because the screen cannot work it
+    out: it sees this row's own assignments and has no way to know whether some
+    *other* competitor switched this Page into assignment-only mode.
+
+    Without it the column lies at scale. Measured while this was added: 88 of 92
+    competitors had no assignment, and 8 of the 10 Pages were still on the
+    fallback — so "not assigned" was rendering against rows that were being read
+    every day, which is the opposite of what an operator would conclude.
+    """
+
     page_id: int
     page_name: str
     """Which Page's competitor set this belongs to in Metricool.
@@ -402,6 +416,14 @@ def get_competitor_pages(
     for row in session.exec(select(PageCompetitor)).all():
         assignments.setdefault(row.competitor_page_id, []).append(row.page_id)
 
+    # A Page switches to assignment-only the moment it has one assignment of any
+    # kind — see `_visible_to`. So this is a property of the Page, not of the
+    # competitor, and it is read from every assignment rather than from this
+    # row's.
+    assignment_holders = {
+        page_id for page_ids in assignments.values() for page_id in page_ids
+    }
+
     rows = []
     for page in pages:
         try:
@@ -421,6 +443,7 @@ def get_competitor_pages(
                 picture=competitor.get("picture"),
                 posts_stored=counts.get(competitor["name"], 0),
                 assigned_page_ids=assignments.get(competitor["provider_id"], []),
+                reads_by_default=page.id not in assignment_holders,
                 page_id=page.id,
                 page_name=page.name,
             )

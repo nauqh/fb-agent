@@ -102,6 +102,15 @@ export interface CompetitorPage {
   posts_stored: number;
   /** Which of our Pages read this competitor. Empty means none have assigned it. */
   assigned_page_ids: number[];
+  /**
+   * Whether `page_id` reads this without an assignment, through the fallback.
+   *
+   * The screen cannot derive this: a Page switches to assignment-only as soon as
+   * it has *any* assignment, which may be on a different competitor entirely.
+   * Empty `assigned_page_ids` therefore means "nobody reads it" or "the Page it
+   * sits under reads it by default", and only the server can tell which.
+   */
+  reads_by_default: boolean;
   /** Whose Metricool set it sits in — where the 100-competitor allowance went. */
   page_id: number;
   page_name: string;

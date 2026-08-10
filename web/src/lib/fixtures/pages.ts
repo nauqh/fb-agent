@@ -15,8 +15,10 @@ export const PAGES: Page[] = [
     name: "History Retraced",
     facebook_page_id: "569035169625026",
     metricool_blog_id: "4605385",
-    avatar_image_path: "assets/pages/history-retraced.png",
-    avatar_url: null,
+    // No committed avatar any more: the logo comes from Metricool, which serves
+    // the Facebook profile picture and follows it when it changes.
+    avatar_image_path: null,
+    avatar_url: "https://static.metricool.com/brand/facebook-page-image?brandId=4605385",
     watermark_image_path: "assets/watermarks/history-retraced-stacked.png",
     created_at: "2026-08-03T02:10:00Z",
     updated_at: "2026-08-03T02:10:00Z",
