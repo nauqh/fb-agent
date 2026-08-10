@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 
 import { Logo } from "@/components/logo";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { listDrafts } from "@/lib/api/drafts";
 import { useCart } from "@/lib/cart";
 import { usePageScope } from "@/lib/page-scope";
@@ -249,6 +250,11 @@ export function Sidebar({
               count={null}
               collapsed={collapsed}
             />
+            {/* Last, and below Settings rather than beside it. Settings is a
+                destination with a URL and an active state; this is a control
+                that changes nothing about where you are. It shares the row
+                shape only so the icons stay in the same column. */}
+            <ThemeToggle collapsed={collapsed} />
           </div>
         </nav>
       </aside>

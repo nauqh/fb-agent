@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
 import { cookies } from "next/headers";
+import { ThemeProvider } from "next-themes";
 
 import { Sidebar } from "@/components/sidebar";
 import { COLLAPSE_COOKIE } from "@/lib/sidebar-cookie";
@@ -40,6 +41,11 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   return (
     <html
       lang="en"
+      // next-themes writes `class="dark"` and `style="color-scheme"` onto this
+      // element from a blocking script, before React hydrates — which is
+      // precisely the mismatch React would otherwise shout about. Scoped to
+      // this element only; it does not silence anything below it.
+      suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       {/*
@@ -50,21 +56,44 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         on a phone.
       */}
       <body className="flex min-h-full flex-col lg:h-screen lg:flex-row lg:overflow-hidden">
-        {/* The Cart sits above the router so it survives Sources → Generate.
-            Page scope wraps it, because the Cart's Generate button reads the
-            selected Page to decide what it is generating for. */}
-        <PageScopeProvider defaultPageId={pageId}>
-          <CartProvider>
-            <Sidebar defaultCollapsed={collapsed} />
-            {/* `min-w-0`: without it this flex child takes its width from its
-                content, and a wide table inside a screen pushes the rail off the
-                left edge instead of scrolling in its own pane. */}
-            <main className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col px-6 py-6 lg:min-h-0 lg:min-w-0 lg:overflow-hidden">
-              {children}
-            </main>
-            <Toaster position="bottom-right" />
-          </CartProvider>
-        </PageScopeProvider>
+        {/*
+          Outermost of the three, because the Toaster reads the theme too
+          (`ui/sonner.tsx` has called `useTheme` since it was generated, and
+          until now got nothing back and fell through to its "system" default).
+
+          The theme is *not* read from a cookie the way the rail's width is.
+          That trick exists because the sidebar renders its own width on the
+          server; next-themes solves the same first-paint problem differently,
+          with a blocking inline script that sets the class before anything is
+          painted — so there is no flash to fix and no second source of truth.
+          `system` is the default, so an operator who never touches the control
+          follows the OS.
+        */}
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          // The shell animates width and colour on a 300ms transition. Without
+          // this, flipping the theme drags every one of those through the
+          // colour change and the whole screen smears.
+          disableTransitionOnChange
+        >
+          {/* The Cart sits above the router so it survives Sources → Generate.
+              Page scope wraps it, because the Cart's Generate button reads the
+              selected Page to decide what it is generating for. */}
+          <PageScopeProvider defaultPageId={pageId}>
+            <CartProvider>
+              <Sidebar defaultCollapsed={collapsed} />
+              {/* `min-w-0`: without it this flex child takes its width from its
+                  content, and a wide table inside a screen pushes the rail off the
+                  left edge instead of scrolling in its own pane. */}
+              <main className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col px-6 py-6 lg:min-h-0 lg:min-w-0 lg:overflow-hidden">
+                {children}
+              </main>
+              <Toaster position="bottom-right" />
+            </CartProvider>
+          </PageScopeProvider>
+        </ThemeProvider>
       </body>
     </html>
   );
