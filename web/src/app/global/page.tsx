@@ -48,7 +48,11 @@ export default function GlobalScreen() {
   } = useQuery(() => getCompetitorPages(), []);
 
   return (
-    <div className="w-full space-y-4 lg:pr-3">
+    // Its own scroller, like every screen: the shell is `lg:overflow-hidden` on
+    // both `body` and `main`, so a screen without `overflow-y-auto` here is not
+    // a short page — it is a clipped one, with everything below the fold simply
+    // unreachable. `pb-16` keeps the last row clear of the mobile bar.
+    <div className="w-full space-y-4 pb-16 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-3">
       <ScreenHeader title="Global" />
 
       <Budget data={allowance} />
@@ -148,6 +152,10 @@ function Budget({ data }: { data: Allowance | null }) {
   if (!data) return <Skeleton className="h-24 rounded-xl" />;
 
   const spent = data.profiles.filter((one) => one.competitors > 0);
+  // Brands watching nobody are left out of the bar — a zero-width segment is
+  // invisible — but they are counted at the end, because "why only four when I
+  // have eleven brands?" is the first question the legend otherwise raises.
+  const empty = data.profiles.length - spent.length;
   const tight = data.remaining <= 10;
 
   return (
@@ -217,6 +225,11 @@ function Budget({ data }: { data: Allowance | null }) {
             ) : null}
           </li>
         ))}
+        {empty > 0 ? (
+          <li className="text-muted-foreground">
+            + {empty} brand{empty === 1 ? "" : "s"} watching nobody
+          </li>
+        ) : null}
       </ul>
     </section>
   );
