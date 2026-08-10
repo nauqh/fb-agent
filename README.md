@@ -17,11 +17,20 @@ uv run python scripts/seed_page.py     # once; idempotent
 uv run fastapi dev app/main.py
 ```
 
-Schema changed? There is still no migration tool: `create_all` adds missing
-tables and never alters existing ones, so a new column is a hand-written
-`ALTER TABLE ADD COLUMN` against Supabase. Delete-and-reseed stopped being the
-escape hatch when the database moved off the laptop — it is now shared, and it
-holds the only copy of the drafts.
+Schema changed? Alembic:
+
+```
+cd api
+uv run alembic revision --autogenerate -m "what changed"   # read the file it writes
+uv run alembic upgrade head
+```
+
+The app also runs `upgrade head` at startup, so a deploy migrates itself. Run
+`uv run alembic check` to see whether the models and the live database differ —
+it should say "No new upgrade operations detected".
+
+Delete-and-reseed stopped being the escape hatch when the database moved off the
+laptop: it is shared, and it holds the only copy of the drafts.
 
 The page watermark is committed at `api/assets/watermarks/` — recovered from the
 previous Supabase project, [provenance here](docs/data-model.md#layout-is-config-not-data).

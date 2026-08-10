@@ -4,8 +4,13 @@ Supabase Postgres, via SQLModel. No `user_id` (ADR-0002). No schedule table
 (ADR-0001). No `brand_key` (ADR-0003).
 
 Enum columns are stored as `VARCHAR`, never as a native Postgres enum — see
-`models._stored_enum`, which carries the reasoning. Adding a member stays an
-edit to the class rather than an `ALTER TYPE` no migration tool would run.
+`models._stored_enum`, which carries the reasoning. That predates Alembic and
+survived it: `ALTER TYPE` is now a migration we could write, but a new enum
+member is a fact about the Python class, and making it a schema change as well
+buys nothing. It also keeps the SQLite test fixture building the same schema
+Postgres has.
+
+Schema changes are Alembic revisions in `api/alembic/versions/`.
 
 **Three tables.** The old system had eight, plus a 54-column templates table.
 Everything removed was one of three things: configuration duplicated across

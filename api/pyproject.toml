@@ -26,6 +26,7 @@ dependencies = [
     # there — and the publish path needs it to stamp a naive local time for
     # Metricool. Harmless on Linux, where zoneinfo prefers the system copy.
     "tzdata>=2026.1",
+    "alembic>=1.19.1",
 ]
 
 [dependency-groups]

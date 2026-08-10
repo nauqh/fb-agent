@@ -16,10 +16,17 @@ and the current state of play is `HANDOFF.md`.
 ## Checks
 
 ```
-api/   uv run pytest -q          # 238 at time of writing
+api/   uv run pytest -q          # 265 at time of writing
+api/   uv run alembic check      # "No new upgrade operations detected"
 web/   npx tsc --noEmit
 web/   npx eslint src            # clean — keep it that way
 ```
+
+`alembic check` is the one that tests cannot cover: the suite builds its schema
+straight from the models with `create_all`, so it verifies the models and never
+the migrations. `check` diffs the models against the **live** database. Anything
+it reports means a revision is missing, and a deploy would take the schema and
+the code out of step.
 
 `eslint src` exits 0. It carried one standing `set-state-in-effect` error in
 `review-list.tsx` for a long time, described here as pre-existing and to be left

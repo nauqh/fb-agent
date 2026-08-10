@@ -27,10 +27,12 @@ def _stored_enum(enum: type) -> SAEnum:
       SQLAlchemy emits `CREATE TYPE … AS ENUM` on Postgres and a plain string on
       SQLite, so the offline test suite would be exercising a schema production
       does not have.
-    - **Adding a value must not need a migration.** A native enum makes it an
-      `ALTER TYPE`, which `create_all` will never perform, in a repo that has
-      deliberately chosen to run no migration tool. `create_constraint` is left
-      off for the same reason — a `CHECK` would need altering too.
+    - **Adding a value should not need a migration at all.** Alembic arrived
+      after this was written, so `ALTER TYPE` is now a migration we *could*
+      write — but a new member is a fact about the Python enum, and having it
+      also be a schema change is a cost with nothing on the other side.
+      `create_constraint` is left off for the same reason: a `CHECK` listing the
+      values would need altering too.
     - **It must load back as the enum, not as `str`.** `sa_type=String` gets the
       first two and silently loses this one: `SourceKind.is_factual` is a
       property, `sources/__init__.py` asks for it on a value read from the
@@ -39,8 +41,9 @@ def _stored_enum(enum: type) -> SAEnum:
       it would have shipped.
 
     `length` is fixed rather than derived. SQLAlchemy sizes the column to the
-    longest *current* value, so a longer member added later silently needs an
-    `ALTER TABLE` on Postgres; 32 is clear of every value either enum has.
+    longest *current* value, so a longer member added later would need an
+    `ALTER TABLE` — `alembic check` would catch it now, but 32 is clear of every
+    value either enum has and there is nothing to catch.
     """
     return SAEnum(enum, native_enum=False, length=32, values_callable=lambda e: [m.value for m in e])
 
