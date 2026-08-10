@@ -1,13 +1,16 @@
-# Where Source Items come from.
+# How wide a window Source Items are drawn through. Both numbers global.
 #
 # Separate from layout.yml on purpose. That file describes the Composed Image
-# and has no per-page section, ever — every Page renders identically. This one
-# is per-page by nature: the old system's four brands had unrelated beats, and
-# hot tub news is noise on a history grid.
+# and has no per-page section, ever — every Page renders identically.
 #
-# Feeds are configuration, not data. There is no `feed` table because nothing
-# would point at a row in it — see docs/data-model.md, "What was considered and
-# rejected". The publisher name lands on the Source Item as `author`.
+# **The feed list is no longer here.** It is `feed` rows, added and removed from
+# Settings, because it is the one part of this file an operator has to change
+# without a deploy and this API runs from a container image: a write to this
+# file lasts until the next deploy and disagrees with the committed copy in the
+# meantime. The publisher name still lands on the Source Item as `author`.
+#
+# What stayed is what a form cannot help with. Changing `since_days` is a
+# judgement about a beat, made once, and reading it as a diff is the point.
 
 rss:
     # These publishers cover history, where a five-day-old story is still good
@@ -33,84 +36,41 @@ competitors:
     # what anyone browses for.
     grid_limit: 60
 
-# Keyed by `page.name`, which is unique and is what an operator reads. A Page
-# with no entry here raises rather than returning an empty grid: a source that
-# silently stops producing looks exactly like a quiet week, which is how the old
-# system lost its watermark for months.
+# ---------------------------------------------------------------------------
+# Feeds that were probed and *not* kept.
 #
-# `name` is the byline. It is curated here rather than taken from the feed's own
-# <title>, which is written for feed readers and reads badly on a card —
-# "History | smithsonianmag.com", "Archaeology News -- ScienceDaily", "Latest
-# from Live Science in Archaeology". It reaches the writer as the publisher.
+# Kept here because a `feed` row can only record a feed that exists. This is the
+# other half of the same evidence, and without it the next person re-probes the
+# same dead ends and re-reaches the same conclusions. `Feed.note` carries the
+# measurements for the twelve that did earn a place; the seed migration moved
+# them across verbatim.
 #
-# Probed 2026-07-31; every entry below returned 100% summary coverage. Rejected:
-# Smithsonian Smart News (277 items, swamps max_items on recency alone), Live
-# Science /all and ScienceDaily "Fossils & Ruins" (superseded by the tag feeds
-# they overlap), Archaeology Magazine (101-char summaries are thin fuel),
-# Ancient Origins / HeritageDaily / GreekReporter (403 even with a User-Agent).
+# Probed 2026-07-31, for the history beat:
+#   Smithsonian Smart News  277 items, swamps max_items on recency alone
+#   Live Science /all,      superseded by the tag feeds they overlap
+#     ScienceDaily Fossils
+#   Archaeology Magazine    101-char summaries are thin fuel
+#   Ancient Origins,        403 even with a User-Agent
+#     HeritageDaily,
+#     GreekReporter
 #
-# Google News is excluded by design: its items carry no summary and an
-# unresolvable redirect link, which is weak input for a Factual Source that has
-# to be written about accurately.
-feeds:
-    History Retraced:
-        # 31 items, 179-char summaries, every item imaged.
-        - name: Smithsonian Magazine
-          url: https://www.smithsonianmag.com/rss/history/
-        # 50 items, every item imaged. The archaeology tag, not /all.
-        - name: Live Science
-          url: https://www.livescience.com/feeds/tag/archaeology
-        # Longest summaries here at 357 chars, but carries no images at all.
-        - name: Science Daily
-          url: https://www.sciencedaily.com/rss/fossils_ruins/archaeology.xml
-        # 1882-char bodies — by a wide margin the richest source in this list.
-        - name: Atlas Obscura
-          url: https://www.atlasobscura.com/feeds/latest
-        # Only 5 items, but 420-char summaries and unmixed history.
-        - name: The History Blog
-          url: http://www.thehistoryblog.com/feed
-        - name: HistoryExtra
-          url: https://www.historyextra.com/feed/
-        # Highest volume of the keepers at 100 items.
-        - name: All That's Interesting
-          url: https://allthatsinteresting.com/feed
-
-    # Probed 2026-08-09, 29 candidates, same measurements as above. This beat is
-    # the opposite of History Retraced's: its posts are 24-72h old at publish,
-    # so volume is enormous and the constraint is crowding rather than drought.
-    #
-    # Rejected on measurement, not taste:
-    #   AP, Reuters      — DNS no longer resolves for either feed path
-    #   IFLScience       — 403 even with the User-Agent
-    #   CNN edition      — parses, but its newest item is years stale
-    #   UPI Odd News     — the natural fit for this page's offbeat lane, and
-    #                      unusable: newest entry 45h old against a grid that
-    #                      spans 10, so it contributed 0 of 50 in every variant
-    #   BBC Sport        — 72 fresh items with pictures, and it swamps: adding
-    #                      it pulled the window 10.2h -> 6.0h and the median
-    #                      summary 424 -> 359 chars. This page does post sport;
-    #                      if the operator misses it, it is one entry here
-    #   NPR, Al Jazeera, CBS, Newsweek, Deutsche Welle — no images at all
-    #   Politico         — newest item 22.9h, slower than The Hill at the same beat
-    The Fact Feed:
-        # 100 items and 3356-char bodies — by a wide margin the richest source
-        # in either list. It surfaces rarely (1-2 of 50) because it publishes in
-        # bursts rather than continuously, and is kept for what it carries when
-        # it does.
-        - name: Axios
-          url: https://api.axios.com/feed/
-        # 45 items, 552-char summaries, every item imaged. The spine of the grid.
-        - name: The Guardian
-          url: https://www.theguardian.com/world/rss
-        # Thin at 114 chars, but the freshest of all of them and every item
-        # imaged — it is what puts a breaking story on the grid first.
-        - name: BBC News
-          url: https://feeds.bbci.co.uk/news/world/rss.xml
-        # 382-char summaries, fully imaged, and not an Anglosphere desk — it
-        # carries stories the other four do not run.
-        - name: France 24
-          url: https://www.france24.com/en/rss
-        # Only 15 items, but 357-char summaries and the US politics beat this
-        # page actually posts — the midterm-money and Senate-vote lane.
-        - name: The Hill
-          url: https://thehill.com/news/feed/
+# Probed 2026-08-09, 29 candidates, for the news beat. That beat is the opposite
+# of the history one: posts are 24-72h old at publish, so volume is enormous and
+# the constraint is crowding rather than drought.
+#   AP, Reuters             DNS no longer resolves for either feed path
+#   IFLScience              403 even with the User-Agent
+#   CNN edition             parses, but its newest item is years stale
+#   UPI Odd News            the natural fit for the offbeat lane, and unusable:
+#                           newest entry 45h old against a grid spanning 10, so
+#                           it contributed 0 of 50 in every variant
+#   BBC Sport               72 fresh items with pictures, and it swamps: adding
+#                           it pulled the window 10.2h -> 6.0h and the median
+#                           summary 424 -> 359 chars. This page does post sport;
+#                           if the operator misses it, it is one row to add
+#   NPR, Al Jazeera, CBS,   no images at all
+#     Newsweek, DW
+#   Politico                newest item 22.9h, slower than The Hill on the beat
+#
+# Google News is excluded by design rather than by measurement: its items carry
+# no summary and an unresolvable redirect link, which is weak input for a
+# Factual Source that has to be written about accurately.

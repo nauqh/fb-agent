@@ -7,9 +7,9 @@ that is what these test — the traps, not the happy path.
 from datetime import datetime, timezone
 
 import pytest
+from sqlmodel import select
 
-from app.models import SourceKind
-from app.settings import sources
+from app.models import Feed, Page, SourceKind
 from app.sources import metricool, rss, x
 
 # --- Metricool -------------------------------------------------------------
@@ -160,28 +160,50 @@ def test_an_entry_with_no_link_is_skipped(entries):
     assert rss._to_source_item(entry, "Smithsonian Magazine") is None
 
 
-def test_only_curated_hosts_pass_the_guard():
-    assert rss.is_curated_url("https://www.smithsonianmag.com/history/x/")
-    assert rss.is_curated_url("https://allthatsinteresting.com/y")
-    assert not rss.is_curated_url("https://evil.example/z")
-    assert not rss.is_curated_url(None)
+def test_only_curated_hosts_pass_the_guard(session, page):
+    hosts = rss.curated_hosts(session)
+
+    assert rss.is_curated_url("https://www.smithsonianmag.com/history/x/", hosts)
+    assert rss.is_curated_url("https://allthatsinteresting.com/y", hosts)
+    assert not rss.is_curated_url("https://evil.example/z", hosts)
+    assert not rss.is_curated_url(None, hosts)
 
 
-def test_every_curated_feed_host_is_one_an_item_can_come_from():
+def test_every_curated_feed_host_is_one_an_item_can_come_from(session, page):
     """The guard compares an *item* URL against *feed* hosts.
 
     That only holds while each publisher serves both from one host — a feed
     moved to feedburner would silently start refusing its own items.
     """
-    for feeds in sources.feeds.values():
-        for feed in feeds:
-            assert rss.is_curated_url(feed.url), feed.name
+    hosts = rss.curated_hosts(session)
+    for feed in session.exec(select(Feed)).all():
+        assert rss.is_curated_url(feed.url, hosts), feed.name
 
 
-def test_a_page_with_no_feeds_configured_raises():
-    """Rather than returning an empty grid, which reads as a quiet week."""
-    with pytest.raises(KeyError, match="No feeds configured"):
-        sources.feeds_for("A Page That Does Not Exist")
+def test_the_host_set_spans_every_page(session, page):
+    """`curated_hosts` is the union, deliberately.
+
+    An RSS item is not tied to a Page — only a competitor post is — so the guard
+    has no Page to check against and the question it answers is "is this one of
+    ours". A second Page's feed must therefore pass on the first Page's cart.
+    """
+    other = Page(name="The Fact Feed", facebook_page_id="603815099479680")
+    session.add(other)
+    session.commit()
+    session.add(Feed(page_id=other.id, name="Axios", url="https://api.axios.com/feed/"))
+    session.commit()
+
+    assert rss.is_curated_url("https://api.axios.com/2026/a-story", rss.curated_hosts(session))
+
+
+def test_no_feeds_at_all_means_nothing_is_curated(session):
+    """An empty table refuses everything rather than accepting everything.
+
+    The direction matters: `is_curated_url` is a guard on what `POST /generate`
+    will write, so an empty set failing open would accept arbitrary text from
+    the client and hand it to the writer.
+    """
+    assert not rss.is_curated_url("https://www.smithsonianmag.com/x", rss.curated_hosts(session))
 
 
 def test_merge_drops_stale_items_and_duplicate_stories():

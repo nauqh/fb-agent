@@ -2,19 +2,23 @@
 
   config/layout.yml   how the image looks — identical for every Page, never
                       per-page
-  config/sources.yml  where material comes from — per-page by nature
+  config/sources.yml  how wide a window material is drawn from
   prompts/*.txt       what the model is told — the product, edited constantly
   .env                secrets and model ids, which get retired upstream
   page rows           identity and publishing policy
+  feed rows           which feeds a Page draws from — the one list an operator
+                      edits from a screen rather than from a diff
 
 Both yml files are parsed at import, so a bad value fails the boot rather than
 the render. Prompts are read per call, so editing one needs no restart.
 
-The split between the two yml files is the point: `layout.yml` describes the one
-Composed Image form and must never grow a per-page section, while `sources.yml`
-is per-page because the beats do not overlap — the old system's four brands were
-history, general facts, scripture and hot tubs, and hot tub news is noise on a
-history grid.
+Neither yml file has a per-page section, and for different reasons. `layout.yml`
+must never grow one: every Page renders the same Composed Image form.
+`sources.yml` lost the one it had — the per-page thing in it was the feed list,
+and that is `feed` rows now, because the beats do not overlap (the old system's
+four brands were history, general facts, scripture and hot tubs, and hot tub
+news is noise on a history grid) *and* because it is the one list that has to
+change without a deploy.
 
 What stays in code rather than moving here: vendor base URLs, query-parameter
 sets, the User-Agent, and the fetch limits that bound a window. Changing any of
@@ -25,7 +29,6 @@ change the value without touching code.
 
 from functools import lru_cache
 from pathlib import Path
-from urllib.parse import urlsplit
 
 import yaml
 from pydantic import BaseModel, ConfigDict
@@ -137,14 +140,6 @@ def get_layout() -> Layout:
         return Layout.model_validate(yaml.safe_load(handle))
 
 
-class Feed(Frozen):
-    name: str
-    """The byline. Curated, not the feed's own <title>, which is written for
-    feed readers and reads badly on a card."""
-
-    url: str
-
-
 class RssConfig(Frozen):
     since_days: int
     max_items: int
@@ -156,45 +151,23 @@ class CompetitorsConfig(Frozen):
 
 
 class Sources(Frozen):
-    """Where Source Items come from. Per-page, unlike `Layout`.
+    """The two windows a grid is built inside. Both global, neither per-page.
 
-    Kept apart from layout.yml because that file describes the one Composed
-    Image form and must never grow a per-page section, whereas this one is
-    per-page by nature — the beats do not overlap.
+    `feeds` used to be the third field here, a `dict[str, list[Feed]]` keyed by
+    `page.name`, and it is a `feed` table now — see models.py. It moved because
+    it is the one part of this file an operator has to be able to change without
+    a deploy, and this API runs from a container image: a write to
+    `config/sources.yml` lasts until the next deploy and disagrees with the
+    committed copy until then.
+
+    The windows stayed. They are not per-page (sources.yml records the
+    measurement that settled it) and nothing about them wants a form, so they
+    are still config in the sense this module means: an operator could change
+    the value without touching code, and it is edited where a diff can be read.
     """
 
     rss: RssConfig
     competitors: CompetitorsConfig
-    feeds: dict[str, list[Feed]]
-    """Keyed by `page.name`."""
-
-    def feeds_for(self, page_name: str) -> list[Feed]:
-        """Raises:
-        KeyError: the Page has no entry. Loud on purpose — an empty grid is
-            indistinguishable from a quiet week, and that is how the old system
-            lost its watermark for months without one failed post.
-        """
-        try:
-            return self.feeds[page_name]
-        except KeyError:
-            raise KeyError(
-                f"No feeds configured for {page_name!r} in config/sources.yml. "
-                f"Configured: {sorted(self.feeds)}"
-            ) from None
-
-    @property
-    def curated_hosts(self) -> set[str]:
-        """Every host any Page draws from.
-
-        The union rather than one Page's, because `POST /sources` has no Page —
-        an RSS item is not tied to one (only a competitor post is). The guard it
-        backs asks "is this one of ours", which is what it needs to ask.
-        """
-        return {
-            urlsplit(feed.url).hostname or ""
-            for feeds in self.feeds.values()
-            for feed in feeds
-        }
 
 
 @lru_cache(maxsize=1)

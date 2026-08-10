@@ -14,7 +14,16 @@ from sqlmodel import Session
 
 from app import generate
 from app.db import get_engine, init_db
-from app.routes import config, drafts, pages, prompts, schedule, sources
+from app.routes import (
+    competitors,
+    config,
+    drafts,
+    feeds,
+    pages,
+    prompts,
+    schedule,
+    sources,
+)
 from app.settings import API_DIR, layout, settings
 
 
@@ -91,8 +100,10 @@ app.mount(
     name="assets",
 )
 
+app.include_router(competitors.router)
 app.include_router(config.router)
 app.include_router(drafts.router)
+app.include_router(feeds.router)
 app.include_router(pages.router)
 app.include_router(prompts.router)
 app.include_router(schedule.router)

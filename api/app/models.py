@@ -1,7 +1,15 @@
-"""The three tables. See docs/data-model.md for why there are only three.
+"""The four tables. See docs/data-model.md for why there are so few.
 
 Nothing here carries a user_id (ADR-0002), a brand_key (ADR-0003), or any
 schedule state (ADR-0001). Layout lives in config/layout.yml, not on Page.
+
+`Feed` is the one that data-model.md rejected and this file now has. The
+rejection still reads correctly on its own terms — nothing points at a feed —
+but it was answering "does a feed need identity", and the question that brought
+the table back is different: the operator has to be able to add and remove one
+without a deploy. `config/sources.yml` cannot answer that, because the API runs
+from a container image on Railway and a file written into it is gone at the next
+deploy, with the repo's committed copy silently disagreeing in the meantime.
 """
 
 from datetime import datetime, timezone
@@ -129,6 +137,118 @@ class Page(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=_now)
 
 
+class Feed(SQLModel, table=True):
+    """One RSS feed a Page draws from. Rows, so they can be added and removed.
+
+    Per-page because the beats do not overlap — the old system's four brands
+    were history, general facts, scripture and hot tubs, and hot tub news is
+    noise on a history grid.
+
+    Nothing points at a row here. `SOURCE_ITEM` still carries the publisher as
+    `author` rather than a `feed_id`, exactly as data-model.md argued: an item
+    outlives the feed it arrived through, and a foreign key would make removing
+    a feed either a cascade through published work or an error message about
+    drafts from 2026. Deleting a Feed removes it from tomorrow's grid and
+    changes nothing that already happened.
+    """
+
+    __tablename__ = "feed"
+    __table_args__ = (
+        # The same URL twice on one Page is not a second source, it is one
+        # source counted twice — `_merge` deduplicates the items, so the only
+        # visible effect would be a wasted fetch and a duplicate row on Settings.
+        UniqueConstraint("page_id", "url", name="uq_feed_page_url"),
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    page_id: int = Field(foreign_key="page.id", index=True)
+
+    name: str
+    """The byline, and the reason this is not derived from the feed itself.
+
+    Curated rather than taken from the feed's own <title>, which is written for
+    feed readers and reads badly on a card — "History | smithsonianmag.com",
+    "Archaeology News -- ScienceDaily". It reaches the writer as the publisher.
+    """
+
+    url: str
+
+    note: str | None = None
+    """Why this feed earns its place — item count, summary length, whether it
+    carries images.
+
+    A column rather than a comment because the comments are where this
+    evidence used to live: `config/sources.yml` carried a probe result above
+    every entry ("31 items, 179-char summaries, every item imaged") and a
+    rejection list beside them. Moving the feeds into a table without this would
+    have thrown all of that away at the first `git rm`. The seed migration
+    carries the twelve original notes across verbatim.
+    """
+
+    created_at: datetime = Field(default_factory=_now)
+
+
+class PageCompetitor(SQLModel, table=True):
+    """Which Competitors feed which Pages. Ours, not Metricool's.
+
+    This is not a mirror of Metricool's competitor list, and `CONTEXT.md`'s rule
+    survives intact: the list is still configured there and still never stored
+    here. What is stored is an *assignment* on top of it — a decision only this
+    app can hold, because Metricool has no concept of one competitor serving
+    several of your pages.
+
+    It exists because of a hard external limit. A Metricool account may
+    configure 100 competitors **in total**, not per page. Five politics Pages
+    that should each watch the same twenty sources would need those twenty added
+    five times, spending the entire allowance on twenty distinct sources. So a
+    competitor is added once, under whichever Page has room, and assigned here to
+    every Page that should read it.
+
+    No foreign key to a competitor row, because there is no competitor table and
+    should not be — the list is Metricool's. `competitor_page_id` is their
+    `providerId`, and an assignment naming a competitor that has since been
+    removed there is harmless: it matches no posts and shows on Settings as a row
+    Metricool no longer lists.
+    """
+
+    __tablename__ = "page_competitor"
+    __table_args__ = (
+        UniqueConstraint(
+            "page_id", "competitor_page_id", name="uq_page_competitor_page_provider"
+        ),
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    page_id: int = Field(foreign_key="page.id", index=True)
+    competitor_page_id: str = Field(index=True)
+    """Metricool's `providerId`. Joins to `source_item.competitor_page_id`."""
+
+    name: str | None = None
+    """The competitor's display name when the assignment was made.
+
+    A convenience for showing an assignment whose competitor Metricool no longer
+    lists — without it such a row renders as a bare id. Never used to join;
+    `competitor_page_id` is the key precisely because names change.
+    """
+
+    note: str | None = None
+    """Why this Page reads this competitor.
+
+    Here because a table has no history and a config file does. Keeping the
+    mapping in `sources.yml` was considered for exactly that reason — `git log`
+    would say who decided a Page should read a competitor, and why — and rejected
+    because it would put this behind a deploy while the feed list, the other half
+    of the same Settings screen, is editable from a form. Two ways to change two
+    similar settings is worse than one missing changelog.
+
+    This column is the compensation, and it is the same trade `Feed.note` makes:
+    the reasoning travels with the row instead of with the commit. Optional,
+    because an obvious assignment does not need defending.
+    """
+
+    created_at: datetime = Field(default_factory=_now)
+
+
 class SourceItemBase(SQLModel):
     """A Source Item's content, with no identity yet.
 
@@ -159,7 +279,30 @@ class SourceItemBase(SQLModel):
     synced_for_page_id: int | None = Field(
         default=None, foreign_key="page.id", index=True
     )
-    """Whose competitor set this belongs to. competitor_post only."""
+    """Which Page's Metricool competitor set this arrived through. Provenance.
+
+    It used to be ownership — the Competitors grid filtered on it — and that was
+    wrong for a reason outside this codebase: Metricool caps an account at 100
+    competitors *in total*, so five Pages that should each watch the same twenty
+    sources cannot each be given them. Which set a competitor sits in is a fact
+    about where the allowance was spent, not about who may read it.
+
+    Which Pages a competitor actually feeds is `page_competitor` now.
+    """
+
+    competitor_page_id: str | None = Field(default=None, index=True)
+    """The competitor's own Metricool `providerId`. competitor_post only.
+
+    The join key between a stored post and an assignment. Measured before it was
+    relied on: across History Retraced's window, all 15 distinct post `pageId`
+    values are `providerId`s from the competitor list, none unmatched.
+
+    Not the display name, which is what the Settings screen joined on first.
+    That matches today and breaks silently the day a competitor renames itself —
+    the posts keep arriving under the new name and every count against the old
+    one quietly reads zero, which is indistinguishable from a page that stopped
+    posting.
+    """
 
     text: str = ""
     url: str | None = None

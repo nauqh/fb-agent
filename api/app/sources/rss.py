@@ -1,11 +1,13 @@
 """RSS items, from a Page's curated feeds.
 
-Which feeds, and how wide a window, live in
-[`config/sources.yml`](../../config/sources.yml) — curated rather than managed
-in a UI, because the list churns slowly and every candidate has to be probed
-before it earns a place, which is not a thing to do from a form. There is no
-`feed` table for the same reason nothing points at one; see data-model.md,
-"What was considered and rejected".
+The feeds are `feed` rows, added and removed from Settings; how wide a window
+they are read through is still [`config/sources.yml`](../../config/sources.yml).
+They used to both be that file, "curated rather than managed in a UI, because
+every candidate has to be probed before it earns a place, which is not a thing
+to do from a form". The probing was the real requirement and it survived — it
+moved into the form. `probe` below is what `POST /feeds` runs before it will
+write a row, so a feed still earns its place by answering, and now it does so
+where the operator can see the answer.
 
 Browsing does not write. This module only ever *returns* items; they become rows
 when the operator ticks them, which is what keeps `source_item` from filling
@@ -21,9 +23,10 @@ from urllib.parse import urlsplit
 
 import feedparser
 import httpx
+from sqlmodel import Session, select
 
-from app.models import SourceItemBase, SourceKind
-from app.settings import Feed, sources
+from app.models import Feed, SourceItemBase, SourceKind
+from app.settings import sources
 
 USER_AGENT = "Mozilla/5.0 (compatible; fb-agent/1.0)"
 """Several publisher feeds 403 a request that sends none. Not configurable: it
@@ -141,17 +144,23 @@ def _fetch_one(client: httpx.Client, feed: Feed) -> list[SourceItemBase]:
     return [item for item in items if item is not None]
 
 
-def fetch_rss(page_name: str, timeout: float = 10.0) -> RssFeed:
-    """Every feed configured for this Page, merged, deduplicated, newest first.
+def fetch_rss(feeds: list[Feed], timeout: float = 10.0) -> RssFeed:
+    """Every feed given, merged, deduplicated, newest first.
 
     Feeds break often — dead paths, 403s and hangs are all routine — so a
     failing feed is collected rather than raised, and never sinks the batch.
 
-    Raises:
-        KeyError: the Page has no feeds in `config/sources.yml`. Loud, because
-            an empty grid is indistinguishable from a quiet week.
+    Takes the rows rather than a page name and looking them up, which is what it
+    did while they were a dict in a config file. The caller has the session; a
+    query in here would make every test of the merge need a database.
     """
-    feeds = sources.feeds_for(page_name)
+    # `max_workers` must be positive, so an empty list is not merely a fast path
+    # — `ThreadPoolExecutor(max_workers=0)` raises. This became reachable the
+    # moment feeds got a delete button; before that a Page either had a list in
+    # the file or raised on the way in.
+    if not feeds:
+        return RssFeed()
+
     results: list[SourceItemBase] = []
     failures: list[FeedFailure] = []
 
@@ -210,16 +219,110 @@ def _merge(items: list[SourceItemBase]) -> list[SourceItemBase]:
     return merged[: sources.rss.max_items]
 
 
-def is_curated_url(url: str | None) -> bool:
+def curated_hosts(session: Session) -> set[str]:
+    """Every host any Page draws from.
+
+    The union rather than one Page's, because an RSS item is not tied to a Page
+    (only a competitor post is) and the caller has none to check against. The
+    question it answers is "is this one of ours".
+
+    One query, called once per request rather than once per item — see
+    `generate.resolve_sources`, which carries a whole cart through this.
+    """
+    return {
+        urlsplit(url).hostname or ""
+        for url in session.exec(select(Feed.url)).all()  # type: ignore[call-overload]
+    }
+
+
+def is_curated_url(url: str | None, hosts: set[str]) -> bool:
     """Whether a posted item actually came from a configured feed.
 
     The RSS tab is live, so the client posts the item body back when one is
     ticked — the server holds no copy to compare against. Without this check
-    `POST /sources` accepts arbitrary text and hands it to the writer, and
+    `POST /generate` accepts arbitrary text and hands it to the writer, and
     "fully curated" is an intention rather than a property.
 
-    Checked against every Page's hosts, not one Page's, because an RSS item is
-    not tied to a Page and `POST /sources` has none to check against. The
-    question it answers is "is this one of ours".
+    `hosts` is passed in rather than read here so that the query behind it
+    happens once. It also makes the guard a pure function of what was
+    configured, which is what the test asserts against.
     """
-    return bool(url) and urlsplit(url).hostname in sources.curated_hosts
+    return bool(url) and urlsplit(url).hostname in hosts
+
+
+@dataclass
+class Probe:
+    """What a feed answered when asked, before it is allowed to become a row.
+
+    The measurements are the ones `config/sources.yml` used to carry in a
+    comment above each entry — item count, summary length, whether items are
+    imaged — because those are what decided whether a candidate earned a place.
+    Returning them from the add form is what keeps that judgement possible now
+    that the judgement is made on a screen.
+    """
+
+    items: int
+    with_images: int
+
+    median_summary: int
+    """Median length of the text a writer would actually receive — title and
+    summary together, boilerplate already stripped, which is the thing being
+    judged rather than whatever the `<description>` element happens to hold."""
+
+    newest_hours: float | None
+    """Age of the newest item. `None` when no item carries a date.
+
+    The one measurement that catches a feed which parses perfectly and is dead:
+    the sources.yml comments rejected CNN's edition feed on exactly this
+    ("parses, but its newest item is years stale") and it looks identical to a
+    good feed from every other number here.
+    """
+
+
+def probe(url: str, timeout: float = 10.0) -> Probe:
+    """Fetch a candidate feed and measure it. Raises if it is not usable.
+
+    Raises:
+        ValueError: it did not answer, did not parse, or parsed to nothing.
+            The message is the operator's — it goes straight into the toast
+            under the add form.
+    """
+    try:
+        with httpx.Client(
+            timeout=timeout, follow_redirects=True, headers={"User-Agent": USER_AGENT}
+        ) as client:
+            response = client.get(url)
+            response.raise_for_status()
+    except Exception as error:  # noqa: BLE001 — every failure here is the same answer
+        raise ValueError(f"{url} did not answer: {_describe(error)}") from error
+
+    parsed = feedparser.parse(response.content)
+    items = [
+        item
+        for item in (_to_source_item(entry, None) for entry in parsed.entries)
+        if item is not None
+    ]
+    if not items:
+        # A 200 that parses to nothing is the common shape of a wrong URL — an
+        # HTML page where a feed was expected answers exactly like this.
+        raise ValueError(
+            f"{url} answered, but no items parsed out of it. "
+            f"Is it the feed URL rather than the page it is linked from?"
+        )
+
+    summaries = sorted(len(item.text) for item in items)
+    newest = max(
+        (item.published_at for item in items if item.published_at), default=None
+    )
+    return Probe(
+        items=len(items),
+        with_images=sum(1 for item in items if item.image_url),
+        median_summary=summaries[len(summaries) // 2],
+        newest_hours=(
+            None
+            if newest is None
+            else round(
+                (datetime.now(timezone.utc) - newest).total_seconds() / 3600, 1
+            )
+        ),
+    )

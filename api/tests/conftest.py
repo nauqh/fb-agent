@@ -21,7 +21,7 @@ if str(API_DIR) not in sys.path:
     sys.path.insert(0, str(API_DIR))
 
 from app import db as db_module  # noqa: E402
-from app.models import Page  # noqa: E402
+from app.models import Feed, Page  # noqa: E402
 from app.settings import settings  # noqa: E402
 
 
@@ -187,6 +187,19 @@ def session(engine):
 
 @pytest.fixture
 def page(session) -> Page:
+    """The Page, with feeds.
+
+    The feeds are part of this fixture rather than a separate one because they
+    stopped being configuration and became rows: `rss.curated_hosts` reads the
+    table, and `POST /generate` refuses an RSS item whose host is not in it. A
+    Page with no feeds is now a Page that cannot accept an RSS Source Item at
+    all, which is a fair rule and a confusing test failure — it surfaces as a
+    404 on the Draft that was never created.
+
+    Two feeds, not one, so that a test asserting on the set cannot pass by
+    accident on a single row. The hosts match the ones `test_generate.CURATED`
+    and the adapter tests use.
+    """
     page = Page(
         name="History Retraced",
         facebook_page_id="569035169625026",
@@ -195,6 +208,22 @@ def page(session) -> Page:
     session.add(page)
     session.commit()
     session.refresh(page)
+
+    session.add_all(
+        [
+            Feed(
+                page_id=page.id,
+                name="Smithsonian Magazine",
+                url="https://www.smithsonianmag.com/rss/history/",
+            ),
+            Feed(
+                page_id=page.id,
+                name="All That's Interesting",
+                url="https://allthatsinteresting.com/feed",
+            ),
+        ]
+    )
+    session.commit()
     return page
 
 

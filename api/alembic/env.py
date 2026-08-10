@@ -11,19 +11,21 @@ an empty migration. Pointing it at a throwaway file gives the real `create_table
 calls, and `alembic stamp head` then tells the live database it is already there.
 """
 
-from logging.config import fileConfig
 import os
 import sys
+from logging.config import fileConfig
 from pathlib import Path
 
-from alembic import context
 from sqlalchemy import engine_from_config, pool
+
+from alembic import context
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app import models  # noqa: F401,E402  — registers the tables on the metadata
-from app.settings import settings  # noqa: E402
-from sqlmodel import SQLModel  # noqa: E402
+from sqlmodel import SQLModel
+
+from app import models  # noqa: F401  — registers the tables on the metadata
+from app.settings import settings
 
 config = context.config
 

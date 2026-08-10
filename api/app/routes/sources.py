@@ -19,8 +19,15 @@ from pydantic import BaseModel
 from sqlmodel import Session, func, select
 
 from app.db import get_session
-from app.models import Draft, Page, SourceItem, SourceItemBase, SourceKind
-from app.settings import Feed
+from app.models import (
+    Draft,
+    Feed,
+    Page,
+    PageCompetitor,
+    SourceItem,
+    SourceItemBase,
+    SourceKind,
+)
 from app.settings import sources as sources_config
 from app.sources import metricool, rss, x
 
@@ -56,13 +63,85 @@ class RssFeedOut(BaseModel):
     failures: list[FeedFailureOut]
 
 
+def _scope(session: Session, page_ids: list[int] | None) -> list[Page]:
+    """The Pages a competitor read covers. No ids means **every** Page.
+
+    Competitor posts are a shared pool, and this is the function that makes them
+    one. The constraint is Metricool's: a Metricool account may configure at
+    most **100 competitors in total**, not per page. Five Pages that should each
+    watch the same twenty sources would need those twenty added five times — one
+    hundred, the whole allowance, for twenty distinct sources.
+
+    So a source is added to one Page's competitor set in Metricool and read by
+    all of them. `synced_for_page_id` stays on the row, but as *provenance* —
+    which Page's set it arrived through — rather than as ownership. It is what
+    this filter narrows on when the operator wants one Page's set specifically.
+
+    Deliberately unlike RSS, which stays per-Page: feeds cost nothing to list
+    twice, and the beats genuinely do not overlap.
+    """
+    if not page_ids:
+        return list(session.exec(select(Page).order_by(Page.name)).all())  # type: ignore[arg-type]
+
+    pages = []
+    for page_id in dict.fromkeys(page_ids):
+        page = session.get(Page, page_id)
+        if page is None:
+            raise HTTPException(status_code=404, detail=f"No page {page_id}")
+        pages.append(page)
+    return pages
+
+
+def _assigned_to(session: Session, scope_ids: list[int]) -> list[str]:
+    """The competitors these Pages are assigned, by Metricool `providerId`."""
+    return list(
+        session.exec(
+            select(PageCompetitor.competitor_page_id)  # type: ignore[arg-type]
+            .where(PageCompetitor.page_id.in_(scope_ids))  # type: ignore[union-attr]
+            .distinct()
+        ).all()
+    )
+
+
+def _visible_to(session: Session, scope_ids: list[int]):
+    """Which stored competitor posts these Pages may read.
+
+    **Assignment decides, provenance is the fallback.** With assignments, a post
+    is visible to a Page because someone chose that competitor for it — which is
+    the whole point, since Metricool's 100-competitor ceiling means the set a
+    competitor happens to sit in says nothing about which Pages should read it.
+
+    Without any assignment for the scope, it falls back to provenance: the sets
+    those Pages own in Metricool. That fallback is not politeness, it is what
+    makes this shippable — the moment the column exists, every Page has zero
+    assignments, and a strict reading would blank every grid in the app until
+    someone had ticked their way through the Settings screen.
+
+    The fallback ends per scope, not globally: assigning one competitor to one
+    Page switches that Page to assignments alone. That is abrupt by design.
+    A Page in a half-configured state, showing its Metricool set *plus* its
+    assignments, is a grid nobody can predict.
+    """
+    base = SourceItem.kind == SourceKind.COMPETITOR_POST
+    assigned = _assigned_to(session, scope_ids)
+    if assigned:
+        return base & SourceItem.competitor_page_id.in_(assigned)  # type: ignore[union-attr]
+    return base & SourceItem.synced_for_page_id.in_(scope_ids)  # type: ignore[union-attr]
+
+
 @router.get("/competitors")
 def get_competitor_posts(
-    page_id: int = Query(...),
+    page_ids: list[int] | None = Query(
+        None, description="Narrow to these Pages' competitor sets. Omit for all."
+    ),
     refresh: bool = Query(False, description="Force a Metricool sync"),
     session: Session = Depends(get_session),
 ) -> list[StoredSourceItem]:
-    """Stored competitor posts. Syncs when there are none, or when asked.
+    """Stored competitor posts across every Page, or a chosen subset.
+
+    Not scoped to one Page. See `_scope` — Metricool caps an account at 100
+    competitors in total, so the same source cannot be added to every Page that
+    wants it, and the pool has to be shared.
 
     It used to sync on every read, which cost **5.5s and 1.6MB** for 500 posts
     to display 60 — against a seven-day window that gains roughly three posts an
@@ -75,33 +154,45 @@ def get_competitor_posts(
 
     No time-based cooldown. A cooldown guesses at how stale is too stale; the
     operator looking at the grid knows, and the button is right there.
-    """
-    page = session.get(Page, page_id)
-    if page is None:
-        raise HTTPException(status_code=404, detail=f"No page {page_id}")
 
+    A sync now costs one Metricool call **per Page in scope**, so the automatic
+    empty-pool sync is the one to watch as Pages are added: it is the only path
+    that fans out without the operator asking for it.
+    """
+    pages = _scope(session, page_ids)
+    scope_ids = [page.id for page in pages]
+    visible = _visible_to(session, scope_ids)
+
+    # Counted over what the *sync* would fill — the Pages' own Metricool sets —
+    # not over what is visible. Those differ once assignments exist, and using
+    # the visible count would re-sync on every read for a Page whose assigned
+    # competitors happen to be quiet: zero visible is a legitimate answer there,
+    # not an empty pool. That is a 5.5s, 1.6MB vendor call per read.
     stored = session.exec(
         select(func.count())
         .select_from(SourceItem)
         .where(SourceItem.kind == SourceKind.COMPETITOR_POST)
-        .where(SourceItem.synced_for_page_id == page_id)
+        .where(SourceItem.synced_for_page_id.in_(scope_ids))  # type: ignore[union-attr]
     ).one()
 
     if refresh or stored == 0:
-        try:
-            fetched = metricool.fetch_competitor_posts(page)
-        except metricool.MetricoolError as error:
-            # 502: the failure is upstream, and saying so is what stops the
-            # operator reading an empty grid as "no competitor posted this week".
-            raise HTTPException(status_code=502, detail=str(error)) from error
+        for page in pages:
+            try:
+                fetched = metricool.fetch_competitor_posts(page)
+            except metricool.MetricoolError as error:
+                # 502: the failure is upstream, and saying so is what stops the
+                # operator reading an empty grid as "no competitor posted this
+                # week". One Page failing fails the read rather than returning a
+                # partial pool silently — a quietly missing Page's worth of
+                # sources is the same invisible gap, one level up.
+                raise HTTPException(status_code=502, detail=str(error)) from error
 
-        _upsert(session, fetched, refresh_volatile=True)
+            _upsert(session, fetched, refresh_volatile=True)
         session.commit()
 
     rows = session.exec(
         select(SourceItem)
-        .where(SourceItem.kind == SourceKind.COMPETITOR_POST)
-        .where(SourceItem.synced_for_page_id == page_id)
+        .where(visible)
         # Newest first, not most-reacted.
         #
         # This tab exists to find something *new* to write from, and reactions
@@ -118,6 +209,28 @@ def get_competitor_posts(
     ).all()
 
     return _with_used(session, rows)
+
+
+def _feeds_for(session: Session, page: Page) -> list[Feed]:
+    """This Page's feeds, ordered by name. Empty is an error, not a quiet grid.
+
+    A Page with no feeds used to raise a `KeyError` out of the config loader.
+    The rule survives the move to rows and matters more now, because a row can
+    be deleted from a screen: an empty feed list renders as a slow news week,
+    and the old system lost its watermark for months to exactly this shape of
+    silence.
+    """
+    feeds = list(
+        session.exec(
+            select(Feed).where(Feed.page_id == page.id).order_by(Feed.name)  # type: ignore[arg-type]
+        ).all()
+    )
+    if not feeds:
+        raise HTTPException(
+            status_code=500,
+            detail=f"{page.name} has no feeds. Add one on Settings.",
+        )
+    return feeds
 
 
 def _with_used(session: Session, rows) -> list[StoredSourceItem]:
@@ -140,18 +253,16 @@ def get_rss(
     """This Page's curated feeds, live. Nothing is written.
 
     Takes a `page_id` because the feed list is per-page — the beats do not
-    overlap, and hot tub news is noise on a history grid.
+    overlap, and hot tub news is noise on a history grid. Unlike competitor
+    posts, which are a shared pool: see `_scope`. A feed costs nothing to list
+    against two Pages, and Metricool's competitor ceiling has no equivalent here.
     """
     page = session.get(Page, page_id)
     if page is None:
         raise HTTPException(status_code=404, detail=f"No page {page_id}")
 
-    try:
-        feed = rss.fetch_rss(page.name)
-    except KeyError as error:
-        # A Page with no feeds configured is a misconfiguration, not an empty
-        # week, and the two are indistinguishable from the grid.
-        raise HTTPException(status_code=500, detail=str(error.args[0])) from error
+    feeds = _feeds_for(session, page)
+    feed = rss.fetch_rss(feeds)
 
     return RssFeedOut(
         items=feed.items,
@@ -163,16 +274,18 @@ def get_rss(
 
 
 class SourcesConfigOut(BaseModel):
-    """`config/sources.yml`, read back for the Settings screen.
+    """What a run is configured with, for the Settings screen.
 
-    Served from the parsed model rather than described a second time on the
-    client, for the reason `routes/config.py` gives about `layout.yml`: a screen
-    whose whole job is to show what a run is configured with must not show a
-    hand-kept copy that can disagree with it.
+    Two halves now, and they no longer come from the same place: the windows are
+    `config/sources.yml`, the feeds are rows. Served from the parsed model and
+    the table rather than described a second time on the client, for the reason
+    `routes/config.py` gives about `layout.yml` — a screen whose whole job is to
+    show what a run is configured with must not show a hand-kept copy that can
+    disagree with it.
 
-    Deliberately **separate** from the competitor list below. This half is a
-    local file and cannot fail; that half is a vendor call that has 502'd twice.
-    Bundling them would let Metricool being down blank the feed list too.
+    Deliberately **separate** from the competitor list below. This half is local
+    and cannot fail; that half is a vendor call that has 502'd twice. Bundling
+    them would let Metricool being down blank the feed list too.
     """
 
     since_days: int
@@ -193,18 +306,10 @@ def get_sources_config(
     if page is None:
         raise HTTPException(status_code=404, detail=f"No page {page_id}")
 
-    try:
-        feeds = sources_config.feeds_for(page.name)
-    except KeyError as error:
-        # Same 500 as the RSS grid gives, and for the same reason: a Page with
-        # no feeds is a misconfiguration, and an empty list here would render as
-        # a tidy "no feeds" that looks deliberate.
-        raise HTTPException(status_code=500, detail=str(error.args[0])) from error
-
     return SourcesConfigOut(
         since_days=sources_config.rss.since_days,
         max_items=sources_config.rss.max_items,
-        feeds=list(feeds),
+        feeds=_feeds_for(session, page),
         lookback_days=sources_config.competitors.lookback_days,
         grid_limit=sources_config.competitors.grid_limit,
     )
@@ -222,7 +327,7 @@ class CompetitorOut(BaseModel):
     the URL is always fresh. See the note in `sources/metricool.py`."""
 
     posts_stored: int
-    """How many of this competitor's posts are stored for this Page.
+    """How many of this competitor's posts are stored, within the scope asked for.
 
     Zero is the interesting value and the reason this endpoint exists: a
     competitor configured in Metricool that has published nothing looks exactly
@@ -231,13 +336,38 @@ class CompetitorOut(BaseModel):
     for them, and they are what the grid shows.
     """
 
+    assigned_page_ids: list[int] = []
+    """Which of our Pages read this competitor. The editable half of this row.
+
+    Empty means no Page has assigned it — which, while a Page has no assignments
+    at all, still shows in that Page's grid through the provenance fallback. The
+    two are different states and the screen has to say which is in force.
+    """
+
+    page_id: int
+    page_name: str
+    """Which Page's competitor set this belongs to in Metricool.
+
+    Worth showing now that the pool is shared. A source added under one Page is
+    read by all of them, so "which set is it in" stops being a property of who
+    can use it and becomes a fact about where the allowance was spent — which is
+    the thing to look at when the account approaches Metricool's ceiling of 100
+    competitors *in total*.
+    """
+
 
 @router.get("/competitors/pages")
 def get_competitor_pages(
-    page_id: int = Query(...),
+    page_ids: list[int] | None = Query(
+        None, description="Narrow to these Pages' competitor sets. Omit for all."
+    ),
     session: Session = Depends(get_session),
 ) -> list[CompetitorOut]:
-    """This Page's competitor set, live from Metricool.
+    """Every Page's competitor set, live from Metricool, or a chosen subset.
+
+    Defaults to all Pages because the number that matters is the account total:
+    Metricool allows 100 competitors across the whole account, and this is the
+    only screen where that budget is visible.
 
     The list is Metricool's and is not stored (see `CONTEXT.md`: the agent
     stores their posts, never the list itself), so this reads it every time.
@@ -249,39 +379,51 @@ def get_competitor_pages(
     both Pages, 48 configured competitors and 40 distinct post authors, every
     author resolved and none unmatched in either direction.
     """
-    page = session.get(Page, page_id)
-    if page is None:
-        raise HTTPException(status_code=404, detail=f"No page {page_id}")
-
-    try:
-        competitors = metricool.fetch_competitors(page)
-    except metricool.MetricoolError as error:
-        # 502: the competitor set is somebody else's, and the screen says so
-        # rather than pretending the set is empty.
-        raise HTTPException(status_code=502, detail=str(error)) from error
+    pages = _scope(session, page_ids)
 
     counts = dict(
         session.exec(
             select(SourceItem.author, func.count(SourceItem.id))  # type: ignore[arg-type]
             .where(
                 SourceItem.kind == SourceKind.COMPETITOR_POST,
-                SourceItem.synced_for_page_id == page_id,
+                SourceItem.synced_for_page_id.in_([page.id for page in pages]),  # type: ignore[union-attr]
             )
             .group_by(SourceItem.author)  # type: ignore[arg-type]
         ).all()
     )
 
-    rows = [
-        CompetitorOut(
-            provider_id=competitor["provider_id"],
-            name=competitor["name"],
-            followers=competitor["followers"],
-            picture=competitor.get("picture"),
-            posts_stored=counts.get(competitor["name"], 0),
+    # Every assignment, not just this scope's: the screen shows which Pages read
+    # a competitor, and narrowing to the scope would hide the Page that is
+    # actually reading it.
+    assignments: dict[str, list[int]] = {}
+    for row in session.exec(select(PageCompetitor)).all():
+        assignments.setdefault(row.competitor_page_id, []).append(row.page_id)
+
+    rows = []
+    for page in pages:
+        try:
+            competitors = metricool.fetch_competitors(page)
+        except metricool.MetricoolError as error:
+            # 502: the competitor set is somebody else's, and the screen says so
+            # rather than pretending the set is empty.
+            raise HTTPException(status_code=502, detail=str(error)) from error
+
+        assert page.id is not None
+        rows.extend(
+            CompetitorOut(
+                provider_id=competitor["provider_id"],
+                name=competitor["name"],
+                followers=competitor["followers"],
+                picture=competitor.get("picture"),
+                posts_stored=counts.get(competitor["name"], 0),
+                assigned_page_ids=assignments.get(competitor["provider_id"], []),
+                page_id=page.id,
+                page_name=page.name,
+            )
+            for competitor in competitors
         )
-        for competitor in competitors
-    ]
-    # Silent ones first: they are the finding, and at the bottom of twenty-six
+
+    # Silent ones first: they are the finding, and at the bottom of forty-eight
     # rows they would be exactly as invisible as they are today.
     rows.sort(key=lambda row: (row.posts_stored, -(row.followers or 0)))
     return rows

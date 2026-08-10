@@ -47,6 +47,10 @@ def resolve_sources(
       body that does not already exist as a row is refused rather than trusted.
     """
     resolved: list[SourceItem] = []
+    # Read once for the whole cart, not once per item. A cart is routinely a
+    # dozen ticks and this is a query now that feeds are rows rather than a
+    # frozen object built at import.
+    hosts = rss.curated_hosts(session)
 
     for item in items:
         if not item.external_id:
@@ -67,7 +71,7 @@ def resolve_sources(
                 f"Unknown competitor post {item.external_id!r}. Sync the "
                 f"Competitors tab first — the sync owns those rows."
             )
-        if item.kind == SourceKind.RSS and not rss.is_curated_url(item.url):
+        if item.kind == SourceKind.RSS and not rss.is_curated_url(item.url, hosts):
             raise GenerateError(f"Not from a curated feed: {item.url}")
 
         row = SourceItem(**item.model_dump())

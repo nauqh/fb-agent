@@ -95,6 +95,10 @@ def _to_source_item(row: dict, page_id: int) -> SourceItemBase:
     return SourceItemBase(
         kind=SourceKind.COMPETITOR_POST,
         external_id=str(row.get("postId") or ""),
+        # The competitor's own providerId, which is what an assignment
+        # names. Measured to match: all 15 distinct pageId values in a
+        # window are providerIds from the competitor list, none unmatched.
+        competitor_page_id=str(row.get("pageId") or "") or None,
         author=row.get("ownerDisplayName") or row.get("ownerScreenName"),
         synced_for_page_id=page_id,
         text=(row.get("text") or "").strip(),

@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 
 from sqlmodel import Session, func, select
 
-from app.models import Page, SourceItem, SourceItemBase, SourceKind
+from app.models import Feed, Page, SourceItem, SourceItemBase, SourceKind
 from app.routes import sources as routes
 from app.settings import sources as sources_config
 from app.sources import rss
@@ -80,7 +80,7 @@ def test_competitor_posts_are_written_on_arrival_and_sorted_newest_first(
         ],
     )
 
-    rows = client.get("/sources/competitors", params={"page_id": 1}).json()
+    rows = client.get("/sources/competitors", params={"page_ids": 1}).json()
 
     assert [row["external_id"] for row in rows] == [
         "newer-but-quieter",
@@ -115,7 +115,7 @@ def test_a_resync_refreshes_the_image_url_and_metrics_but_not_the_text(
             ],
         )
         return client.get(
-            "/sources/competitors", params={"page_id": 1, **params}
+            "/sources/competitors", params={"page_ids": 1, **params}
         ).json()
 
     # The first read syncs by itself — there is nothing stored yet.
@@ -152,12 +152,12 @@ def test_a_plain_read_does_not_sync(client, monkeypatch):
 
     monkeypatch.setattr(routes.metricool, "fetch_competitor_posts", counted)
 
-    client.get("/sources/competitors", params={"page_id": 1})  # empty -> syncs
-    client.get("/sources/competitors", params={"page_id": 1})  # stored -> does not
-    client.get("/sources/competitors", params={"page_id": 1})
+    client.get("/sources/competitors", params={"page_ids": 1})  # empty -> syncs
+    client.get("/sources/competitors", params={"page_ids": 1})  # stored -> does not
+    client.get("/sources/competitors", params={"page_ids": 1})
     assert len(calls) == 1
 
-    client.get("/sources/competitors", params={"page_id": 1, "refresh": True})
+    client.get("/sources/competitors", params={"page_ids": 1, "refresh": True})
     assert len(calls) == 2
 
 
@@ -169,14 +169,14 @@ def test_a_metricool_failure_is_502_not_an_empty_grid(client, monkeypatch):
 
     monkeypatch.setattr(routes.metricool, "fetch_competitor_posts", boom)
 
-    response = client.get("/sources/competitors", params={"page_id": 1})
+    response = client.get("/sources/competitors", params={"page_ids": 1})
 
     assert response.status_code == 502
     assert "token expired" in response.json()["detail"]
 
 
 def test_competitors_for_an_unknown_page_is_404(client):
-    assert client.get("/sources/competitors", params={"page_id": 99}).status_code == 404
+    assert client.get("/sources/competitors", params={"page_ids": 99}).status_code == 404
 
 
 def test_a_competitor_post_already_written_from_is_flagged(
@@ -207,7 +207,7 @@ def test_a_competitor_post_already_written_from_is_flagged(
             ),
         ],
     )
-    client.get("/sources/competitors", params={"page_id": 1})
+    client.get("/sources/competitors", params={"page_ids": 1})
 
     spent = session.exec(
         select(SourceItem).where(SourceItem.external_id == "spent")
@@ -215,18 +215,25 @@ def test_a_competitor_post_already_written_from_is_flagged(
     session.add(Draft(page_id=1, source_item_id=spent.id))
     session.commit()
 
-    rows = client.get("/sources/competitors", params={"page_id": 1}).json()
+    rows = client.get("/sources/competitors", params={"page_ids": 1}).json()
     used = {row["external_id"]: row["used"] for row in rows}
 
     assert used == {"spent": True, "fresh": False}
 
 
-def test_sources_config_reads_the_file_rather_than_a_copy_of_it(client):
-    """Settings shows what a run is configured with, so it reads it back."""
+def test_sources_config_reads_the_source_rather_than_a_copy_of_it(client, session):
+    """Settings shows what a run is configured with, so it reads it back.
+
+    Two sources now, not one: the windows are still `config/sources.yml`, the
+    feeds are rows. Both are read here rather than described again on the
+    client, which is the point — a screen whose job is to show the
+    configuration must not show a hand-kept copy that can disagree with it.
+    """
     body = client.get("/sources/config", params={"page_id": 1}).json()
 
     assert [feed["name"] for feed in body["feeds"]] == [
-        feed.name for feed in sources_config.feeds_for("History Retraced")
+        feed.name
+        for feed in session.exec(select(Feed).order_by(Feed.name)).all()
     ]
     assert body["since_days"] == sources_config.rss.since_days
     assert body["max_items"] == sources_config.rss.max_items
@@ -234,8 +241,13 @@ def test_sources_config_reads_the_file_rather_than_a_copy_of_it(client):
     assert body["grid_limit"] == sources_config.competitors.grid_limit
 
 
-def test_a_page_with_no_feeds_configured_is_loud(client, session):
-    """An empty list would render as a tidy "no feeds" and look deliberate."""
+def test_a_page_with_no_feeds_is_loud(client, session):
+    """An empty list would render as a tidy "no feeds" and look deliberate.
+
+    This mattered more once feeds became rows: the list can now reach zero from
+    a screen, by deleting the last one, rather than only by a Page never having
+    had a YAML entry.
+    """
     session.add(Page(name="Unconfigured", facebook_page_id="1", metricool_blog_id="2"))
     session.commit()
     unconfigured = session.exec(select(Page).where(Page.name == "Unconfigured")).one()
@@ -243,7 +255,7 @@ def test_a_page_with_no_feeds_configured_is_loud(client, session):
     response = client.get("/sources/config", params={"page_id": unconfigured.id})
 
     assert response.status_code == 500
-    assert "No feeds configured for 'Unconfigured'" in response.json()["detail"]
+    assert "Unconfigured has no feeds" in response.json()["detail"]
 
 
 def test_a_configured_competitor_that_published_nothing_is_visible_and_first(
@@ -270,7 +282,7 @@ def test_a_configured_competitor_that_published_nothing_is_visible_and_first(
     )
     session.commit()
 
-    rows = client.get("/sources/competitors/pages", params={"page_id": 1}).json()
+    rows = client.get("/sources/competitors/pages", params={"page_ids": 1}).json()
 
     # Silent first, despite having 900,000x the followers — at the bottom of
     # twenty-six rows it would be as invisible as it is on every other screen.
@@ -288,7 +300,44 @@ def test_the_competitor_list_failing_is_502_not_an_empty_set(client, monkeypatch
 
     monkeypatch.setattr(routes.metricool, "fetch_competitors", boom)
 
-    response = client.get("/sources/competitors/pages", params={"page_id": 1})
+    response = client.get("/sources/competitors/pages", params={"page_ids": 1})
 
     assert response.status_code == 502
     assert "Metricool" in response.json()["detail"]
+
+
+def test_the_competitor_pool_spans_every_page_by_default(client, session, monkeypatch):
+    """Omitting `page_ids` returns every Page's competitor posts, not one Page's.
+
+    This is the whole of the shared pool. Metricool caps an account at 100
+    competitors *in total*, so five Pages that should each watch the same twenty
+    sources cannot each be given them — the twenty are added once, under
+    whichever Page, and read by all of them.
+
+    `synced_for_page_id` still records which set a post arrived through. It is
+    provenance now, not ownership.
+    """
+    other = Page(name="The Fact Feed", facebook_page_id="603815099479680",
+                 metricool_blog_id="5600362")
+    session.add(other)
+    session.commit()
+    session.refresh(other)
+
+    session.add_all(
+        [
+            SourceItem(kind=SourceKind.COMPETITOR_POST, external_id="a",
+                       author="Watched By One", synced_for_page_id=1,
+                       published_at=datetime(2026, 8, 1, tzinfo=timezone.utc)),
+            SourceItem(kind=SourceKind.COMPETITOR_POST, external_id="b",
+                       author="Watched By Two", synced_for_page_id=other.id,
+                       published_at=datetime(2026, 8, 2, tzinfo=timezone.utc)),
+        ]
+    )
+    session.commit()
+
+    both = client.get("/sources/competitors").json()
+    assert {row["external_id"] for row in both} == {"a", "b"}
+
+    # And narrowing still works, for looking at one set specifically.
+    narrowed = client.get("/sources/competitors", params={"page_ids": other.id}).json()
+    assert {row["external_id"] for row in narrowed} == {"b"}
