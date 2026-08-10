@@ -31,11 +31,15 @@ function has(phrases: string[], phrase: string) {
 export function HookField({
   value,
   phrases,
+  rows = 5,
   onChange,
   onPhrasesChange,
 }: {
   value: string;
   phrases: string[];
+  /** Five fits a hook in the drawer. The layout editor's sample runs longer,
+      and the box does not scroll — text past the last row is simply not there. */
+  rows?: number;
   onChange: (value: string) => void;
   onPhrasesChange: (phrases: string[]) => void;
 }) {
@@ -81,7 +85,7 @@ export function HookField({
         </div>
         <textarea
           ref={textarea}
-          rows={5}
+          rows={rows}
           className={cn(BOX, "relative resize-none bg-transparent")}
           style={{ color: "transparent", caretColor: "var(--foreground)" }}
           value={value}

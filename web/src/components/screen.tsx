@@ -11,10 +11,19 @@ export function ScreenHeader({
   title,
   hint,
   action,
+  switcher = true,
 }: {
   title: string;
   hint?: React.ReactNode;
   action?: React.ReactNode;
+  /**
+   * Off for a screen that is mostly *not* per-Page.
+   *
+   * Global is the one: the competitor pool and the prompt files belong to the
+   * account, and a Page name in the title row claimed the whole screen was
+   * scoped to it. There the switcher moves down to the one card it governs.
+   */
+  switcher?: boolean;
 }) {
   return (
     <div className="flex shrink-0 items-end justify-between gap-6 pb-5">
@@ -25,7 +34,7 @@ export function ScreenHeader({
       {/* The switcher sits inboard of the screen's own action, so the primary
           button stays at the right edge where it is on every screen. */}
       <div className="flex shrink-0 items-center gap-3">
-        <PageSwitcher />
+        {switcher ? <PageSwitcher /> : null}
         {action}
       </div>
     </div>

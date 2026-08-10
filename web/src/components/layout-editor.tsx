@@ -4,6 +4,8 @@ import { useState } from "react";
 import { Loader2, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 
+import { splitOnHighlights } from "@/components/composed-image";
+import { HookField } from "@/components/hook-field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -14,13 +16,31 @@ import {
   type LayoutPatch,
   type ResolvedLayout,
 } from "@/lib/api/layout";
+import {
+  removeWatermark,
+  updatePage,
+  uploadWatermark,
+  watermarkUrl,
+} from "@/lib/api/pages";
 import { usePageScope } from "@/lib/page-scope";
+import type { Page } from "@/lib/types";
 import { emit } from "@/lib/store";
 import { useQuery } from "@/lib/use-query";
 import { cn } from "@/lib/utils";
 
+/**
+ * A hook at the length the writer actually produces — near the 65-word cap.
+ *
+ * The one-line sample this replaced flattered every setting: at 36px it wrapped
+ * to two lines, the panel sat on its `ratio` floor, and nothing about padding,
+ * line count or the `max_ratio` cap could be judged from it. The panel grows to
+ * fit its text, so a short sample hides the behaviour the screen exists to show.
+ */
 const SAMPLE =
-  "In 1925, a deadly outbreak threatened to wipe out isolated Nome, Alaska.";
+  "In 1925, a deadly diphtheria outbreak threatened to wipe out the isolated " +
+  "town of Nome, Alaska. The only serum was a thousand miles away, every port " +
+  "was frozen solid, and twenty mushers ran it through a −50°F blizzard in " +
+  "five and a half days.";
 
 /**
  * Edit one Page's Composed Image, with the card beside it.
@@ -98,37 +118,49 @@ export function LayoutEditor() {
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
       <div className="space-y-5">
-        <Group title="Panel">
+        {/* Three sections, named for the three things on the card: the mark
+            stamped on the hero, the box it sits above, and the type inside that
+            box. Grouped this way rather than by which model field they came
+            from — "Marks" held the highlight colour and the logo, which are the
+            same word and not the same object. The old app's split is the same
+            one (`Text overlay typography` carries the font *and* its padding,
+            because padding is a property of the text block). */}
+        <Group title="Watermark">
           <Range
-            label="Height"
-            hint="Floor, not a cap — the panel grows to fit the text."
-            value={shown.panel.ratio}
-            min={0.1}
-            max={0.6}
-            step={0.01}
-            format={(v) => `${Math.round(v * 100)}%`}
-            changed={data.overridden.includes("panel_ratio")}
-            onChange={(v) => set("panel_ratio", v)}
+            label="Size"
+            hint="Capped again at 22% of width by the compositor."
+            value={shown.watermark.max_px}
+            min={60}
+            max={260}
+            step={2}
+            format={(v) => `${v}px`}
+            changed={data.overridden.includes("watermark_max_px")}
+            onChange={(v) => set("watermark_max_px", v)}
           />
+          {/* Its own two cells, spanning the row: the image and the text that
+              replaces it belong beside each other, not stacked under a slider. */}
+          <div className="sm:col-span-2">
+            <Watermark page={page} />
+          </div>
+        </Group>
+
+        <Group title="Text panel">
+          {/* Background only. Height and opacity track `layout.yml` for every
+              Page, on the same grounds as line height below: the panel already
+              grows to fit its text, so its floor is a typographic decision made
+              once, and an opacity that differs per Page is a way for one brand's
+              cards to drift off the house style without anyone choosing it. The
+              API still takes `panel_ratio` and `panel_opacity` — this is a
+              screen that does not offer them, not values that stopped existing. */}
           <Colour
             label="Background"
             value={shown.panel.color}
             changed={data.overridden.includes("panel_color")}
             onChange={(v) => set("panel_color", v)}
           />
-          <Range
-            label="Opacity"
-            value={shown.panel.opacity}
-            min={0}
-            max={1}
-            step={0.05}
-            format={(v) => `${Math.round(v * 100)}%`}
-            changed={data.overridden.includes("panel_opacity")}
-            onChange={(v) => set("panel_opacity", v)}
-          />
         </Group>
 
-        <Group title="Text">
+        <Group title="Text overlay">
           <Range
             label="Size"
             hint="Fixed — there is no autofit. The panel grows, the type does not shrink."
@@ -140,16 +172,11 @@ export function LayoutEditor() {
             changed={data.overridden.includes("text_font_size_px")}
             onChange={(v) => set("text_font_size_px", v)}
           />
-          <Range
-            label="Line height"
-            value={shown.text.line_height_ratio}
-            min={1}
-            max={2}
-            step={0.02}
-            format={(v) => v.toFixed(2)}
-            changed={data.overridden.includes("text_line_height_ratio")}
-            onChange={(v) => set("text_line_height_ratio", v)}
-          />
+          {/* No line-height control. It tracks `layout.yml` for every Page: the
+              panel already grows to fit, so the leading is a typographic
+              decision made once rather than a knob per Page. The API still
+              takes `text_line_height_ratio` — this is a screen that does not
+              offer it, not a value that stopped existing. */}
           <Choice
             label="Align"
             value={shown.text.align}
@@ -163,31 +190,6 @@ export function LayoutEditor() {
             changed={data.overridden.includes("text_color")}
             onChange={(v) => set("text_color", v)}
           />
-          <div className="grid grid-cols-2 gap-x-4">
-            {(
-              [
-                ["Pad left", "text_padding_left_px", shown.text.padding.left_px],
-                ["Pad right", "text_padding_right_px", shown.text.padding.right_px],
-                ["Pad top", "text_padding_top_px", shown.text.padding.top_px],
-                ["Pad bottom", "text_padding_bottom_px", shown.text.padding.bottom_px],
-              ] as const
-            ).map(([label, key, value]) => (
-              <Range
-                key={key}
-                label={label}
-                value={value}
-                min={0}
-                max={80}
-                step={1}
-                format={(v) => `${v}px`}
-                changed={data.overridden.includes(key)}
-                onChange={(v) => set(key, v)}
-              />
-            ))}
-          </div>
-        </Group>
-
-        <Group title="Marks">
           <Colour
             label="Highlight"
             hint="Phrases the writer marks verbatim."
@@ -195,17 +197,30 @@ export function LayoutEditor() {
             changed={data.overridden.includes("highlight_color")}
             onChange={(v) => set("highlight_color", v)}
           />
-          <Range
-            label="Watermark size"
-            hint="Capped again at 22% of width by the compositor."
-            value={shown.watermark.max_px}
-            min={60}
-            max={260}
-            step={2}
-            format={(v) => `${v}px`}
-            changed={data.overridden.includes("watermark_max_px")}
-            onChange={(v) => set("watermark_max_px", v)}
-          />
+          {/* The four paddings are cells of the same grid as the rest, not a
+              grid of their own inside one cell — nested, they were half the
+              width of every other control and read as a different kind of
+              thing. */}
+          {(
+            [
+              ["Pad left", "text_padding_left_px", shown.text.padding.left_px],
+              ["Pad right", "text_padding_right_px", shown.text.padding.right_px],
+              ["Pad top", "text_padding_top_px", shown.text.padding.top_px],
+              ["Pad bottom", "text_padding_bottom_px", shown.text.padding.bottom_px],
+            ] as const
+          ).map(([label, key, value]) => (
+            <Range
+              key={key}
+              label={label}
+              value={value}
+              min={0}
+              max={80}
+              step={1}
+              format={(v) => `${v}px`}
+              changed={data.overridden.includes(key)}
+              onChange={(v) => set(key, v)}
+            />
+          ))}
         </Group>
 
         <div className="flex flex-wrap items-center gap-2 border-t pt-4">
@@ -231,7 +246,7 @@ export function LayoutEditor() {
         </div>
       </div>
 
-      <Preview layout={shown} pageName={page.name} />
+      <Preview layout={shown} page={page} />
     </div>
   );
 }
@@ -270,16 +285,43 @@ function preview(base: ResolvedLayout, draft: LayoutPatch): ResolvedLayout {
   };
 }
 
+/** Short phrases, as `overlay.txt` asks the writer for — not one long clause. */
+const SAMPLE_HIGHLIGHTS = [
+  "deadly diphtheria outbreak",
+  "a thousand miles away",
+  "five and a half days",
+];
+
 /**
- * The card, at 4:5, with an editable sample hook.
+ * The card, at 4:5, with the sample hook and its highlights below it.
  *
  * Percentages of the real 896px width throughout, so the preview is the same
  * shape at any rendered size. Sticky, because the controls are taller than it
  * is and a preview you have to scroll back to is not a preview.
+ *
+ * Four things here were drawn differently from the compositor, which is what
+ * made the preview disagree with the published card:
+ *
+ * - **Opacity dimmed the text.** `opacity` on the panel applies to its
+ *   children; the compositor puts `fill-opacity` on the panel *rect* and draws
+ *   the text at full strength over it. At 50% the preview faded the words and
+ *   the real card did not. Hence the separate background layer.
+ * - **The text was vertically centred.** The compositor's first baseline is
+ *   `padding.top + font_size` and the panel grows downward from there.
+ * - **The mark was the page name in 8px text.** It is an image, at
+ *   `watermark.max_px` capped at 22% of width, inset by `edge_margin_ratio`,
+ *   `top_ratio` down the *hero* rather than the card.
+ * - **The font was the app's sans.** The card is drawn in Arial Bold, which is
+ *   wider — a hook that fit here could wrap to another line there.
  */
-function Preview({ layout, pageName }: { layout: ResolvedLayout; pageName: string }) {
+function Preview({ layout, page }: { layout: ResolvedLayout; page: Page }) {
   const [sample, setSample] = useState(SAMPLE);
+  const [phrases, setPhrases] = useState<string[]>(SAMPLE_HIGHLIGHTS);
   const scale = (px: number) => `${(px / layout.image.width) * 100}%`;
+  const mark = watermarkUrl(page);
+  // The compositor's own second cap, applied to the box the logo fits inside.
+  const markBox = Math.min(layout.watermark.max_px, layout.image.width * 0.22);
+  const runs = splitOnHighlights(sample, phrases);
 
   return (
     <div className="space-y-2 lg:sticky lg:top-0 lg:self-start">
@@ -291,76 +333,317 @@ function Preview({ layout, pageName }: { layout: ResolvedLayout; pageName: strin
         className="relative w-full overflow-hidden rounded-lg border bg-muted [container-type:inline-size]"
         style={{ aspectRatio: `${layout.image.width} / ${layout.image.height}` }}
       >
-        {/* Stands in for the hero. A real one would need a draft, and this is
-            about the panel over it rather than the picture under it. */}
+        {/* Stands in for the hero, and fills the *whole* card rather than only
+            the space above the panel. A real one would need a draft, and this is
+            about the panel over it rather than the picture under it.
+
+            Full-bleed because the two were flex siblings and their heights are
+            fractional at most widths: the panel's `%` height rounds one way, the
+            hero's `flex-1` the other, and the card's own light background showed
+            through the half-pixel between them as a thin white line above the
+            panel. Painting the hero behind everything leaves nothing to show
+            through — the panel simply covers the bottom of it, which is what the
+            compositor does anyway. */}
         <div className="absolute inset-0 bg-gradient-to-br from-slate-600 to-slate-800" />
 
-        <div
-          className="absolute right-0 top-0 flex items-center justify-end"
-          style={{
-            width: scale(layout.watermark.max_px),
-            margin: scale(layout.image.edge_margin_ratio * layout.image.width),
-          }}
-        >
-          <span className="truncate text-[0.5rem] font-semibold text-white/90">
-            {pageName}
-          </span>
-        </div>
+        <div className="absolute inset-0 flex flex-col">
+          {/* The hero's share of the height. Transparent — the gradient is
+              behind it — and here only to hang the watermark off, whose
+              `top_ratio` is a fraction of the hero rather than of the card. */}
+          <div className="relative min-h-0 flex-1">
+            {!page.watermark_enabled ? null : mark ? (
+              // The mark comes from one of two origins — the public bucket, or
+              // the API's /assets mount through the proxy — and neither is in
+              // next.config.ts's image hosts, so `next/image` cannot load it.
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={mark}
+                alt=""
+                className="absolute object-contain"
+                style={{
+                  right: scale(layout.image.edge_margin_ratio * layout.image.width),
+                  top: `${layout.watermark.top_ratio * 100}%`,
+                  maxWidth: scale(markBox),
+                  maxHeight: scale(markBox),
+                }}
+              />
+            ) : (
+              // What the compositor draws when a Page has no mark at all: its
+              // name, right-anchored, at 2.2% of width. Not a fallback for a
+              // logo that failed to load — that raises — so seeing this here
+              // means this Page publishes without a wordmark.
+              <span
+                className="absolute font-bold text-white/95"
+                style={{
+                  right: scale(layout.image.edge_margin_ratio * layout.image.width),
+                  top: `${layout.watermark.top_ratio * 100}%`,
+                  fontSize: `${Math.max(16, layout.image.width * 0.022) / layout.image.width * 100}cqw`,
+                  fontFamily: "Arial, Helvetica, sans-serif",
+                }}
+              >
+                {page.watermark_text || page.name}
+              </span>
+            )}
+          </div>
 
-        {/* `maxHeight` is `panel.max_ratio`, the same cap the compositor applies.
-            Without it the panel grew past the top of the card as the sample text
-            got longer, which is not what the real one does. */}
-        <div
-          className="absolute inset-x-0 bottom-0 flex flex-col justify-center overflow-hidden"
-          style={{
-            minHeight: `${layout.panel.ratio * 100}%`,
-            maxHeight: `${layout.panel.max_ratio * 100}%`,
-            backgroundColor: layout.panel.color,
-            opacity: layout.panel.opacity,
-            paddingLeft: scale(layout.text.padding.left_px),
-            paddingRight: scale(layout.text.padding.right_px),
-            paddingTop: scale(layout.text.padding.top_px),
-            paddingBottom: scale(layout.text.padding.bottom_px),
-          }}
-        >
-          <p
+          {/* `maxHeight` is `panel.max_ratio`, the same cap the compositor
+              applies. Without it the panel grew past the top of the card as the
+              sample text got longer, which is not what the real one does. */}
+          <div
+            className="relative shrink-0 overflow-hidden"
             style={{
-              color: layout.text.color,
-              // The panel is drawn at `image.width` in the real card, so type
-              // scales with the container rather than sitting at a fixed px.
-              // As a share of the real 896px width, so the card is the same
-              // shape at any rendered size.
-              fontSize: `${(layout.text.font_size_px / layout.image.width) * 100}cqw`,
-              lineHeight: layout.text.line_height_ratio,
-              textAlign: layout.text.align as "left" | "center" | "right",
+              minHeight: `${layout.panel.ratio * 100}%`,
+              maxHeight: `${layout.panel.max_ratio * 100}%`,
             }}
-            className="font-bold"
           >
-            {sample}
-          </p>
+            {/* Its own layer, so `opacity` never reaches the words. */}
+            <div
+              className="absolute inset-0"
+              style={{
+                backgroundColor: layout.panel.color,
+                opacity: layout.panel.opacity,
+              }}
+            />
+            <p
+              className="relative"
+              style={{
+                color: layout.text.color,
+                // The panel is drawn at `image.width` in the real card, so type
+                // scales with the container rather than sitting at a fixed px.
+                // As a share of the real 896px width, so the card is the same
+                // shape at any rendered size.
+                fontSize: `${(layout.text.font_size_px / layout.image.width) * 100}cqw`,
+                lineHeight: layout.text.line_height_ratio,
+                textAlign: layout.text.align as "left" | "center" | "right",
+                fontFamily: "Arial, Helvetica, sans-serif",
+                fontWeight: 700,
+                paddingLeft: scale(layout.text.padding.left_px),
+                paddingRight: scale(layout.text.padding.right_px),
+                paddingTop: scale(layout.text.padding.top_px),
+                paddingBottom: scale(layout.text.padding.bottom_px),
+              }}
+            >
+              {runs.map((run, index) => (
+                <span
+                  key={index}
+                  style={run.highlight ? { color: layout.highlight.color } : undefined}
+                >
+                  {run.text}
+                </span>
+              ))}
+            </p>
+          </div>
         </div>
       </div>
 
-      <Input
+      {/* Under the card: the card is the thing being judged and stays at the
+          top of the sticky column, where a change to any slider is visible
+          without scrolling. The sample text is the input to it.
+
+          `HookField` rather than a text box and a list of phrases, because it
+          is what the review drawer already uses and the reason it exists there
+          holds here: a typed phrase has to match the text exactly or it colours
+          nothing, and retyping words that are already on screen is the one way
+          to get that wrong. Select the words, press Highlight. */}
+      <HookField
         value={sample}
-        onChange={(event) => setSample(event.target.value)}
-        aria-label="Sample text"
-        className="h-7 text-xs"
+        phrases={phrases}
+        rows={6}
+        onChange={setSample}
+        onPhrasesChange={setPhrases}
       />
-      <p className="text-[0.7rem] text-muted-foreground">
-        Approximate. The published image is drawn by the compositor, not here.
-      </p>
     </div>
   );
 }
 
+/**
+ * The Page's watermark: what it is drawing with, and how to change it.
+ *
+ * Two sources, and the screen says which is in force. A committed asset under
+ * `api/assets/` cannot 404 and needs no upload, which is why the two Pages that
+ * have one keep it. The other eight have no artwork in the repo and no way to
+ * put it there, so they publish unmarked — this is their route.
+ */
+function Watermark({ page }: { page: Page }) {
+  const [busy, setBusy] = useState(false);
+  const [text, setText] = useState(page.watermark_text ?? "");
+  const url = watermarkUrl(page);
+  const hasImage = Boolean(page.watermark_upload_path || page.watermark_image_path);
+
+  async function setEnabled(next: boolean) {
+    try {
+      await updatePage(page.id, { watermark_enabled: next });
+      toast.success(next ? "Cards will carry a mark" : "Cards publish unmarked");
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Could not save");
+    }
+  }
+
+  async function saveText() {
+    const wanted = text.trim();
+    if (wanted === (page.watermark_text ?? "")) return;
+    try {
+      // Empty is a clear, not a blank: null means "print the Page's name",
+      // which is what a Page with no text and no logo has always drawn.
+      await updatePage(page.id, { watermark_text: wanted || null });
+      toast.success(wanted ? `Fallback text is “${wanted}”` : "Back to the Page's name");
+    } catch (cause) {
+      setText(page.watermark_text ?? "");
+      toast.error(cause instanceof Error ? cause.message : "Could not save");
+    }
+  }
+
+  async function choose(file: File | undefined) {
+    if (!file) return;
+    setBusy(true);
+    try {
+      await uploadWatermark(page.id, file);
+      toast.success(`${page.name}'s watermark uploaded`);
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Could not upload");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove() {
+    setBusy(true);
+    try {
+      await removeWatermark(page.id);
+      toast.success("Upload removed");
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Could not remove");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    // Two cells of the section's own grid, so the image and the text that
+    // stands in for it sit side by side and line up with every other control.
+    // Stacked, the text field read as a caption on the thumbnail above it.
+    <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2">
+      <div className="sm:col-span-2">
+        {/* A tick, not a pair of buttons: this is one binary thing that is on
+            by default, and a two-button group implies two choices of equal
+            weight. */}
+        <label className="flex cursor-pointer items-center gap-2 text-xs">
+          <input
+            type="checkbox"
+            checked={page.watermark_enabled}
+            onChange={(event) => void setEnabled(event.target.checked)}
+            className="size-3.5 cursor-pointer accent-primary"
+          />
+          Stamp a mark on this Page&apos;s cards
+        </label>
+        <p className="pt-1 text-[0.7rem] text-muted-foreground">
+          {page.watermark_enabled
+            ? "The image below, or the fallback text where there is no image."
+            : "Off — the photograph publishes clean. Neither image nor text is drawn."}
+        </p>
+      </div>
+
+      <div className={cn("space-y-1", !page.watermark_enabled && "opacity-50")}>
+        {/* `block`, because `Input` is a bare <input> and so inline-block: an
+            inline label leaves it on the same line, and `space-y` only adds a
+            margin it has no reason to break at. */}
+        <label className="block text-xs">Watermark image</label>
+        <div className="flex items-center gap-3">
+          {/* Square, and big enough to read — the compositor fits the mark into
+              a square box too (`max_px`, capped at 22% of width), so this is
+              the shape it is actually judged in. At 56px it was a smudge that
+              could not be told apart from the wrong file.
+
+              Dark, not the transparency checker the old app used here. Ours is
+              white ink for a photograph: on a light checker it is invisible,
+              which is the one thing a thumbnail must not be. */}
+          <div className="flex size-24 shrink-0 items-center justify-center rounded border bg-slate-700 p-2">
+            {url ? (
+              // Same two origins as the preview's mark — see there.
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={url} alt="" className="max-h-full max-w-full object-contain" />
+            ) : (
+              <span className="text-[0.6rem] text-white/70">None</span>
+            )}
+          </div>
+          <div className="space-y-1.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <Button size="sm" variant="outline" disabled={busy} asChild>
+                <label className="cursor-pointer">
+                  {busy ? <Loader2 className="size-3.5 animate-spin" /> : null}
+                  {page.watermark_upload_path ? "Replace" : "Upload"}
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg"
+                    className="hidden"
+                    onChange={(event) => {
+                      void choose(event.target.files?.[0]);
+                      // Cleared, so choosing the same file twice fires again.
+                      event.target.value = "";
+                    }}
+                  />
+                </label>
+              </Button>
+              {page.watermark_upload_path ? (
+                <Button size="sm" variant="ghost" disabled={busy} onClick={remove}>
+                  Remove
+                </Button>
+              ) : null}
+            </div>
+            <p className="text-[0.7rem] text-muted-foreground">
+              {page.watermark_upload_path
+                ? "An uploaded mark. It wins over any committed asset."
+                : page.watermark_image_path
+                  ? "A committed asset in the repo. An upload would override it."
+                  : "No image mark — the fallback text is what gets stamped."}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className={cn("space-y-1", !page.watermark_enabled && "opacity-50")}>
+        <label className="block text-xs" htmlFor="watermark-text">
+          Fallback text
+        </label>
+        <Input
+          id="watermark-text"
+          value={text}
+          placeholder={page.name}
+          onChange={(event) => setText(event.target.value)}
+          // Saved on blur rather than per keystroke: this is a Page row, not
+          // the unsaved layout patch, and a PATCH per character would write ten
+          // rows to spell a word. Empty clears it back to the Page's name.
+          onBlur={() => void saveText()}
+          className="h-8 text-xs"
+        />
+        <p className="text-[0.7rem] text-muted-foreground">
+          {hasImage
+            ? "Only drawn if the image beside it is removed."
+            : `Drawn top-right, right now. Blank means this Page's name — “${page.name}”.`}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * A titled block of controls, two to a row.
+ *
+ * Columns rather than one field per row, which is how the old app's settings
+ * panel reads (`facebook-prompts-settings-panel.tsx`, `grid gap-4
+ * sm:grid-cols-2`). Stacked, sixteen controls made a column tall enough that
+ * the sticky preview had scrolled out of the useful range by the padding
+ * fields — and padding is the one group you cannot judge without watching the
+ * card. A field that needs the width wraps itself in `sm:col-span-2`.
+ */
 function Group({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="space-y-3">
-      <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        {title}
-      </h3>
-      {children}
+      {/* Full-strength, like every other heading on this screen. Small caps
+          already separate it from the controls under it; greying it as well
+          made the group read as switched off. */}
+      <h3 className="text-xs font-semibold uppercase tracking-wide">{title}</h3>
+      <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2">{children}</div>
     </section>
   );
 }
@@ -420,6 +703,10 @@ function Range({
   changed?: boolean;
   onChange: (value: number) => void;
 }) {
+  // The filled portion, as a percentage. WebKit's track cannot see the thumb,
+  // so the fill is a gradient stop and this is the only way to place it.
+  const fill = max <= min ? 0 : Math.min(100, Math.max(0, ((value - min) / (max - min)) * 100));
+
   return (
     <Field label={label} hint={hint} changed={changed} value={format(value)}>
       <input
@@ -429,7 +716,8 @@ function Range({
         step={step}
         value={value}
         onChange={(event) => onChange(Number(event.target.value))}
-        className="h-1 w-full cursor-pointer appearance-none rounded bg-muted accent-primary"
+        className="range-input w-full"
+        style={{ "--range-fill": `${fill}%` } as React.CSSProperties}
       />
     </Field>
   );

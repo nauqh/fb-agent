@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { CompetitorMark } from "@/components/competitor-mark";
 import { Card } from "@/components/config-card";
 import { LayoutEditor } from "@/components/layout-editor";
+import { PageSwitcher } from "@/components/page-switcher";
 import { QueuePagination } from "@/components/queue-pagination";
 import { ScreenHeader } from "@/components/screen";
 import { Button } from "@/components/ui/button";
@@ -67,7 +68,11 @@ export default function GlobalScreen() {
     // a short page — it is a clipped one, with everything below the fold simply
     // unreachable. `pb-16` keeps the last row clear of the mobile bar.
     <div className="w-full space-y-4 pb-16 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-3">
-      <ScreenHeader title="Global" />
+      {/* No switcher in the title row. Everything above the Composed Image card
+          is account-wide, and a Page name up there read as the scope of the
+          whole screen — including the pool, which is shared by every Page. It
+          sits on the card it actually governs instead. */}
+      <ScreenHeader title="Global" switcher={false} />
 
       <CompetitorPool
         allowance={allowance}
@@ -87,6 +92,10 @@ export default function GlobalScreen() {
               change here applies to the Page in the switcher only.
             </>
           }
+          // The one per-Page block on this screen, so the switcher belongs to
+          // it rather than to the title row — beside the sentence that says the
+          // edits apply to whichever Page it names.
+          meta={<PageSwitcher />}
         >
           <LayoutEditor />
         </Card>

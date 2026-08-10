@@ -199,3 +199,80 @@
     background: transparent;
   }
 }
+
+/**
+ * The layout editor's sliders, ported from the old app (`ui/range-input.tsx`
+ * plus its rules in that repo's `globals.css`).
+ *
+ * A native range input styles as a grey trough with a platform thumb, which at
+ * this size read as a form field rather than as a value being dragged. This is
+ * a 6px track that fills to the left of the thumb — `--range-fill` is set per
+ * input, because no browser exposes the value as a CSS variable and the WebKit
+ * track cannot see the thumb's position.
+ *
+ * The WebKit and Gecko halves are both required and neither is a fallback:
+ * Firefox has `::-moz-range-progress` for the filled portion, WebKit has
+ * nothing equivalent and needs the gradient instead.
+ */
+@layer components {
+  .range-input {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 1.25rem;
+    background: transparent;
+    border: 0;
+    padding: 0;
+    box-shadow: none;
+    cursor: pointer;
+  }
+
+  .range-input:focus-visible {
+    outline: none;
+  }
+
+  .range-input::-webkit-slider-runnable-track {
+    height: 0.375rem;
+    border-radius: 9999px;
+    background: linear-gradient(
+      to right,
+      var(--primary) 0%,
+      var(--primary) var(--range-fill, 0%),
+      var(--input) var(--range-fill, 0%),
+      var(--input) 100%
+    );
+  }
+
+  .range-input::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 1rem;
+    height: 1rem;
+    /* Half the thumb less half the track, so it centres on the line. */
+    margin-top: -0.3125rem;
+    border-radius: 9999px;
+    background: var(--primary);
+    border: 2px solid var(--background);
+    box-shadow: 0 0 0 1px var(--border);
+  }
+
+  .range-input::-moz-range-track {
+    height: 0.375rem;
+    border-radius: 9999px;
+    background: var(--input);
+  }
+
+  .range-input::-moz-range-progress {
+    height: 0.375rem;
+    border-radius: 9999px;
+    background: var(--primary);
+  }
+
+  .range-input::-moz-range-thumb {
+    width: 1rem;
+    height: 1rem;
+    border-radius: 9999px;
+    background: var(--primary);
+    border: 2px solid var(--background);
+    box-shadow: 0 0 0 1px var(--border);
+  }
+}
