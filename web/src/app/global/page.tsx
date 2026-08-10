@@ -1,11 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, ExternalLink, FileText, Loader2, Plus, Trash2 } from "lucide-react";
+import {
+  ArrowRight,
+  ChevronDown,
+  ExternalLink,
+  FileText,
+  Loader2,
+  Plus,
+  Trash2,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { CompetitorMark } from "@/components/competitor-mark";
-import { Card, Counts } from "@/components/config-card";
+import { Card } from "@/components/config-card";
 import { LayoutEditor } from "@/components/layout-editor";
 import { QueuePagination } from "@/components/queue-pagination";
 import { ScreenHeader } from "@/components/screen";
@@ -27,6 +35,7 @@ import {
 import { listPromptFiles } from "@/lib/api/pages";
 import { getCompetitorPages, type CompetitorPage } from "@/lib/api/sources";
 import { usePageScope } from "@/lib/page-scope";
+import type { Page } from "@/lib/types";
 import { emit } from "@/lib/store";
 import { useQuery } from "@/lib/use-query";
 import { cn } from "@/lib/utils";
@@ -60,42 +69,13 @@ export default function GlobalScreen() {
     <div className="w-full space-y-4 pb-16 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-3">
       <ScreenHeader title="Global" />
 
-      <Budget data={allowance} />
-
-      <Card
-        title="Competitor pool"
-        hint={
-          <>
-            Every page Metricool is watching, across the whole account. Add one
-            here; choose which of your Pages read it on Settings.
-          </>
-        }
-        meta={
-          pool ? (
-            <Counts>
-              {pool.length} watched
-              {(() => {
-                const silent = pool.filter((one) => one.posts_stored === 0).length;
-                return silent ? (
-                  <span className="text-destructive"> · {silent} silent</span>
-                ) : null;
-              })()}
-            </Counts>
-          ) : null
-        }
-      >
-        <AddToPool />
-
-        {poolError ? (
-          <p className="rounded-lg border border-dashed p-4 text-xs text-destructive">
-            {poolError}
-          </p>
-        ) : poolLoading || !pool ? (
-          <Skeleton className="h-64 rounded-lg" />
-        ) : (
-          <PoolTable rows={pool} pages={pages} />
-        )}
-      </Card>
+      <CompetitorPool
+        allowance={allowance}
+        rows={pool}
+        pages={pages}
+        error={poolError}
+        loading={poolLoading}
+      />
 
       <div className="grid items-start gap-4 xl:grid-cols-2">
         <Card
@@ -127,13 +107,19 @@ export default function GlobalScreen() {
 }
 
 /**
- * How much of Metricool's competitor limit is spent.
+ * The pool and the budget that constrains it, as one object.
  *
- * A meter rather than a number in a corner, because this is the only figure on
- * either screen that stops you doing something. Segmented by brand so the
- * answer to "where did it go" is in the same object as "how much is left" —
- * on this account 44 of 92 sit on brands with no Page in this app, and a bare
- * total would send someone hunting through Metricool for them.
+ * They were two cards, and they duplicated each other: the budget said "92 of
+ * 100, by brand", the pool said "92 watched", and brand appeared in both with
+ * no link between them. The screen made you read the same number twice and
+ * join it yourself.
+ *
+ * The join is the design. Metricool's segments *are* the pool's brands, so the
+ * meter's segments and the filter chips are the same list, and picking a brand
+ * both narrows the table and lights the slice of the bar that brand spent. The
+ * question this screen exists to answer — "where did the hundred go, and is any
+ * of it producing anything" — is then one gesture rather than two screens'
+ * worth of arithmetic.
  *
  * 100 is Metricool's published figure for Starter and Advanced alike. Their
  * documentation does not say whether it counts per account or per brand; the
@@ -141,90 +127,298 @@ export default function GlobalScreen() {
  * as per account. If that turns out to be wrong this bar is pessimistic, which
  * is the safe direction for a limit.
  */
-function Budget({ data }: { data: Allowance | null }) {
-  if (!data) return <Skeleton className="h-24 rounded-xl" />;
+function CompetitorPool({
+  allowance,
+  rows,
+  pages,
+  error,
+  loading,
+}: {
+  allowance: Allowance | null;
+  rows: CompetitorPage[] | null;
+  pages: Page[];
+  error: string | null;
+  loading: boolean;
+}) {
+  // Null is "no filter", which is not the same as any page id — hence null
+  // rather than 0, which is a legal id in a table that starts at 1.
+  const [brand, setBrand] = useState<number | null>(null);
+  const [silentOnly, setSilentOnly] = useState(false);
+  const [page, setPage] = useState(1);
 
-  const spent = data.profiles.filter((one) => one.competitors > 0);
-  // Brands watching nobody are left out of the bar — a zero-width segment is
-  // invisible — but they are counted at the end, because "why only four when I
-  // have eleven brands?" is the first question the legend otherwise raises.
-  const empty = data.profiles.length - spent.length;
-  const tight = data.remaining <= 10;
+  /** Every filter resets to the first page. Landing on page 4 of a two-page
+   *  result is the classic way a filter looks like it returned nothing. */
+  function filter(next: () => void) {
+    next();
+    setPage(1);
+  }
+
+  // Keyed by our Page id, because that is what the pool rows carry. The join to
+  // Metricool's profiles is `metricool_blog_id` — exact, unlike matching on the
+  // display name, which is the same string only by convention.
+  const blogIdOf = new Map(pages.map((one) => [one.id, one.metricool_blog_id]));
+  const selectedBlogId = brand === null ? null : blogIdOf.get(brand) ?? null;
+
+  const counts = new Map<number, { name: string; total: number; silent: number }>();
+  for (const row of rows ?? []) {
+    const seen = counts.get(row.page_id) ?? { name: row.page_name, total: 0, silent: 0 };
+    seen.total += 1;
+    if (row.posts_stored === 0) seen.silent += 1;
+    counts.set(row.page_id, seen);
+  }
+  const brands = [...counts.entries()].sort((a, b) => b[1].total - a[1].total);
+
+  const silent = (rows ?? []).filter((one) => one.posts_stored === 0).length;
+  const shown = (rows ?? []).filter(
+    (row) =>
+      (brand === null || row.page_id === brand) &&
+      (!silentOnly || row.posts_stored === 0),
+  );
+
+  const tight = allowance ? allowance.remaining <= 10 : false;
 
   return (
-    <section
-      className={cn(
-        "rounded-xl border bg-card p-5",
-        tight && "border-destructive/40",
-      )}
-    >
-      <div className="flex items-end justify-between gap-4 pb-3">
-        <div>
-          <h2 className="text-sm font-medium">Metricool competitor budget</h2>
-          <p className="pt-1 text-xs text-muted-foreground">
-            One allowance for the whole account, shared by every brand.
-          </p>
+    // Deliberately not a red border when the allowance is tight, which is what
+    // the budget did as its own card. This card is now the whole screen's
+    // subject, and ringing all of it in red says "everything here is wrong"
+    // rather than "you have eight slots left" — the warning belongs on the
+    // figure and on the empty end of the bar, which is where it is.
+    <section className="overflow-hidden rounded-xl border bg-card">
+      <div className="p-5 pb-4">
+        <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2">
+          <div className="min-w-0">
+            <h2 className="text-[15px] font-semibold tracking-tight">
+              Competitor pool
+            </h2>
+            <p className="pt-1 text-xs text-muted-foreground">
+              Every page Metricool is watching, on one allowance shared by every
+              brand. Which of your Pages read one is set on Settings.
+            </p>
+          </div>
+
+          {/* The remaining count, not the used count. This is the only figure on
+              either screen that stops you doing something, and "8 left" is the
+              form that says so. */}
+          {allowance ? (
+            <p className="shrink-0 text-right leading-none">
+              <span
+                className={cn(
+                  "text-2xl font-semibold tabular-nums",
+                  tight && "text-destructive",
+                )}
+              >
+                {allowance.remaining}
+              </span>
+              <span className="pl-1.5 text-xs text-muted-foreground">
+                left of {allowance.limit}
+              </span>
+            </p>
+          ) : null}
         </div>
-        <p className="shrink-0 text-right">
-          <span
-            className={cn(
-              "text-2xl font-semibold tabular-nums",
-              tight && "text-destructive",
-            )}
-          >
-            {data.remaining}
+
+        <div className="pt-4">
+          {allowance ? (
+            <Meter data={allowance} selected={selectedBlogId} tight={tight} />
+          ) : (
+            <Skeleton className="h-2 rounded-full" />
+          )}
+        </div>
+
+        {/* The legend and the filter are one control. A brand's chip carries the
+            count that brand spent, so reading the bar and narrowing the table
+            below are the same act. */}
+        <div className="flex flex-wrap items-center gap-1.5 pt-4">
+          <Chip active={brand === null} onClick={() => filter(() => setBrand(null))}>
+            All
+            <ChipCount active={brand === null}>{rows?.length ?? 0}</ChipCount>
+          </Chip>
+
+          {brands.map(([id, one]) => (
+            <Chip
+              key={id}
+              active={brand === id}
+              onClick={() => filter(() => setBrand(brand === id ? null : id))}
+            >
+              {one.name}
+              <ChipCount active={brand === id}>{one.total}</ChipCount>
+            </Chip>
+          ))}
+
+          {/* Silent is a filter rather than a red number in the corner, because
+              it is the only thing on this screen that is actionable per row:
+              these are slots being spent on nothing. It also explains the sort —
+              the server puts silent sources first, and without this the list
+              opens on a dozen rows reading "none" for no visible reason. */}
+          {silent > 0 ? (
+            <Chip
+              tone="destructive"
+              active={silentOnly}
+              onClick={() => filter(() => setSilentOnly((current) => !current))}
+            >
+              {silent} silent
+            </Chip>
+          ) : null}
+
+          <span className="ml-auto text-xs text-muted-foreground">
+            <Unmanaged data={allowance} />
           </span>
-          <span className="pl-1.5 text-xs text-muted-foreground">
-            left of {data.limit}
-          </span>
-        </p>
+        </div>
       </div>
 
-      {/* Segmented, not a single fill: the segments are the brands, and the gap
-          between them is what makes four of eleven readable at a glance. */}
-      <div className="flex h-2 w-full gap-0.5 overflow-hidden rounded-full bg-muted">
-        {spent.map((profile) => (
+      <div className="border-t px-5 py-4">
+        <AddToPool />
+
+        {error ? (
+          <p className="rounded-lg border border-dashed p-4 text-xs text-destructive">
+            {error}
+          </p>
+        ) : loading || !rows ? (
+          <Skeleton className="h-64 rounded-lg" />
+        ) : shown.length === 0 ? (
+          <p className="rounded-lg border border-dashed p-6 text-center text-xs text-muted-foreground">
+            Nothing matches that filter.
+          </p>
+        ) : (
+          <PoolTable rows={shown} pages={pages} page={page} onPageChange={setPage} />
+        )}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * The allowance as one bar, segmented by the brand that spent each slice.
+ *
+ * Segmented rather than a single fill because "where did it go" and "how much is
+ * left" are the same question here, and the gap between segments is what makes
+ * four brands out of eleven readable at a glance.
+ *
+ * Selection dims rather than recolours. The palette is neutral by design, so
+ * four brands cannot each have a hue — instead the selected brand's segment
+ * stays solid and the rest drop back, which reads the same in light and dark
+ * and needs no legend swatches to decode.
+ */
+function Meter({
+  data,
+  selected,
+  tight,
+}: {
+  data: Allowance;
+  selected: string | null;
+  tight: boolean;
+}) {
+  // Brands watching nobody are left out — a zero-width segment is invisible —
+  // but `Unmanaged` still counts them, because "why only four when I have
+  // eleven brands?" is the first question the bar otherwise raises.
+  const spent = data.profiles.filter((one) => one.competitors > 0);
+
+  return (
+    // The *track* carries the warning, not the card: what turns red when the
+    // account runs out of room is the part that is running out.
+    <div
+      className={cn(
+        "flex h-2 w-full gap-0.5 overflow-hidden rounded-full transition-colors",
+        tight ? "bg-destructive/25" : "bg-muted",
+      )}
+    >
+      {spent.map((profile) => {
+        const dimmed = selected !== null && profile.blog_id !== selected;
+        return (
           <div
             key={profile.blog_id}
             title={`${profile.label} — ${profile.competitors}`}
             style={{ width: `${(profile.competitors / data.limit) * 100}%` }}
             className={cn(
-              "h-full first:rounded-l-full",
-              profile.managed ? "bg-primary" : "bg-muted-foreground/40",
+              "h-full transition-colors first:rounded-l-full",
+              dimmed
+                ? "bg-muted-foreground/20"
+                : profile.managed
+                  ? "bg-primary"
+                  : "bg-muted-foreground/40",
             )}
           />
-        ))}
-      </div>
+        );
+      })}
+    </div>
+  );
+}
 
-      <ul className="flex flex-wrap gap-x-4 gap-y-1 pt-3 text-xs">
-        {spent.map((profile) => (
-          <li key={profile.blog_id} className="flex items-center gap-1.5">
-            <span
-              className={cn(
-                "size-2 rounded-full",
-                profile.managed ? "bg-primary" : "bg-muted-foreground/40",
-              )}
-            />
-            <span className={profile.managed ? "font-medium" : "text-muted-foreground"}>
-              {profile.label}
-            </span>
-            <span className="tabular-nums text-muted-foreground">
-              {profile.competitors}
-            </span>
-            {/* Named rather than implied. A brand with no Page here still spends
-                the allowance, and that is the surprising half. */}
-            {!profile.managed ? (
-              <span className="text-muted-foreground">· not in this app</span>
-            ) : null}
-          </li>
-        ))}
-        {empty > 0 ? (
-          <li className="text-muted-foreground">
-            + {empty} brand{empty === 1 ? "" : "s"} watching nobody
-          </li>
-        ) : null}
-      </ul>
-    </section>
+/**
+ * The brands spending the allowance that this app has no Page for.
+ *
+ * Stated rather than implied. They hold no pool rows, so they can never appear
+ * in the table or its chips — but they do spend slots, and that is the half
+ * that surprises: an operator counting only what this app shows would read the
+ * remaining figure as much larger than it is.
+ */
+function Unmanaged({ data }: { data: Allowance | null }) {
+  if (!data) return null;
+
+  const outside = data.profiles.filter((one) => !one.managed && one.competitors > 0);
+  const spentOutside = outside.reduce((total, one) => total + one.competitors, 0);
+  const empty = data.profiles.filter((one) => one.competitors === 0).length;
+
+  const parts = [];
+  if (spentOutside > 0) {
+    parts.push(
+      `${spentOutside} on ${outside.length} brand${outside.length === 1 ? "" : "s"} not in this app`,
+    );
+  }
+  if (empty > 0) parts.push(`${empty} brand${empty === 1 ? "" : "s"} watching nobody`);
+
+  return parts.length > 0 ? <>{parts.join(" · ")}</> : null;
+}
+
+/** A filter pill. Solid when it is the one in force — the palette has no second
+ *  hue to spend on selection, so selection is the inversion. */
+function Chip({
+  active,
+  tone = "default",
+  onClick,
+  children,
+}: {
+  active: boolean;
+  tone?: "default" | "destructive";
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors",
+        active
+          ? tone === "destructive"
+            // `text-background`, not `text-white`: there is no
+            // `--destructive-foreground` in this theme, and dark mode's
+            // destructive is a *light* red that white text disappears into.
+            ? "border-destructive bg-destructive text-background"
+            : "border-primary bg-primary text-primary-foreground"
+          : tone === "destructive"
+            ? "border-destructive/30 text-destructive hover:bg-destructive/10"
+            : "hover:bg-muted",
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+/** The count inside a chip. Dimmed against whichever background it lands on, so
+ *  the brand name stays the thing you read first. */
+function ChipCount({
+  active,
+  children,
+}: {
+  active: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <span className={cn("tabular-nums", active ? "opacity-70" : "text-muted-foreground")}>
+      {children}
+    </span>
   );
 }
 
@@ -316,12 +510,15 @@ const POOL_PAGE_SIZE = 12;
 function PoolTable({
   rows,
   pages,
+  page,
+  onPageChange,
 }: {
   rows: CompetitorPage[];
   pages: { id: number; name: string }[];
+  page: number;
+  onPageChange: (page: number) => void;
 }) {
-  const nameOf = new Map(pages.map((page) => [page.id, page.name]));
-  const [page, setPage] = useState(1);
+  const nameOf = new Map(pages.map((one) => [one.id, one.name]));
 
   // Clamped rather than reset: removing the last row of the last page should
   // step back a page, not throw the operator to the top of a 48-row list.
@@ -331,24 +528,23 @@ function PoolTable({
 
   return (
     // The rail has its own provider and this screen is not inside it, so the
-    // header hints need one here or Radix throws at render.
+    // header hint needs one here or Radix throws at render.
     <TooltipProvider>
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[46rem] text-xs">
+      {/* Fixed layout. Auto sizing gave the first column every spare pixel, so
+          a competitor's name sat a screen's width from the brand beside it and
+          the eye had to travel to pair them. */}
+      <table className="w-full min-w-184 table-fixed text-xs">
         <thead>
-          <tr className="border-b text-left text-muted-foreground">
-            <th className="pb-2 font-normal">Page</th>
-            <th className="pb-2 font-normal">
-              <HeaderHint hint="Which Metricool profile this competitor is filed under — where one of the account's 100 slots was spent. It does not limit who can read it.">
-                In brand
-              </HeaderHint>
+          {/* Headings in the text colour, not muted. They name the columns; a
+              grey heading over black data reads as the disabled state of a
+              table rather than as its structure. */}
+          <tr className="border-b text-left font-medium">
+            <th className="pb-2">Competitor</th>
+            <th className="w-[38%] pb-2">
+              Slot in <span className="text-muted-foreground">→</span> Read by
             </th>
-            <th className="pb-2 font-normal">
-              <HeaderHint hint="Which of your Pages actually see this competitor's posts. A Page with no assignments of its own reads the set it is filed under, shown here as “default”.">
-                Read by
-              </HeaderHint>
-            </th>
-            <th className="pb-2 text-right font-normal">
+            <th className="w-20 pb-2 text-right">
               <HeaderHint
                 align="end"
                 hint="How many of this competitor's posts are stored from the last syncs. “none” means it is configured but has published nothing we picked up — a dead source looks identical to an unconfigured one everywhere else."
@@ -356,12 +552,18 @@ function PoolTable({
                 Posts
               </HeaderHint>
             </th>
-            <th className="pb-2" />
+            <th className="w-10 pb-2" />
           </tr>
         </thead>
         <tbody className="divide-y">
           {shown.map((row) => (
-            <tr key={`${row.page_id}-${row.provider_id}`} className="group">
+            // Hover tints the whole row. The four columns are spread across a
+            // wide card, and a tint is what carries the eye from a competitor's
+            // name to the brand and the count that belong to it.
+            <tr
+              key={`${row.page_id}-${row.provider_id}`}
+              className="group transition-colors hover:bg-muted/40"
+            >
               <td className="py-2 pr-3">
                 {/* The logo is how a competitor is actually recognised — several
                     of these are "Historical facts" / "History Addicts" /
@@ -388,7 +590,6 @@ function PoolTable({
                   </div>
                 </div>
               </td>
-              <td className="py-2 pr-3 text-muted-foreground">{row.page_name}</td>
               <td className="py-2 pr-3">
                 <ReadBy row={row} nameOf={nameOf} />
               </td>
@@ -421,7 +622,7 @@ function PoolTable({
         totalItems={rows.length}
         page={current}
         pageSize={POOL_PAGE_SIZE}
-        onPageChange={setPage}
+        onPageChange={onPageChange}
       />
     </div>
     </TooltipProvider>
@@ -431,10 +632,11 @@ function PoolTable({
 /**
  * A column heading that explains itself on hover.
  *
- * These columns each mean something the word alone does not carry — "In brand"
- * is where a slot was spent rather than who may use it, "Posts" counts what was
- * stored rather than what exists. Dotted underline so it reads as explicable
- * rather than as a link.
+ * One heading left needs this: "Posts" counts what was *stored*, not what
+ * exists, and "none" is a finding rather than a zero. The two brand columns
+ * that used to need one are now a single column that shows the difference
+ * instead of describing it. Dotted underline so it reads as explicable rather
+ * than as a link.
  */
 function HeaderHint({
   hint,
@@ -458,14 +660,21 @@ function HeaderHint({
 }
 
 /**
- * Who actually reads this competitor.
+ * Which brand pays for this competitor, and which Pages actually read it.
  *
- * Not the same as its assignments, which is why this is not a `join(", ")`. A
- * Page falls back to the set it is filed under until it has an assignment of
- * its own (`routes/sources._visible_to`), so an unassigned competitor is often
- * still being read — by the brand it sits in. This column used to print "not
- * assigned" for every one of them: measured when this was written, that was 88
- * of 92 rows, and 44 of those were being read every day.
+ * Two columns until now — "In brand" and "Read by" — and each needed a tooltip
+ * to say how it differed from the other. They are one column here, and the
+ * arrow does the explaining: a brand alone means the slot and the reader are
+ * the same, `A → B` means B reads what A is paying for. On this account that is
+ * 2 rows of 92, so the arrow is the exception the eye can find rather than a
+ * shape repeated down the page.
+ *
+ * Assignment is not the same as reading, which is why this is not a
+ * `join(", ")`. A Page falls back to the set it is filed under until it has an
+ * assignment of its own (`routes/sources._visible_to`), so an unassigned
+ * competitor is often still being read — by the brand it sits in. This column
+ * used to print "not assigned" for every one of them: measured when that was
+ * written, 88 of 92 rows, and 44 of those were being read every day.
  *
  * `reads_by_default` and the assignment list cannot both apply. A Page holding
  * any assignment has left the fallback, so a Page that assigned *this* row can
@@ -480,7 +689,18 @@ function ReadBy({
 }) {
   const assigned = row.assigned_page_ids.map((id) => nameOf.get(id) ?? String(id));
 
-  if (assigned.length > 0) return <>{assigned.join(", ")}</>;
+  // Named once when the slot's brand is also the only reader. Printing
+  // "History Retraced → History Retraced" down 90 rows is noise that buries the
+  // two rows where the arrow means something.
+  if (assigned.length === 1 && assigned[0] === row.page_name) {
+    return <>{row.page_name}</>;
+  }
+
+  if (assigned.length > 0) {
+    return (
+      <Crosses from={row.page_name}>{assigned.join(", ")}</Crosses>
+    );
+  }
 
   if (row.reads_by_default) {
     return (
@@ -496,8 +716,25 @@ function ReadBy({
 
   // The genuine empty state, and worth a red: the Page it sits under has
   // assignments and none of them is this, so nothing reads it — while it goes
-  // on spending one of the hundred. Measured at 44 of 92 when this was written.
-  return <span className="text-destructive">not read</span>;
+  // on spending one of the hundred. Measured at 44 of 92 when this was written,
+  // and fixed by assigning each of them to the brand whose slot they hold.
+  return (
+    <Crosses from={row.page_name}>
+      <span className="text-destructive">nobody</span>
+    </Crosses>
+  );
+}
+
+/** `brand → reader`, for the rows where those differ. Muted on the left because
+ *  the reader is the answer; the payer is the context. */
+function Crosses({ from, children }: { from: string; children: React.ReactNode }) {
+  return (
+    <span className="flex items-center gap-1.5">
+      <span className="text-muted-foreground">{from}</span>
+      <ArrowRight className="size-3 shrink-0 text-muted-foreground/60" />
+      {children}
+    </span>
+  );
 }
 
 /** Frees a slot in Metricool. Assignments naming it are left alone — re-adding

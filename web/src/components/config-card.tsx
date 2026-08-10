@@ -31,7 +31,9 @@ export function Card({
     <section className={cn("rounded-xl border bg-card p-5", className)}>
       <div className="flex items-start justify-between gap-4 pb-4">
         <div className="min-w-0">
-          <h2 className="text-sm font-medium">{title}</h2>
+          {/* Full-strength text, never muted. A card's title is the one thing on
+              it that has to read first; grey it and the block looks disabled. */}
+          <h2 className="text-[15px] font-semibold tracking-tight">{title}</h2>
           {hint ? <p className="pt-1 text-xs text-muted-foreground">{hint}</p> : null}
         </div>
         {meta}
