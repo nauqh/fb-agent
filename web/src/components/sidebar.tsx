@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   CalendarDays,
+  Globe,
   Inbox,
   Layers,
   PanelLeft,
@@ -49,7 +50,18 @@ const LINKS: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/schedule", label: "Schedule", icon: CalendarDays },
 ];
 
-const SETTINGS = { href: "/settings", label: "Settings", icon: Settings2 };
+/**
+ * The two configuration screens, kept apart because they answer different
+ * questions. Settings is "this Page" — its feeds, its watermark, which
+ * competitors it reads. Global is "the account" — the competitor pool and its
+ * Metricool budget, the image layout, the prompts. Neither is scoped by the
+ * Page switcher in the same way, and mixing them put an account-wide number
+ * under a per-Page heading.
+ */
+const CONFIG: { href: string; label: string; icon: LucideIcon }[] = [
+  { href: "/settings", label: "Settings", icon: Settings2 },
+  { href: "/global", label: "Global", icon: Globe },
+];
 
 /** The old app's rail: a plain ghost square, tinted only on hover. */
 const GHOST_ICON =
@@ -244,16 +256,19 @@ export function Sidebar({
                 <Generating count={queue.generating} />
               </div>
             ) : null}
-            <Item
-              {...SETTINGS}
-              active={pathname.startsWith(SETTINGS.href)}
-              count={null}
-              collapsed={collapsed}
-            />
-            {/* Last, and below Settings rather than beside it. Settings is a
-                destination with a URL and an active state; this is a control
-                that changes nothing about where you are. It shares the row
-                shape only so the icons stay in the same column. */}
+            {CONFIG.map((link) => (
+              <Item
+                key={link.href}
+                {...link}
+                active={pathname.startsWith(link.href)}
+                count={null}
+                collapsed={collapsed}
+              />
+            ))}
+            {/* Last, and below the two config screens rather than among them.
+                Those are destinations with a URL and an active state; this is a
+                control that changes nothing about where you are. It shares
+                their row shape only so the icons stay in the same column. */}
             <ThemeToggle collapsed={collapsed} />
           </div>
         </nav>

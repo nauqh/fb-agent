@@ -3,9 +3,7 @@
 import { useState } from "react";
 import {
   Check,
-  ChevronDown,
   ExternalLink,
-  FileText,
   Loader2,
   Plus,
   Rss,
@@ -13,20 +11,15 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { CompetitorMark } from "@/components/competitor-mark";
+import { Card, Counts } from "@/components/config-card";
 import { ScreenHeader } from "@/components/screen";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import { getLayout } from "@/lib/api/config";
-import { listPromptFiles } from "@/lib/api/pages";
 import { getCompetitorPages, getSourcesConfig } from "@/lib/api/sources";
-import {
-  addToPool,
-  getAllowance,
-  setAssignments,
-  type Allowance as AllowanceData,
-} from "@/lib/api/competitors";
+import { setAssignments } from "@/lib/api/competitors";
 import { addFeed, removeFeed } from "@/lib/api/feeds";
 import { usePageScope } from "@/lib/page-scope";
 import { emit } from "@/lib/store";
@@ -45,8 +38,6 @@ import { cn } from "@/lib/utils";
  */
 export default function SettingsScreen() {
   const { page, pageId } = usePageScope();
-  const { data: prompts } = useQuery(() => listPromptFiles(), []);
-  const { data: layout } = useQuery(() => getLayout(), []);
 
   const { data: sources } = useQuery(() => getSourcesConfig(pageId!), [pageId], {
     enabled: pageId !== null,
@@ -60,9 +51,6 @@ export default function SettingsScreen() {
     loading: competitorsLoading,
   } = useQuery(() => getCompetitorPages(), []);
 
-  // Its own query: it costs one Metricool request per brand — eleven on this
-  // account — and the list beside it should not wait for the number.
-  const { data: allowance } = useQuery(() => getAllowance(), []);
 
   /**
    * Assign or unassign this competitor for the Page in the switcher.
@@ -113,7 +101,11 @@ export default function SettingsScreen() {
     //
     // No `max-w-3xl` any more. That width was right when the screen was four
     // stacked sections under one Page; with Feeds and Competitors on it the
-    // column ran off the bottom while 40% of a 1400px viewport sat empty
+    // column ran off the bottom while 40% of a 1400px viewport sat empty.
+    //
+    // Identity and Feeds are a pair now: both short, both about this Page, and
+    // stacked they left a column of white beside them. Composed Image and the
+    // prompts left for Global, which is where account-wide things live
     // beside it. The shell's own `max-w-[1600px]` is the bound now.
     <div className="w-full pb-16 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-3">
       <ScreenHeader title="Settings" />
@@ -159,41 +151,7 @@ export default function SettingsScreen() {
           </div>
         </Card>
 
-        <Card
-          title="Composed Image"
-          hint={<><code>api/config/layout.yml</code>, read back from the server.</>}
-        >
-          {layout ? (
-            <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-xs sm:grid-cols-4">
-              <Constant
-                label="Size"
-                value={`${layout.image.width} × ${layout.image.height}`}
-              />
-              <Constant
-                label="Panel"
-                value={`${Math.round(layout.panel.ratio * 100)}–${Math.round(layout.panel.max_ratio * 100)}%`}
-              />
-              <Constant
-                label="Font"
-                value={`${layout.font.family} ${layout.font.weight} ${layout.text.font_size_px}px`}
-              />
-              <Constant label="Highlight" value={layout.highlight.color} swatch />
-            </dl>
-          ) : (
-            <Skeleton className="h-16 rounded-lg" />
-          )}
-        </Card>
 
-        <Card
-          title="Prompts"
-          hint={<>Files in <code>api/prompts/</code>, edited in your editor.</>}
-        >
-          <div className="divide-y rounded-lg border">
-            {prompts?.map((prompt) => (
-              <PromptRow key={prompt.filename} {...prompt} />
-            ))}
-          </div>
-        </Card>
 
         <Card
           title="Feeds"
@@ -255,11 +213,11 @@ export default function SettingsScreen() {
             in a half-width column it sets the page's height on its own. */}
         <Card
           className="xl:col-span-2"
-          title="Competitors"
+          title="Competitors this Page reads"
           hint={
             <>
-              One pool for the whole Metricool account. Add a page here, then tick
-              which of your Pages read it &mdash; the same source can feed several.
+              Which of the pool this Page reads. Tick to assign; the same source
+              can feed several Pages. The pool itself is on Global.
             </>
           }
           meta={
@@ -278,8 +236,6 @@ export default function SettingsScreen() {
             ) : null
           }
         >
-          <Allowance data={allowance} />
-          <AddCompetitor pageId={pageId} pageName={page.name} />
           {competitorsError ? (
             // This section fails alone. Everything else on the screen is a
             // local file and cannot.
@@ -368,144 +324,15 @@ export default function SettingsScreen() {
  * a single column; as cards in a grid the screen uses the width the shell
  * gives it, and a section can be moved without dragging a separator with it.
  */
-function Card({
-  title,
-  hint,
-  meta,
-  className,
-  children,
-}: {
-  title: string;
-  hint?: React.ReactNode;
-  meta?: React.ReactNode;
-  className?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className={cn("rounded-xl border bg-card p-5", className)}>
-      <div className="flex items-start justify-between gap-4 pb-4">
-        <div className="min-w-0">
-          <h2 className="text-sm font-medium">{title}</h2>
-          {hint ? (
-            <p className="pt-1 text-xs text-muted-foreground">{hint}</p>
-          ) : null}
-        </div>
-        {meta}
-      </div>
-      {children}
-    </section>
-  );
-}
+
 
 /** The numbers that describe a section, beside its title rather than under it. */
-function Counts({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="shrink-0 whitespace-nowrap text-xs tabular-nums text-muted-foreground">
-      {children}
-    </span>
-  );
-}
 
-/**
- * A competitor's Facebook picture.
- *
- * Rendered straight from Metricool's URL, which is Facebook's CDN and is
- * *signed and expiring* — roughly four days out. That is safe here and only
- * here: this list is re-read live on every request and never stored, so the URL
- * in the browser is always minutes old. `routes/sources.VOLATILE` exists
- * because the stored competitor *posts* do not get that for free.
- *
- * The initial is the fallback, and a dead URL takes it too — `onError` clears
- * the source rather than leaving a broken-image glyph in a list whose whole
- * job is to look trustworthy.
- */
-function CompetitorMark({
-  name,
-  picture,
-}: {
-  name: string;
-  picture?: string | null;
-}) {
-  const [broken, setBroken] = useState(false);
 
-  if (picture && !broken) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={picture}
-        alt=""
-        onError={() => setBroken(true)}
-        className="size-8 shrink-0 rounded-full border object-cover"
-      />
-    );
-  }
 
-  return (
-    <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-semibold text-muted-foreground">
-      {name.slice(0, 1).toUpperCase()}
-    </span>
-  );
-}
 
-function PromptRow({
-  filename,
-  chars,
-  body,
-}: {
-  filename: string;
-  chars: number;
-  body: string;
-}) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div>
-      <button
-        type="button"
-        onClick={() => setOpen((current) => !current)}
-        className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-muted/50"
-      >
-        <FileText className="size-4 shrink-0 text-muted-foreground" />
-        <span className="flex-1 font-mono text-xs">{filename}</span>
-        <span className="tabular-nums text-xs text-muted-foreground">
-          {chars.toLocaleString()} chars
-        </span>
-        <ChevronDown
-          className={cn("size-4 text-muted-foreground transition-transform", open && "rotate-180")}
-        />
-      </button>
-      {open ? (
-        <pre className="max-h-96 overflow-auto whitespace-pre-wrap border-t bg-muted/40 px-4 py-3 font-mono text-[11px] leading-relaxed text-muted-foreground">
-          {body}
-        </pre>
-      ) : null}
-    </div>
-  );
-}
 
-function Constant({
-  label,
-  value,
-  swatch,
-}: {
-  label: string;
-  value: string;
-  swatch?: boolean;
-}) {
-  return (
-    <div>
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className="flex items-center gap-1.5 pt-0.5 font-mono">
-        {swatch ? (
-          <span
-            className="size-2.5 rounded-full border"
-            style={{ backgroundColor: value }}
-          />
-        ) : null}
-        {value}
-      </dd>
-    </div>
-  );
-}
+
 
 
 /**
@@ -661,100 +488,4 @@ function RemoveFeed({ id, name }: { id: number; name: string }) {
 }
 
 
-/**
- * How much of Metricool's competitor limit is spent, account-wide.
- *
- * Account-wide is the load-bearing word. Most of this account's competitors sit
- * on brands this app has no Page for — measured at 44 of 92 — so a count of
- * what is on screen would say 48 and imply 52 free when there were 8. The
- * failure mode without this is discovering the ceiling as a refusal on the add
- * form, having already decided what to add.
- *
- * 100 is Metricool's published figure for Starter and Advanced alike. Their
- * docs do not say whether it is per account or per brand; the number staying at
- * 100 while brands go from 10 to 50 is the reason to read it as per account.
- */
-function Allowance({ data }: { data: AllowanceData | null }) {
-  if (!data) return <Skeleton className="mb-3 h-9 rounded-lg" />;
 
-  const tight = data.remaining <= 10;
-  const theirs = data.profiles.filter((one) => !one.managed && one.competitors > 0);
-
-  return (
-    <div
-      className={cn(
-        "mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border px-3 py-2 text-xs",
-        tight && "border-destructive/40 bg-destructive/5",
-      )}
-    >
-      <span className="font-medium tabular-nums">
-        {data.used} of {data.limit} competitors used
-      </span>
-      <span className={cn("tabular-nums", tight ? "text-destructive" : "text-muted-foreground")}>
-        {data.remaining} left
-      </span>
-      {theirs.length > 0 ? (
-        // Named, not just counted: "44 elsewhere" invites a hunt through
-        // Metricool. The brands are the answer to where the budget went.
-        <span className="min-w-0 truncate text-muted-foreground">
-          · {theirs.reduce((sum, one) => sum + one.competitors, 0)} on brands not in
-          this app ({theirs.map((one) => `${one.label} ${one.competitors}`).join(", ")})
-        </span>
-      ) : null}
-    </div>
-  );
-}
-
-/**
- * Add a Facebook page to the pool.
- *
- * Takes the numeric page id because that is what Metricool's parameter takes; a
- * URL or an @name fails upstream with an unreadable 500, so the server refuses
- * those with a sentence instead.
- *
- * `pageId` picks which brand's set it lands in — where the allowance is spent.
- * It does not decide who reads it: that is the tick list on each row.
- */
-function AddCompetitor({ pageId, pageName }: { pageId: number | null; pageName: string }) {
-  const [value, setValue] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  async function submit(event: React.FormEvent) {
-    event.preventDefault();
-    if (pageId === null || !value.trim()) return;
-
-    setSaving(true);
-    try {
-      await addToPool(pageId, value.trim());
-      toast.success(`Added to ${pageName}'s set in Metricool`);
-      setValue("");
-      emit();
-    } catch (cause) {
-      toast.error(cause instanceof Error ? cause.message : "Could not add that page");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <form onSubmit={submit} className="mb-3 flex items-center gap-2">
-      <Plus className="size-3.5 shrink-0 text-muted-foreground" />
-      <Input
-        value={value}
-        onChange={(event) => setValue(event.target.value)}
-        placeholder="Facebook page id, e.g. 20528438720"
-        aria-label="Facebook page id"
-        className="h-7 min-w-0 flex-1 text-xs"
-      />
-      <Button
-        type="submit"
-        size="sm"
-        variant="outline"
-        className="h-7 shrink-0"
-        disabled={saving || pageId === null || !value.trim()}
-      >
-        {saving ? <Loader2 className="size-3 animate-spin" /> : "Add to pool"}
-      </Button>
-    </form>
-  );
-}

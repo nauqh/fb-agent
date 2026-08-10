@@ -85,6 +85,9 @@ export async function getSourcesConfig(pageId: number): Promise<SourcesConfig> {
 
 /** Mirrors `CompetitorOut`. `posts_stored: 0` is the row worth looking at. */
 export interface CompetitorPage {
+  /** Metricool's own row id — what DELETE takes. Null on rows they return
+   *  without one, which is why removal is disabled rather than guessed. */
+  id: number | null;
   provider_id: string;
   name: string;
   followers: number | null;
