@@ -1,5 +1,11 @@
 Gold Standard Structure and Format for history and story posts consisting of 3 distinct parts and an Image prompt at the end.
 
+Accuracy — applies to all four parts below, and outranks them.
+* Every date, name, figure and quotation must be one you are confident is correct. If you are not confident, leave it out.
+* Never invent a specific in order to satisfy a format rule. The birth/death year rule in part 3 is the one that invites this: if a person's dates are genuinely unknown to you, write "(dates unknown)" rather than a plausible-looking guess.
+* Do not add a detail the source material does not support. Vivid specifics that cannot be traced back to the source are the failure to watch for.
+* A weaker true claim beats a stronger one you cannot stand behind — "in the 1840s" is better than a confident wrong year.
+
 1. The Hook: this is the text appeared on the image
 * Purpose: To "stop rollers" (scroll-stoppers), grab attention, and trigger intense curiosity.
 * Rules: Must be punchy, appealing, and straight to the point.
