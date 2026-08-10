@@ -283,8 +283,12 @@ function Preview({ layout, pageName }: { layout: ResolvedLayout; pageName: strin
 
   return (
     <div className="space-y-2 lg:sticky lg:top-0 lg:self-start">
+      {/* `container-type: inline-size` belongs here, on the card, not on the
+          text. Putting it on the <p> gave `cqw` no valid container to resolve
+          against — it fell back to the viewport and rendered the hook at about
+          five times its real size, overflowing the card entirely. */}
       <div
-        className="relative w-full overflow-hidden rounded-lg border bg-muted"
+        className="relative w-full overflow-hidden rounded-lg border bg-muted [container-type:inline-size]"
         style={{ aspectRatio: `${layout.image.width} / ${layout.image.height}` }}
       >
         {/* Stands in for the hero. A real one would need a draft, and this is
@@ -303,10 +307,14 @@ function Preview({ layout, pageName }: { layout: ResolvedLayout; pageName: strin
           </span>
         </div>
 
+        {/* `maxHeight` is `panel.max_ratio`, the same cap the compositor applies.
+            Without it the panel grew past the top of the card as the sample text
+            got longer, which is not what the real one does. */}
         <div
-          className="absolute inset-x-0 bottom-0 flex flex-col justify-center"
+          className="absolute inset-x-0 bottom-0 flex flex-col justify-center overflow-hidden"
           style={{
             minHeight: `${layout.panel.ratio * 100}%`,
+            maxHeight: `${layout.panel.max_ratio * 100}%`,
             backgroundColor: layout.panel.color,
             opacity: layout.panel.opacity,
             paddingLeft: scale(layout.text.padding.left_px),
@@ -320,11 +328,13 @@ function Preview({ layout, pageName }: { layout: ResolvedLayout; pageName: strin
               color: layout.text.color,
               // The panel is drawn at `image.width` in the real card, so type
               // scales with the container rather than sitting at a fixed px.
-              fontSize: `calc(${(layout.text.font_size_px / layout.image.width) * 100} * 1cqw)`,
+              // As a share of the real 896px width, so the card is the same
+              // shape at any rendered size.
+              fontSize: `${(layout.text.font_size_px / layout.image.width) * 100}cqw`,
               lineHeight: layout.text.line_height_ratio,
               textAlign: layout.text.align as "left" | "center" | "right",
             }}
-            className="[container-type:inline-size] font-bold"
+            className="font-bold"
           >
             {sample}
           </p>
