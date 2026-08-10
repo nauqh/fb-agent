@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertTriangle, Loader2, RefreshCw, Search } from "lucide-react";
+import { AlertTriangle, Check, Filter, Loader2, RefreshCw, Search } from "lucide-react";
 import { toast } from "sonner";
 
 import { CartPanel } from "@/components/cart-panel";
@@ -9,6 +9,13 @@ import { ScreenHeader } from "@/components/screen";
 import { QueryError } from "@/components/query-error";
 import { SourceCard } from "@/components/source-card";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -61,15 +68,91 @@ export default function SourcesScreen() {
   );
 }
 
+/**
+ * Which Pages' competitors to draw from. Empty means every Page.
+ *
+ * Competitor posts are a shared pool, unlike the feeds: Metricool caps an
+ * account at 100 competitors *in total*, so five Pages that should each watch
+ * the same twenty sources cannot each be given them. A source is configured
+ * under whichever Page had room and assigned to the Pages that read it.
+ *
+ * The default is the selected Page — that is the work in front of you — and
+ * widening is one click, because the pool is the point.
+ */
+function ScopeFilter({
+  scope,
+  onChange,
+}: {
+  scope: number[];
+  onChange: (next: number[]) => void;
+}) {
+  const { pages } = usePageScope();
+  if (pages.length < 2) return null;
+
+  const label =
+    scope.length === 0
+      ? "All pages"
+      : scope.length === 1
+        ? (pages.find((page) => page.id === scope[0])?.name ?? "1 page")
+        : `${scope.length} pages`;
+
+  function toggle(id: number) {
+    onChange(scope.includes(id) ? scope.filter((one) => one !== id) : [...scope, id]);
+  }
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size="sm" className="h-8">
+          <Filter className="size-3.5" />
+          {label}
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-52">
+        <DropdownMenuItem onSelect={() => onChange([])}>
+          <span className="flex-1">All pages</span>
+          {/* The tick holds its slot either way, so the rows do not shift. */}
+          <Check className={scope.length === 0 ? "size-3.5" : "size-3.5 opacity-0"} />
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        {pages.map((page) => (
+          <DropdownMenuItem
+            key={page.id}
+            // Kept open: picking a scope is usually several ticks, and closing
+            // on the first one makes the multi-select feel broken.
+            onSelect={(event) => {
+              event.preventDefault();
+              toggle(page.id);
+            }}
+          >
+            <span className="flex-1 truncate">{page.name}</span>
+            <Check
+              className={scope.includes(page.id) ? "size-3.5" : "size-3.5 opacity-0"}
+            />
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 function CompetitorsTab() {
   const cart = useCart();
   const { pageId } = usePageScope();
-  // `pageId` is in the deps *and* gates the query: null means the Pages have
-  // not landed yet, and firing against a guessed id would show the wrong
-  // Page's competitors for a beat before correcting itself.
+  // `null` means "not chosen yet", which resolves to the selected Page. Held
+  // separately rather than initialised in an effect: an effect that seeds state
+  // renders once with the wrong value first, and this repo's lint rule against
+  // set-state-in-effect exists for exactly that.
+  const [chosen, setChosen] = useState<number[] | null>(null);
+  const scope = chosen ?? (pageId !== null ? [pageId] : []);
+  const scopeKey = scope.join(",");
+
+  // `pageId` gates the query: null means the Pages have not landed yet, and
+  // firing against a guessed id would show the wrong Page's competitors for a
+  // beat before correcting itself.
   const { data, loading, error, refresh } = useQuery(
-    () => getCompetitorPosts(pageId!),
-    [pageId],
+    () => getCompetitorPosts(scope),
+    [scopeKey, pageId],
     { enabled: pageId !== null },
   );
   const [syncing, setSyncing] = useState(false);
@@ -85,7 +168,7 @@ function CompetitorsTab() {
     if (pageId === null) return;
     setSyncing(true);
     try {
-      await getCompetitorPosts(pageId, true);
+      await getCompetitorPosts(scope, true);
       emit();
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : "Sync failed");
@@ -97,10 +180,13 @@ function CompetitorsTab() {
   return (
     <>
       <div className="flex items-center justify-between gap-3 pb-3">
-        <p className="text-xs text-muted-foreground">
-          Synced from Metricool, newest first. Which pages are Competitors is configured in
-          Metricool — never here.
-        </p>
+        <div className="flex min-w-0 items-center gap-2">
+          <ScopeFilter scope={scope} onChange={setChosen} />
+          <p className="truncate text-xs text-muted-foreground">
+            Synced from Metricool, newest first. A source is shared across pages —
+            assign them on Settings.
+          </p>
+        </div>
         <Button variant="outline" size="sm" disabled={syncing || loading} onClick={sync}>
           {syncing ? (
             <Loader2 className="size-3.5 animate-spin" />

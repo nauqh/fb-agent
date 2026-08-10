@@ -1,4 +1,5 @@
 import type { SourceItem } from "@/lib/types";
+import type { Feed } from "@/lib/api/feeds";
 import { get } from "@/lib/api/client";
 
 /**
@@ -30,11 +31,15 @@ export type LiveSourceItem = Omit<SourceItem, "id" | "created_at">;
  * it has nothing stored.
  */
 export async function getCompetitorPosts(
-  pageId: number,
+  pageIds: number[],
   refresh = false,
 ): Promise<SourceItem[]> {
   return get<SourceItem[]>("/sources/competitors", {
-    page_id: pageId,
+    // An empty array sends no `page_ids` at all, which the server reads as
+    // every Page. That is the shared pool: a competitor is configured under one
+    // Page in Metricool — whichever had room under their 100-per-account cap —
+    // and any Page assigned it can read its posts.
+    ...(pageIds.length > 0 ? { page_ids: pageIds } : {}),
     ...(refresh ? { refresh: "true" } : {}),
   });
 }
@@ -59,17 +64,20 @@ export async function getTweet(url: string): Promise<LiveSourceItem> {
 export interface SourcesConfig {
   since_days: number;
   max_items: number;
-  feeds: { name: string; url: string }[];
+  /** Rows, not file entries — see `api/feeds.ts`. Added and removed on Settings. */
+  feeds: Feed[];
   lookback_days: number;
   grid_limit: number;
 }
 
 /**
- * `config/sources.yml`, read back from the server.
+ * What a run is configured with, read back from the server.
  *
- * Read rather than restated on this side, for the reason `api/config.ts`
- * records about `layout.yml`: Settings showing a hand-kept copy of a config
- * file is a screen that can disagree with the run it claims to describe.
+ * Two halves from two places now: the windows are `config/sources.yml`, the
+ * feeds are rows. Read rather than restated on this side, for the reason
+ * `api/config.ts` records about `layout.yml` — Settings showing a hand-kept
+ * copy of a config file is a screen that can disagree with the run it claims to
+ * describe.
  */
 export async function getSourcesConfig(pageId: number): Promise<SourcesConfig> {
   return get<SourcesConfig>("/sources/config", { page_id: pageId });
@@ -89,6 +97,11 @@ export interface CompetitorPage {
    */
   picture: string | null;
   posts_stored: number;
+  /** Which of our Pages read this competitor. Empty means none have assigned it. */
+  assigned_page_ids: number[];
+  /** Whose Metricool set it sits in — where the 100-competitor allowance went. */
+  page_id: number;
+  page_name: string;
 }
 
 /**
@@ -98,6 +111,11 @@ export interface CompetitorPage {
  * and cannot fail, this one is a vendor that has 502'd twice, and one request
  * for both would let Metricool being down blank the feed list as well.
  */
-export async function getCompetitorPages(pageId: number): Promise<CompetitorPage[]> {
-  return get<CompetitorPage[]>("/sources/competitors/pages", { page_id: pageId });
+export async function getCompetitorPages(pageIds: number[] = []): Promise<CompetitorPage[]> {
+  return get<CompetitorPage[]>("/sources/competitors/pages", {
+    // Defaults to every Page, because the number that matters is the account
+    // total: Metricool allows 100 competitors across the whole account, and
+    // this is the only screen where that budget is visible.
+    ...(pageIds.length > 0 ? { page_ids: pageIds } : {}),
+  });
 }

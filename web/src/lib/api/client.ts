@@ -61,13 +61,21 @@ async function detail(response: Response): Promise<string> {
   return `${response.status} ${response.statusText}`;
 }
 
-export function get<T>(path: string, params?: Record<string, string | number>): Promise<T> {
-  const query = params
-    ? `?${new URLSearchParams(
-        Object.entries(params).map(([key, value]) => [key, String(value)]),
-      )}`
-    : "";
-  return request<T>(`${path}${query}`);
+export function get<T>(
+  path: string,
+  params?: Record<string, string | number | (string | number)[]>,
+): Promise<T> {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params ?? {})) {
+    // An array becomes the key repeated — `?page_ids=1&page_ids=2` — which is
+    // what FastAPI parses into a `list[int]`. Comma-joining would arrive as the
+    // single string "1,2" and fail validation.
+    for (const one of Array.isArray(value) ? value : [value]) {
+      query.append(key, String(one));
+    }
+  }
+  const suffix = query.size > 0 ? `?${query}` : "";
+  return request<T>(`${path}${suffix}`);
 }
 
 export function post<T>(path: string, body: unknown): Promise<T> {
@@ -76,6 +84,11 @@ export function post<T>(path: string, body: unknown): Promise<T> {
 
 export function patch<T>(path: string, body: unknown): Promise<T> {
   return request<T>(path, { method: "PATCH", body: JSON.stringify(body) });
+}
+
+/** PUT, for the one endpoint that replaces a set rather than editing a row. */
+export function put<T>(path: string, body: unknown): Promise<T> {
+  return request<T>(path, { method: "PUT", body: JSON.stringify(body) });
 }
 
 /** A file, as multipart. The one request in the app that does not send JSON. */
