@@ -84,6 +84,41 @@ class TextLayout(Frozen):
     padding: PaddingLayout
 
 
+Template = Literal["card", "full_overlay"]
+"""Which of the two card forms a Page draws.
+
+`card` is the original: hero on top, panel below it, the two dividing the height
+between them. `full_overlay` is the old app's Template 2 — the photograph fills
+the card and the panel is laid over its bottom, which only reads as one picture
+if the panel is translucent (`panel.opacity`).
+
+Two, and closed. A third would be a `template` table rather than a value, which
+is what the old system had: `facebook_post_templates`, a row per page, every
+field doubled with a `_full_overlay` twin.
+"""
+
+
+class BadgeLayout(Frozen):
+    """The headline chip, bottom-left of a `full_overlay` card.
+
+    Never drawn on a `card` — the old app made it a Template 2 feature and it is
+    one: on a card the panel already starts where the badge would sit.
+
+    Its *label* is not here. Style is layout, and the word is the Page's
+    (`page.badge_text`), because "NEWS" on a history page is wrong in a way no
+    layout value can be.
+    """
+
+    color: str
+    text_color: str
+    font_size_px: int
+    radius_px: int
+    padding_x_px: int
+    padding_y_px: int
+    gap_ratio: float
+    """× image height → the gap between the badge and the top of the panel."""
+
+
 class HighlightLayout(Frozen):
     color: str
 
@@ -133,11 +168,13 @@ class FontLayout(Frozen):
 
 
 class Layout(Frozen):
+    template: Template
     image: ImageLayout
     panel: PanelLayout
     text: TextLayout
     highlight: HighlightLayout
     watermark: WatermarkLayout
+    badge: BadgeLayout
     portrait: PortraitLayout
     font: FontLayout
 

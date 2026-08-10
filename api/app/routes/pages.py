@@ -38,6 +38,9 @@ class PageUpdate(BaseModel):
     watermark_enabled: bool | None = None
     """False publishes a clean photograph: no image mark and no text either."""
 
+    badge_text: str | None = None
+    """The headline chip's word. Null draws no chip. `full_overlay` only."""
+
 
 @router.get("")
 def list_pages(session: Session = Depends(get_session)) -> list[Page]:

@@ -8,6 +8,12 @@
 # This file has no per-page section and should not grow one. A setting that
 # genuinely varies by Page belongs in the `page` table, not here.
 
+# Which card form. `card` is hero-above-panel; `full_overlay` is the old app's
+# Template 2, where the photograph fills the card and the panel lies over its
+# bottom. A Page picks its own in Settings; this is what a Page that has not
+# picked inherits.
+template: card
+
 image:
     width: 896
     height: 1120 # 4:5 — the tallest ratio Facebook renders in feed
@@ -53,6 +59,20 @@ watermark:
     # without one failed post.
     max_px: 138 # capped again at 0.22 × width
     top_ratio: 0.014 # × hero height, floor 8px
+
+badge:
+    # The headline chip, bottom-left of a `full_overlay` card only. Ported from
+    # headline-badge-svg.ts: 22px type, 18/8 padding, radius 24 (the old file
+    # scales all three with the font size and clamps the radius to half the
+    # height, which is what stops resvg drawing a pill where the CSS preview
+    # drew a rounded rectangle). The label is per Page, not here.
+    color: "#2563eb"
+    text_color: "#ffffff"
+    font_size_px: 22
+    radius_px: 24
+    padding_x_px: 18
+    padding_y_px: 8
+    gap_ratio: 0.012 # × height → the gap above the panel
 
 portrait:
     # The circular inset: a picture the operator uploads, straddling the

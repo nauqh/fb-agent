@@ -46,6 +46,7 @@ def as_overrides(row: PageLayout | None) -> dict:
     if row is None:
         return {}
     return {
+        "template": row.template,
         "panel": {
             "ratio": row.panel_ratio,
             "max_ratio": row.panel_max_ratio,
@@ -68,6 +69,10 @@ def as_overrides(row: PageLayout | None) -> dict:
         "watermark": {
             "max_px": row.watermark_max_px,
             "top_ratio": row.watermark_top_ratio,
+        },
+        "badge": {
+            "color": row.badge_color,
+            "font_size_px": row.badge_font_size_px,
         },
         "portrait": {
             "size_px": row.portrait_size_px,

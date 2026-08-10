@@ -181,6 +181,19 @@ class Page(SQLModel, table=True):
     months with nothing failing.
     """
 
+    badge_text: str | None = None
+    """The headline chip's word — "NEWS", "HISTORY". Null draws no badge.
+
+    Drawn on `full_overlay` cards only, where the panel lies over the photograph
+    and there is room above it. Per Page rather than per draft, for now: one word
+    that says what the Page publishes is most of the value, and a label chosen
+    per post needs the writer to return one and the review drawer to edit it.
+
+    Not in `layout.yml` beside the badge's colour and size, because those are
+    style and this is a word: "NEWS" on a history page is wrong in a way no
+    layout value can be.
+    """
+
     watermark_enabled: bool = Field(default=True)
     """Whether this Page's cards get a mark at all. Off means a clean image.
 
@@ -374,6 +387,15 @@ class PageLayout(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     page_id: int = Field(foreign_key="page.id", unique=True, index=True)
 
+    template: str | None = None
+    """`card` or `full_overlay`. The one override that changes the geometry.
+
+    A column like the rest rather than a Page field, because it is a layout
+    value: null means the Page tracks `layout.yml`, and resetting the Page
+    returns it to whatever the file says — the same contract every other
+    override here has.
+    """
+
     panel_ratio: float | None = None
     panel_max_ratio: float | None = None
     panel_color: str | None = None
@@ -392,6 +414,9 @@ class PageLayout(SQLModel, table=True):
 
     watermark_max_px: int | None = None
     watermark_top_ratio: float | None = None
+
+    badge_color: str | None = None
+    badge_font_size_px: int | None = None
 
     portrait_size_px: int | None = None
     portrait_min_px: int | None = None

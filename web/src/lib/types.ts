@@ -52,6 +52,12 @@ export interface Page {
    * photograph clean — no image *and* no fallback text.
    */
   watermark_enabled: boolean;
+  /**
+   * The headline chip's word — "NEWS", "HISTORY". Null draws no chip, and it is
+   * drawn on `full_overlay` cards only, where the panel lies over the
+   * photograph and there is room above it.
+   */
+  badge_text: string | null;
   created_at: string;
   updated_at: string;
 }

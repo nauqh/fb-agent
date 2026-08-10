@@ -125,6 +125,65 @@ export function LayoutEditor() {
             same word and not the same object. The old app's split is the same
             one (`Text overlay typography` carries the font *and* its padding,
             because padding is a property of the text block). */}
+        <Group title="Template">
+          <div className="sm:col-span-2">
+            <Choice
+              label="Card form"
+              value={shown.template}
+              options={["card", "full_overlay"]}
+              changed={data.overridden.includes("template")}
+              onChange={(v) => set("template", v as "card" | "full_overlay")}
+            />
+            <p className="pt-1 text-[0.7rem] text-muted-foreground">
+              {shown.template === "card"
+                ? "Hero on top, panel below it, dividing the height between them."
+                : "The photograph fills the card and the panel lies over its bottom."}
+            </p>
+          </div>
+
+          {/* Opacity is a full-overlay control and only that. On a card there is
+              nothing behind the panel, so the setting does nothing but let one
+              brand's cards drift off the house style; here it is the whole
+              difference between type on a photograph and a black band over it. */}
+          {shown.template === "full_overlay" ? (
+            <Range
+              label="Panel opacity"
+              hint="At 100% the panel covers the picture it is meant to sit on."
+              value={shown.panel.opacity}
+              min={0}
+              max={1}
+              step={0.05}
+              format={(v) => `${Math.round(v * 100)}%`}
+              changed={data.overridden.includes("panel_opacity")}
+              onChange={(v) => set("panel_opacity", v)}
+            />
+          ) : null}
+        </Group>
+
+        {shown.template === "full_overlay" ? (
+          <Group title="Headline badge">
+            <Colour
+              label="Colour"
+              value={shown.badge.color}
+              changed={data.overridden.includes("badge_color")}
+              onChange={(v) => set("badge_color", v)}
+            />
+            <Range
+              label="Size"
+              value={shown.badge.font_size_px}
+              min={12}
+              max={48}
+              step={1}
+              format={(v) => `${v}px`}
+              changed={data.overridden.includes("badge_font_size_px")}
+              onChange={(v) => set("badge_font_size_px", v)}
+            />
+            <div className="sm:col-span-2">
+              <Badge page={page} />
+            </div>
+          </Group>
+        ) : null}
+
         <Group title="Watermark">
           <Range
             label="Size"
@@ -258,6 +317,12 @@ function preview(base: ResolvedLayout, draft: LayoutPatch): ResolvedLayout {
 
   return {
     ...base,
+    template: at(draft.template, base.template),
+    badge: {
+      ...base.badge,
+      color: at(draft.badge_color, base.badge.color),
+      font_size_px: at(draft.badge_font_size_px, base.badge.font_size_px),
+    },
     panel: {
       ...base.panel,
       ratio: at(draft.panel_ratio, base.panel.ratio),
@@ -319,8 +384,15 @@ function Preview({ layout, page }: { layout: ResolvedLayout; page: Page }) {
   const [phrases, setPhrases] = useState<string[]>(SAMPLE_HIGHLIGHTS);
   const scale = (px: number) => `${(px / layout.image.width) * 100}%`;
   const mark = watermarkUrl(page);
+  const full = layout.template === "full_overlay";
   // The compositor's own second cap, applied to the box the logo fits inside.
   const markBox = Math.min(layout.watermark.max_px, layout.image.width * 0.22);
+  // `top_ratio` is a fraction of the hero, and on a full overlay the hero is
+  // the whole card — so the mark hangs from the card's top rather than from the
+  // bottom of the space above the panel. Same number, different denominator.
+  const markTop = full
+    ? `${layout.watermark.top_ratio * 1.25 * 100}cqw`
+    : `${layout.watermark.top_ratio * 100}%`;
   const runs = splitOnHighlights(sample, phrases);
 
   return (
@@ -351,6 +423,37 @@ function Preview({ layout, page }: { layout: ResolvedLayout; page: Page }) {
               behind it — and here only to hang the watermark off, whose
               `top_ratio` is a fraction of the hero rather than of the card. */}
           <div className="relative min-h-0 flex-1">
+            {/* The chip, bottom-left of the hero share — whose bottom edge *is*
+                the top of the panel, on either template. `cqw` throughout
+                because the container query resolves against the width, and the
+                compositor's gap is a fraction of the height: at 896×1120 a
+                share of height is 1.25× the same share of width. */}
+            {full && page.badge_text ? (
+              <span
+                className="absolute font-bold uppercase leading-none"
+                style={{
+                  left: scale(layout.image.edge_margin_ratio * layout.image.width),
+                  bottom: `${layout.badge.gap_ratio * 1.25 * 100}cqw`,
+                  backgroundColor: layout.badge.color,
+                  color: layout.badge.text_color,
+                  fontSize: `${(layout.badge.font_size_px / layout.image.width) * 100}cqw`,
+                  fontFamily: "Arial, Helvetica, sans-serif",
+                  paddingInline: scale(layout.badge.padding_x_px),
+                  paddingBlock: scale(layout.badge.padding_y_px),
+                  // Clamped to half the height, as the compositor does — past
+                  // that resvg draws a stadium and this drew a rounded box.
+                  borderRadius: scale(
+                    Math.min(
+                      layout.badge.radius_px,
+                      (layout.badge.font_size_px + layout.badge.padding_y_px * 2) / 2,
+                    ),
+                  ),
+                }}
+              >
+                {page.badge_text}
+              </span>
+            ) : null}
+
             {!page.watermark_enabled ? null : mark ? (
               // The mark comes from one of two origins — the public bucket, or
               // the API's /assets mount through the proxy — and neither is in
@@ -362,7 +465,7 @@ function Preview({ layout, page }: { layout: ResolvedLayout; page: Page }) {
                 className="absolute object-contain"
                 style={{
                   right: scale(layout.image.edge_margin_ratio * layout.image.width),
-                  top: `${layout.watermark.top_ratio * 100}%`,
+                  top: markTop,
                   maxWidth: scale(markBox),
                   maxHeight: scale(markBox),
                 }}
@@ -376,7 +479,7 @@ function Preview({ layout, page }: { layout: ResolvedLayout; page: Page }) {
                 className="absolute font-bold text-white/95"
                 style={{
                   right: scale(layout.image.edge_margin_ratio * layout.image.width),
-                  top: `${layout.watermark.top_ratio * 100}%`,
+                  top: markTop,
                   fontSize: `${Math.max(16, layout.image.width * 0.022) / layout.image.width * 100}cqw`,
                   fontFamily: "Arial, Helvetica, sans-serif",
                 }}
@@ -627,6 +730,53 @@ function Watermark({ page }: { page: Page }) {
 }
 
 /**
+ * The word in the headline chip, stored on the Page.
+ *
+ * Per Page rather than per draft for now: one word saying what the Page
+ * publishes is most of the value, and a label chosen per post needs the writer
+ * to return one and the review drawer to edit it. Blank draws no chip at all,
+ * which is what a Page on this template that does not want one wants.
+ */
+function Badge({ page }: { page: Page }) {
+  const [text, setText] = useState(page.badge_text ?? "");
+
+  async function save() {
+    const wanted = text.trim();
+    if (wanted === (page.badge_text ?? "")) return;
+    try {
+      await updatePage(page.id, { badge_text: wanted || null });
+      toast.success(wanted ? `Badge reads “${wanted.toUpperCase()}”` : "Badge removed");
+    } catch (cause) {
+      setText(page.badge_text ?? "");
+      toast.error(cause instanceof Error ? cause.message : "Could not save");
+    }
+  }
+
+  return (
+    <div className="space-y-1">
+      <label className="block text-xs" htmlFor="badge-text">
+        Label
+      </label>
+      <Input
+        id="badge-text"
+        value={text}
+        placeholder="NEWS"
+        onChange={(event) => setText(event.target.value)}
+        // On blur, like the fallback text: this is a Page row, and a PATCH per
+        // keystroke would write four of them to spell one word.
+        onBlur={() => void save()}
+        className="h-8 text-xs uppercase"
+      />
+      <p className="text-[0.7rem] text-muted-foreground">
+        {page.badge_text
+          ? "Drawn bottom-left, just above the panel. Always upper-cased."
+          : "Blank draws no chip."}
+      </p>
+    </div>
+  );
+}
+
+/**
  * A titled block of controls, two to a row.
  *
  * Columns rather than one field per row, which is how the old app's settings
@@ -784,7 +934,9 @@ function Choice({
                 : "text-muted-foreground hover:bg-muted",
             )}
           >
-            {option}
+            {/* The value is what the API takes; the underscore in
+                `full_overlay` is not for reading. */}
+            {option.replace(/_/g, " ")}
           </button>
         ))}
       </div>

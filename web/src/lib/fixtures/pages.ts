@@ -28,6 +28,8 @@ export const PAGES: Page[] = [
     // anyway — the text is only reached when there is no image at all.
     watermark_text: null,
     watermark_enabled: true,
+    // History Retraced draws the `card` template, which has no headline chip.
+    badge_text: null,
     created_at: "2026-08-03T02:10:00Z",
     updated_at: "2026-08-03T02:10:00Z",
   },

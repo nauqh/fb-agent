@@ -35,7 +35,7 @@ from app.db import get_session
 from app.image import compositor
 from app.image import text as overlay
 from app.models import Draft, Page, PageLayout
-from app.settings import Align, Layout
+from app.settings import Align, Layout, Template
 
 router = APIRouter(tags=["config"])
 
@@ -125,6 +125,8 @@ class LayoutPatch(BaseModel):
     per-field reset needs.
     """
 
+    template: Template | None = None
+
     panel_ratio: float | None = None
     panel_max_ratio: float | None = None
     panel_color: str | None = None
@@ -143,6 +145,9 @@ class LayoutPatch(BaseModel):
 
     watermark_max_px: int | None = None
     watermark_top_ratio: float | None = None
+
+    badge_color: str | None = None
+    badge_font_size_px: int | None = None
 
     portrait_size_px: int | None = None
     portrait_min_px: int | None = None
@@ -264,6 +269,7 @@ def render_sample(
             None,
             layout,
             fallback_text=mark_text,
+            badge_text=page.badge_text if page else None,
         )
     except compositor.CompositeError as error:
         # The clipped-panel and unreadable-watermark cases both land here. They

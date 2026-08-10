@@ -26,6 +26,8 @@ export interface PageUpdate {
   watermark_text?: string | null;
   /** False publishes clean: no image mark and no fallback text either. */
   watermark_enabled?: boolean | null;
+  /** The headline chip's word. Null draws no chip. `full_overlay` only. */
+  badge_text?: string | null;
 }
 
 /**

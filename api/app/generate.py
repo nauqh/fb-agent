@@ -271,6 +271,9 @@ def build_image(session: Session, draft: Draft, page: Page) -> list[str]:
             _inset(draft),
             layout,
             fallback_text=mark_text,
+            # Drawn only on a `full_overlay` card, and only if the Page has a
+            # word for it. The compositor decides which of those applies.
+            badge_text=page.badge_text,
         )
         superseded = draft.composed_image_path
         draft.composed_image_path = media.store.save(

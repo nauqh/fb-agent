@@ -133,6 +133,100 @@ def test_alignment_moves_the_anchor_rather_than_being_ignored():
     assert 'text-anchor="middle"' in aligned("center")
 
 
+def _templated(template: str, panel_opacity: float | None = None):
+    """The file's layout as one of the two card forms."""
+    from app.settings import Layout, layout as defaults
+
+    values = defaults.model_dump()
+    values["template"] = template
+    if panel_opacity is not None:
+        values["panel"]["opacity"] = panel_opacity
+    return Layout.model_validate(values)
+
+
+def _drawn(layout, badge_text=None) -> "Image.Image":
+    from app.image import compositor, text as overlay
+
+    hero = io.BytesIO()
+    Image.new("RGB", (1280, 1600), (200, 40, 40)).save(hero, format="PNG")
+    plan = overlay.plan(SAMPLE, layout)
+    jpeg = compositor.compose(
+        hero.getvalue(), plan, [], None, None, layout, badge_text=badge_text
+    )
+    return Image.open(io.BytesIO(jpeg)).convert("RGB")
+
+
+def test_a_full_overlay_puts_the_photograph_behind_the_panel():
+    """The panel is at the same height either way. What changes is what is under
+    it: on a `card` nothing, on a `full_overlay` the hero.
+
+    Read at 50% opacity, because an opaque panel is black on both and would
+    pass this test while drawing no photograph at all.
+    """
+    card = _drawn(_templated("card", panel_opacity=0.5))
+    full = _drawn(_templated("full_overlay", panel_opacity=0.5))
+
+    # Well inside the panel, which starts at 80% of the height by default.
+    probe = (448, 1080)
+    assert card.getpixel(probe) == (0, 0, 0), "a card's panel has only black under it"
+    assert full.getpixel(probe)[0] > 40, "the hero is not showing through the panel"
+
+
+def test_the_badge_is_a_full_overlay_thing_only():
+    """On a card the panel begins exactly where the badge would sit."""
+    layout = _templated("full_overlay", panel_opacity=0.5)
+
+    assert _drawn(layout, badge_text="NEWS") != _drawn(layout), "no badge was drawn"
+
+    card = _templated("card")
+    assert _drawn(card, badge_text="NEWS") == _drawn(card), "a card drew a badge"
+
+
+def test_the_badge_is_measured_rather_than_estimated():
+    """The old file guessed `chars × fontSize × 0.62` plus a 0.35em margin.
+
+    We read the same TTF resvg draws with, so the chip fits its word. The
+    radius is clamped to half the height, past which resvg draws a stadium
+    where the CSS preview drew a rounded rectangle.
+    """
+    from app.image import compositor
+    from app.settings import layout as defaults
+
+    svg, width, height = compositor.badge_svg("news", defaults)
+
+    assert ">NEWS<" in svg, "the label is upper-cased, as the old app's was"
+    assert height == 22 + 8 * 2
+
+    # `chars × fontSize × 0.62 + 0.35em`, the old estimate, against the advance
+    # widths of the real face. It comes out *narrow* on this label — the chip
+    # was 4px tighter than its own word, so the 18px padding it claimed was
+    # nearer 16 on each side.
+    estimate = round(len("NEWS") * 22 * 0.62 + 22 * 0.35) + 18 * 2
+    assert width > estimate, "still using the old estimate"
+    assert width - estimate < 10, "and not wildly apart — it was an estimate, not a bug"
+    assert 'rx="19"' in svg, "half the height, not the configured 24"
+
+
+def test_a_template_that_is_not_one_is_refused(client, session, page, a_photograph):
+    _with_hero(session, page, a_photograph)
+
+    assert (
+        client.patch(
+            "/layout", params={"page_id": page.id}, json={"template": "carousel"}
+        ).status_code
+        == 422
+    )
+    assert (
+        client.patch(
+            "/layout", params={"page_id": page.id}, json={"template": "full_overlay"}
+        ).status_code
+        == 200
+    )
+    assert client.get("/layout", params={"page_id": page.id}).json()["layout"][
+        "template"
+    ] == "full_overlay"
+
+
 def test_an_alignment_that_is_not_one_is_refused_by_both_routes(
     client, session, page, a_photograph
 ):

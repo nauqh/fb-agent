@@ -22,7 +22,7 @@ from typing import NamedTuple
 import resvg_py
 from PIL import Image, ImageDraw
 
-from app.image.text import OverlayPlan, Segment, segment_lines
+from app.image.text import OverlayPlan, Segment, get_measurer, segment_lines
 from app.settings import API_DIR, Layout
 from app.settings import layout as default_layout
 
@@ -202,6 +202,49 @@ def _watermark_text(text: str, layout: Layout) -> Image.Image:
     return Image.open(io.BytesIO(png)).convert("RGBA")
 
 
+def badge_svg(label: str, layout: Layout) -> tuple[str, int, int]:
+    """The headline chip, and the size it will rasterise to.
+
+    Ported from `buildHeadlineBadgeSvg`, with one deliberate departure: the old
+    file *estimates* the label's width as `chars × fontSize × 0.62` plus a
+    `0.35em` safety margin, because it had no measurer on the compositing path.
+    We have one — `text.get_measurer` reads the same TTF resvg draws with — so
+    the box is measured rather than guessed. On "NEWS" at 22px the estimate runs
+    4px narrow, which spends the padding rather than the word: the chip claimed
+    18px a side and drew nearer 16.
+
+    The radius is clamped to half the height, as there: past that resvg draws a
+    stadium where the preview drew a rounded rectangle.
+    """
+    badge = layout.badge
+    text = label.strip().upper()
+    measurer = get_measurer(str(layout.font_file))
+
+    width = round(measurer.width(text, badge.font_size_px)) + badge.padding_x_px * 2
+    height = badge.font_size_px + badge.padding_y_px * 2
+    radius = min(badge.radius_px, width // 2, height // 2)
+
+    return (
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}">'
+        f'<rect width="{width}" height="{height}" rx="{radius}" ry="{radius}" '
+        f'fill="{badge.color}"/>'
+        f'<text x="{width / 2}" y="{height / 2}" text-anchor="middle" dy="0.35em" '
+        f'font-family="{layout.font.family}" font-weight="{layout.font.weight}" '
+        f'font-size="{badge.font_size_px}" fill="{badge.text_color}">{_escape(text)}'
+        f"</text></svg>",
+        width,
+        height,
+    )
+
+
+def _badge(label: str, layout: Layout) -> Image.Image:
+    svg, _width, _height = badge_svg(label, layout)
+    png = bytes(
+        resvg_py.svg_to_bytes(svg_string=svg, font_files=[str(layout.font_file)])
+    )
+    return Image.open(io.BytesIO(png)).convert("RGBA")
+
+
 SUPERSAMPLE = 4
 """Draw the disc and its ring this much larger, then shrink.
 
@@ -295,9 +338,18 @@ def compose(
     inset: Inset | None = None,
     layout: Layout | None = None,
     fallback_text: str | None = None,
+    badge_text: str | None = None,
 ) -> bytes:
-    """The finished JPEG. Everything variable was decided before this call."""
+    """The finished JPEG. Everything variable was decided before this call.
+
+    Two card forms, and `layout.template` picks between them. On a `card` the
+    hero and the panel divide the height. On a `full_overlay` the hero fills the
+    card and the panel is laid over its bottom — the same panel, at the same
+    height, drawn at the same y; what changes is that there is photograph
+    underneath it, which is only visible if `panel.opacity` is below 1.
+    """
     layout = layout or default_layout
+    full_overlay = layout.template == "full_overlay"
 
     if not plan.lines:
         raise CompositeError("the overlay text produced no lines to draw")
@@ -315,14 +367,31 @@ def compose(
     except OSError as error:
         raise CompositeError(f"the hero image did not decode ({error})") from error
 
-    canvas.paste(_cover(source, width, plan.hero_height_px), (0, 0))
-    canvas.paste(render_panel(plan, phrases, layout), (0, plan.hero_height_px))
+    hero_height = layout.image.height if full_overlay else plan.hero_height_px
+    canvas.paste(_cover(source, width, hero_height), (0, 0))
+
+    # `alpha_composite`, not `paste`: a panel below full opacity has to blend
+    # with what is under it, and `paste` would replace those pixels with a
+    # semi-transparent black instead — which then flattens onto black at the
+    # JPEG step and looks like an opaque panel that ignored the setting.
+    canvas.alpha_composite(render_panel(plan, phrases, layout), (0, plan.hero_height_px))
 
     margin = round(width * layout.image.edge_margin_ratio)
 
+    if full_overlay and badge_text and badge_text.strip():
+        # Bottom-left, sitting on the photograph just above the panel — the old
+        # app's `badgeTop`. Never on a `card`, where the panel starts exactly
+        # where the badge would go.
+        chip = _badge(badge_text, layout)
+        gap = round(layout.image.height * layout.badge.gap_ratio)
+        canvas.alpha_composite(
+            chip, (margin, max(margin, plan.hero_height_px - chip.height - gap))
+        )
+
     box = min(layout.watermark.max_px, round(width * 0.22))
     mark = _watermark(watermark, box)
-    top = max(8, round(plan.hero_height_px * layout.watermark.top_ratio))
+    # Measured against the hero, which on a full overlay is the whole card.
+    top = max(8, round(hero_height * layout.watermark.top_ratio))
     if mark is not None:
         canvas.paste(mark, (width - mark.width - margin, top), mark)
     elif fallback_text:
@@ -349,9 +418,9 @@ def compose(
 
     out = io.BytesIO()
     # `convert("RGB")` on a canvas that still had transparency would composite
-    # it onto *black* without saying so. Safe here only because the hero and the
-    # panel between them cover every pixel — the same assumption the publish
-    # step's flatten-onto-white made explicit before it was deleted. If a layout
-    # ever leaves a gap, this is where it turns into a black band.
+    # it onto *black* without saying so. Safe here only because the hero covers
+    # every pixel — on a `card` up to the panel, and on a `full_overlay` the
+    # whole surface. If a layout ever leaves a gap, this is where it turns into
+    # a black band.
     canvas.convert("RGB").save(out, format="JPEG", quality=JPEG_QUALITY)
     return out.getvalue()
