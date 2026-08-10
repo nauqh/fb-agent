@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 import { CompetitorMark } from "@/components/competitor-mark";
 import { Card, Counts } from "@/components/config-card";
+import { LayoutEditor } from "@/components/layout-editor";
 import { QueuePagination } from "@/components/queue-pagination";
 import { ScreenHeader } from "@/components/screen";
 import { Button } from "@/components/ui/button";
@@ -23,7 +24,6 @@ import {
   removeFromPool,
   type Allowance,
 } from "@/lib/api/competitors";
-import { getLayout } from "@/lib/api/config";
 import { listPromptFiles } from "@/lib/api/pages";
 import { getCompetitorPages, type CompetitorPage } from "@/lib/api/sources";
 import { usePageScope } from "@/lib/page-scope";
@@ -45,7 +45,6 @@ export default function GlobalScreen() {
   const { pages } = usePageScope();
 
   const { data: allowance } = useQuery(() => getAllowance(), []);
-  const { data: layout } = useQuery(() => getLayout(), []);
   const { data: prompts } = useQuery(() => listPromptFiles(), []);
   const {
     data: pool,
@@ -100,28 +99,16 @@ export default function GlobalScreen() {
 
       <div className="grid items-start gap-4 xl:grid-cols-2">
         <Card
+          className="xl:col-span-2"
           title="Composed Image"
-          hint={<><code>api/config/layout.yml</code>, read back from the server.</>}
+          hint={
+            <>
+              <code>api/config/layout.yml</code> holds the defaults; what you
+              change here applies to the Page in the switcher only.
+            </>
+          }
         >
-          {layout ? (
-            <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-xs sm:grid-cols-4">
-              <Constant
-                label="Size"
-                value={`${layout.layout.image.width} × ${layout.layout.image.height}`}
-              />
-              <Constant
-                label="Panel"
-                value={`${Math.round(layout.layout.panel.ratio * 100)}–${Math.round(layout.layout.panel.max_ratio * 100)}%`}
-              />
-              <Constant
-                label="Font"
-                value={`${layout.layout.font.family} ${layout.layout.font.weight} ${layout.layout.text.font_size_px}px`}
-              />
-              <Constant label="Highlight" value={layout.layout.highlight.color} swatch />
-            </dl>
-          ) : (
-            <Skeleton className="h-16 rounded-lg" />
-          )}
+          <LayoutEditor />
         </Card>
 
         <Card
@@ -560,30 +547,7 @@ function RemoveFromPool({
   );
 }
 
-function Constant({
-  label,
-  value,
-  swatch,
-}: {
-  label: string;
-  value: string;
-  swatch?: boolean;
-}) {
-  return (
-    <div>
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className="flex items-center gap-1.5 pt-0.5 font-mono">
-        {swatch ? (
-          <span
-            className="size-2.5 rounded-full border"
-            style={{ backgroundColor: value }}
-          />
-        ) : null}
-        {value}
-      </dd>
-    </div>
-  );
-}
+
 
 function PromptRow({
   filename,
@@ -595,11 +559,15 @@ function PromptRow({
   body: string;
 }) {
   const [open, setOpen] = useState(false);
+  const panelId = `prompt-${filename}`;
+
   return (
     <div>
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
+        aria-expanded={open}
+        aria-controls={panelId}
         className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-muted/50"
       >
         <FileText className="size-4 shrink-0 text-muted-foreground" />
@@ -608,14 +576,43 @@ function PromptRow({
           {chars.toLocaleString()} chars
         </span>
         <ChevronDown
-          className={cn("size-4 text-muted-foreground transition-transform", open && "rotate-180")}
+          className={cn("size-4 text-muted-foreground transition-transform duration-300", open && "rotate-180")}
         />
       </button>
-      {open ? (
-        <pre className="max-h-96 overflow-auto whitespace-pre-wrap border-t bg-muted/40 px-4 py-3 font-mono text-[11px] leading-relaxed text-muted-foreground">
-          {body}
-        </pre>
-      ) : null}
+
+      {/**
+       * Animated by grid row, not by height.
+       *
+       * These bodies are 1,700–2,700 characters and wrap to whatever the column
+       * gives them, so the open height is not a number this code can know —
+       * which rules out transitioning `height` from 0 to a constant, and rules
+       * out `max-height` to a guess: too small clips the longest prompt, too
+       * large makes the close look like it hangs before it moves.
+       *
+       * `grid-template-rows: 0fr → 1fr` is transitionable and resolves to the
+       * content's own height, so it fits all three files without measuring any
+       * of them. The inner `overflow-hidden` is what makes it work — without it
+       * the row shrinks and the text spills out over the row below.
+       */}
+      <div
+        id={panelId}
+        aria-hidden={!open}
+        className={cn(
+          "grid transition-[grid-template-rows] duration-300 ease-out",
+          open ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+        )}
+      >
+        <div className="overflow-hidden">
+          {/* `max-h-96` with its own scroller, unchanged: the animation opens to
+              the capped height, and the longest prompt scrolls inside it. The
+              top border rides on this element rather than the wrapper so it is
+              clipped along with the text, instead of sitting as a stray 1px
+              line under every closed row. */}
+          <pre className="max-h-96 overflow-auto whitespace-pre-wrap border-t bg-muted/40 px-4 py-3 font-mono text-[11px] leading-relaxed text-muted-foreground">
+            {body}
+          </pre>
+        </div>
+      </div>
     </div>
   );
 }
