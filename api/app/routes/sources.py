@@ -318,6 +318,10 @@ def get_sources_config(
 class CompetitorOut(BaseModel):
     """One configured competitor, and whether it is actually producing."""
 
+    id: int | None = None
+    """Metricool's own row id. What `DELETE /competitors/{id}` takes — their
+    parameter is `competitorId` and means their key, not Facebook's."""
+
     provider_id: str
     name: str
     followers: int | None = None
@@ -411,6 +415,7 @@ def get_competitor_pages(
         assert page.id is not None
         rows.extend(
             CompetitorOut(
+                id=competitor.get("id"),
                 provider_id=competitor["provider_id"],
                 name=competitor["name"],
                 followers=competitor["followers"],
@@ -438,7 +443,7 @@ def get_tweet(url: str = Query(...)) -> SourceItemBase:
         raise HTTPException(status_code=422, detail=str(error)) from error
 
 
-VOLATILE = ("image_url", "reactions", "comments", "shares")
+VOLATILE = ("image_url", "reactions", "comments", "shares", "competitor_page_id")
 """Facts the vendor owns and keeps changing, as opposed to the content chosen.
 
 `image_url` is the reason this list exists. Facebook's CDN URLs are *signed and
@@ -450,6 +455,13 @@ every sync (`competitorMetricoolSyncService.ts:203`), and it was right to.
 `text` is deliberately not here. Metrics and a CDN URL are the vendor's; the
 words are what the operator chose, and rewriting them under a Draft that already
 used them would make the Draft's provenance a moving target.
+
+`competitor_page_id` is the odd one out: it never changes, so it is not volatile
+in the sense the rest of this list means. It is here because 954 rows predate the
+column and hold null, and a null there is not a cosmetic gap — `_visible_to`
+matches assignments on it, so a Page with an assignment and un-backfilled posts
+shows an **empty grid**. Which is exactly what happened. Refreshing it on sync is
+what repairs those rows.
 """
 
 

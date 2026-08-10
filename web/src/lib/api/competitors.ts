@@ -1,4 +1,4 @@
-import { get, put } from "./client";
+import { del, get, post, put } from "./client";
 
 /**
  * Which Competitors feed which Pages.
@@ -50,4 +50,49 @@ export async function setAssignments(
     names,
     notes,
   });
+}
+
+/** How much of Metricool's competitor limit is spent, across the whole account. */
+export interface Allowance {
+  used: number;
+  limit: number;
+  remaining: number;
+  /** Every brand on the account, not just the ones this app manages. */
+  profiles: {
+    blog_id: string;
+    label: string;
+    competitors: number;
+    managed: boolean;
+  }[];
+}
+
+/**
+ * Costs one request per brand, so it is its own call — the competitor list
+ * should not wait several seconds for a number beside it.
+ *
+ * Counts every brand deliberately. Measured while this was written: 92 of 100
+ * in use, and 44 of those sat on brands with no Page in this app. Counting only
+ * what this app manages would have shown 48 and implied 52 slots free, when
+ * there were 8.
+ */
+export async function getAllowance(): Promise<Allowance> {
+  return get<Allowance>("/competitors/allowance");
+}
+
+/**
+ * Start watching a Facebook page. Writes to Metricool, stores nothing here.
+ *
+ * `pageId` only decides which brand's set it lands in — where the allowance is
+ * spent — not who may read it. Any Page can then be assigned it.
+ */
+export async function addToPool(pageId: number, facebookPageId: string): Promise<void> {
+  await post<{ added: string }>("/competitors", {
+    page_id: pageId,
+    facebook_page_id: facebookPageId,
+  });
+}
+
+/** `competitorId` is Metricool's own row id, not the Facebook page id. */
+export async function removeFromPool(competitorId: number, pageId: number): Promise<void> {
+  await del(`/competitors/${competitorId}?page_id=${pageId}`);
 }

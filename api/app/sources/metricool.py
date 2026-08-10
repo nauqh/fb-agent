@@ -12,6 +12,7 @@ then filtered it down to one competitor at a time, because its UI browsed them
 individually (`metricoolService.ts:1046`). Ours does not, so it keeps them all.
 """
 
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 import httpx
@@ -161,6 +162,10 @@ def fetch_competitors(page: Page, timeout: float = 20.0) -> list[dict]:
 
     return [
         {
+            # Metricool's own row id, which is what DELETE takes — *not* the
+            # providerId, which is Facebook's. Confirmed by adding a page and
+            # removing it: `competitorId=342033` worked, the providerId did not.
+            "id": row.get("id"),
             "provider_id": str(row.get("providerId") or ""),
             "name": row.get("displayName") or row.get("screenName") or "Competitor",
             "followers": row.get("followers"),
@@ -174,3 +179,162 @@ def fetch_competitors(page: Page, timeout: float = 20.0) -> list[dict]:
         }
         for row in rows
     ]
+
+
+def add_competitor(page: Page, facebook_page_id: str, timeout: float = 20.0) -> None:
+    """Add a Facebook page to this Metricool profile's competitor set.
+
+    Their list stays authoritative — this drives it rather than keeping a copy
+    beside it, which is what `CONTEXT.md` means by the list being configured in
+    Metricool and never stored here.
+
+    Verified against the live account: `POST` with `id` set to the Facebook page
+    id answers `{"data": true}` and the page appears in the next `GET`. `PUT` is
+    not supported at all, so there is no edit — remove and re-add.
+
+    Remember the ceiling. A Metricool account may hold **100 competitors in
+    total**, across every profile, which is the whole reason competitors are a
+    shared pool here rather than a per-Page list.
+    """
+    if not page.metricool_blog_id:
+        raise MetricoolError(f"{page.name} has no metricool_blog_id")
+
+    with httpx.Client(timeout=timeout) as client:
+        response = client.post(
+            f"{BASE}/v2/analytics/competitors/facebook",
+            params={
+                **_params(page.metricool_blog_id, sources.competitors.lookback_days),
+                "id": facebook_page_id,
+            },
+            headers=_headers(),
+        )
+
+    if response.is_error:
+        raise MetricoolError(
+            f"Metricool refused that competitor ({response.status_code}): "
+            f"{response.text[:200]}"
+        )
+
+
+def remove_competitor(page: Page, competitor_id: int, timeout: float = 20.0) -> None:
+    """Remove one from the set. `competitor_id` is Metricool's row id.
+
+    Not the `providerId`: their DELETE names the parameter `competitorId` and
+    means their own primary key, which is why `fetch_competitors` carries `id`
+    alongside `provider_id`.
+    """
+    if not page.metricool_blog_id:
+        raise MetricoolError(f"{page.name} has no metricool_blog_id")
+
+    with httpx.Client(timeout=timeout) as client:
+        response = client.request(
+            "DELETE",
+            f"{BASE}/v2/analytics/competitors/facebook",
+            params={
+                **_params(page.metricool_blog_id, sources.competitors.lookback_days),
+                "competitorId": competitor_id,
+            },
+            headers=_headers(),
+        )
+
+    if response.is_error:
+        raise MetricoolError(
+            f"Metricool would not remove that competitor ({response.status_code}): "
+            f"{response.text[:200]}"
+        )
+
+
+@dataclass
+class ProfileUsage:
+    """One Metricool profile and how many competitors it holds."""
+
+    blog_id: str
+    label: str
+    competitors: int
+    managed: bool
+    """Whether this app has a Page for it. Most of the account is not ours."""
+
+
+@dataclass
+class Allowance:
+    """How much of the account's competitor limit is spent.
+
+    **The limit is per account, not per profile**, which is the fact the whole
+    shared-pool design rests on. Counting only the profiles this app manages
+    would understate it badly: measured on this account, 92 of 100 were in use
+    and 44 of those sat on profiles with no Page here at all — so an operator
+    reading "48 configured" would think they had 52 slots and actually have 8.
+    """
+
+    used: int
+    limit: int
+    profiles: list[ProfileUsage]
+
+    @property
+    def remaining(self) -> int:
+        return max(self.limit - self.used, 0)
+
+
+COMPETITOR_LIMIT = 100
+"""Metricool's cap, per account. Not discoverable from their API — it is a plan
+limit, and the only way it announces itself is a refusal on the 101st add."""
+
+
+def fetch_profiles(timeout: float = 30.0) -> list[dict]:
+    """Every profile on the account, not just the ones with a Page here."""
+    with httpx.Client(timeout=timeout) as client:
+        response = client.get(
+            f"{BASE}/admin/simpleProfiles",
+            params={"userId": settings.metricool_user_id},
+            headers=_headers(),
+        )
+    if response.is_error:
+        raise MetricoolError(
+            f"Metricool profiles failed ({response.status_code}): {response.text[:200]}"
+        )
+    # A bare list, not the `{"data": …}` envelope the analytics endpoints use.
+    return response.json()
+
+
+def fetch_allowance(managed_blog_ids: set[str], timeout: float = 40.0) -> Allowance:
+    """Count competitors across every profile on the account.
+
+    One request per profile — eleven on this account — because there is no
+    endpoint that answers the total. Slow enough to be worth knowing about
+    (several seconds), which is why it is its own call rather than folded into
+    the competitor list.
+
+    A profile that errors is counted as zero rather than failing the whole
+    reading: a partial total with the rest of the screen working beats no number
+    at all, and the count is a budget indicator rather than an invariant.
+    """
+    profiles = fetch_profiles(timeout=timeout)
+
+    usage: list[ProfileUsage] = []
+    with httpx.Client(timeout=timeout) as client:
+        for profile in profiles:
+            blog_id = str(profile.get("id") or "")
+            response = client.get(
+                f"{BASE}/v2/analytics/competitors/facebook",
+                params=_params(blog_id, sources.competitors.lookback_days),
+                headers=_headers(),
+            )
+            count = (
+                len(response.json().get("data") or []) if not response.is_error else 0
+            )
+            usage.append(
+                ProfileUsage(
+                    blog_id=blog_id,
+                    label=str(profile.get("label") or profile.get("title") or blog_id),
+                    competitors=count,
+                    managed=blog_id in managed_blog_ids,
+                )
+            )
+
+    # Spent first: the profiles with none are not what anyone is looking for.
+    usage.sort(key=lambda one: (-one.competitors, one.label))
+    return Allowance(
+        used=sum(one.competitors for one in usage),
+        limit=COMPETITOR_LIMIT,
+        profiles=usage,
+    )

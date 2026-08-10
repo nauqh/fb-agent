@@ -21,7 +21,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { getLayout } from "@/lib/api/config";
 import { listPromptFiles } from "@/lib/api/pages";
 import { getCompetitorPages, getSourcesConfig } from "@/lib/api/sources";
-import { setAssignments } from "@/lib/api/competitors";
+import {
+  addToPool,
+  getAllowance,
+  setAssignments,
+  type Allowance as AllowanceData,
+} from "@/lib/api/competitors";
 import { addFeed, removeFeed } from "@/lib/api/feeds";
 import { usePageScope } from "@/lib/page-scope";
 import { emit } from "@/lib/store";
@@ -54,6 +59,10 @@ export default function SettingsScreen() {
     error: competitorsError,
     loading: competitorsLoading,
   } = useQuery(() => getCompetitorPages(), []);
+
+  // Its own query: it costs one Metricool request per brand — eleven on this
+  // account — and the list beside it should not wait for the number.
+  const { data: allowance } = useQuery(() => getAllowance(), []);
 
   /**
    * Assign or unassign this competitor for the Page in the switcher.
@@ -247,7 +256,12 @@ export default function SettingsScreen() {
         <Card
           className="xl:col-span-2"
           title="Competitors"
-          hint="Configured in Metricool, never here — this repo stores their posts, not the list. Read live."
+          hint={
+            <>
+              One pool for the whole Metricool account. Add a page here, then tick
+              which of your Pages read it &mdash; the same source can feed several.
+            </>
+          }
           meta={
             competitors ? (
               <Counts>
@@ -260,11 +274,12 @@ export default function SettingsScreen() {
                     <span className="text-destructive"> · {silent} silent</span>
                   ) : null;
                 })()}
-                {sources ? ` · ${sources.lookback_days}d window · ${sources.grid_limit} shown` : ""}
               </Counts>
             ) : null
           }
         >
+          <Allowance data={allowance} />
+          <AddCompetitor pageId={pageId} pageName={page.name} />
           {competitorsError ? (
             // This section fails alone. Everything else on the screen is a
             // local file and cannot.
@@ -642,5 +657,104 @@ function RemoveFeed({ id, name }: { id: number; name: string }) {
     >
       {busy ? <Loader2 className="size-3 animate-spin" /> : <Trash2 className="size-3" />}
     </button>
+  );
+}
+
+
+/**
+ * How much of Metricool's competitor limit is spent, account-wide.
+ *
+ * Account-wide is the load-bearing word. Most of this account's competitors sit
+ * on brands this app has no Page for — measured at 44 of 92 — so a count of
+ * what is on screen would say 48 and imply 52 free when there were 8. The
+ * failure mode without this is discovering the ceiling as a refusal on the add
+ * form, having already decided what to add.
+ *
+ * 100 is Metricool's published figure for Starter and Advanced alike. Their
+ * docs do not say whether it is per account or per brand; the number staying at
+ * 100 while brands go from 10 to 50 is the reason to read it as per account.
+ */
+function Allowance({ data }: { data: AllowanceData | null }) {
+  if (!data) return <Skeleton className="mb-3 h-9 rounded-lg" />;
+
+  const tight = data.remaining <= 10;
+  const theirs = data.profiles.filter((one) => !one.managed && one.competitors > 0);
+
+  return (
+    <div
+      className={cn(
+        "mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border px-3 py-2 text-xs",
+        tight && "border-destructive/40 bg-destructive/5",
+      )}
+    >
+      <span className="font-medium tabular-nums">
+        {data.used} of {data.limit} competitors used
+      </span>
+      <span className={cn("tabular-nums", tight ? "text-destructive" : "text-muted-foreground")}>
+        {data.remaining} left
+      </span>
+      {theirs.length > 0 ? (
+        // Named, not just counted: "44 elsewhere" invites a hunt through
+        // Metricool. The brands are the answer to where the budget went.
+        <span className="min-w-0 truncate text-muted-foreground">
+          · {theirs.reduce((sum, one) => sum + one.competitors, 0)} on brands not in
+          this app ({theirs.map((one) => `${one.label} ${one.competitors}`).join(", ")})
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Add a Facebook page to the pool.
+ *
+ * Takes the numeric page id because that is what Metricool's parameter takes; a
+ * URL or an @name fails upstream with an unreadable 500, so the server refuses
+ * those with a sentence instead.
+ *
+ * `pageId` picks which brand's set it lands in — where the allowance is spent.
+ * It does not decide who reads it: that is the tick list on each row.
+ */
+function AddCompetitor({ pageId, pageName }: { pageId: number | null; pageName: string }) {
+  const [value, setValue] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    if (pageId === null || !value.trim()) return;
+
+    setSaving(true);
+    try {
+      await addToPool(pageId, value.trim());
+      toast.success(`Added to ${pageName}'s set in Metricool`);
+      setValue("");
+      emit();
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Could not add that page");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="mb-3 flex items-center gap-2">
+      <Plus className="size-3.5 shrink-0 text-muted-foreground" />
+      <Input
+        value={value}
+        onChange={(event) => setValue(event.target.value)}
+        placeholder="Facebook page id, e.g. 20528438720"
+        aria-label="Facebook page id"
+        className="h-7 min-w-0 flex-1 text-xs"
+      />
+      <Button
+        type="submit"
+        size="sm"
+        variant="outline"
+        className="h-7 shrink-0"
+        disabled={saving || pageId === null || !value.trim()}
+      >
+        {saving ? <Loader2 className="size-3 animate-spin" /> : "Add to pool"}
+      </Button>
+    </form>
   );
 }

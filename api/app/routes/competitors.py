@@ -21,6 +21,7 @@ from sqlmodel import Session, select
 
 from app.db import get_session
 from app.models import Page, PageCompetitor
+from app.sources import metricool
 
 router = APIRouter(prefix="/competitors", tags=["competitors"])
 
@@ -112,4 +113,138 @@ def set_assignments(
         session.exec(
             select(PageCompetitor).where(PageCompetitor.page_id == page_id)
         ).all()
+    )
+
+
+class PoolEntryIn(BaseModel):
+    """A Facebook page to start watching."""
+
+    page_id: int
+    """Which Metricool profile to add it under.
+
+    Only decides where the allowance is spent, not who may read it — any Page can
+    be assigned the result. It has to be named because Metricool's competitor
+    sets belong to a profile; there is no account-level list to add to.
+    """
+
+    facebook_page_id: str
+    """The numeric page id, which is what Metricool's `id` parameter takes."""
+
+
+@router.post("", status_code=201)
+def add_to_pool(
+    body: PoolEntryIn,
+    session: Session = Depends(get_session),
+) -> dict:
+    """Add a competitor to Metricool's set for a profile.
+
+    Writes to Metricool rather than storing anything here: their list stays the
+    one that exists, and this drives it. Nothing about the competitor is kept
+    locally — `GET /sources/competitors/pages` re-reads it live.
+
+    The account ceiling is 100 competitors in total. Metricool enforces it and
+    the error is passed through, since a limit refusal is exactly the thing an
+    operator needs to read verbatim.
+    """
+    page = session.get(Page, body.page_id)
+    if page is None:
+        raise HTTPException(status_code=404, detail=f"No page {body.page_id}")
+
+    facebook_page_id = body.facebook_page_id.strip()
+    if not facebook_page_id.isdigit():
+        # Their API takes the numeric id. A pasted profile URL or @handle fails
+        # upstream with an unhelpful 500, so it is refused here with a sentence.
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "That needs to be the numeric Facebook page id — the digits, not "
+                "a URL or an @name."
+            ),
+        )
+
+    try:
+        metricool.add_competitor(page, facebook_page_id)
+    except metricool.MetricoolError as error:
+        raise HTTPException(status_code=502, detail=str(error)) from error
+
+    return {"added": facebook_page_id, "page_id": body.page_id}
+
+
+@router.delete("/{competitor_id}", status_code=204)
+def remove_from_pool(
+    competitor_id: int,
+    page_id: int,
+    session: Session = Depends(get_session),
+) -> None:
+    """Stop watching a competitor. `competitor_id` is Metricool's row id.
+
+    Assignments naming it are left alone rather than cleaned up. They match no
+    posts once the competitor is gone, and deleting them would silently discard
+    the operator's decision — re-adding the same page should bring it back, not
+    require re-ticking every Page.
+    """
+    page = session.get(Page, page_id)
+    if page is None:
+        raise HTTPException(status_code=404, detail=f"No page {page_id}")
+
+    try:
+        metricool.remove_competitor(page, competitor_id)
+    except metricool.MetricoolError as error:
+        raise HTTPException(status_code=502, detail=str(error)) from error
+
+
+class ProfileUsageOut(BaseModel):
+    blog_id: str
+    label: str
+    competitors: int
+    managed: bool
+
+
+class AllowanceOut(BaseModel):
+    """How much of Metricool's competitor limit is spent, account-wide."""
+
+    used: int
+    limit: int
+    remaining: int
+    profiles: list[ProfileUsageOut]
+
+
+@router.get("/allowance")
+def get_allowance(session: Session = Depends(get_session)) -> AllowanceOut:
+    """The competitor budget, across **every** profile on the Metricool account.
+
+    Not just the ones with a Page here, and that is the point. Measured while
+    this was written: 92 of 100 in use, 44 of them on profiles this app does not
+    manage. An operator counting only what this app shows would have believed
+    they had 52 slots free when they had 8 — and the failure mode is discovering
+    it as a refusal on the add form.
+
+    Costs one request per profile, so it is deliberately a separate call rather
+    than part of the competitor list: a screen that shows the list should not
+    wait several seconds for a number beside it.
+    """
+    managed = {
+        page.metricool_blog_id
+        for page in session.exec(select(Page)).all()
+        if page.metricool_blog_id
+    }
+
+    try:
+        allowance = metricool.fetch_allowance(managed)
+    except metricool.MetricoolError as error:
+        raise HTTPException(status_code=502, detail=str(error)) from error
+
+    return AllowanceOut(
+        used=allowance.used,
+        limit=allowance.limit,
+        remaining=allowance.remaining,
+        profiles=[
+            ProfileUsageOut(
+                blog_id=one.blog_id,
+                label=one.label,
+                competitors=one.competitors,
+                managed=one.managed,
+            )
+            for one in allowance.profiles
+        ],
     )
