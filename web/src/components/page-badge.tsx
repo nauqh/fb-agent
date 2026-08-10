@@ -52,7 +52,7 @@ export function PageAvatar({
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
-        src={`/api/${avatarPath}`}
+        src={avatarPath.startsWith("http") ? avatarPath : `/api/${avatarPath}`}
         alt=""
         className={cn(box, "shrink-0 rounded-full border bg-white object-contain")}
       />

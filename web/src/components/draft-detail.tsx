@@ -39,6 +39,7 @@ import { LAYOUT } from "@/lib/fixtures/pages";
 import { chars, words } from "@/lib/format";
 import type { Draft } from "@/lib/types";
 import { useQuery } from "@/lib/use-query";
+import { pageAvatarRaw } from "@/lib/page-avatar";
 import { cn } from "@/lib/utils";
 
 type View = "edit" | "preview";
@@ -602,7 +603,7 @@ export function DraftDetail({
         <TabsContent value="preview" className="mt-6">
           <FacebookPreview
             pageName={page?.name ?? "Page"}
-            avatarPath={page?.avatar_image_path}
+            avatarPath={page ? pageAvatarRaw(page) : null}
             image={picture}
             caption={form?.caption ?? draft.caption ?? ""}
             hashtags={form?.hashtags ?? draft.hashtags}

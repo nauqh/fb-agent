@@ -31,6 +31,8 @@ export interface Page {
    * and the logo vanished from output for months without one failed post.
    */
   avatar_image_path: string | null;
+  /** Metricool's brand logo. Fallback for Pages with no committed asset. */
+  avatar_url: string | null;
   watermark_image_path: string | null;
   created_at: string;
   updated_at: string;

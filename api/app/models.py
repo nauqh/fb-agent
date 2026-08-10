@@ -118,6 +118,25 @@ class Page(SQLModel, table=True):
     beside the page name and what the queue and the feed preview both draw.
     """
 
+    avatar_url: str | None = None
+    """The brand's logo as Metricool serves it. UI only, never the composite.
+
+    `static.metricool.com`, and deliberately not the Facebook CDN URL beside it:
+    those are signed and expire in about four days, which is the trap the
+    competitor pictures document. These carry no signature and only a `v=` cache
+    buster, so they survive.
+
+    Still second to `avatar_image_path`. A committed file cannot 404, and the
+    two Pages that have one are the two whose artwork someone actually made. The
+    URL is what stops the other eight rendering as a grey initial.
+
+    Explicitly **not** a watermark source. That is stamped into published images
+    and must be a committed file — the old system read it from a bucket, the
+    bucket was cleared, and the compositor quietly printed the page name instead
+    for months. A round profile picture is also the wrong artwork: the watermark
+    is a white wordmark on a photograph, not an avatar.
+    """
+
     watermark_image_path: str | None = None
     """The page's own logo, relative to `API_DIR` — a committed asset, not a
     bucket object, so a clone has it and no fetch can fail on it.

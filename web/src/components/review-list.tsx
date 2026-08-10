@@ -23,6 +23,7 @@ import { dayHeading, dayKey, timeOfDay } from "@/lib/format";
 import { usePageScope } from "@/lib/page-scope";
 import type { Draft, Page } from "@/lib/types";
 import { useQuery } from "@/lib/use-query";
+import { pageAvatarRaw } from "@/lib/page-avatar";
 import { cn } from "@/lib/utils";
 import { ViewFullButton } from "@/components/image-lightbox";
 import { PageBadge } from "@/components/page-badge";
@@ -287,7 +288,7 @@ function Row({
       <td className="px-5 py-4 align-middle">
         <PageBadge
           name={page?.name ?? ""}
-          avatarPath={page?.avatar_image_path}
+          avatarPath={page ? pageAvatarRaw(page) : null}
           className="text-[13px]"
         />
       </td>

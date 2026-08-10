@@ -9,6 +9,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { pageAvatar } from "@/lib/page-avatar";
 import { usePageScope } from "@/lib/page-scope";
 import { cn } from "@/lib/utils";
 
@@ -84,13 +85,18 @@ export function PageSwitcher() {
   );
 }
 
-function Mark({ page }: { page: { name: string; avatar_image_path?: string | null } }) {
-  if (page.avatar_image_path) {
+function Mark({
+  page,
+}: {
+  page: { name: string; avatar_image_path?: string | null; avatar_url?: string | null };
+}) {
+  const src = pageAvatar(page);
+  if (src) {
     return (
       // A committed asset at a fixed 20px, not a content image.
       // eslint-disable-next-line @next/next/no-img-element
       <img
-        src={`/api/${page.avatar_image_path}`}
+        src={src}
         alt=""
         className="size-5 shrink-0 rounded-sm bg-white object-contain"
       />

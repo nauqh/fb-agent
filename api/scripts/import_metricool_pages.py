@@ -71,8 +71,20 @@ def main() -> None:
                 continue
 
             facebook_page_id = str(facebook_page_id)
+            logo = brand.get("facebookPicture") or brand.get("picture") or None
+
             if facebook_page_id in existing:
-                print(f"  have     {label:<32} already a Page")
+                # Re-runnable: an existing Page still takes a logo it is missing,
+                # so this backfills rather than only importing. Nothing else on
+                # the row is touched — name and blog id may have been corrected
+                # by hand, and Metricool is not the authority on those.
+                page = existing[facebook_page_id]
+                if logo and page.avatar_url != logo:
+                    page.avatar_url = logo
+                    session.add(page)
+                    print(f"  logo     {label:<32} avatar refreshed")
+                else:
+                    print(f"  have     {label:<32} already a Page")
                 skipped += 1
                 continue
 
@@ -86,10 +98,11 @@ def main() -> None:
                     name=label,
                     facebook_page_id=facebook_page_id,
                     metricool_blog_id=blog_id,
+                    avatar_url=logo,
                 )
             )
 
-        if not args.dry_run and added:
+        if not args.dry_run:
             session.commit()
 
         print()
