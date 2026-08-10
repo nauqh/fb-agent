@@ -559,7 +559,9 @@ function PromptRow({
   body: string;
 }) {
   const [open, setOpen] = useState(false);
-  const panelId = `prompt-${filename}`;
+  // `system.txt` would make `prompt-system.txt`, a legal id that reads as an id
+  // *and a class* to every CSS selector that goes looking for it.
+  const panelId = `prompt-${filename.replace(/\W+/g, "-")}`;
 
   return (
     <div>
