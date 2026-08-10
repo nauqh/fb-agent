@@ -73,7 +73,17 @@ def panel_svg(plan: OverlayPlan, phrases: list[str], layout: Layout) -> str:
     padding = layout.text.padding
     width = layout.image.width
     height = plan.panel_height_px
-    x = (padding.left_px + (width - padding.right_px)) / 2
+    left, right = padding.left_px, width - padding.right_px
+    # `text-anchor` is the whole of alignment in SVG — there is no text-align —
+    # so the anchor and the x it hangs from move together. This was hardcoded to
+    # the centre while `text.align` was served, stored and offered as a control,
+    # which made the control a no-op: the API answered 200, the screen showed
+    # "left", and the card came back centred.
+    anchor, x = {
+        "left": ("start", left),
+        "center": ("middle", (left + right) / 2),
+        "right": ("end", right),
+    }[layout.text.align]
     start_y = plan.font_size_px + padding.top_px
 
     coloured = segment_lines(plan.lines, phrases)
@@ -91,7 +101,7 @@ def panel_svg(plan: OverlayPlan, phrases: list[str], layout: Layout) -> str:
         f'width="{width - padding.left_px - padding.right_px}" '
         f'height="{height - padding.top_px - padding.bottom_px}"/></clipPath>'
         f'<g clip-path="url(#panel)">'
-        f'<text xml:space="preserve" x="{x}" y="{start_y}" text-anchor="middle" '
+        f'<text xml:space="preserve" x="{x}" y="{start_y}" text-anchor="{anchor}" '
         f'font-family="{layout.font.family}" font-weight="{layout.font.weight}" '
         f'font-size="{plan.font_size_px}" fill="{layout.text.color}">{lines}</text>'
         f"</g></svg>"

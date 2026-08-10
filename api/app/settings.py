@@ -29,6 +29,7 @@ change the value without touching code.
 
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict
@@ -64,10 +65,21 @@ class PaddingLayout(Frozen):
     bottom_px: int
 
 
+Align = Literal["left", "center", "right"]
+"""The three SVG `text-anchor` positions have, and nothing else does.
+
+Typed here rather than on `LayoutPatch`, because this model is the one thing
+both a `layout.yml` edit and a PATCH pass through. As a bare `str` the route
+stored `text_align: "sideways"` and answered 200: the write is validated by
+building the `Layout` it would produce, so anything this model accepts is a
+value the compositor is later handed.
+"""
+
+
 class TextLayout(Frozen):
     font_size_px: int
     line_height_ratio: float
-    align: str
+    align: Align
     color: str
     padding: PaddingLayout
 
