@@ -241,22 +241,26 @@ def test_sources_config_reads_the_source_rather_than_a_copy_of_it(client, sessio
     assert body["grid_limit"] == sources_config.competitors.grid_limit
 
 
-def test_a_page_with_no_feeds_is_loud(client, session):
-    """An empty list would render as a tidy "no feeds" and look deliberate.
+def test_a_page_with_no_feeds_reads_as_empty_not_broken(client, session):
+    """A new Page has no feeds by definition, and must still be usable.
 
-    This mattered more once feeds became rows: the list can now reach zero from
-    a screen, by deleting the last one, rather than only by a Page never having
-    had a YAML entry.
+    This asserted a 500 until Pages became something you add rather than seed.
+    The 500 made a new Page's Settings screen unreachable — including the form
+    that adds its first feed — so the empty state has to be legible instead:
+    the screen says "no feeds yet" and offers the form.
+
+    The rule it replaced was protecting against silence, and that protection
+    moved rather than vanished: a feed that *fails* is still surfaced, per
+    `RssFeedOut.failures`.
     """
-    session.add(Page(name="Unconfigured", facebook_page_id="1", metricool_blog_id="2"))
+    session.add(Page(name="Brand New", facebook_page_id="1", metricool_blog_id="2"))
     session.commit()
-    unconfigured = session.exec(select(Page).where(Page.name == "Unconfigured")).one()
+    fresh = session.exec(select(Page).where(Page.name == "Brand New")).one()
 
-    response = client.get("/sources/config", params={"page_id": unconfigured.id})
+    body = client.get("/sources/config", params={"page_id": fresh.id})
 
-    assert response.status_code == 500
-    assert "Unconfigured has no feeds" in response.json()["detail"]
-
+    assert body.status_code == 200
+    assert body.json()["feeds"] == []
 
 def test_a_configured_competitor_that_published_nothing_is_visible_and_first(
     client, session, monkeypatch

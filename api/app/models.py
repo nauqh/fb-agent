@@ -249,6 +249,63 @@ class PageCompetitor(SQLModel, table=True):
     created_at: datetime = Field(default_factory=_now)
 
 
+class PageLayout(SQLModel, table=True):
+    """One Page's overrides to the Composed Image. Null means "use the default".
+
+    `config/layout.yml` is the default and stays in git; a row here holds only
+    what a Page changed, and the renderer resolves `{**yaml, **row}`. Resetting
+    a Page is deleting its row, which is why every column is nullable rather
+    than seeded with the current values — a row full of copied defaults would
+    silently stop tracking a change to the file.
+
+    **This reverses a decision, deliberately.** `config/layout.yml` said it "has
+    no per-page section and should not grow one", and `CONTEXT.md` said a Page
+    "does not own styling — every Page renders in the same form and size". Both
+    were written when there was one Page. Two Pages with unrelated beats, and an
+    operator who wants a news card to look unlike a history card, is new
+    evidence rather than a lapse. Both files now say so.
+
+    Image dimensions and the font are **not** here, and that part of the old
+    decision holds: 4:5 is the tallest ratio Facebook renders in feed, and a
+    font family that does not match the TTF's name table makes resvg substitute
+    a serif silently and still return a valid PNG. Neither failure is visible
+    from a form.
+    """
+
+    __tablename__ = "page_layout"
+
+    id: int | None = Field(default=None, primary_key=True)
+    page_id: int = Field(foreign_key="page.id", unique=True, index=True)
+
+    panel_ratio: float | None = None
+    panel_max_ratio: float | None = None
+    panel_color: str | None = None
+    panel_opacity: float | None = None
+
+    text_font_size_px: int | None = None
+    text_line_height_ratio: float | None = None
+    text_align: str | None = None
+    text_color: str | None = None
+    text_padding_left_px: int | None = None
+    text_padding_right_px: int | None = None
+    text_padding_top_px: int | None = None
+    text_padding_bottom_px: int | None = None
+
+    highlight_color: str | None = None
+
+    watermark_max_px: int | None = None
+    watermark_top_ratio: float | None = None
+
+    portrait_size_px: int | None = None
+    portrait_min_px: int | None = None
+    portrait_max_width_ratio: float | None = None
+    portrait_ring_pad_px: int | None = None
+    portrait_border_width_px: int | None = None
+    portrait_border_color: str | None = None
+
+    updated_at: datetime = Field(default_factory=_now)
+
+
 class SourceItemBase(SQLModel):
     """A Source Item's content, with no identity yet.
 

@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 
 from sqlmodel import Session, select
 
-from app import media
+from app import layout_for, media
 from app.db import get_engine
 from app.image import compositor, hero
 from app.image import text as overlay
@@ -232,7 +232,14 @@ def build_image(session: Session, draft: Draft, page: Page) -> list[str]:
         return [f"{IMAGE_WARNING}no hook, so there is nothing to draw."]
 
     try:
-        plan = overlay.plan(draft.hook)
+        # This Page's layout, not the file's: `layout.yml` is the default and a
+        # `page_layout` row is what one Page changed. Resolved once and passed
+        # to both halves — the plan decides how tall the panel is, the composite
+        # draws it, and the two disagreeing is a card whose text does not fit
+        # the space it was measured for.
+        layout = layout_for.resolve(session, page.id)
+
+        plan = overlay.plan(draft.hook, layout)
         warnings: list[str] = []
 
         if draft.hero_image_path:
@@ -259,6 +266,7 @@ def build_image(session: Session, draft: Draft, page: Page) -> list[str]:
             draft.highlight_phrases,
             page.watermark_image_path,
             _inset(draft),
+            layout,
         )
         superseded = draft.composed_image_path
         draft.composed_image_path = media.store.save(

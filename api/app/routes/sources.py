@@ -212,25 +212,24 @@ def get_competitor_posts(
 
 
 def _feeds_for(session: Session, page: Page) -> list[Feed]:
-    """This Page's feeds, ordered by name. Empty is an error, not a quiet grid.
+    """This Page's feeds, ordered by name. Empty is allowed, and it is a state.
 
-    A Page with no feeds used to raise a `KeyError` out of the config loader.
-    The rule survives the move to rows and matters more now, because a row can
-    be deleted from a screen: an empty feed list renders as a slow news week,
-    and the old system lost its watermark for months to exactly this shape of
-    silence.
+    It used to raise — first a `KeyError` from the config loader, then a 500 —
+    on the argument that an empty grid is indistinguishable from a quiet week.
+    That was right while feeds were configuration: a Page with no entry in
+    `sources.yml` was a misconfiguration nobody had noticed.
+
+    It stopped being right when Pages became something you add. A new Page has
+    no feeds by definition, and a 500 made its Settings screen unreachable —
+    including the form that adds the first one. The screen says "no feeds yet"
+    and offers the form; that is a legible empty state rather than silence,
+    which is what the original rule was actually protecting against.
     """
-    feeds = list(
+    return list(
         session.exec(
             select(Feed).where(Feed.page_id == page.id).order_by(Feed.name)  # type: ignore[arg-type]
         ).all()
     )
-    if not feeds:
-        raise HTTPException(
-            status_code=500,
-            detail=f"{page.name} has no feeds. Add one on Settings.",
-        )
-    return feeds
 
 
 def _with_used(session: Session, rows) -> list[StoredSourceItem]:
