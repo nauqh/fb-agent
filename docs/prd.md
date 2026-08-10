@@ -1,393 +1,322 @@
-# PRD — Facebook Agent
+# Facebook Agent
 
-Written from the system as built, not as a forward plan. Vocabulary is
-[CONTEXT.md](../CONTEXT.md); the binding decisions are the three
-[ADRs](adr/). Where this document and the code disagree, the code is right and
-this document is a bug.
-
----
-
-## Problem Statement
-
-An operator runs several owned Facebook Pages — History Retraced and The Fact
-Feed today — and every post is hand-made. Finding something worth posting means
-scrolling other people's Pages, checking news feeds, and remembering what was
-already covered. Writing it means holding a page's voice in your head. Making
-the image means a separate tool. Scheduling means a third.
-
-The previous system automated parts of this and made it worse in a specific way:
-it mirrored external state locally. It kept its own copy of the posting
-schedule, its own copy of the Competitor list, and its own copy of every prompt
-in a 54-column templates table. Those copies drifted from the systems they
-copied, and when they drifted the app went on producing confident, well-formed
-output about the wrong thing. Its schedule table held **0 rows against 237
-approved drafts** — the mirror was not merely stale, it was empty, while the app
-behaved as though it were authoritative.
-
-The operator needs the tedious parts done for them without ever losing the
-ability to see, edit and veto what goes out under their name.
+Written from the system as built. The words in it are defined in
+[CONTEXT.md](../CONTEXT.md); the decisions that bind are the
+[ADRs](adr/). Where this document and the code disagree, **the code is right and
+this document is a bug.**
 
 ---
 
-## Solution
+## Overview
 
-A two-part application — a browser workspace and a service behind it — that
-gathers candidate material, drafts a post and generates its image, then stops
-and waits for a human.
+The agent helps one person run several Facebook Pages. It gathers material worth
+posting about, writes a post in the Page's voice, makes the picture that goes
+with it, and then stops. A person reads it, edits anything they like, and
+approves or throws it away. Approved posts are handed to Metricool, which does
+the actual posting and adds the first comment. Nothing reaches Facebook without
+someone clicking approve.
 
-The operator picks Source Items from a browsable list, sends them to be written,
-reviews the resulting Draft exactly as it will appear on Facebook, edits
-anything, and approves or rejects. Approved Drafts are handed to Metricool with
-a publish time. Metricool posts to the Page and adds the first comment.
-
-Three properties define the shape:
-
-- **A person is the gate.** No Draft becomes a post without an explicit
-  approval. There is no configuration that removes this step.
-- **External state is never mirrored.** Metricool owns the schedule and the
-  Competitor list; the app reads them live and stores neither (ADR-0001).
-- **A Page is a row, not a constant.** Adding a Page is an insert, not a code
-  change (ADR-0003).
+Two Pages run on it today: History Retraced and The Fact Feed.
 
 ---
 
-## User Stories
+## Background
 
-### Choosing what to write about
+Every post used to be made by hand. Finding something to post about meant
+scrolling other people's Pages and news feeds and remembering what had already
+been covered. Writing meant holding a Page's voice in your head. The picture was
+a second tool, the scheduling a third.
 
-1. As an operator, I want to see recent Competitor posts for the Page I'm working on, so that I can borrow a format that is currently working.
-2. As an operator, I want Competitor posts sorted by reactions, so that the strongest performers are the ones I consider first.
-3. As an operator, I want to see items from RSS feeds curated for this Page, so that I get the beats that suit this Page rather than a generic news wire.
-4. As an operator, I want to paste an X post URL and pull in that tweet, so that a specific story I've seen elsewhere can become a post.
-5. As an operator, I want a Source Item I have already written from to be visibly flagged, so that I don't produce the same post twice.
-6. As an operator, I want browsing sources to write nothing to the database, so that looking around has no consequences.
-7. As an operator, I want to collect several Source Items before generating, so that I can queue a batch in one pass.
-8. As an operator, I want the Source Items I see to belong to the Page I have selected, so that The Fact Feed's beats never appear while I'm working on History Retraced.
+An earlier system automated parts of this and made one bad mistake, worth
+stating because avoiding it shapes everything here: **it kept its own copies of
+things it did not own.** Its own copy of the posting schedule, of the competitor
+list, of every writing instruction. The copies drifted from the real thing, and
+once they drifted the app kept producing confident, well-formed output about the
+wrong thing. Its schedule table held zero rows while 237 posts sat approved — not
+merely stale, empty, and still treated as the truth.
 
-### Generating
-
-9. As an operator, I want to send selected Source Items to be written, so that I get a first draft without composing from scratch.
-10. As an operator, I want to generate from a topic I type in, so that I am not limited to material the app found.
-11. As an operator, I want the app to know that a Competitor post is borrowed for tone only, so that it doesn't write a post about a rival's subject matter.
-12. As an operator, I want the app to know that a tweet or RSS item binds the subject, so that the post is about that story and not merely in its style.
-13. As an operator, I want each Draft to appear in the queue the moment generation starts, so that I can see work in progress rather than an empty screen.
-14. As an operator, I want to see which step a Draft is on and how far through it is, so that I know whether to wait.
-15. As an operator, I want a run that fails to leave a Draft that says why, so that a failure is distinguishable from a Draft awaiting review.
-16. As an operator, I want Drafts stranded by a restart to be marked as such on the next start, so that they don't sit in the queue looking ready forever.
-
-### Reviewing
-
-17. As an operator, I want a queue of Drafts with the ones needing a decision first, so that I know where to start.
-18. As an operator, I want to see the finished card exactly as it will appear on Facebook, so that I am approving the real thing.
-19. As an operator, I want to edit the caption, the hook and the first comment, so that I can fix a line without regenerating.
-20. As an operator, I want to edit highlight phrases, so that the emphasis in the image is mine.
-21. As an operator, I want to regenerate just the image, so that a good caption isn't lost to a bad picture.
-22. As an operator, I want to upload my own photograph as a circular inset, so that a post about a real person can show that person.
-23. As an operator, I want to move and resize that inset, so that it sits well against the image behind it.
-24. As an operator, I want brand-rule failures shown on the Draft, so that I can judge whether they matter rather than discovering them after publishing.
-25. As an operator, I want to approve a Draft, so that it becomes eligible for scheduling.
-26. As an operator, I want to un-approve a Draft, so that a decision made too quickly can be taken back.
-27. As an operator, I want to reject a Draft, so that it leaves the queue without being deleted.
-28. As an operator, I want to delete a Draft outright, so that genuine rubbish doesn't accumulate.
-29. As an operator, I want an edit in the Draft sheet to update the queue behind it, so that two views of the same Draft never disagree.
-
-### Scheduling and publishing
-
-30. As an operator, I want to hand an approved Draft to Metricool with a date and time, so that it goes out when the audience is there.
-31. As an operator, I want the image to still resolve when Facebook fetches it at publish time, so that a post doesn't go out with a broken picture.
-32. As an operator, I want the first comment sent with the post, so that Metricool adds it without me returning to do it manually.
-33. As an operator, I want the schedule read live from Metricool, so that what I see is what will actually happen.
-34. As an operator, I want to see which scheduled posts came from this app and which did not, so that the cutover from the old system is legible.
-35. As an operator, I want a rehearsal mode that keeps pushes as Metricool drafts, so that I can exercise the whole path without anything reaching an audience.
-36. As an operator, I want the time I choose interpreted in the Page's own timezone, so that a post scheduled for 8pm goes out at 8pm.
-
-### Configuration and orientation
-
-37. As an operator, I want to switch the Page I'm working on from anywhere in the app, so that I don't navigate back to change context.
-38. As an operator, I want my Page choice remembered between visits, so that I resume where I left off.
-39. As an operator, I want to see which RSS feeds each Page draws from, so that I understand why a particular item appeared.
-40. As an operator, I want each feed to link to its source, so that I can check the feed itself.
-41. As an operator, I want to see every Competitor Metricool is watching across all Pages, so that I can see how much of the 100-competitor allowance is spent.
-41a. As an operator, I want to assign one Competitor to several Pages, so that the account limit does not decide how many Pages can watch a source.
-41b. As an operator, I want to record why a Page reads a Competitor, so that the reasoning survives without a commit message.
-41c. As an operator, I want to add and remove RSS feeds from a screen, so that changing a feed does not need a deploy.
-41d. As an operator, I want a new feed probed before it is saved, so that a feed which does not answer never reaches the grid.
-42. As an operator, I want Competitors that have published nothing to be listed first, so that a dead Competitor is obvious rather than merely absent.
-43. As an operator, I want to see the instructions the writer works to, so that unexpected output is explicable.
-44. As an operator, I want a health endpoint naming any missing configuration, so that a broken deploy says what is missing rather than failing obscurely.
-
-### Safety and operability
-
-45. As an operator, I want the service to refuse requests without a shared key, so that a public URL is not an open door.
-46. As an operator, I want the health check to stay reachable without that key, so that the platform can probe it.
-47. As an operator, I want a missing key to deny everything rather than allow everything, so that a misconfigured deploy fails loudly.
-48. As an operator, I want the browser never to hold the key, so that anyone with developer tools cannot take it.
-49. As an operator, I want Drafts and images to survive a redeploy, so that a deploy is not a data-loss event.
-50. As an operator, I want the schema brought up to date on start, so that deploying code and migrating the database cannot get out of order.
-51. As an operator, I want images stored under a path rather than a URL, so that changing bucket or project is configuration and not a database migration.
-52. As a developer, I want the test suite to run offline in about a minute, so that I can work without a live database.
+So this system reads that kind of thing live and stores none of it.
 
 ---
 
-## Implementation Decisions
+## Design Principles
 
-### Overall shape
+**A person is the gate.** No post goes out without an explicit approval. There is
+no setting that turns this off, and adding one would be a redesign rather than a
+feature.
 
-Two deployables. A **Next.js workspace** with no database access, talking only
-to the service over HTTP; and a **FastAPI service** owning all state, all
-integrations, and all image work. The split is not ceremony: image compositing
-and the AI calls are Python-side concerns, and keeping the browser out of the
-database is what lets the service be the only place authorisation is enforced.
+**Nothing external is copied.** Metricool owns the posting schedule and the
+competitor list. The app asks for them when it needs them and keeps neither
+([ADR-0001](adr/)).
 
-### Backend modules
+**A Page is a row, not code.** Adding a third Page is a database insert, not a
+release ([ADR-0003](adr/)).
 
-**Source adapters** — three implementations behind one interface: Competitor
-posts from Metricool, tweets from x.com, RSS items via feed parsing. This is the
-one seam in the app that is genuinely a seam, which is why tests substitute here
-rather than intercepting HTTP. A `SourceKind` carries an `is_factual` property
-that decides whether a Source Item's subject binds the writer — derived from the
-kind, never stored, because a stored copy is a second truth that drifts.
+---
 
-**Generate run** — the pipeline, exposed as a single call taking Source Item ids
-and Page ids and returning Draft ids. The Draft row is inserted *before*
-generation begins, so it doubles as the job record; that is why progress lives
-on the Draft and there is no separate event table. Steps report as `queued` →
-writing (20%) → drawing (60%) → done (100%).
+## Architecture
 
-**Writer** — an AI agent producing caption, hook, first comment, highlight
-phrases and hashtags, with prompts held as files rather than database rows.
-Retries on validation failure.
+```mermaid
+flowchart LR
+    Operator[Operator in a browser]
+    Web[Frontend]
+    API[Backend]
+    DB[(Database)]
+    Bucket[(Image bucket)]
+    AI[AI writer and image maker]
+    Metricool[Metricool]
+    Facebook[Facebook]
 
-**Validators** — the brand rules as pure functions, one per rule: hook length,
-no question in the hook, recap point count, emoji line starts, first-comment
-paragraph count and length, birth/death year formatting. Pure functions because
-they are the most testable thing in the app and must stay that way. Rules still
-failing after the writer exhausts its retries are recorded on the Draft as
-warnings rather than blocking it — the operator judges.
+    Operator --> Web
+    Web --> API
+    API --> DB
+    API --> Bucket
+    API --> AI
+    API --> Metricool
+    Metricool --> Facebook
+```
 
-**Image** — hero generation (the paid call), text layout, and a compositor that
-assembles hero, text panel, watermark and optional circular inset into the
-finished card. Hero and composite are stored separately so that re-compositing
-an edit does not re-pay for image generation.
+Two things get deployed. The **frontend** is what the operator looks at; it holds
+no data of its own and can only ask the backend for things. The **backend** owns
+everything else: the database, the pictures, the AI calls, and every outside
+connection.
 
-**Media store** — one implementation, Supabase Storage, behind a small
-protocol. The bucket is public because Metricool does not re-host images: the
-URL must still resolve when Facebook fetches it at publish time. Rows store a
-path, never a URL; the URL is computed on serialisation, which is what keeps a
-row portable across projects and buckets.
+The browser never talks to the database, and never holds the backend's password.
+The frontend server attaches that on the way through, so it stays server-side and
+never reaches anyone's developer tools.
 
-**Publish** — Metricool only. Sends text, first comment, media URL, publication
-date and a draft flag.
+---
 
-### Frontend modules
+## Workflow
 
-**Page scope** — a provider exposing the Pages, the selected Page and a setter,
-backed by a cookie read by the server layout so the first render is already
-correct. Every screen reads from it; the switcher lives in the shared screen
-header so no screen can forget to render it.
+```mermaid
+flowchart TD
+    A[Browse material for the selected Page] --> B[Collect the ones worth writing]
+    B --> C[Send them to be written]
+    C --> D[A Draft appears immediately, marked in progress]
+    D --> E[The writer produces the words]
+    E --> F[The image is generated and assembled]
+    F --> G[Draft waits for review]
+    G --> H{Operator decides}
+    H -->|Approve| I[Hand to Metricool with a date and time]
+    H -->|Reject| J[Leaves the queue, kept]
+    H -->|Edit| G
+    I --> K[Metricool posts it and adds the first comment]
+```
 
-**API client** — one module that knows the service is over HTTP. Requests go to
-a relative path and are proxied by the Next server. It surfaces the service's
-`detail` string verbatim, because those strings are written for the operator and
-collapsing them to "Request failed" throws away the actionable part.
+**Finding material.** Three kinds, all shown per Page:
 
-**Query layer** — a small read/invalidate mechanism where any write notifies
-open queries, so the Review queue and an open Draft sheet cannot disagree.
+| Kind | Where it comes from | How the writer treats it |
+|---|---|---|
+| Competitor post | Metricool's competitor tracking | Borrowed for **tone only** — the post is not about their subject |
+| RSS item | News feeds chosen for that Page | The subject is **binding** — the post is about that story |
+| Tweet | An X link the operator pastes | The subject is **binding** |
 
-**Screens** — Sources, Review, Schedule, Settings. Each is scoped to the
-selected Page.
+That distinction matters more than it looks. Treating a competitor's post as
+binding writes a post about a rival's topic; treating a news article as
+tone-only writes a post about nothing in particular. It is worked out from the
+kind every time it is needed, never stored, so it cannot drift.
+
+**Browsing writes nothing.** Looking around has no consequences. Material only
+becomes a stored row when it is actually chosen for writing.
+
+**Writing and drawing.** The Draft row is created *before* any work begins, so it
+doubles as the progress record — which is why there is no job queue and no
+separate events table anywhere in this system. It moves through: queued → writing
+the post (20%) → drawing the image (60%) → done (100%).
+
+The finished picture is assembled in layers: a generated photograph on top, a
+black panel underneath carrying the text, the Page's logo stamped in the corner,
+and optionally a round inset photo the operator uploads and positions themselves.
+The photograph and the finished card are stored separately, so re-assembling
+after an edit does not pay for a new photograph.
+
+**Review.** The operator sees the card exactly as Facebook will show it. Caption,
+hook, first comment and highlighted phrases are all editable without
+regenerating. The image alone can be redone.
+
+The writer checks its own work against the Page's style rules and retries when it
+breaks one. Anything still broken after those retries is attached to the Draft as
+a **warning rather than a block** — the operator decides whether it matters.
+
+**Publishing.** An approved Draft is handed to Metricool with a time. Metricool
+posts it and adds the first comment. The app never touches Facebook directly.
+
+There is a rehearsal mode that keeps everything as Metricool drafts, so the whole
+path can be exercised without anything reaching an audience.
+
+---
+
+## Draft Lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> generating
+    generating --> review: written and drawn
+    generating --> failed: something went wrong
+    review --> approved
+    approved --> review: un-approve
+    review --> rejected
+    approved --> [*]: handed to Metricool
+```
+
+`failed` is deliberately not the same as `review`. A run that produced nothing is
+not a post awaiting a decision, and when the two shared a state the empty rows
+sat in the queue looking ready.
+
+If the backend restarts mid-run, anything still marked in progress is marked
+failed on the next start — otherwise it would sit in the queue forever looking
+like work about to finish.
+
+---
+
+## Data Model
 
 ### Database
 
-Five tables. The previous system had eight plus a 54-column templates table;
-everything removed was configuration duplicated across rows, external state
-mirrored locally, or tenancy ceremony. The two added since are both things an
-operator has to change without a deploy — this API runs from a container image,
-so a file written into it is gone at the next one.
+```mermaid
+erDiagram
+    PAGE ||--o{ FEED : "draws from"
+    PAGE ||--o{ PAGE_COMPETITOR : "reads"
+    PAGE ||--o| PAGE_LAYOUT : "styled by"
+    PAGE ||--o{ DRAFT : "posts to"
+    SOURCE_ITEM ||--o{ DRAFT : "written from"
+```
 
-- **Page** — identity and policy: name, Facebook page id, Metricool blog id,
-  avatar and watermark asset paths. No `is_active`; a flag that is never false
-  is not state.
-- **Source Item** — one table, three kinds, with a uniqueness constraint on
-  (kind, external id) so selecting the same item twice cannot create a second
-  row.
-- **Draft** — the generated post plus its progress, its warnings, its image
-  paths, its inset geometry, and the Metricool post id. No `scheduled_at`
-  (ADR-0001).
-- **Feed** — one RSS feed a Page draws from, added and removed on Settings. No
-  row points at one: a Source Item carries its publisher as text, so removing a
-  feed changes tomorrow's grid and nothing already published.
-- **Page Competitor** — which Competitors feed which Pages. Not a mirror of
-  Metricool's list, which is still theirs and still never stored; an assignment
-  on top of it, which they have no way to express.
-
-**Competitor posts are a shared pool.** Metricool caps an account at 100
-competitors *in total*, not per page, so five Pages that should each watch the
-same twenty sources cannot each be given them. A source is configured once,
-under whichever Page had room, and assigned to the Pages that read it.
-`synced_for_page_id` records which set a post arrived through — provenance, not
-ownership. A Page with no assignments falls back to the set it owns in
-Metricool, which is what let the change ship without blanking every grid.
-
-No `user_id` (ADR-0002). No `brand_key` (ADR-0003). Layout lives in
-configuration, not on Page.
-
-**Enum columns are stored as `VARCHAR`, never as a native Postgres enum.** Three
-constraints have to hold at once: both backends must build the same schema so
-the offline test fixture is testing production's shape; adding a member must not
-require a migration; and the value must load back as the enum rather than as a
-bare string, because the `is_factual` property is asked of rows read from the
-database. Storing as a plain string satisfies the first two and silently breaks
-the third.
-
-**Migrations are Alembic**, run in-process at startup. Exactly one replica, so
-nothing races for the migration lock and no deploy can ship code whose schema
-change was forgotten. The suite builds its schema from the models rather than by
-running migrations, so a schema check against the live database is the only
-thing that can catch a missing revision, and it is a required pre-deploy step.
-
-### API contract
-
-Grouped by screen rather than by table.
-
-| Area | Endpoints |
+| Table | What it holds |
 |---|---|
-| Sources | list Competitor posts; list RSS items; look up a tweet; read the feed and Competitor configuration for a Page |
-| Generate | start a run (returns `202` with Draft ids) |
-| Drafts | list; read one; patch fields; regenerate image; upload/remove inset; delete; approve; un-approve; reject; publish |
-| Schedule | read the planner live from Metricool |
-| Pages | list; read one; patch |
-| Prompts | read the writer's instructions |
-| Health | boot state and the *names* of missing configuration |
+| **page** | One Facebook Page: its name, its Facebook and Metricool ids, and which logo and avatar files to use |
+| **feed** | One RSS feed a Page reads. Added and removed on screen, no deploy needed |
+| **page_competitor** | Which competitors each Page reads. **Not a copy of Metricool's list** — an extra decision on top of it |
+| **page_layout** | Per-Page overrides for how the card is drawn: panel size, text size, colours, logo and inset placement |
+| **source_item** | A piece of material that was actually chosen. One table for all three kinds |
+| **draft** | The generated post: its words, its pictures, its progress, its warnings, and Metricool's id for it once sent |
 
-Reads that browse — Competitor posts, RSS items, a tweet — do not write. A
-Source Item becomes a row only when it is selected for generation.
+Three absences are deliberate and each has a reason:
 
-### Integration decisions
+- **No schedule table.** Metricool's planner is the truth and is read live. This
+  is the single most important thing in the data model, and the old system's
+  empty schedule table is why.
+- **No competitor list table.** The list belongs to Metricool. `page_competitor`
+  records only which of them a given Page should read.
+- **No user accounts.** One operator, no roles, no tenancy ([ADR-0002](adr/)).
 
-These were each found by measurement and are pinned by tests.
+**Competitors are a shared pool.** Metricool allows 100 competitors per *account*,
+not per Page. So five Pages that should each watch the same twenty sources
+cannot each be given them — it would spend the entire allowance on twenty
+sources. A competitor is added once under whichever Page has room, and then
+assigned to every Page that should read it. A Page with no assignments falls back
+to whatever set it owns in Metricool.
 
-- Metricool does not re-host images. The normalize endpoint echoes the URL back
-  unchanged and returns no media id, so the image must remain publicly
-  retrievable at publish time. Signed URLs were what left 0 of 105 of the old
-  system's published posts with working images.
-- `Accept: application/json` on Metricool GETs answers 500. Omit it.
-- Publication date is naive local time with the timezone as a separate field; an
-  offset suffix is rejected, on both the read and write side.
-- Pinned model ids rot silently, and the provider's model list still reports
-  models that fail on use. Verify with a real call.
+### Image Storage
 
-### Authentication
+Pictures live in Supabase Storage, not in the database. Rows store a **path**,
+never a web address — so moving to a different bucket or project is a
+configuration change rather than a database migration.
 
-A single shared secret in a request header, checked in middleware rather than as
-a per-route dependency — a dependency is something the next route can be written
-without, and that failure is silent. Middleware also covers the static asset
-mount, which a dependency cannot reach. Only the health endpoint is exempt, so
-the platform probe works.
+| In the bucket | Committed with the code |
+|---|---|
+| Generated photographs | Page logos / watermarks |
+| Finished cards | Page avatars |
+| Operator-uploaded inset photos | The font |
 
-The comparison is constant-time. An unset key **denies**: an empty constant-time
-comparison against an empty header succeeds, so this requires an explicit check,
-and getting it wrong produces a deploy that is wide open and looks healthy.
+Logos are committed rather than hosted because hosting them is exactly what
+failed before: the old system read them from storage by key, the bucket was
+cleared, and the compositor quietly printed the Page name as plain text instead.
+The logo disappeared from output with no error anywhere.
 
-The browser never holds the key. The Next server proxies the service and
-attaches the header on the way through, so the secret lives in that server's
-environment and never enters a bundle. The variable must not carry the framework's
-public prefix, which would inline it into client JavaScript at build time.
+Files are named `<draft id>-<kind>-<timestamp>-<random>.png`, filed under a
+year-month folder. Draft id first so a listing sorts usefully; timestamped rather
+than overwritten so redoing an image cannot pull the picture out from under a
+post already scheduled.
 
-### Non-functional
+**The bucket is public and unsigned, and this is load-bearing.** Metricool does
+not take its own copy of an image — tested against Metricool directly, it hands the
+same address straight back. So the picture must still be fetchable when Facebook
+comes for it at posting time. The old system used addresses that expired two
+hours after posting: **0 of its 105 published posts still have a working image.**
 
-- **One replica.** The stranded-Draft sweep marks every in-progress Draft as
-  failed on startup and cannot distinguish "crashed" from "running in another
-  process". A second worker would reap a live run. This is a correctness
-  constraint, not a capacity choice.
-- **One database and one bucket across environments.** A Draft id is part of the
-  stored media path, so two databases handing out the same ids would collide in
-  storage. The consequence is that there is no sandbox: local runs write
-  production rows. Rehearsal mode is what keeps that off a real Page.
-- **Timestamps are naive UTC** in the database, with the client treating them as
-  UTC explicitly.
-- **Assets are committed, not hosted.** The watermark and font ship with the
-  code, because the old system read them from a bucket and printed the Page name
-  as plain text when the key went missing — silently.
+Development and production use different buckets, because they have separate
+databases that both hand out draft id 1 — one bucket would let them overwrite
+each other's files.
 
 ---
 
-## Testing Decisions
+## Screens
 
-**What makes a good test here.** Tests assert externally visible behaviour: the
-rows that exist afterwards, the status code and body, the file that was written,
-the transitions a Draft went through. They do not assert how a function reached
-that state. No mocking library reaches past an interface — if a test needs to,
-the module is the wrong shape.
+| Screen | For |
+|---|---|
+| **Sources** | Browse material and collect what is worth writing |
+| **Review** | The queue of Drafts, and the decision on each |
+| **Schedule** | What is actually planned, read live from Metricool |
+| **Settings** | This Page: its feeds, its logo, which competitors it reads |
+| **Global** | The account: the competitor pool and its budget, the card layout, the writing instructions |
 
-**Substitution happens at the seam.** The three Source adapters are the seam, so
-tests replace them there rather than intercepting HTTP. Media writes go to a
-local directory through the same protocol the real store implements. Image
-generation is refused by default in every test, because it is the one call that
-costs money per invocation, and a suite billed for it once already; tests that
-need pixels opt in explicitly.
+Every screen is scoped to whichever Page is selected, and that choice is
+remembered between visits.
 
-**Reload, don't reconstruct.** A test that constructs a row and asserts on it
-cannot catch a column that fails to round-trip. This is not hypothetical: a
-change to the enum columns passed the entire suite while a stored kind loaded
-back as a plain string, which would have raised at runtime on the property the
-generate path depends on. Tests covering persistence must read the row back.
+---
 
-**Modules under test.** The validators (pure functions, exhaustively); the
-generate run (with fakes for writer, image, compositor and media store,
-asserting rows, progress transitions and that a failure leaves an error rather
-than a stuck row); the routes, through a test client against a throwaway
-database; the publish and schedule paths, pinning each integration trap above;
-authentication, including the unauthenticated case, the wrong-key case, the open
-health endpoint, the static asset mount, and the blank-key case.
+## Operational Constraints
 
-**The gap tests cannot close.** The suite builds its schema from the models, so
-it verifies the models and never the migrations. A schema diff against the live
-database is the only check for a missing revision and belongs in the pre-deploy
-routine, not in the suite.
+**One copy of the backend runs, deliberately.** The startup sweep that marks
+stranded Drafts as failed cannot tell "crashed" from "still running somewhere
+else", so a second copy would kill live runs. This is a correctness constraint,
+not a capacity decision.
 
-**Browser verification is not optional.** A green suite has repeatedly not meant
-a working screen. Changes with a rendered surface are driven in a real browser
-before being called done.
+**The backend is locked; the frontend is not.** Every request to the backend
+needs a shared secret, checked centrally rather than route by route so a new
+route cannot silently skip it. Only the health check is open, so the hosting
+platform can probe it. A missing secret **denies everything** rather than
+allowing it — the opposite would produce a wide-open deploy that looks healthy.
+The frontend itself runs locally today; putting it on a public address needs its
+own decision.
+
+**The database schema updates itself on start**, so code and schema cannot ship
+out of step. The test suite builds its schema from the code rather than by
+running the migrations, so it can never catch a missing migration — a check
+against the live database is the only thing that can, and it is a required step
+before deploying.
+
+**There is no separate testing environment.** One database, one bucket. Local
+runs write real rows. Rehearsal mode is what keeps that off a real Page.
 
 ---
 
 ## Out of Scope
 
-- **Multi-tenancy.** No user accounts, no per-user data, no roles (ADR-0002).
-  One operator.
-- **Automatic publishing.** No configuration removes the human approval step.
-- **A local schedule mirror.** Metricool's planner is the source of truth
-  (ADR-0001). No due-post cron, no stale-job recovery, no status enum
-  duplicating theirs.
-- **Storing the Competitor list.** Configured in Metricool; the app stores their
-  posts, never the list.
-- **Networks other than Facebook.** The publish payload names a network, but
-  nothing else in the system is built for a second one.
-- **Horizontal scaling.** Single replica by design; supporting more means
-  scoping the stranded sweep first.
-- **A gate on the workspace itself.** The service is locked; the browser
-  application is not. It runs locally today. Deploying it publicly needs its own
-  decision, because it holds the key server-side and would hand a working UI to
-  anyone who loaded it.
-- **Analytics and reporting.** Metricool already does this.
+- **Automatic publishing.** No setting removes the approval step.
+- **A local copy of the schedule.** No cron, no due-post checker, no status list
+  duplicating Metricool's ([ADR-0001](adr/)).
+- **Storing the competitor list.** The app stores their *posts*, never the list.
+- **Networks other than Facebook.**
+- **User accounts and roles** ([ADR-0002](adr/)).
+- **Running more than one copy** — the stranded-Draft sweep would have to be
+  rethought first.
+- **Analytics.** Metricool already does this.
 
 ---
 
-## Further Notes
+## Known Limitations
 
-**Deliberate absences.** There is no queue, no worker, no Redis, no cron. Long
-work runs as a background task in the same process, which is sound only because
-of the single-replica constraint and is the first thing that has to change if
-that constraint lifts.
+- The collected-items list does not clear when the Page is switched.
+- One style rule warns on nearly every news-beat Draft — a tuning problem, not a
+  correctness one.
+- The old system is still the one publishing today, and remains the reference for
+  prior art and for what not to repeat. It is read-only.
 
-**The old system remains the reference** for prior art and for what not to
-repeat, and is still the only thing publishing today. It is read-only.
+---
 
-**Two Pages, live.** `CONTEXT.md` still describes v1 as having exactly one; The
-Fact Feed was added as an insert, exactly as ADR-0003 predicted, which is the
-best available evidence that the decision was right.
+## Related Documentation
 
-**Known and accepted.** The item collection does not clear when the Page is
-switched. One brand rule warns on nearly every news-beat Draft, which is a
-tuning problem rather than a correctness one.
+This document is the overview. The details it deliberately leaves out are
+recorded where they are enforced:
+
+| Looking for | Read |
+|---|---|
+| What the words mean | [CONTEXT.md](../CONTEXT.md) |
+| Decisions that bind | [adr/](adr/) |
+| Why the tables are shaped this way | [data-model.md](data-model.md) |
+| What was cut and why | [decisions.md](decisions.md) |
+| Traps found the hard way | [CLAUDE.md](../CLAUDE.md), and the tests that pin them |
+| Why any specific line exists | its commit message |
