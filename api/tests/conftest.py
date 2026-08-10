@@ -198,8 +198,19 @@ def page(session) -> Page:
     return page
 
 
+TEST_API_KEY = "test-key"
+
+
 @pytest.fixture
-def client(engine, page):
+def client(engine, page, monkeypatch):
+    """A client that is already authenticated.
+
+    The key is set and sent here rather than in each test because the 253 tests
+    that predate authentication are about routes, not about the lock — making
+    every one of them assert a header would say nothing they are for.
+    `test_auth.py` covers the lock itself, including the unauthenticated case.
+    """
     from app.main import app
 
-    return TestClient(app)
+    monkeypatch.setattr(settings, "api_key", TEST_API_KEY)
+    return TestClient(app, headers={"X-API-Key": TEST_API_KEY})

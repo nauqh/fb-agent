@@ -4,11 +4,12 @@ Pages and sources so far; generate and drafts arrive with Phase 3. See
 docs/plan.md.
 """
 
+import secrets
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-
 from sqlmodel import Session
 
 from app import generate
@@ -30,6 +31,48 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(title="Facebook Agent", version="0.1.0", lifespan=lifespan)
+
+OPEN_PATHS = frozenset({"/health"})
+"""Reachable without the key. Railway probes `/health` before routing traffic.
+
+It reports the database host, the bucket name and which secrets are missing —
+never a secret's value — which is the most that can be given away here without
+making the probe useless.
+"""
+
+
+@app.middleware("http")
+async def require_api_key(request: Request, call_next):
+    """The whole of the authentication. One shared secret in `X-API-Key`.
+
+    Middleware rather than a `Depends` on each router: a dependency is something
+    the next route can be written without, and the failure is silent — a new
+    endpoint that is simply unprotected. This cannot be forgotten.
+
+    It also covers the `/assets` mount, which `Depends` could not: those are
+    served by StaticFiles, not by a route function.
+
+    Nothing is exempt but `/health`. The API sat on a public Railway domain with
+    no authentication at all — every draft, caption and image URL readable by
+    anyone with the address, `POST /generate` spending Gemini budget on demand,
+    and the publish path reaching a real Facebook page with
+    `METRICOOL_PUBLISH_AS_DRAFT` as the only thing in the way.
+
+    A blank `API_KEY` denies everything rather than allowing everything, and
+    that needs the explicit check below: `compare_digest("", "")` is **True**,
+    so an unset key plus a request with no header would otherwise authenticate
+    successfully. That was written here as a comment claiming the opposite until
+    `test_a_blank_key_denies_rather_than_allows` disagreed — the failure mode
+    being a deploy that comes up wide open and looks exactly like a working one.
+    """
+    if request.url.path not in OPEN_PATHS:
+        sent = request.headers.get("x-api-key", "")
+        # Constant-time. `==` on a secret returns as soon as two bytes differ,
+        # so response timing leaks the key one character at a time to anyone
+        # patient enough to measure it.
+        if not settings.api_key or not secrets.compare_digest(sent, settings.api_key):
+            return JSONResponse({"detail": "Not authorised"}, status_code=401)
+    return await call_next(request)
 
 # There is no `/media` mount. Draft pictures live in a Supabase bucket and the
 # browser fetches them from there directly — the API serves the *URL* on the row

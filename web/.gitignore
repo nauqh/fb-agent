@@ -32,6 +32,10 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# ...except the template, which carries no values. Same exception the root
+# .gitignore makes: a file naming the variables is the only thing telling a
+# fresh clone that API_KEY exists at all.
+!.env.example
 
 # vercel
 .vercel

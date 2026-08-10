@@ -276,6 +276,19 @@ class Settings(BaseSettings):
     acceptable for this brand rather than merely available.
     """
 
+    api_key: str = ""
+    """The shared secret every request must carry in `X-API-Key`. See main.py.
+
+    Blank denies everything except `/health` rather than allowing everything.
+    That direction is the entire point: the API sat on a public Railway domain
+    with no authentication at all, and a misconfigured deploy that comes up
+    *open* looks exactly like a working one until someone finds it.
+
+    Not user login. One operator (ADR-0002), and the browser never holds this —
+    `next.config.ts` proxies `/api/*` on the Next server, so the key lives in
+    that server's environment and is added on the way through.
+    """
+
     metricool_api_token: str = ""
     metricool_user_id: str = ""
 
@@ -321,6 +334,7 @@ class Settings(BaseSettings):
     def missing_secrets(self) -> list[str]:
         """Named, never valued. Reported by /health so a blank .env is obvious."""
         required = {
+            "API_KEY": self.api_key,
             "DATABASE_URL": self.database_url,
             "GEMINI_API_KEY": self.gemini_api_key,
             "METRICOOL_API_TOKEN": self.metricool_api_token,
