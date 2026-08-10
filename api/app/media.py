@@ -222,6 +222,23 @@ def public_url(stored: str) -> str:
     return f"{root}/storage/v1/object/public/{settings.supabase_bucket}/{stored}"
 
 
+def watermark_source(upload_path: str | None, asset_path: str | None) -> str | bytes | None:
+    """The mark to stamp on this Page's cards. An upload wins over the asset.
+
+    The upload is fetched here rather than inside the compositor, which draws
+    and does no IO — `store.read` raises loudly on a miss, and the caller turns
+    that into a failed draft with a sentence in it. That is the whole difference
+    from the old system, which hosted its watermarks, swallowed the `NoSuchKey`
+    when the bucket was cleared, and printed the page name as text for months.
+
+    Returns the committed asset's *path* untouched: it is a file in the image,
+    so there is nothing to fetch and no failure to have.
+    """
+    if upload_path:
+        return store.read(upload_path)
+    return asset_path
+
+
 def filename(draft_id: int, kind: str, extension: str) -> str:
     """`42-hero-20260806T141230-a3f9c1.png` — draft first, so a listing sorts usefully.
 

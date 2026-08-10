@@ -122,21 +122,31 @@ def _cover(image: Image.Image, width: int, height: int) -> Image.Image:
     return resized.crop((left, top, left + width, top + height))
 
 
-def _watermark(path: str | None, box_px: int) -> Image.Image | None:
+def _watermark(source: str | bytes | None, box_px: int) -> Image.Image | None:
     """The page's logo, scaled to fit `box_px`. Never enlarged past its own size.
 
-    Raises `CompositeError` when a path is configured but unreadable — see the
+    Two kinds of source, because a Page's mark can be either a committed asset
+    under `api/assets/` — a `str` path, relative to `API_DIR` — or one the
+    operator uploaded, which arrives as the `bytes` its caller already fetched
+    from the bucket. Fetching is the caller's job: this module draws, and a
+    compositor that could reach for a bucket object is a compositor that fails
+    with a network error inside a render.
+
+    Raises `CompositeError` when a source is configured but unreadable — see the
     module docstring. `None` means the Page has no logo, which is a choice.
     """
-    if not path:
+    if not source:
         return None
 
-    resolved = API_DIR / path
     try:
-        image = Image.open(resolved).convert("RGBA")
+        if isinstance(source, bytes):
+            image = Image.open(io.BytesIO(source)).convert("RGBA")
+        else:
+            image = Image.open(API_DIR / source).convert("RGBA")
     except OSError as error:
+        named = "the uploaded watermark" if isinstance(source, bytes) else repr(source)
         raise CompositeError(
-            f"watermark {path!r} did not load ({error}). The image is not "
+            f"watermark {named} did not load ({error}). The image is not "
             f"composed without it — a missing logo must not ship silently."
         ) from error
 
@@ -146,6 +156,40 @@ def _watermark(path: str | None, box_px: int) -> Image.Image | None:
             (round(image.width * scale), round(image.height * scale)), Image.LANCZOS
         )
     return image
+
+
+def watermark_text_svg(text: str, layout: Layout) -> str:
+    """The Page's name, set to stand in for a logo it does not have.
+
+    Ported from `buildWatermarkSvg` (image-composite.ts:108) including its
+    numbers: `0.022 × width` for the size with a 16px floor, right-anchored, 95%
+    white. At 896px that is 20px type — small, and meant to be: it is a credit,
+    not a brand mark, and anything larger reads as a caption on the photograph.
+
+    The margin is ours (`edge_margin_ratio`, 18px) rather than the old file's
+    own `0.022 × width` (20px), so the text and an image mark hang off the same
+    edge. Two pixels, and worth the consistency.
+    """
+    size = max(16, round(layout.image.width * 0.022))
+    margin = round(layout.image.width * layout.image.edge_margin_ratio)
+    return (
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{layout.image.width}" '
+        f'height="{round(size * 2.2)}">'
+        f'<text x="{layout.image.width - margin}" y="{round(size * 1.2)}" '
+        f'text-anchor="end" font-family="{layout.font.family}" '
+        f'font-weight="{layout.font.weight}" font-size="{size}" '
+        f'fill="#ffffff" opacity="0.95">{_escape(text)}</text></svg>'
+    )
+
+
+def _watermark_text(text: str, layout: Layout) -> Image.Image:
+    png = bytes(
+        resvg_py.svg_to_bytes(
+            svg_string=watermark_text_svg(text, layout),
+            font_files=[str(layout.font_file)],
+        )
+    )
+    return Image.open(io.BytesIO(png)).convert("RGBA")
 
 
 SUPERSAMPLE = 4
@@ -237,9 +281,10 @@ def compose(
     hero: bytes,
     plan: OverlayPlan,
     phrases: list[str],
-    watermark_path: str | None,
+    watermark: str | bytes | None,
     inset: Inset | None = None,
     layout: Layout | None = None,
+    fallback_text: str | None = None,
 ) -> bytes:
     """The finished JPEG. Everything variable was decided before this call."""
     layout = layout or default_layout
@@ -266,10 +311,22 @@ def compose(
     margin = round(width * layout.image.edge_margin_ratio)
 
     box = min(layout.watermark.max_px, round(width * 0.22))
-    mark = _watermark(watermark_path, box)
+    mark = _watermark(watermark, box)
+    top = max(8, round(plan.hero_height_px * layout.watermark.top_ratio))
     if mark is not None:
-        top = max(8, round(plan.hero_height_px * layout.watermark.top_ratio))
         canvas.paste(mark, (width - mark.width - margin, top), mark)
+    elif fallback_text:
+        # Only when the Page has *no* mark configured at all. A configured one
+        # that will not load raised above and never reaches here — that order is
+        # the whole difference from the old compositor, which fell through to
+        # this branch on a failed load and printed the name for eight months
+        # while looking like it was working.
+        #
+        # Eight of the ten Pages have no logo, and unmarked output is how a
+        # picture ends up reposted with no idea where it came from. The name is
+        # not as good as the wordmark; it is much better than nothing.
+        drawn = _watermark_text(fallback_text, layout)
+        canvas.alpha_composite(drawn, (0, top))
 
     if inset is not None:
         # Default is centred on the seam: half on the photograph, half on the

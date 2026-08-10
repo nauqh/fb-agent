@@ -34,6 +34,24 @@ export interface Page {
   /** Metricool's brand logo. Fallback for Pages with no committed asset. */
   avatar_url: string | null;
   watermark_image_path: string | null;
+  /**
+   * An uploaded mark, bucket-relative. Wins over the committed asset when set,
+   * and is the answer for the eight Pages whose artwork is not in the repo.
+   */
+  watermark_upload_path: string | null;
+  /** The uploaded mark's public URL. Null when the Page is on a committed asset. */
+  watermark_upload_url: string | null;
+  /**
+   * What is printed when there is no image mark at all. Null means the Page's
+   * `name` — which is the Metricool brand name, and not always something to
+   * stamp on a photograph ("GYM Motivation | quotes | videos | tips|").
+   */
+  watermark_text: string | null;
+  /**
+   * Whether this Page's cards get a mark at all. False publishes the
+   * photograph clean — no image *and* no fallback text.
+   */
+  watermark_enabled: boolean;
   created_at: string;
   updated_at: string;
 }

@@ -9,12 +9,15 @@ per-page value and Phase 4 is the code that reads it; a Page with the wrong
 watermark needs a way back that is not a SQL prompt.
 """
 
+import io
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from PIL import Image
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
+from app import media
 from app.db import get_session
 from app.models import Page
 
@@ -29,6 +32,11 @@ class PageUpdate(BaseModel):
     """
 
     watermark_image_path: str | None = None
+    watermark_text: str | None = None
+    """Null here means "print the Page's name" — it is a clear, not a blank."""
+
+    watermark_enabled: bool | None = None
+    """False publishes a clean photograph: no image mark and no text either."""
 
 
 @router.get("")
@@ -44,15 +52,111 @@ def get_page(page_id: int, session: Session = Depends(get_session)) -> Page:
     return page
 
 
+def _page(session: Session, page_id: int) -> Page:
+    page = session.get(Page, page_id)
+    if page is None:
+        raise HTTPException(status_code=404, detail=f"No page {page_id}")
+    return page
+
+
+MAX_WATERMARK_BYTES = 4 * 1024 * 1024
+"""A wordmark is tens of kilobytes. The cap is for what is not a wordmark."""
+
+
+@router.post("/{page_id}/watermark")
+async def upload_watermark(
+    page_id: int,
+    file: UploadFile = File(description="The page's logo. Transparent PNG, ideally."),
+    session: Session = Depends(get_session),
+) -> Page:
+    """Give this Page a mark without committing a file to the repo.
+
+    Eight of the ten Pages have no committed asset and so publish with nothing
+    stamped on them at all. Their artwork is not in git and their operator
+    cannot put it there, which made "commit a PNG under `api/assets/`" a rule
+    only two Pages could follow.
+
+    Hosting the watermark is the exact thing that failed in the old system — the
+    bucket was cleared and every path started returning `NoSuchKey`. What made
+    that eight silent months rather than one failed post was the compositor
+    swallowing it (`return null`, image-composite.ts:136) and printing the page
+    name instead. Ours raises (`compositor._watermark`), so the same accident is
+    a draft that fails with the file named in `draft.error`. That is what makes
+    hosting safe here and did not there.
+
+    Re-encoded to PNG **with its alpha kept**. The mark is white ink meant to sit
+    on a photograph; flattened to RGB it arrives as a white wordmark on a white
+    box, which is not a subtle failure but is an easy one to write —
+    `upload_inset` does exactly that, correctly, because a disc is cover-cropped
+    over the panel and has no transparency to lose.
+    """
+    page = _page(session, page_id)
+
+    data = await file.read(MAX_WATERMARK_BYTES + 1)
+    if len(data) > MAX_WATERMARK_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"That image is over {MAX_WATERMARK_BYTES // (1024 * 1024)}MB.",
+        )
+
+    try:
+        picture = Image.open(io.BytesIO(data))
+        picture.load()
+    except Exception as error:  # noqa: BLE001 — any decode failure is the same answer
+        raise HTTPException(
+            status_code=422,
+            detail=f"That file is not an image Pillow can read ({error}).",
+        ) from error
+
+    buffer = io.BytesIO()
+    picture.convert("RGBA").save(buffer, format="PNG")
+
+    superseded = page.watermark_upload_path
+    page.watermark_upload_path = media.store.save(
+        buffer.getvalue(), media.filename(page_id, "page-watermark", "png")
+    )
+    page.updated_at = datetime.now(timezone.utc)
+    session.add(page)
+    session.commit()
+    session.refresh(page)
+
+    # Only after the row points at the replacement, and unlike a composite this
+    # is safe to drop at all: the mark is drawn *into* the JPEG, so a published
+    # card keeps its pixels when the source object goes.
+    if superseded and superseded != page.watermark_upload_path:
+        media.store.delete(superseded)
+
+    return page
+
+
+@router.delete("/{page_id}/watermark")
+def remove_watermark(page_id: int, session: Session = Depends(get_session)) -> Page:
+    """Drop the upload. The Page falls back to its committed asset, or to none.
+
+    Returns the Page rather than 204 because what it renders with has changed,
+    and the screen has to show which of the two sources is now in force.
+    """
+    page = _page(session, page_id)
+
+    dropped = page.watermark_upload_path
+    page.watermark_upload_path = None
+    page.updated_at = datetime.now(timezone.utc)
+    session.add(page)
+    session.commit()
+    session.refresh(page)
+
+    if dropped:
+        media.store.delete(dropped)
+    return page
+
+
 @router.patch("/{page_id}")
 def update_page(
     page_id: int,
     update: PageUpdate,
     session: Session = Depends(get_session),
 ) -> Page:
-    page = session.get(Page, page_id)
-    if page is None:
-        raise HTTPException(status_code=404, detail=f"No page {page_id}")
+    page = _page(session, page_id)
 
     changes = update.model_dump(exclude_unset=True)
     for field, value in changes.items():

@@ -1,5 +1,5 @@
 import type { Page, PromptFile } from "@/lib/types";
-import { get, patch } from "@/lib/api/client";
+import { delJson, get, patch, upload } from "@/lib/api/client";
 /**
  * `GET /pages`, `GET /pages/{id}`, `PATCH /pages/{id}`, `GET /prompts`.
  *
@@ -22,6 +22,10 @@ export async function getPage(id: number): Promise<Page> {
  */
 export interface PageUpdate {
   watermark_image_path?: string | null;
+  /** Null clears it back to the Page's name rather than to nothing. */
+  watermark_text?: string | null;
+  /** False publishes clean: no image mark and no fallback text either. */
+  watermark_enabled?: boolean | null;
 }
 
 /**
@@ -31,6 +35,36 @@ export interface PageUpdate {
  */
 export async function updatePage(id: number, update: PageUpdate): Promise<Page> {
   return patch<Page>(`/pages/${id}`, update);
+}
+
+/**
+ * Give a Page a watermark without committing a file to the repo.
+ *
+ * Eight of the ten Pages have no committed asset and publish unmarked. Their
+ * artwork is not in git, so the upload is the only route they have. The API
+ * re-encodes to PNG keeping the alpha — the mark is white ink for a
+ * photograph, and flattened it is a white wordmark on a white box.
+ */
+export async function uploadWatermark(id: number, file: File): Promise<Page> {
+  return upload<Page>(`/pages/${id}/watermark`, file);
+}
+
+/** Drop the upload. The Page falls back to its committed asset, or to none. */
+export async function removeWatermark(id: number): Promise<Page> {
+  return delJson<Page>(`/pages/${id}/watermark`);
+}
+
+/**
+ * Where the browser fetches this Page's mark, or null when it has none.
+ *
+ * Two sources with one answer: an uploaded mark is a public bucket URL, and a
+ * committed asset is served by the API's own `/assets` mount — which is behind
+ * the API key, and reachable only because `proxy.ts` attaches it to everything
+ * under `/api`. A bare `<img src="/assets/...">` would 401.
+ */
+export function watermarkUrl(page: Page): string | null {
+  if (page.watermark_upload_url) return page.watermark_upload_url;
+  return page.watermark_image_path ? `/api/${page.watermark_image_path}` : null;
 }
 
 /**

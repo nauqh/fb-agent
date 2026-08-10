@@ -260,13 +260,17 @@ def build_image(session: Session, draft: Draft, page: Page) -> list[str]:
                 image_bytes, media.filename(draft.id or 0, "hero", "png")
             )
 
+        # The mark and the text that stands in for it are one decision, so the
+        # Page answers both at once — including "neither", when it is opted out.
+        mark, mark_text = page.watermark()
         composed = compositor.compose(
             image_bytes,
             plan,
             draft.highlight_phrases,
-            page.watermark_image_path,
+            mark,
             _inset(draft),
             layout,
+            fallback_text=mark_text,
         )
         superseded = draft.composed_image_path
         draft.composed_image_path = media.store.save(

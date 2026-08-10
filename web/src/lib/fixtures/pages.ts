@@ -20,6 +20,14 @@ export const PAGES: Page[] = [
     avatar_image_path: null,
     avatar_url: "https://static.metricool.com/brand/facebook-page-image?brandId=4605385",
     watermark_image_path: "assets/watermarks/history-retraced-stacked.png",
+    // This Page's mark is the committed file, so it has no upload. The eight
+    // Pages with no asset in the repo are the ones the upload exists for.
+    watermark_upload_path: null,
+    watermark_upload_url: null,
+    // Null means the Page's name, and this Page draws its committed asset
+    // anyway — the text is only reached when there is no image at all.
+    watermark_text: null,
+    watermark_enabled: true,
     created_at: "2026-08-03T02:10:00Z",
     updated_at: "2026-08-03T02:10:00Z",
   },

@@ -152,8 +152,86 @@ class Page(SQLModel, table=True):
     deliberate choice for a page without one, never as cover for a broken path.
     """
 
+    watermark_upload_path: str | None = None
+    """An uploaded mark, bucket-relative. Wins over the committed asset.
+
+    Hosting the watermark is what failed in the old system, so this exists only
+    because the failure was never the hosting: it was that the compositor
+    *swallowed* a missing object and printed the page name instead. Ours raises
+    (`compositor._watermark`), so a cleared bucket is a failed draft with a
+    sentence naming the file, not eight months of unmarked posts.
+
+    It is a second source rather than a replacement because the committed asset
+    cannot 404 and needs no upload — two Pages already have one. This is the
+    answer for the other eight, whose artwork is not in the repo and whose
+    operator cannot commit a file.
+    """
+
+    watermark_text: str | None = None
+    """What to print when the Page has no image mark. Null means its `name`.
+
+    A column and not a constant because the name is the Metricool brand's — "GYM
+    Motivation | quotes | videos | tips|" is one of the ten, and that is not what
+    anyone wants stamped on a photograph.
+
+    Reached only when neither an upload nor a committed asset is set. A
+    configured image that will not load raises instead of falling through to
+    this, which is the single difference from the old compositor: there, a
+    missing file quietly became text and the logo was gone from output for
+    months with nothing failing.
+    """
+
+    watermark_enabled: bool = Field(default=True)
+    """Whether this Page's cards get a mark at all. Off means a clean image.
+
+    Separate from having no mark configured: a Page with neither an image nor
+    its own text still draws its *name*, because unmarked output is how a
+    picture ends up reposted with no idea where it came from. This is the
+    deliberate opt-out for the operator who wants the photograph alone, and it
+    silences the image and the text together — a half-off switch that still
+    printed the name would be the confusing one.
+    """
+
     created_at: datetime = Field(default_factory=_now)
     updated_at: datetime = Field(default_factory=_now)
+
+    def watermark(self) -> tuple[str | bytes | None, str | None]:
+        """What to stamp, and what to print if there is nothing to stamp.
+
+        One method rather than two expressions at each call site, because the
+        two answers are one decision: `(None, None)` when the Page is opted out,
+        and otherwise the mark in precedence order — upload, committed asset,
+        then the text, which falls back to the Page's name.
+
+        The upload is *fetched* here, so a cleared bucket raises at the caller
+        rather than resolving to a path the compositor draws nothing for. That
+        is the whole difference from the old system, which swallowed the miss
+        and printed the name for months while looking like it was working.
+        """
+        if not self.watermark_enabled:
+            return None, None
+        return (
+            media.watermark_source(
+                self.watermark_upload_path, self.watermark_image_path
+            ),
+            self.watermark_text or self.name,
+        )
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def watermark_upload_url(self) -> str | None:
+        """Where the browser fetches an uploaded mark. Null for a committed one.
+
+        The committed asset is not a bucket object and has no public URL — the
+        screen reaches it through the API's own `/assets` mount, which the Next
+        proxy authenticates. Only the uploaded one is built here, for the same
+        reason the Draft URLs are: one place knows what a bucket is.
+        """
+        return (
+            media.public_url(self.watermark_upload_path)
+            if self.watermark_upload_path
+            else None
+        )
 
 
 class Feed(SQLModel, table=True):
