@@ -1,27 +1,18 @@
 # fb-agent
 
-![Python](https://img.shields.io/badge/Python-3.11-blue?colorA=363a4f&colorB=8aadf4&style=for-the-badge&logo=python&logoColor=cad3f5)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.115-blue?colorA=363a4f&colorB=8bd5ca&style=for-the-badge&logo=fastapi&logoColor=cad3f5)
-![Next.js](https://img.shields.io/badge/Next.js-16-blue?colorA=363a4f&colorB=b7bdf8&style=for-the-badge&logo=nextdotjs&logoColor=cad3f5)
-![React](https://img.shields.io/badge/React-19-blue?colorA=363a4f&colorB=91d7e3&style=for-the-badge&logo=react&logoColor=cad3f5)
-![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20Storage-blue?colorA=363a4f&colorB=a6da95&style=for-the-badge&logo=supabase&logoColor=cad3f5)
-![Gemini](https://img.shields.io/badge/Gemini-text%20%2B%20image-blue?colorA=363a4f&colorB=c6a0f6&style=for-the-badge&logo=googlegemini&logoColor=cad3f5)
-![Metricool](https://img.shields.io/badge/Metricool-publishing-blue?colorA=363a4f&colorB=f5a97f&style=for-the-badge&logo=rss&logoColor=cad3f5)
-
-## Overview
+![Python](https://img.shields.io/badge/Python-3.11-x?colorA=2b2622&colorB=f5c542&style=for-the-badge&logo=python&logoColor=f5c542)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.115-x?colorA=2b2622&colorB=f5c542&style=for-the-badge&logo=fastapi&logoColor=f5c542)
+![Next.js](https://img.shields.io/badge/Next.js-16-x?colorA=2b2622&colorB=f5c542&style=for-the-badge&logo=nextdotjs&logoColor=f5c542)
+![React](https://img.shields.io/badge/React-19-x?colorA=2b2622&colorB=f5c542&style=for-the-badge&logo=react&logoColor=f5c542)
+![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20Storage-x?colorA=2b2622&colorB=f5c542&style=for-the-badge&logo=supabase&logoColor=f5c542)
+![Gemini](https://img.shields.io/badge/Gemini-text%20%2B%20image-x?colorA=2b2622&colorB=f5c542&style=for-the-badge&logo=googlegemini&logoColor=f5c542)
+![Metricool](https://img.shields.io/badge/Metricool-publishing-x?colorA=2b2622&colorB=f5c542&style=for-the-badge&logo=rss&logoColor=f5c542)
 
 The agent helps one person run several Facebook Pages. It gathers material worth
 posting about, writes a post in the Page's voice, makes the picture that goes
 with it, and stops. A person reads it, edits anything, and approves or throws it
 away. Approved posts go to Metricool, which does the posting and adds the first
 comment.
-
-**Nothing reaches Facebook without someone clicking approve.** Ten Pages are
-configured; History Retraced is the largest and the one the design was drawn
-around.
-
-Python · FastAPI · Supabase Postgres, with a Next.js frontend. A rebuild of the
-system at `../social-agent`, which is still the only thing that publishes today.
 
 ---
 
