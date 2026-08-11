@@ -8,14 +8,6 @@
 ![Gemini](https://img.shields.io/badge/Gemini-text%20%2B%20image-blue?colorA=363a4f&colorB=c6a0f6&style=for-the-badge&logo=googlegemini&logoColor=cad3f5)
 ![Metricool](https://img.shields.io/badge/Metricool-publishing-blue?colorA=363a4f&colorB=f5a97f&style=for-the-badge&logo=rss&logoColor=cad3f5)
 
-The one document: what the system is for, what its words mean, how a post gets
-made, how to run it, and what it needs.
-
-Where this and the code disagree, **the code is right and this is a bug.** Why
-any single line exists is in its commit message.
-
----
-
 ## Overview
 
 The agent helps one person run several Facebook Pages. It gathers material worth
