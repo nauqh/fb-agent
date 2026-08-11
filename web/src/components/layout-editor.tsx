@@ -203,45 +203,6 @@ export function LayoutEditor() {
           </div>
         </Group>
 
-        {/* The inset's *defaults*. Every one of these is overridable per draft
-            in the review drawer, because the right ring depends on the picture
-            in the disc — a dark portrait wants a light ring and a bright one
-            usually wants none. What belongs here is the Page's house style,
-            which is what a draft that has chosen nothing inherits. */}
-        <Group title="Circular inset">
-          <Range
-            label="Default size"
-            hint="A starting diameter, not a cap. Each draft carries its own."
-            value={shown.portrait.size_px}
-            min={shown.portrait.min_px}
-            max={Math.round(shown.image.width * shown.portrait.max_width_ratio)}
-            step={2}
-            format={(v) => `${v}px`}
-            changed={data.overridden.includes("portrait_size_px")}
-            onChange={(v) => set("portrait_size_px", v)}
-          />
-          <Range
-            label="Border width"
-            hint="0 draws no ring at all — the disc sits on the card bare."
-            value={shown.portrait.border_width_px}
-            min={0}
-            // The old app's ceiling (`MAX_INSET_BORDER_WIDTH_PX`). Past this the
-            // ring is thicker than most of the picture inside it.
-            max={48}
-            step={1}
-            format={(v) => (v === 0 ? "none" : `${v}px`)}
-            changed={data.overridden.includes("portrait_border_width_px")}
-            onChange={(v) => set("portrait_border_width_px", v)}
-          />
-          <Colour
-            label="Border colour"
-            hint="Black reads as a cut-out where the ring crosses the panel."
-            value={shown.portrait.border_color}
-            changed={data.overridden.includes("portrait_border_color")}
-            onChange={(v) => set("portrait_border_color", v)}
-          />
-        </Group>
-
         <Group title="Text panel">
           {/* Background only. Height and opacity track `layout.yml` for every
               Page, on the same grounds as line height below: the panel already
@@ -386,15 +347,6 @@ function preview(base: ResolvedLayout, draft: LayoutPatch): ResolvedLayout {
       ...base.watermark,
       max_px: at(draft.watermark_max_px, base.watermark.max_px),
     },
-    portrait: {
-      ...base.portrait,
-      size_px: at(draft.portrait_size_px, base.portrait.size_px),
-      border_width_px: at(
-        draft.portrait_border_width_px,
-        base.portrait.border_width_px,
-      ),
-      border_color: at(draft.portrait_border_color, base.portrait.border_color),
-    },
   };
 }
 
@@ -501,36 +453,6 @@ function Preview({ layout, page }: { layout: ResolvedLayout; page: Page }) {
                 {page.badge_text}
               </span>
             ) : null}
-
-            {/* A stand-in for the circular inset, on the seam at bottom-right
-                where an unplaced one lands.
-
-                Drawn from nothing — there is no draft here and so no picture —
-                because without it the three inset controls above have no
-                feedback at all, and ring width is the one setting nobody can
-                judge from a number. Hatched rather than a flat grey so it
-                cannot be mistaken for a real portrait that failed to load. */}
-            <div
-              className="absolute z-10 aspect-square rounded-full"
-              style={{
-                width: scale(
-                  layout.portrait.size_px + layout.portrait.border_width_px * 2,
-                ),
-                right: scale(layout.image.edge_margin_ratio * layout.image.width),
-                bottom: 0,
-                translate: "0 50%",
-                backgroundColor: layout.portrait.border_color,
-                padding: scale(layout.portrait.border_width_px),
-              }}
-            >
-              <div
-                className="size-full rounded-full bg-slate-500/80"
-                style={{
-                  backgroundImage:
-                    "repeating-linear-gradient(45deg, rgba(255,255,255,0.16) 0 4px, transparent 4px 8px)",
-                }}
-              />
-            </div>
 
             {!page.watermark_enabled ? null : mark ? (
               // The mark comes from one of two origins — the public bucket, or

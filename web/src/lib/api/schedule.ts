@@ -25,3 +25,23 @@ export async function getSchedule(
     days_ahead: daysAhead,
   });
 }
+
+/**
+ * The next configured publishing time this Page has free.
+ *
+ * Computed on the server against Metricool's planner, never against local
+ * state — a post somebody scheduled by hand in Metricool's own UI occupies a
+ * slot exactly as much as one of ours (ADR-0001).
+ */
+export interface NextSlot {
+  /** Naive local time in the Page's zone, as publish takes it. */
+  when: string;
+  /** `HH:MM`, the slot as configured. */
+  label: string;
+  /** Slots skipped because the planner already had a post at them. */
+  taken: number;
+}
+
+export async function getNextSlot(pageId: number): Promise<NextSlot> {
+  return get<NextSlot>("/schedule/next-slot", { page_id: pageId });
+}

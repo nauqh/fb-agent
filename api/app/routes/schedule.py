@@ -15,14 +15,16 @@ planner.
 """
 
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
 from app.db import get_session
-from app.models import Draft, Page
+from app.models import Draft, Page, PageTimeSlot
 from app.publish import metricool as publisher
+from app.settings import settings
 
 router = APIRouter(tags=["schedule"])
 
@@ -78,6 +80,123 @@ def _flatten(row: dict, ours: dict[str, int]) -> ScheduledPost:
         public_url=provider.get("publicUrl"),
         is_draft=bool(row.get("draft")),
         draft_id=ours.get(post_id),
+    )
+
+
+class NextSlot(BaseModel):
+    """The next configured time with nothing already queued against it."""
+
+    when: str
+    """Naive local time, `YYYY-MM-DDTHH:MM:SS`, in the Page's zone — the same
+    shape `POST /drafts/{id}/publish` takes and the planner stores."""
+
+    label: str
+    """`HH:MM`, the slot as it is configured."""
+
+    taken: int
+    """How many slots were skipped because the planner already has a post at
+    them. Shown so "why is it offering Thursday" answers itself."""
+
+
+SLOT_SEARCH_DAYS = 30
+"""How far forward to look before giving up. A Page with three slots a day and a
+full month queued is not a case to solve by searching further."""
+
+
+@router.get("/schedule/next-slot")
+def next_slot(
+    page_id: int = Query(1),
+    session: Session = Depends(get_session),
+) -> NextSlot:
+    """The next publishing time this Page has free.
+
+    Walks forward from now through the Page's configured slots and returns the
+    first that Metricool's planner has nothing at. **The planner is the only
+    thing consulted about what is taken** (ADR-0001) — there is no local mirror
+    to disagree with, and a post somebody scheduled by hand in Metricool's own
+    UI counts exactly as much as one of ours.
+
+    A slot is "taken" when the planner holds any post whose local time falls in
+    the same minute. Minute precision rather than exact-string equality because
+    the planner's own times come back as naive local strings and a post moved by
+    hand can land a second off; and rather than a wider window, because two
+    slots an hour apart must not shadow each other.
+
+    Times are naive local throughout — `publicationDate.dateTime` is naive local
+    and an offset suffix is rejected, which is the trap `CLAUDE.md` records.
+    """
+    page = session.get(Page, page_id)
+    if page is None:
+        raise HTTPException(status_code=404, detail=f"No page {page_id}")
+
+    slots = list(
+        session.exec(
+            select(PageTimeSlot)
+            .where(PageTimeSlot.page_id == page_id)
+            .order_by(PageTimeSlot.minute_of_day)  # type: ignore[arg-type]
+        ).all()
+    )
+    if not slots:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"{page.name} has no publishing times configured. "
+                "Add them on Settings."
+            ),
+        )
+    if not page.metricool_blog_id:
+        raise HTTPException(
+            status_code=409,
+            detail=f"{page.name} has no metricool_blog_id to check the planner with.",
+        )
+
+    zone = ZoneInfo(settings.timezone)
+    now = datetime.now(zone).replace(tzinfo=None)
+
+    try:
+        rows = publisher.list_scheduled(
+            page.metricool_blog_id, now, now + timedelta(days=SLOT_SEARCH_DAYS)
+        )
+    except publisher.PublishError as error:
+        raise HTTPException(status_code=502, detail=str(error)) from error
+
+    # To the minute, so a post moved by hand a second off still counts as
+    # occupying its slot.
+    busy = set()
+    for row in rows:
+        stamp = (row.get("publicationDate") or {}).get("dateTime", "")
+        try:
+            busy.add(datetime.fromisoformat(stamp).replace(second=0, microsecond=0))
+        except ValueError:
+            # A row whose time we cannot read is not evidence that a slot is
+            # free, but it is also not something to fail the whole search over.
+            continue
+
+    taken = 0
+    for day in range(SLOT_SEARCH_DAYS):
+        midnight = (now + timedelta(days=day)).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        for slot in slots:
+            when = midnight + timedelta(minutes=slot.minute_of_day)
+            # `>` not `>=`: a slot at this exact minute is already in progress
+            # as far as the planner is concerned, and Metricool refuses a
+            # publication date in the past anyway.
+            if when <= now:
+                continue
+            if when in busy:
+                taken += 1
+                continue
+            return NextSlot(
+                when=when.strftime("%Y-%m-%dT%H:%M:%S"), label=slot.label, taken=taken
+            )
+
+    raise HTTPException(
+        status_code=409,
+        detail=(
+            f"Every slot for the next {SLOT_SEARCH_DAYS} days already has a post. "
+            "Add another publishing time, or pick a time by hand."
+        ),
     )
 
 

@@ -109,3 +109,113 @@ def test_metricool_being_down_is_a_502_not_an_empty_schedule(client, monkeypatch
 
     assert response.status_code == 502
     assert "did not answer" in response.json()["detail"]
+
+
+# --- the next available slot --------------------------------------------------
+#
+# The Page's configured times, minus whatever the planner already holds. There
+# is no local schedule state involved and there must not be (ADR-0001): a post
+# somebody scheduled by hand in Metricool's own UI has to count exactly as much
+# as one of ours, and only the planner knows about it.
+
+
+def _slots(client, *times):
+    for hour, minute in times:
+        response = client.post("/pages/1/slots", json={"hour": hour, "minute": minute})
+        assert response.status_code == 201, response.text
+
+
+def _at(client, monkeypatch, *stamps):
+    """Make the planner report posts at these naive local times."""
+    rows = [
+        {**PLANNER_ROW, "publicationDate": {"dateTime": s, "timezone": "Asia/Ho_Chi_Minh"}}
+        for s in stamps
+    ]
+    monkeypatch.setattr(publisher, "list_scheduled", lambda *a, **k: rows)
+
+
+def _next(client):
+    response = client.get("/schedule/next-slot?page_id=1")
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+def test_the_next_slot_is_the_first_configured_time_still_free(
+    client, page, monkeypatch
+):
+    _slots(client, (8, 0), (13, 30), (19, 0))
+    _at(client, monkeypatch)  # nothing queued
+
+    answer = _next(client)
+
+    assert answer["label"] in {"08:00", "13:30", "19:00"}
+    assert answer["taken"] == 0
+    # Naive local, no offset suffix — the shape publish takes and the planner
+    # stores. An offset here is rejected by Metricool.
+    assert "+" not in answer["when"] and answer["when"].count(":") == 2
+
+
+def test_a_slot_the_planner_already_has_a_post_at_is_skipped(
+    client, page, monkeypatch
+):
+    """Including a post nobody here created — the planner is the only authority."""
+    _slots(client, (8, 0), (19, 0))
+    # Stubbed *before* the first read: without this the call leaves the building
+    # and answers 401 from the real Metricool.
+    _at(client, monkeypatch)
+    first = _next(client)
+
+    _at(client, monkeypatch, first["when"])
+    second = _next(client)
+
+    assert second["when"] != first["when"]
+    assert second["taken"] >= 1, "the occupied slot was not reported as skipped"
+
+
+def test_a_post_a_second_off_the_slot_still_occupies_it(client, page, monkeypatch):
+    """A post moved by hand lands seconds off. Matching to the minute is what
+    stops the same slot being offered forever."""
+    _slots(client, (8, 0), (19, 0))
+    _at(client, monkeypatch)
+    first = _next(client)
+
+    # Same minute, 42 seconds in — `YYYY-MM-DDTHH:MM:` is 17 characters.
+    _at(client, monkeypatch, first["when"][:17] + "42")
+
+    assert _next(client)["when"] != first["when"]
+
+
+def test_a_page_with_no_slots_says_so_rather_than_guessing(client, page, monkeypatch):
+    _at(client, monkeypatch)
+
+    response = client.get("/schedule/next-slot?page_id=1")
+
+    assert response.status_code == 409
+    assert "no publishing times" in response.json()["detail"]
+
+
+def test_slots_come_back_earliest_first(client, page):
+    _slots(client, (19, 0), (8, 0), (13, 30))
+
+    labels = [s["label"] for s in client.get("/pages/1/slots").json()]
+
+    assert labels == ["08:00", "13:30", "19:00"]
+
+
+def test_the_same_time_twice_is_refused(client, page):
+    _slots(client, (8, 0))
+
+    assert client.post("/pages/1/slots", json={"hour": 8, "minute": 0}).status_code == 409
+
+
+def test_an_impossible_time_is_refused(client, page):
+    assert client.post("/pages/1/slots", json={"hour": 24, "minute": 0}).status_code == 422
+    assert client.post("/pages/1/slots", json={"hour": 8, "minute": 60}).status_code == 422
+
+
+def test_removing_a_slot_leaves_the_others(client, page):
+    _slots(client, (8, 0), (19, 0))
+    slots = client.get("/pages/1/slots").json()
+
+    assert client.delete(f"/pages/1/slots/{slots[0]['id']}").status_code == 204
+    assert [s["label"] for s in client.get("/pages/1/slots").json()] == ["19:00"]

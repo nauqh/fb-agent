@@ -6,6 +6,7 @@ import {
   ExternalLink,
   Loader2,
   Plus,
+  Clock,
   Rss,
   Trash2,
 } from "lucide-react";
@@ -21,6 +22,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { getCompetitorPages, getSourcesConfig } from "@/lib/api/sources";
 import { setAssignments } from "@/lib/api/competitors";
 import { addFeed, removeFeed } from "@/lib/api/feeds";
+import { addSlot, listSlots, removeSlot } from "@/lib/api/pages";
 import { usePageScope } from "@/lib/page-scope";
 import { emit } from "@/lib/store";
 import { useQuery } from "@/lib/use-query";
@@ -207,6 +209,18 @@ export default function SettingsScreen() {
           ) : (
             <Skeleton className="h-40 rounded-lg" />
           )}
+        </Card>
+
+        <Card
+          title="Publishing times"
+          hint={
+            <>
+              The slots &ldquo;Schedule next available&rdquo; walks through. The
+              same times every day, in this Page&rsquo;s zone (GMT+7).
+            </>
+          }
+        >
+          <TimeSlots pageId={pageId} />
         </Card>
 
         {/* Full width: at 26 rows this is the longest thing on the screen, and
@@ -489,3 +503,108 @@ function RemoveFeed({ id, name }: { id: number; name: string }) {
 
 
 
+
+
+/**
+ * When this Page publishes.
+ *
+ * Policy rather than schedule state, which is the whole reason it can live in
+ * our database at all without contradicting ADR-0001: a slot is a standing
+ * decision — "we post at 08:00 and 19:00" — that exists whether or not anything
+ * is queued against it. What is *actually* queued is still read live from
+ * Metricool's planner, and "next available" checks these against that.
+ *
+ * No weekday dimension. The operator chose the same times every day; adding one
+ * later is an additive migration rather than a rewrite.
+ */
+function TimeSlots({ pageId }: { pageId: number | null }) {
+  const { data: slots, refresh } = useQuery(() => listSlots(pageId!), [pageId], {
+    enabled: pageId !== null,
+  });
+  const [time, setTime] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  async function add(event: React.FormEvent) {
+    event.preventDefault();
+    // `<input type="time">` gives `HH:MM`, which is the one format that needs
+    // no parsing rules of our own.
+    const [hour, minute] = time.split(":").map(Number);
+    if (pageId === null || Number.isNaN(hour) || Number.isNaN(minute)) return;
+
+    setSaving(true);
+    try {
+      await addSlot(pageId, hour, minute);
+      setTime("");
+      await refresh();
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Could not add that time");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function drop(id: number, label: string) {
+    if (pageId === null) return;
+    try {
+      await removeSlot(pageId, id);
+      toast.success(`${label} removed`);
+      await refresh();
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Could not remove");
+    }
+  }
+
+  if (!slots) return <Skeleton className="h-24 rounded-lg" />;
+
+  return (
+    <div className="space-y-3">
+      <form onSubmit={add} className="flex items-center gap-2">
+        <Clock className="size-3.5 shrink-0 text-muted-foreground" />
+        <Input
+          type="time"
+          value={time}
+          onChange={(event) => setTime(event.target.value)}
+          aria-label="Publishing time"
+          className="h-8 w-32 text-xs"
+        />
+        <Button
+          type="submit"
+          size="sm"
+          variant="outline"
+          className="h-8"
+          disabled={saving || !time || pageId === null}
+        >
+          {saving ? <Loader2 className="size-3 animate-spin" /> : "Add time"}
+        </Button>
+      </form>
+
+      {slots.length === 0 ? (
+        // Not decoration: with no slots, "Schedule next available" has nothing
+        // to offer and the server answers 409 rather than guessing a time.
+        <p className="rounded-lg border border-dashed p-4 text-center text-xs text-muted-foreground">
+          No publishing times yet. Until one is added, &ldquo;Schedule next
+          available&rdquo; has nothing to choose from.
+        </p>
+      ) : (
+        <div className="flex flex-wrap gap-1.5">
+          {slots.map((slot) => (
+            <span
+              key={slot.id}
+              className="group flex items-center gap-1 rounded-full border py-1 pr-1 pl-2.5 text-xs tabular-nums"
+            >
+              {slot.label}
+              <button
+                type="button"
+                onClick={() => void drop(slot.id, slot.label)}
+                aria-label={`Remove ${slot.label}`}
+                className="rounded-full p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+              >
+                <Trash2 className="size-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

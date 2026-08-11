@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
-  Check,
+  CalendarClock,
   ImagePlus,
   Loader2,
   Rocket,
@@ -29,7 +29,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  approveDraft,
   getDraft,
   publishDraft,
   regenerateField,
@@ -42,6 +41,7 @@ import {
 } from "@/lib/api/drafts";
 import { getPageLayout, type ResolvedLayout } from "@/lib/api/layout";
 import { listPages } from "@/lib/api/pages";
+import { getNextSlot, type NextSlot } from "@/lib/api/schedule";
 import { chars, pageLocalSoon, words } from "@/lib/format";
 import type { RegeneratableField } from "@/lib/api/drafts";
 import type { Draft } from "@/lib/types";
@@ -231,7 +231,9 @@ export function DraftDetail({
     }
   }
 
-  async function decide(action: "approve" | "reject") {
+  /** Reject: the one decision that is not publishing. Approve is gone — see
+   *  the footer for why. */
+  async function reject() {
     setDeciding(true);
     try {
       // A decision closes the drawer, and the form goes with it. Anything typed
@@ -240,11 +242,9 @@ export function DraftDetail({
       // easiest to believe is already stored. Rejecting saves too: it is
       // reversible, and a draft that comes back should come back as it looked.
       if (dirty && form) await updateDraft(draftId, form);
+      await rejectDraft(draftId);
 
-      if (action === "approve") await approveDraft(draftId);
-      else await rejectDraft(draftId);
-
-      toast(action === "approve" ? "Approved — it left the queue." : "Rejected.", {
+      toast("Rejected.", {
         action: {
           label: "Undo",
           onClick: () => {
@@ -714,50 +714,49 @@ export function DraftDetail({
           ) : null}
         </div>
 
-        {decided ? (
-          <div className="flex items-center gap-2">
-            <p className="mr-1 text-xs text-muted-foreground">
-              {draft.status === "approved" ? "Approved." : "Rejected."}
-            </p>
-            <PublishAction draft={draft} onPublished={refresh} />
-            <Button variant="outline" size="sm" onClick={() => void returnToReview(draftId)}>
-              Return to queue
-            </Button>
-          </div>
-        ) : (
-          <div className="flex items-center gap-2">
+        {/* Reject, then the three ways to publish. **Approve is gone**: it set
+            a status that took the row out of the queue and did nothing else,
+            was reversible, and was never required by publish — a step with no
+            consequence in front of the one step that cannot be taken back. The
+            client asked whether it was needed; it was not.
+
+            `DraftStatus.APPROVED` still exists for the rows that already carry
+            it, and `returnToReview` still brings one back. Nothing writes it
+            any more. */}
+        <div className="flex items-center gap-2">
+          {decided ? (
+            <>
+              <p className="mr-1 text-xs text-muted-foreground">
+                {draft.status === "approved" ? "Approved." : "Rejected."}
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void returnToReview(draftId)}
+              >
+                Return to queue
+              </Button>
+            </>
+          ) : (
             <Button
               variant="ghost"
               size="sm"
               disabled={deciding}
-              onClick={() => decide("reject")}
+              onClick={() => void reject()}
               className="text-muted-foreground"
             >
               <X className="size-4" />
               Reject
             </Button>
+          )}
+          {failed ? (
+            <p className="text-xs text-muted-foreground">
+              Failed — there is nothing to publish.
+            </p>
+          ) : (
             <PublishAction draft={draft} onPublished={refresh} />
-            {failed ? (
-              <p className="text-xs text-muted-foreground">
-                Failed — nothing to approve.
-              </p>
-            ) : (
-              <Button
-                size="sm"
-                className="bg-gold text-gold-foreground hover:bg-gold/90"
-                disabled={deciding}
-                onClick={() => decide("approve")}
-              >
-                {deciding ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
-                  <Check className="size-4" />
-                )}
-                Approve
-              </Button>
-            )}
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );
@@ -777,6 +776,25 @@ export function DraftDetail({
  * (`routes/drafts.py:361` refuses only a republish, a FAILED row, and one with
  * no composite) — the disabled conditions here are those three and nothing
  * more, so the button is never offered for a call that would 409.
+ *//**
+ * The three ways a draft leaves the queue: now, at a time, or at the next free
+ * slot.
+ *
+ * **Approve is gone, and the client was right about why.** It set
+ * `status = approved`, which took the row out of the Review queue and did
+ * nothing else — reversible by `unapprove`, and never required by publish,
+ * which refuses only a republish, a FAILED draft and one with no composite. So
+ * it was a queue movement with no consequence sitting in front of the action
+ * that has every consequence. These three replace it.
+ *
+ * "Schedule next available" asks the server, which walks this Page's configured
+ * times against Metricool's planner. That read is the only authority on what is
+ * taken (ADR-0001) — a post scheduled by hand in Metricool's own UI occupies a
+ * slot exactly as much as one of ours.
+ *
+ * All three land in the same confirmation, because the irreversible part is
+ * identical: once Metricool has it, it goes to a page with an audience on a
+ * schedule we no longer own.
  */
 function PublishAction({
   draft,
@@ -788,6 +806,8 @@ function PublishAction({
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [when, setWhen] = useState(pageLocalSoon);
+  const [slot, setSlot] = useState<NextSlot | null>(null);
+  const [finding, setFinding] = useState(false);
 
   if (draft.metricool_post_id) {
     return (
@@ -797,13 +817,17 @@ function PublishAction({
     );
   }
 
-  async function publish() {
+  const blocked = draft.status === "failed" || !draft.composed_image_path;
+
+  /** `undefined` means "as soon as Metricool will take it" — Publish now. */
+  async function publish(at: string | undefined) {
     setBusy(true);
     try {
-      await publishDraft(draft.id, when || undefined);
+      await publishDraft(draft.id, at);
       toast("Handed to Metricool.");
       onPublished();
       setOpen(false);
+      setSlot(null);
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : "Publish failed");
     } finally {
@@ -811,30 +835,99 @@ function PublishAction({
     }
   }
 
+  /**
+   * Ask for the next free slot, then confirm it by name.
+   *
+   * Fetched on the click rather than held on the screen: it depends on the
+   * planner, which anyone can change from Metricool, so a value shown since the
+   * drawer opened would be a guess by the time it was used.
+   */
+  async function findSlot() {
+    setFinding(true);
+    try {
+      const found = await getNextSlot(draft.page_id);
+      setSlot(found);
+      setWhen(found.when.slice(0, 16));
+      setOpen(true);
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "No slot available");
+    } finally {
+      setFinding(false);
+    }
+  }
+
   return (
     <>
-      {/* The field sits in the footer, not behind the button, because the
-          drawer has room for it — the old sheet did exactly this
-          (`draft-review-row.tsx:1320`). An overlay to hold one input is a
-          click and a context switch for nothing. What stays behind the button
-          is only the confirmation, which is about the irreversibility and not
-          about the time. */}
       <PublishAt value={when} onChange={setWhen} />
+
+      {/* Schedule — the time beside it is the one that goes out. */}
       <Button
-        variant="secondary"
+        variant="outline"
         size="sm"
-        disabled={draft.status === "failed" || !draft.composed_image_path}
-        onClick={() => setOpen(true)}
+        disabled={blocked}
+        onClick={() => {
+          setSlot(null);
+          setOpen(true);
+        }}
+      >
+        <CalendarClock className="size-4" />
+        Schedule
+      </Button>
+
+      <Button
+        variant="outline"
+        size="sm"
+        disabled={blocked || finding}
+        onClick={() => void findSlot()}
+        title="The next configured publishing time with nothing already queued at it."
+      >
+        {finding ? (
+          <Loader2 className="size-4 animate-spin" />
+        ) : (
+          <CalendarClock className="size-4" />
+        )}
+        Next slot
+      </Button>
+
+      {/* Publish now is the primary of the three: it is what the operator
+          reaches for on a post that is ready, and the other two are the
+          deliberate detours. */}
+      <Button
+        size="sm"
+        className="bg-gold text-gold-foreground hover:bg-gold/90"
+        disabled={blocked}
+        onClick={() => {
+          setSlot(null);
+          setWhen("");
+          setOpen(true);
+        }}
       >
         <Rocket className="size-4" />
-        Publish
+        Publish now
       </Button>
+
       <PublishDialog
         open={open}
         onOpenChange={setOpen}
         busy={busy}
-        onConfirm={() => void publish()}
-      />
+        onConfirm={() => void publish(when || undefined)}
+      >
+        <p className="text-sm text-muted-foreground">
+          {slot ? (
+            <>
+              The next free slot is <strong>{slot.label}</strong> on{" "}
+              {slot.when.slice(0, 10)}.
+              {slot.taken > 0
+                ? ` ${slot.taken} earlier slot${slot.taken === 1 ? "" : "s"} already had a post.`
+                : ""}
+            </>
+          ) : when ? (
+            <>It will go out at the time in the field, GMT+7.</>
+          ) : (
+            <>It will go out as soon as Metricool will take it.</>
+          )}
+        </p>
+      </PublishDialog>
     </>
   );
 }

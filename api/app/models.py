@@ -298,6 +298,57 @@ class Feed(SQLModel, table=True):
     created_at: datetime = Field(default_factory=_now)
 
 
+class PageTimeSlot(SQLModel, table=True):
+    """One time of day this Page publishes at. The same times every day.
+
+    **This is not schedule state and does not reverse ADR-0001.** The ADR is
+    about mirroring Metricool's planner — what is queued, when, and whether it
+    went out — and none of that is here. A slot is *policy*: "we post at 08:00
+    and 19:00", a standing decision that exists whether or not anything is
+    queued against it. Metricool has nowhere to keep it and no concept of it.
+
+    Nothing points at a row here, deliberately. A scheduled post records its own
+    time in the planner, so deleting a slot changes tomorrow's suggestion and
+    nothing that already happened — the same shape as `Feed`.
+
+    No weekday column. The operator chose the same times every day; a weekday
+    dimension doubles the table and the form for a distinction they did not
+    ask for, and adding one later is an additive migration.
+    """
+
+    __tablename__ = "page_time_slot"
+    __table_args__ = (
+        # The same time twice is not two slots, it is one slot counted twice —
+        # and "next available" would then offer it, find it taken, and offer it
+        # again on the next pass.
+        UniqueConstraint("page_id", "minute_of_day", name="uq_time_slot_page_minute"),
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    page_id: int = Field(foreign_key="page.id", index=True)
+
+    minute_of_day: int = Field(index=True)
+    """Minutes past midnight, 0–1439, in the Page's zone (`settings.timezone`).
+
+    An integer rather than a `TIME` column, and rather than an `HH:MM` string.
+    A `TIME` invites the question of which date and therefore which offset it
+    carries, which is exactly the confusion the timezone rules in `CLAUDE.md`
+    exist to prevent — there is no instant here, only a time of day. A string
+    would need parsing before it could be sorted or compared, and "8:00" would
+    sort after "19:00".
+
+    Every clock in this app is `Asia/Ho_Chi_Minh` and this is no exception.
+    """
+
+    created_at: datetime = Field(default_factory=_now)
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def label(self) -> str:
+        """`HH:MM`, for a screen that should not do arithmetic to show a time."""
+        return f"{self.minute_of_day // 60:02d}:{self.minute_of_day % 60:02d}"
+
+
 class PageCompetitor(SQLModel, table=True):
     """Which Competitors feed which Pages. Ours, not Metricool's.
 

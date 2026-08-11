@@ -14,12 +14,12 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from PIL import Image
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
 from app import media
 from app.db import get_session
-from app.models import Page
+from app.models import Page, PageTimeSlot
 
 router = APIRouter(prefix="/pages", tags=["pages"])
 
@@ -170,3 +170,76 @@ def update_page(
     session.commit()
     session.refresh(page)
     return page
+
+
+# --- publishing times ---------------------------------------------------------
+#
+# The Page's standing decision about when it posts. Policy, not schedule state:
+# see `PageTimeSlot` for why this does not reverse ADR-0001.
+
+
+class TimeSlotIn(BaseModel):
+    """A time of day, as a form sends it."""
+
+    hour: int = Field(ge=0, le=23)
+    minute: int = Field(ge=0, le=59)
+
+
+@router.get("/{page_id}/slots")
+def list_slots(page_id: int, session: Session = Depends(get_session)) -> list[PageTimeSlot]:
+    """This Page's publishing times, earliest first."""
+    _page(session, page_id)
+    return list(
+        session.exec(
+            select(PageTimeSlot)
+            .where(PageTimeSlot.page_id == page_id)
+            .order_by(PageTimeSlot.minute_of_day)  # type: ignore[arg-type]
+        ).all()
+    )
+
+
+@router.post("/{page_id}/slots", status_code=201)
+def add_slot(
+    page_id: int,
+    slot: TimeSlotIn,
+    session: Session = Depends(get_session),
+) -> PageTimeSlot:
+    """Add a time. The same time twice is refused rather than stored.
+
+    A duplicate is not two slots — it is one counted twice, and "next available"
+    would offer it, find it taken and offer it again on the next pass.
+    """
+    _page(session, page_id)
+    minute = slot.hour * 60 + slot.minute
+
+    existing = session.exec(
+        select(PageTimeSlot)
+        .where(PageTimeSlot.page_id == page_id)
+        .where(PageTimeSlot.minute_of_day == minute)
+    ).first()
+    if existing is not None:
+        raise HTTPException(
+            status_code=409, detail=f"{existing.label} is already a slot for this Page."
+        )
+
+    row = PageTimeSlot(page_id=page_id, minute_of_day=minute)
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    return row
+
+
+@router.delete("/{page_id}/slots/{slot_id}", status_code=204)
+def remove_slot(
+    page_id: int, slot_id: int, session: Session = Depends(get_session)
+) -> None:
+    """Removing a slot changes tomorrow's suggestion and nothing already queued.
+
+    Nothing points at a slot — a scheduled post carries its own time in
+    Metricool's planner — so this cannot cascade into published work.
+    """
+    row = session.get(PageTimeSlot, slot_id)
+    if row is None or row.page_id != page_id:
+        raise HTTPException(status_code=404, detail=f"No slot {slot_id} on page {page_id}")
+    session.delete(row)
+    session.commit()

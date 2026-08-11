@@ -1,5 +1,5 @@
 import type { Page, PromptFile } from "@/lib/types";
-import { delJson, get, patch, upload } from "@/lib/api/client";
+import { del, delJson, get, patch, post, upload } from "@/lib/api/client";
 /**
  * `GET /pages`, `GET /pages/{id}`, `PATCH /pages/{id}`, `GET /prompts`.
  *
@@ -81,4 +81,35 @@ export function watermarkUrl(page: Page): string | null {
  */
 export async function listPromptFiles(): Promise<PromptFile[]> {
   return get<PromptFile[]>("/prompts");
+}
+
+/**
+ * When this Page publishes — the times "Schedule next available slot" walks.
+ *
+ * Policy, not schedule state: a slot is a standing decision that exists whether
+ * or not anything is queued against it, which is why it lives here and not in
+ * Metricool. See `PageTimeSlot` on the API side.
+ */
+export interface TimeSlot {
+  id: number;
+  page_id: number;
+  minute_of_day: number;
+  /** `HH:MM`, so a screen never does arithmetic to show a time. */
+  label: string;
+}
+
+export async function listSlots(pageId: number): Promise<TimeSlot[]> {
+  return get<TimeSlot[]>(`/pages/${pageId}/slots`);
+}
+
+export async function addSlot(
+  pageId: number,
+  hour: number,
+  minute: number,
+): Promise<TimeSlot> {
+  return post<TimeSlot>(`/pages/${pageId}/slots`, { hour, minute });
+}
+
+export async function removeSlot(pageId: number, slotId: number): Promise<void> {
+  await del(`/pages/${pageId}/slots/${slotId}`);
 }
