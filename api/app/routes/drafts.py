@@ -24,9 +24,10 @@ from sqlmodel import Session, select
 
 from app import generate, media
 from app.db import get_session
-from app.models import Draft, DraftStatus, Page, SourceItemBase
+from app.models import Draft, DraftStatus, Page, SourceItem, SourceItemBase
 from app.publish import metricool as publisher
 from app.settings import layout
+from app.writer import agent as writer
 from app.writer import validators
 
 router = APIRouter(tags=["drafts"])
@@ -285,6 +286,74 @@ def update_draft(
     if redraw and draft.hero_image_path:
         page = session.get(Page, draft.page_id)
         if page is not None:
+            fresh = generate.build_image(session, draft, page)
+            kept = [w for w in draft.warnings if not w.startswith(generate.IMAGE_WARNING)]
+            draft.warnings = kept + fresh
+
+    return _save(session, draft)
+
+
+@router.post("/drafts/{draft_id}/regenerate")
+def regenerate_field(
+    draft_id: int,
+    field: str = Query(description="hook, caption or first_comment"),
+    session: Session = Depends(get_session),
+) -> Draft:
+    """Ask the writer for one field again, keeping the rest.
+
+    The old app had this per field (`regenerate-field-control.tsx`,
+    `draft-regenerate.ts`) and the rewrite lost it, leaving the whole draft or
+    nothing — so a good hook with a weak caption meant re-rolling the hook too.
+
+    **The kept fields go to the model**, which is the difference between this
+    and running the writer again. A caption written in isolation is a caption
+    for a different post: it would not open on the hook that is drawn on the
+    picture above it, and the operator would be handed two halves that do not
+    meet.
+
+    Only the requested field is written back — plus `highlight_phrases` when it
+    is the hook, because they are verbatim substrings of it and phrases chosen
+    for the old hook match nothing in the new one. Leaving them would render no
+    gold and look like the highlight feature had broken.
+
+    Synchronous, unlike `/generate`: this is one call the operator is waiting on,
+    and there is no picture to draw unless the hook changed.
+    """
+    if field not in writer.REGENERATABLE:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Cannot regenerate {field!r}. One of: {', '.join(writer.REGENERATABLE)}.",
+        )
+
+    draft = _editable(session, draft_id)
+    page = session.get(Page, draft.page_id)
+    if page is None:
+        raise HTTPException(status_code=404, detail=f"No page {draft.page_id}")
+
+    source = (
+        session.get(SourceItem, draft.source_item_id) if draft.source_item_id else None
+    )
+    keeping = {
+        name: getattr(draft, name) or ""
+        for name in writer.REGENERATABLE
+        if name != field
+    }
+
+    try:
+        result = writer.rewrite(page, source, draft.topic, field, keeping)
+    except Exception as error:  # noqa: BLE001 — upstream, and the row is untouched
+        raise HTTPException(
+            status_code=502,
+            detail=f"The writer could not rewrite that ({type(error).__name__}).",
+        ) from error
+
+    setattr(draft, field, getattr(result.output, field))
+    if field == "hook":
+        draft.highlight_phrases = result.output.highlight_phrases
+        # The hook is drawn on the card, so the stored PNG is now stale. Free —
+        # the hero is reused and only the panel is redrawn — which is the same
+        # rule `PATCH` follows on every save that touches the drawn text.
+        if draft.hero_image_path:
             fresh = generate.build_image(session, draft, page)
             kept = [w for w in draft.warnings if not w.startswith(generate.IMAGE_WARNING)]
             draft.warnings = kept + fresh

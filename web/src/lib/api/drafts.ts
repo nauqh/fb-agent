@@ -160,6 +160,24 @@ export async function uploadInset(id: number, file: File): Promise<Draft> {
   return upload<Draft>(`/drafts/${id}/inset`, file);
 }
 
+/** The three fields the writer can be asked for again, one at a time. */
+export type RegeneratableField = "hook" | "caption" | "first_comment";
+
+/**
+ * Ask the writer for one field again, keeping the rest.
+ *
+ * The kept fields go to the model, which is what separates this from running
+ * the writer again: a caption written in isolation is a caption for a different
+ * post. A regenerated hook brings new `highlight_phrases` with it and redraws
+ * the card, because the hook is the text on the panel.
+ */
+export async function regenerateField(
+  id: number,
+  field: RegeneratableField,
+): Promise<Draft> {
+  return post<Draft>(`/drafts/${id}/regenerate?field=${field}`, {});
+}
+
 /** Take the circle off. Answers with the redrawn draft, not 204. */
 export async function removeInset(id: number): Promise<Draft> {
   return delJson<Draft>(`/drafts/${id}/inset`);

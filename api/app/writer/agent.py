@@ -187,10 +187,33 @@ def write(page: Page, source: SourceItem | None, topic: str | None = None, model
     A caller passing `model` gets exactly that model and no fallback: tests
     supply a fake, and silently swapping it for a real one would bill them.
     """
-    if model is not None:
-        return build_agent(page, model).run_sync(user_prompt(source, topic))
+    return _run(page, user_prompt(source, topic), _validate, model)
 
-    prompt = user_prompt(source, topic)
+
+def _run(page: Page, prompt: str, validator, model=None):
+    """Ask the model, stepping down the fallback chain while it is unavailable.
+
+    Extracted so `rewrite` cannot grow a second copy of the ladder — the two
+    differ only in what they ask for and which rules they hold the answer to.
+
+    A caller passing `model` gets exactly that model and no fallback: tests
+    supply a fake, and silently swapping it for a real one would bill them.
+    """
+    if model is not None:
+        agent = build_agent(page, model)
+        if validator is not _validate:
+            # `build_agent` already attached the whole-draft validator; a
+            # rewrite needs the narrower one instead, and pydantic-ai has no
+            # way to detach.
+            agent = Agent(
+                model,
+                output_type=DraftContent,
+                instructions=_instructions(page, layout),
+                retries=MAX_RETRIES,
+            )
+            agent.output_validator(validator)
+        return agent.run_sync(prompt)
+
     names = [settings.gemini_text_model, *FALLBACK_MODELS]
     last: Exception | None = None
 
@@ -203,7 +226,7 @@ def write(page: Page, source: SourceItem | None, topic: str | None = None, model
                 model_settings=_model_settings(name),
                 retries=MAX_RETRIES,
             )
-            agent.output_validator(_validate)
+            agent.output_validator(validator)
             return agent.run_sync(prompt)
         except Exception as error:  # noqa: BLE001 — re-raised below if not transient
             if not is_transient(error):
@@ -212,3 +235,124 @@ def write(page: Page, source: SourceItem | None, topic: str | None = None, model
 
     assert last is not None
     raise last
+
+
+REGENERATABLE = ("hook", "caption", "first_comment")
+"""The three fields the operator can ask for again, one at a time.
+
+`highlight_phrases` is not on the list and cannot be: it is defined as verbatim
+substrings *of the hook*, so it has no meaning apart from one. It rides along
+when the hook is rewritten — see `rewrite`.
+
+`image_prompt` is not here either. Re-rolling it changes nothing on its own; the
+picture is bought by `POST /drafts/{id}/image?new_hero=true`, and the prompt is
+editable by hand for exactly that purpose.
+"""
+
+
+def _field_rules(field: str):
+    """The blocking rules that apply to **one** field, as an output validator.
+
+    The whole-draft validator cannot be reused here. It checks all three fields,
+    and on a rewrite the other two come from the row unchanged — so a draft that
+    was written by hand, or predates a rule, would fail validation on text the
+    operator explicitly asked to keep. The model would then spend its retries
+    fixing fields nobody asked about, and the run could exhaust them and die
+    without ever producing the one field that was requested.
+
+    So each field is held to its own rules and nothing else. `no_meta_phrases`
+    reads the recap and the body together, and is applied to both, because it is
+    a rule about the prose either of them contains.
+    """
+
+    def reasons(content: DraftContent) -> list[str]:
+        if field == "hook":
+            found = [
+                validators.hook_length(content.hook),
+                validators.hook_has_no_question(content.hook),
+            ]
+        elif field == "caption":
+            found = [
+                validators.recap_point_count(content.caption),
+                validators.recap_lines_start_with_emoji(content.caption),
+                validators.no_meta_phrases(content.caption, ""),
+            ]
+        else:
+            found = [
+                validators.first_comment_paragraphs(content.first_comment),
+                validators.body_length(content.first_comment),
+                validators.no_meta_phrases("", content.first_comment),
+            ]
+        return [reason for reason in found if reason]
+
+    def validate(_ctx: RunContext, output: DraftContent) -> DraftContent:
+        broken = reasons(output)
+        if broken:
+            raise ModelRetry(
+                f"The {field.replace('_', ' ')} breaks brand rules. Fix all of "
+                "these and return the whole draft again:\n- " + "\n- ".join(broken)
+            )
+        return output
+
+    return validate
+
+
+def rewrite_prompt(
+    source: SourceItem | None,
+    topic: str | None,
+    field: str,
+    keeping: dict[str, str],
+) -> str:
+    """The original brief, plus what is being kept and what to replace.
+
+    **The kept fields are in the prompt, and that is the whole point.** A caption
+    regenerated in isolation is a caption for a different post — it would not
+    open on the hook that is drawn on the picture above it, and the operator
+    would be handed two halves that do not meet. Showing the model what stays is
+    what makes the new field fit the old ones.
+    """
+    parts = [user_prompt(source, topic), ""]
+    parts.append(
+        "This post already exists. Keep the fields below EXACTLY as they are "
+        "and return them unchanged."
+    )
+    for name, value in keeping.items():
+        if value:
+            parts += ["", f"{name.replace('_', ' ').upper()} (keep verbatim):", value]
+    parts += [
+        "",
+        f"Rewrite ONLY the {field.replace('_', ' ')}. Produce a genuinely "
+        "different one — a new angle or a new opening, not a reworded copy of "
+        "what is there now. It must still fit the kept fields above.",
+    ]
+    return "\n".join(parts)
+
+
+def rewrite(
+    page: Page,
+    source: SourceItem | None,
+    topic: str | None,
+    field: str,
+    keeping: dict[str, str],
+    model=None,
+):
+    """One field again, written to sit with the ones being kept.
+
+    Returns the whole `DraftContent`; the caller takes the field it asked for.
+    The model has to return every field because that is the output schema, and
+    narrowing the schema per field would be three more types for no gain — what
+    matters is that only the requested one is written back to the row.
+
+    The exception is the hook, whose `highlight_phrases` must travel with it.
+    They are verbatim substrings of the hook, so phrases chosen for the old one
+    match nothing in the new one and render no gold at all — a silent failure
+    that looks like the highlight feature being broken.
+    """
+    if field not in REGENERATABLE:
+        raise ValueError(f"{field!r} is not a field that can be regenerated")
+    return _run(
+        page,
+        rewrite_prompt(source, topic, field, keeping),
+        _field_rules(field),
+        model,
+    )

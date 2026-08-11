@@ -8,6 +8,7 @@ import {
   ImagePlus,
   Loader2,
   Rocket,
+  RefreshCw,
   RotateCcw,
   Sparkles,
   TriangleAlert,
@@ -31,6 +32,7 @@ import {
   approveDraft,
   getDraft,
   publishDraft,
+  regenerateField,
   regenerateHero,
   rejectDraft,
   removeInset,
@@ -41,6 +43,7 @@ import {
 import { getPageLayout, type ResolvedLayout } from "@/lib/api/layout";
 import { listPages } from "@/lib/api/pages";
 import { chars, pageLocalSoon, words } from "@/lib/format";
+import type { RegeneratableField } from "@/lib/api/drafts";
 import type { Draft } from "@/lib/types";
 import { useQuery } from "@/lib/use-query";
 import { pageAvatarRaw } from "@/lib/page-avatar";
@@ -585,6 +588,16 @@ export function DraftDetail({
                 <>
                 <Field
                   label="Hook"
+                  regenerate={
+                    <Regenerate
+                      draftId={draftId}
+                      field="hook"
+                      label="Hook"
+                      dirty={dirty}
+                      form={form}
+                      onDone={refresh}
+                    />
+                  }
                   hint={`${words(form.hook)} words · on the image · limit 65, no question`}
                   flagged={words(form.hook) > 65 || form.hook.includes("?")}
                 >
@@ -603,6 +616,16 @@ export function DraftDetail({
 
                 <Field
                   label="Caption"
+                  regenerate={
+                    <Regenerate
+                      draftId={draftId}
+                      field="caption"
+                      label="Caption"
+                      dirty={dirty}
+                      form={form}
+                      onDone={refresh}
+                    />
+                  }
                   hint={`${form.caption.split("\n").filter(Boolean).length} recap lines · max 5, each opening with an emoji`}
                 >
                   <Textarea
@@ -614,6 +637,16 @@ export function DraftDetail({
 
                 <Field
                   label="First comment"
+                  regenerate={
+                    <Regenerate
+                      draftId={draftId}
+                      field="first_comment"
+                      label="First comment"
+                      dirty={dirty}
+                      form={form}
+                      onDone={refresh}
+                    />
+                  }
                   hint={`${chars(form.first_comment)} · 1,500–2,100`}
                   flagged={form.first_comment.length < 1500 || form.first_comment.length > 2100}
                 >
@@ -921,6 +954,73 @@ function InsetRing({
   );
 }
 
+/**
+ * Ask the writer for one field again.
+ *
+ * A small control on the label rather than a button in the footer, because it
+ * acts on *this* field and a row of three identical buttons somewhere else
+ * would not say which. The old app put it in the same place
+ * (`regenerate-field-control.tsx`).
+ *
+ * Saves first when there are unsaved edits, for the reason the inset upload
+ * does: the server rewrites from the **row**, so an unsaved hook would be
+ * ignored and then overwritten — losing an edit the operator could still see on
+ * screen.
+ */
+function Regenerate({
+  draftId,
+  field,
+  label,
+  dirty,
+  form,
+  onDone,
+}: {
+  draftId: number;
+  field: RegeneratableField;
+  label: string;
+  dirty: boolean;
+  form: Form | null;
+  onDone: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+
+  async function run() {
+    setBusy(true);
+    try {
+      if (dirty && form) await updateDraft(draftId, form);
+      await regenerateField(draftId, field);
+      await onDone();
+      toast.success(`New ${label.toLowerCase()}.`, {
+        description:
+          field === "hook"
+            ? "The card was redrawn and the highlights are new."
+            : "The other fields were kept.",
+      });
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Could not rewrite that");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => void run()}
+      disabled={busy}
+      title={`Ask the writer for a new ${label.toLowerCase()}, keeping the other fields.`}
+      className="inline-flex items-center gap-1 rounded px-1 py-0.5 text-[11px] font-normal text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+    >
+      {busy ? (
+        <Loader2 className="size-3 animate-spin" />
+      ) : (
+        <RefreshCw className="size-3" />
+      )}
+      Rewrite
+    </button>
+  );
+}
+
 /** The shape of the screen before the draft, its Page or its layout arrive. */
 function DetailSkeleton() {
   return (
@@ -961,17 +1061,23 @@ function Field({
   label,
   hint,
   flagged,
+  regenerate,
   children,
 }: {
   label: string;
   hint?: string;
   flagged?: boolean;
+  /** Ask the writer for this field again. Absent on fields it cannot rewrite. */
+  regenerate?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
     <div className="space-y-2">
       <div className="flex items-baseline justify-between gap-3">
-        <Label className="text-sm">{label}</Label>
+        <Label className="flex items-center gap-2 text-sm">
+          {label}
+          {regenerate}
+        </Label>
         {hint ? (
           <span
             className={cn(

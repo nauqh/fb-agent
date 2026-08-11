@@ -556,6 +556,124 @@ def test_deleting_something_that_is_not_there_says_so(client):
     assert client.delete("/drafts/999").status_code == 404
 
 
+# --- regenerating one field --------------------------------------------------
+
+
+@pytest.fixture
+def rewritten(monkeypatch):
+    """Stub the rewrite, and record what the writer was asked to keep.
+
+    The prompt is the thing under test as much as the row is: a field written
+    without the kept ones in front of the model is a field for a different post.
+    """
+    seen: dict = {}
+
+    class Result:
+        output = DraftContent(
+            hook="In 1925, twenty mushers ran serum to Nome through a blizzard.",
+            caption="🐕 A relay of dog teams.",
+            first_comment="x" * 1850,
+            highlight_phrases=["twenty mushers"],
+            hashtags=[],
+            image_prompt="a sled dog team on sea ice",
+        )
+
+    def fake(page, source, topic, field, keeping, model=None):
+        seen["field"] = field
+        seen["keeping"] = keeping
+        return Result()
+
+    monkeypatch.setattr(generate.writer, "rewrite", fake)
+    from app.routes import drafts as drafts_routes
+
+    monkeypatch.setattr(drafts_routes.writer, "rewrite", fake)
+    return seen
+
+
+def test_regenerating_a_caption_leaves_the_other_fields_alone(
+    client, written, illustrated, rewritten
+):
+    _generate(client)
+    before = client.get("/drafts/1").json()
+
+    after = client.post("/drafts/1/regenerate?field=caption").json()
+
+    assert after["caption"] == "🐕 A relay of dog teams."
+    assert after["hook"] == before["hook"], "the hook was overwritten"
+    assert after["first_comment"] == before["first_comment"]
+
+
+def test_the_kept_fields_are_shown_to_the_model(client, written, illustrated, rewritten):
+    """Otherwise the new caption is a caption for a different post — it would not
+    open on the hook that is drawn on the picture above it."""
+    _generate(client)
+    before = client.get("/drafts/1").json()
+
+    client.post("/drafts/1/regenerate?field=caption")
+
+    assert rewritten["field"] == "caption"
+    assert set(rewritten["keeping"]) == {"hook", "first_comment"}
+    assert rewritten["keeping"]["hook"] == before["hook"]
+
+
+def test_a_new_hook_brings_its_highlight_phrases_with_it(
+    client, written, illustrated, rewritten
+):
+    """They are verbatim substrings of the hook. Phrases chosen for the old one
+    match nothing in the new one and render no gold at all — a silent failure
+    that reads as the highlight feature being broken."""
+    _generate(client)
+    before = client.get("/drafts/1").json()
+
+    after = client.post("/drafts/1/regenerate?field=hook").json()
+
+    assert after["highlight_phrases"] == ["twenty mushers"]
+    assert after["highlight_phrases"] != before["highlight_phrases"]
+    assert all(p in after["hook"] for p in after["highlight_phrases"])
+
+
+def test_a_new_hook_redraws_the_card(client, written, illustrated, rewritten):
+    """The hook is drawn on the panel, so the stored PNG is stale without this."""
+    _generate(client)
+    before = client.get("/drafts/1").json()
+
+    after = client.post("/drafts/1/regenerate?field=hook").json()
+
+    assert after["composed_image_path"] != before["composed_image_path"]
+
+
+def test_regenerating_a_caption_does_not_redraw_the_card(
+    client, written, illustrated, rewritten
+):
+    """Nothing on the card changed, and a rebuild would orphan a file for nothing."""
+    _generate(client)
+    before = client.get("/drafts/1").json()
+
+    after = client.post("/drafts/1/regenerate?field=caption").json()
+
+    assert after["composed_image_path"] == before["composed_image_path"]
+
+
+def test_a_field_that_is_not_regeneratable_is_refused(client, written, illustrated):
+    _generate(client)
+
+    assert client.post("/drafts/1/regenerate?field=hashtags").status_code == 422
+    assert client.post("/drafts/1/regenerate?field=image_prompt").status_code == 422
+
+
+def test_a_published_draft_cannot_be_regenerated(
+    client, written, illustrated, rewritten, session
+):
+    """Same freeze as every other edit: Metricool holds a link to the composite."""
+    _generate(client)
+    draft = session.get(Draft, 1)
+    draft.metricool_post_id = "queued-1"
+    session.add(draft)
+    session.commit()
+
+    assert client.post("/drafts/1/regenerate?field=caption").status_code == 409
+
+
 # --- the manual draft --------------------------------------------------------
 #
 # The old app's second generate mode: "Create a draft for {page} without calling
