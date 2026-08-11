@@ -45,6 +45,16 @@ class GenerateRequest(BaseModel):
     sources: list[SourceItemBase] = []
     topic: str | None = None
 
+    template: str | None = None
+    """`card` or `full_overlay` for the drafts this run produces. Null takes
+    the Page's, which is what a run that does not care should send."""
+
+    no_image: bool = False
+    """Produce text-only drafts: no hero, no card, nothing to composite.
+
+    The one generate path that costs nothing at all, since `build_image` is
+    skipped rather than failing."""
+
     hero_from_source: bool = False
     """Use each Source Item's own picture as the hero instead of buying one.
 
@@ -68,6 +78,8 @@ def start_generate(
             request.sources,
             request.topic,
             request.hero_from_source,
+            request.template,
+            request.no_image,
         )
     except generate.GenerateError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
@@ -216,6 +228,7 @@ class DraftEdit(BaseModel):
     inset_y_ratio: float | None = None
     inset_border_width_px: int | None = None
     inset_border_color: str | None = None
+    template: str | None = None
 
 
 DRAWN_FIELDS = (
@@ -226,6 +239,7 @@ DRAWN_FIELDS = (
     "inset_y_ratio",
     "inset_border_width_px",
     "inset_border_color",
+    "template",
 )
 """The only edits that change the picture. Caption and body are not on it."""
 
@@ -262,6 +276,11 @@ def update_draft(
     # Clamped where the edit lands, not only where it is drawn: the row is read
     # back into a slider and a drag handle, and a value they would never render
     # is a control that lies about what it is set to.
+    if changes.get("template") is not None and changes["template"] not in TEMPLATES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Unknown template {changes['template']!r}. One of: {', '.join(TEMPLATES)}.",
+        )
     if changes.get("inset_size_px") is not None:
         changes["inset_size_px"] = layout.portrait.clamp(
             changes["inset_size_px"], layout.image.width
@@ -399,6 +418,12 @@ def rebuild_image(
     kept = [w for w in draft.warnings if not w.startswith(generate.IMAGE_WARNING)]
     draft.warnings = kept + fresh
     return _save(session, draft)
+
+
+TEMPLATES = ("card", "full_overlay")
+"""The card forms the compositor knows. Checked on write as well as at draw time,
+because a bad one does not fail in resvg — it renders the wrong card and returns
+a perfectly valid PNG."""
 
 
 MAX_INSET_BORDER_PX = 48
@@ -574,7 +599,10 @@ def publish_draft(
         raise HTTPException(
             status_code=409, detail="That draft failed and has nothing to publish."
         )
-    if not draft.composed_image_path:
+    if not draft.composed_image_path and not draft.no_image:
+        # `no_image` is the difference between "text only, on purpose" and "the
+        # picture failed" — identical on the row otherwise, and only one of them
+        # may go out.
         raise HTTPException(
             status_code=409,
             detail="That draft has no composed image, so there is nothing to post.",
@@ -595,10 +623,15 @@ def publish_draft(
     # would otherwise move the picture out from under a scheduled post. The
     # freeze in `_editable` is what removed the need: a published draft cannot
     # rebuild, so the composite it points at can no longer change or be deleted.
-    url = media.public_url(draft.composed_image_path)
+    # A text-only draft skips the normalize call entirely: there is no image to
+    # register, and Metricool answers an error rather than a URL for an empty one.
+    normalized = None
+    if draft.composed_image_path:
+        url = media.public_url(draft.composed_image_path)
 
     try:
-        normalized = publisher.normalize_image(url, page.metricool_blog_id)
+        if draft.composed_image_path:
+            normalized = publisher.normalize_image(url, page.metricool_blog_id)
         post_id = publisher.schedule(
             page.metricool_blog_id,
             _post_text(draft),

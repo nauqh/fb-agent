@@ -18,7 +18,7 @@ from app.models import PageLayout
 from app.settings import Layout
 from app.settings import layout as defaults
 
-__all__ = ["as_overrides", "defaults", "resolve"]
+__all__ = ["as_overrides", "defaults", "resolve", "resolve_draft"]
 
 
 def _merge(base: dict, override: dict) -> dict:
@@ -83,6 +83,24 @@ def as_overrides(row: PageLayout | None) -> dict:
             "border_color": row.portrait_border_color,
         },
     }
+
+
+def resolve_draft(session: Session, page_id: int | None, template: str | None) -> Layout:
+    """The Page's layout, with this draft's own template laid over it.
+
+    One more level of the same `{**default, **override}` the file and the Page
+    already form: `layout.yml` < `page_layout` < the draft. Null at any level
+    means "keep tracking the one below", which is why a draft that has chosen
+    nothing still follows the Page when the Page changes.
+
+    Validated through `Layout` like everything else, so a stored template the
+    compositor does not know fails here rather than rendering the wrong card and
+    returning a perfectly valid PNG.
+    """
+    layout = resolve(session, page_id)
+    if not template or template == layout.template:
+        return layout
+    return Layout.model_validate({**layout.model_dump(), "template": template})
 
 
 def resolve(session: Session, page_id: int | None) -> Layout:

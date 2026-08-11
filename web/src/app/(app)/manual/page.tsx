@@ -266,6 +266,7 @@ function FromATopic() {
   const router = useRouter();
   const { page } = usePageScope();
   const [topic, setTopic] = useState("");
+  const [noImage, setNoImage] = useState(false);
   const [running, setRunning] = useState(false);
 
   const ready = topic.trim().length > 0 && page !== null;
@@ -274,8 +275,14 @@ function FromATopic() {
     if (!page || !ready) return;
     setRunning(true);
     try {
-      const ids = await generate({ sources: [], page_ids: [page.id], topic: topic.trim() });
+      const ids = await generate({
+        sources: [],
+        page_ids: [page.id],
+        topic: topic.trim(),
+        no_image: noImage,
+      });
       setTopic("");
+      setNoImage(false);
       toast.success(`${ids.length} draft${ids.length === 1 ? "" : "s"} generating.`, {
         description: "Progress is on the Review screen.",
       });
@@ -308,6 +315,18 @@ function FromATopic() {
           run as any other: the same prompts, the same brand rules, the same card.
         </p>
       </div>
+
+      {/* The picture is the only part of a topic run that costs money, so the
+          option to skip it belongs beside the button that spends it. */}
+      <label className="flex w-fit cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+        <input
+          type="checkbox"
+          checked={noImage}
+          onChange={(event) => setNoImage(event.target.checked)}
+          className="size-3.5 cursor-pointer accent-primary"
+        />
+        No image — text only, and nothing to pay for
+      </label>
 
       <Button
         className="bg-gold text-gold-foreground hover:bg-gold/90"

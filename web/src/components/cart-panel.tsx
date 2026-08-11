@@ -64,6 +64,15 @@ export function CartPanel() {
    */
   const [heroFromSource, setHeroFromSource] = useState(false);
   /**
+   * Produce text-only drafts. The one generate path that costs nothing: no
+   * hero is bought and nothing is composited.
+   *
+   * Mutually exclusive with the source picture, and the UI enforces it rather
+   * than letting the server pick a winner — asking for the feed's photograph
+   * and for no photograph is a contradiction, not a preference.
+   */
+  const [noImage, setNoImage] = useState(false);
+  /**
    * RSS only, mirroring the server, which refuses the rest.
    *
    * A competitor post's picture is a rival page's own creative and a tweet's
@@ -86,10 +95,12 @@ export function CartPanel() {
         // so it needs the item rather than a pointer to one.
         sources: cart.items,
         page_ids: [page.id],
-        hero_from_source: offerSourceHero && heroFromSource,
+        hero_from_source: offerSourceHero && heroFromSource && !noImage,
+        no_image: noImage,
       });
       cart.clear();
       setHeroFromSource(false);
+      setNoImage(false);
       toast.success(`${ids.length} draft${ids.length === 1 ? "" : "s"} generating.`, {
         description: "Progress is on the Review screen.",
       });
@@ -158,7 +169,26 @@ export function CartPanel() {
               count is the honest part — it says how many of the ticked items
               can actually supply one, which is the difference between "free
               heroes" and "some free heroes and some warnings". */}
-          {offerSourceHero ? (
+          {/* Text only. Beside the other picture option because they answer
+              the same question — where does the image come from — and one of
+              the answers is "there isn't one". */}
+          <label
+            className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs text-muted-foreground"
+            title="Produce drafts with no picture at all. Nothing is generated, so this run costs nothing."
+          >
+            <input
+              type="checkbox"
+              checked={noImage}
+              onChange={(event) => {
+                setNoImage(event.target.checked);
+                if (event.target.checked) setHeroFromSource(false);
+              }}
+              className="size-3.5 cursor-pointer accent-primary"
+            />
+            No image
+          </label>
+
+          {offerSourceHero && !noImage ? (
             <label
               className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs text-muted-foreground"
               title="Use each source's own photograph instead of generating one. No Gemini call, and the rights are the publisher's."

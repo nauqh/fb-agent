@@ -125,7 +125,7 @@ def publication_date(when: datetime | None = None) -> str:
 def build_body(
     text: str,
     first_comment: str | None,
-    image_url: str,
+    image_url: str | None,
     when: datetime | None = None,
 ) -> dict:
     """The scheduler payload, shaped as the old system shaped it.
@@ -138,7 +138,7 @@ def build_body(
     `autoPublish` and `firstCommentText` are what make Metricool the publisher
     rather than us: it posts to the page and adds the first comment on its own.
     """
-    return {
+    body = {
         "text": text,
         "firstCommentText": first_comment or "",
         "autoPublish": True,
@@ -148,8 +148,14 @@ def build_body(
             "dateTime": publication_date(when),
             "timezone": settings.timezone,
         },
-        "media": [image_url],
     }
+    # Omitted rather than sent empty for a text-only post. `"media": []` and
+    # `"media": [null]` are both a media field Metricool then has to interpret,
+    # and the type stays `POST` either way — a Facebook status update is a post
+    # with no attachment, not a different kind of publication.
+    if image_url:
+        body["media"] = [image_url]
+    return body
 
 
 def list_scheduled(
@@ -243,7 +249,7 @@ def schedule(
     blog_id: str,
     text: str,
     first_comment: str | None,
-    image_url: str,
+    image_url: str | None,
     when: datetime | None = None,
     client: httpx.Client | None = None,
 ) -> str | None:

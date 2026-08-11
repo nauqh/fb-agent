@@ -47,6 +47,7 @@ export type DraftEdit = Partial<
     | "inset_y_ratio"
     | "inset_border_width_px"
     | "inset_border_color"
+    | "template"
   >
 >;
 
@@ -94,6 +95,10 @@ export interface GenerateRequest {
    * Ignored for a topic-only run — there is no Source Item to take one from.
    */
   hero_from_source?: boolean;
+  /** `card` or `full_overlay` for the drafts this run makes. Null takes the Page's. */
+  template?: "card" | "full_overlay" | null;
+  /** Text only: no hero, no card, and the one generate path that costs nothing. */
+  no_image?: boolean;
 }
 
 /**

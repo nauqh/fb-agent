@@ -1323,3 +1323,101 @@ def test_source_kind_survives_a_database_round_trip(session):
 
     assert isinstance(stored.kind, SourceKind)
     assert stored.kind.is_factual is True
+
+
+# --- the card form, and a post with no picture --------------------------------
+
+
+def test_a_draft_follows_the_pages_template_by_default(client, written, illustrated):
+    _generate(client)
+
+    assert client.get("/drafts/1").json()["template"] is None, (
+        "null is what keeps a draft tracking the Page"
+    )
+
+
+def test_a_draft_can_choose_its_own_card_form(client, written, illustrated):
+    """The choice depends on the picture, not on the brand — a busy photograph
+    with a face low in the frame is ruined by a panel lying over it."""
+    _generate(client)
+    before = client.get("/drafts/1").json()
+
+    after = client.patch("/drafts/1", json={"template": "full_overlay"}).json()
+
+    assert after["template"] == "full_overlay"
+    assert after["composed_image_path"] != before["composed_image_path"], (
+        "the card was not redrawn in the other form"
+    )
+
+
+def test_an_unknown_template_is_refused_on_write(client, written, illustrated):
+    """resvg does not fail on a bad one — it draws the wrong card and returns a
+    perfectly valid PNG, so this is the only place it can be caught."""
+    _generate(client)
+
+    assert client.patch("/drafts/1", json={"template": "billboard"}).status_code == 422
+
+
+def test_a_no_image_run_draws_nothing_and_warns_about_nothing(client, written):
+    """No `illustrated` fixture: conftest makes `hero.generate` raise, so
+    finishing without it is the proof that nothing was drawn or billed."""
+    client.post("/generate", json={"page_ids": [1], "topic": "x", "no_image": True})
+    draft = client.get("/drafts/1").json()
+
+    assert draft["no_image"] is True
+    assert draft["status"] == "review"
+    assert draft["hero_image_path"] is None
+    assert draft["composed_image_path"] is None
+    assert draft["warnings"] == [], (
+        "a picture left out on purpose is not a warning — that is what makes it "
+        "distinguishable from one that failed"
+    )
+
+
+def test_a_text_only_draft_publishes_with_no_media(client, written, session, monkeypatch):
+    """A draft whose image *failed* must still be refused; this one is deliberate."""
+    from app.publish import metricool as publisher
+
+    sent = {}
+
+    def fake_schedule(blog_id, text, first_comment, image_url, when=None, client=None):
+        sent["image_url"] = image_url
+        return "queued-text"
+
+    monkeypatch.setattr(publisher, "schedule", fake_schedule)
+    monkeypatch.setattr(
+        publisher, "normalize_image", lambda *a, **k: (_ for _ in ()).throw(
+            AssertionError("normalize was called for a post with no image")
+        )
+    )
+    client.post("/generate", json={"page_ids": [1], "topic": "x", "no_image": True})
+
+    published = client.post("/drafts/1/publish", json={}).json()
+
+    assert published["metricool_post_id"] == "queued-text"
+    assert sent["image_url"] is None
+
+
+def test_the_payload_omits_media_entirely_when_there_is_no_picture():
+    """Not `[]` and not `[null]`: both are a media field Metricool then has to
+    interpret. A Facebook status update is a post with no attachment."""
+    from app.publish import metricool as publisher
+
+    body = publisher.build_body("text", None, None)
+
+    assert "media" not in body
+    assert body["providers"][0]["facebookData"]["type"] == "POST"
+
+
+def test_a_draft_whose_picture_failed_still_cannot_publish(client, written, illustrated, session):
+    """The difference `no_image` exists to draw. Both have no composite."""
+    _generate(client)
+    draft = session.get(Draft, 1)
+    draft.composed_image_path = None
+    session.add(draft)
+    session.commit()
+
+    response = client.post("/drafts/1/publish", json={})
+
+    assert response.status_code == 409
+    assert "nothing to post" in response.json()["detail"]

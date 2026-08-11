@@ -87,6 +87,8 @@ def start_run(
     sources: list[SourceItemBase],
     topic: str | None = None,
     hero_from_source: bool = False,
+    template: str | None = None,
+    no_image: bool = False,
 ) -> list[int]:
     """Insert one placeholder Draft per (source × page) and return the ids.
 
@@ -115,6 +117,8 @@ def start_run(
             # topic-only draft has no feed and no image_url, so carrying the
             # flag would guarantee the warning above on every one of them.
             hero_from_source=hero_from_source and row is not None,
+            template=template,
+            no_image=no_image,
             status=DraftStatus.GENERATING,
             progress_step="queued",
             progress_pct=0,
@@ -233,6 +237,11 @@ def build_image(session: Session, draft: Draft, page: Page) -> list[str]:
     genuinely new picture is charged for. `inset_image_path` is free either way
     — it is an upload, not a generation.
     """
+    if draft.no_image:
+        # Asked for on purpose, so it is not a warning. A draft with no picture
+        # by choice and one whose generation failed look identical on the row
+        # otherwise, and only one of them may be published.
+        return []
     if not draft.hook:
         return [f"{IMAGE_WARNING}no hook, so there is nothing to draw."]
 
@@ -242,7 +251,7 @@ def build_image(session: Session, draft: Draft, page: Page) -> list[str]:
         # to both halves — the plan decides how tall the panel is, the composite
         # draws it, and the two disagreeing is a card whose text does not fit
         # the space it was measured for.
-        layout = layout_for.resolve(session, page.id)
+        layout = layout_for.resolve_draft(session, page.id, draft.template)
 
         plan = overlay.plan(draft.hook, layout)
         warnings: list[str] = []

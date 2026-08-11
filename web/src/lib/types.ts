@@ -147,6 +147,10 @@ export interface Draft {
    * took.
    */
   hero_from_source: boolean;
+  /** `card` or `full_overlay` for this draft alone. Null follows the Page. */
+  template: "card" | "full_overlay" | null;
+  /** Text only, on purpose — distinct from a picture that failed to draw. */
+  no_image: boolean;
 
   /** Brand rules still failing after the writer exhausted its retries. */
   warnings: string[];

@@ -596,6 +596,35 @@ class Draft(SQLModel, table=True):
 
     image_prompt: str | None = None
 
+    template: str | None = None
+    """`card` or `full_overlay` for this draft alone. Null takes the Page's.
+
+    The same contract every other per-draft override has: null means "whatever
+    the Page is set to" and follows it when that changes, so a draft that has
+    chosen nothing is not quietly pinned to today's value.
+
+    Per draft because the client asked to switch a post between the two forms
+    at review, and the choice depends on the picture — a busy photograph with a
+    face in the lower third is ruined by a panel lying over it, and the same
+    panel is the making of a wide landscape.
+
+    A string rather than an enum for the same reason `_stored_enum` exists at
+    all: the set of templates is a fact about the compositor, and `Layout`
+    validates it on the way through (`layout_for.resolve_draft`).
+    """
+
+    no_image: bool = Field(default=False)
+    """Publish this as text only — no hero, no card, no picture at all.
+
+    A column rather than "the composite happens to be missing", because those
+    are different states and only one of them is publishable. A draft whose
+    image generation *failed* has an empty `composed_image_path` and a warning,
+    and must not go out; this one has an empty `composed_image_path` on purpose.
+
+    `build_image` is skipped entirely on a run that sets it, so it is also the
+    only generate path that costs nothing at all.
+    """
+
     hero_from_source: bool = Field(default=False)
     """Take the hero from the Source Item's own picture instead of buying one.
 

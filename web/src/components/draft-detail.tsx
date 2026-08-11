@@ -69,6 +69,8 @@ interface Form {
    */
   inset_border_width_px: number | null;
   inset_border_color: string | null;
+  /** `card` or `full_overlay` for this draft. Null follows the Page. */
+  template: "card" | "full_overlay" | null;
 }
 
 export function DraftDetail({
@@ -340,7 +342,14 @@ export function DraftDetail({
    */
   const picture = (
     <ComposedImage
-      layout={layout}
+      layout={
+        // The draft's own form laid over the Page's, so the toggle moves the
+        // card as it is clicked rather than after a save. Same merge the server
+        // does in `layout_for.resolve_draft`.
+        form?.template && form.template !== layout.template
+          ? { ...layout, template: form.template }
+          : layout
+      }
       page={page}
       overlayText={form?.hook ?? draft.hook}
       highlightPhrases={form?.highlight_phrases ?? draft.highlight_phrases}
@@ -476,6 +485,55 @@ export function DraftDetail({
             )}
             Regenerate hero
           </Button>
+          {/* Which of the two forms this card is drawn in. Under the picture
+              because that is the only place the difference is visible: the
+              choice depends on the photograph, not on the brand — a busy shot
+              with a face low in the frame is ruined by a panel lying over it,
+              and the same panel is the making of a wide landscape.
+
+              Null follows the Page, so a draft nobody has touched still moves
+              when the Page's form changes. Once set it is this draft's. */}
+          {form ? (
+            <div className="space-y-2 rounded-md border p-3">
+              <div className="flex items-baseline justify-between">
+                <Label className="text-xs">Card form</Label>
+                <span className="text-[11px] text-muted-foreground">
+                  {form.template === null ? "from Page" : "this draft"}
+                </span>
+              </div>
+              <div className="flex gap-1">
+                {(["card", "full_overlay"] as const).map((option) => {
+                  const shown = form.template ?? layout.template;
+                  return (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() => setForm({ ...form, template: option })}
+                      className={cn(
+                        "flex-1 rounded-md border px-2 py-1 text-[11px] capitalize transition-colors",
+                        option === shown
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "text-muted-foreground hover:bg-muted",
+                      )}
+                    >
+                      {option.replace(/_/g, " ")}
+                    </button>
+                  );
+                })}
+                {form.template !== null ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-auto px-2 text-[11px] text-muted-foreground"
+                    onClick={() => setForm({ ...form, template: null })}
+                  >
+                    Use the Page&rsquo;s
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+
           {/* The inset sits under the picture rather than in the copy column:
               it is the one control whose whole feedback is the image, and the
               slider is useless without it in view. */}
@@ -1213,5 +1271,6 @@ function toForm(draft: Draft): Form {
     inset_y_ratio: draft.inset_y_ratio,
     inset_border_width_px: draft.inset_border_width_px,
     inset_border_color: draft.inset_border_color,
+    template: draft.template,
   };
 }
