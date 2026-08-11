@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 
 import { Logo } from "@/components/logo";
+import { SignOut } from "@/components/sign-out";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { listDrafts } from "@/lib/api/drafts";
 import { useCart } from "@/lib/cart";
@@ -270,6 +271,7 @@ export function Sidebar({
                 control that changes nothing about where you are. It shares
                 their row shape only so the icons stay in the same column. */}
             <ThemeToggle collapsed={collapsed} />
+            <SignOut collapsed={collapsed} />
           </div>
         </nav>
       </aside>
