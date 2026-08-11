@@ -141,6 +141,12 @@ export interface Draft {
    */
   inset_border_width_px: number | null;
   inset_border_color: string | null;
+  /**
+   * Whether the hero came from the Source Item's own picture rather than from
+   * Gemini. Stored rather than derived, so a rebuild takes the path the run
+   * took.
+   */
+  hero_from_source: boolean;
 
   /** Brand rules still failing after the writer exhausted its retries. */
   warnings: string[];

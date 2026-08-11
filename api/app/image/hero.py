@@ -6,11 +6,14 @@ arithmetic and rasterising, and can be re-run for free — which is why
 overlay re-composites; it does not re-buy the picture.
 """
 
+import io
 import time
 from typing import NamedTuple
 
+import httpx
 from google import genai
 from google.genai import types
+from PIL import Image
 
 from app.settings import Layout, settings
 from app.settings import layout as default_layout
@@ -52,6 +55,63 @@ asking for is the ratio closest to the box it has to fill.
 
 class HeroError(RuntimeError):
     """No image came back. Lands on `draft.error`; the draft survives without one."""
+
+
+FETCH_TIMEOUT = 30.0
+
+MAX_FETCH_BYTES = 16 * 1024 * 1024
+"""Bounded because the body is read into memory, and the URL is a publisher's
+rather than ours — a feed can point at a 40MB press original."""
+
+
+def from_url(url: str, client: httpx.Client | None = None) -> bytes:
+    """The publisher's own photograph, for a hero nobody has to pay for.
+
+    The Source Item already carries `image_url` and the source cards already
+    render it, so this is the cheapest picture in the app: no model call, and
+    the rights are whatever the publisher already had.
+
+    **Re-encoded and stored, never hot-linked.** Metricool keeps a *link* to
+    what we publish and Facebook fetches it when the post is due, days later —
+    the trap `CLAUDE.md` records for our own bucket applies twice over to
+    somebody else's CDN, which can rotate a URL or drop the file with no notice.
+    Decoding here also means a feed serving an HTML error page is a failure at
+    the fetch rather than a broken composite twenty seconds later.
+
+    PNG out, matching what `generate` returns and what the `hero` filename says.
+    """
+    owned = client is None
+    client = client or httpx.Client(timeout=FETCH_TIMEOUT, follow_redirects=True)
+    try:
+        response = client.get(url)
+    except httpx.HTTPError as error:
+        raise HeroError(
+            f"the feed's image did not answer ({type(error).__name__}): {url}"
+        ) from error
+    finally:
+        if owned:
+            client.close()
+
+    if response.is_error:
+        raise HeroError(
+            f"the feed's image answered {response.status_code}: {url}"
+        )
+    if len(response.content) > MAX_FETCH_BYTES:
+        raise HeroError(
+            f"the feed's image is over {MAX_FETCH_BYTES // (1024 * 1024)}MB: {url}"
+        )
+
+    try:
+        picture = Image.open(io.BytesIO(response.content))
+        picture.load()
+    except Exception as error:  # noqa: BLE001 — any decode failure is the same answer
+        raise HeroError(
+            f"the feed's image is not one Pillow can read ({error}): {url}"
+        ) from error
+
+    buffer = io.BytesIO()
+    picture.convert("RGB").save(buffer, format="PNG")
+    return buffer.getvalue()
 
 
 class Hero(NamedTuple):

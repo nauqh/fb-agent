@@ -87,6 +87,13 @@ export interface GenerateRequest {
   page_ids: number[];
   /** Set instead of sources for a topic-only run. */
   topic?: string;
+  /**
+   * Take each Source Item's own picture as the hero instead of buying one from
+   * Gemini. Off by default, so the paid path is the one you ask for.
+   *
+   * Ignored for a topic-only run — there is no Source Item to take one from.
+   */
+  hero_from_source?: boolean;
 }
 
 /**

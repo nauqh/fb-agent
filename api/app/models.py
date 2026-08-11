@@ -544,6 +544,21 @@ class Draft(SQLModel, table=True):
     hashtags: list[str] = Field(default_factory=list, sa_column=Column(JSON))
 
     image_prompt: str | None = None
+
+    hero_from_source: bool = Field(default=False)
+    """Take the hero from the Source Item's own picture instead of buying one.
+
+    A column rather than a decision made at draw time, because a rebuild has to
+    take the same path the run did. Derived from "does the source have an
+    image_url" it would flip on its own — a feed that starts or stops carrying
+    pictures would silently change what a rebuild costs and what the card looks
+    like.
+
+    False is the default and means the Gemini call. `image_prompt` stays
+    populated either way: the writer produced it, it costs nothing to keep, and
+    it is what a later "buy one after all" would use.
+    """
+
     hero_image_path: str | None = None
     composed_image_path: str | None = None
     """Kept apart so re-compositing an edit does not re-pay for image generation."""

@@ -3,7 +3,7 @@
 import pytest
 from sqlmodel import Session, func, select
 
-from app import generate
+from app import generate, media
 from app.models import Draft, DraftStatus, SourceItem, SourceItemBase, SourceKind
 from app.settings import settings
 from app.writer.agent import DraftContent
@@ -554,6 +554,173 @@ def test_a_draft_still_generating_cannot_be_deleted(client, session):
 
 def test_deleting_something_that_is_not_there_says_so(client):
     assert client.delete("/drafts/999").status_code == 404
+
+
+# --- the feed's own picture as the hero --------------------------------------
+#
+# Note what is *absent* from these: the `illustrated` fixture. The autouse guard
+# in conftest makes `hero.generate` raise, so a run that finishes without it is
+# proof that nothing was billed — which is the whole point of the feature, and
+# not something an assertion on the row could show.
+
+
+def _feed_png(monkeypatch) -> bytes:
+    """Stand in for the publisher's CDN. Real bytes: the compositor opens them."""
+    import io
+
+    from PIL import Image
+
+    from app.image import hero
+
+    buffer = io.BytesIO()
+    Image.new("RGB", (1600, 900), (90, 60, 40)).save(buffer, format="PNG")
+    png = buffer.getvalue()
+    monkeypatch.setattr(hero, "from_url", lambda *a, **k: png)
+    return png
+
+
+def test_the_feeds_picture_becomes_the_hero_and_costs_nothing(
+    client, written, monkeypatch
+):
+    _feed_png(monkeypatch)
+    source = _rss()
+    source.image_url = "https://example.com/photo.jpg"
+
+    client.post(
+        "/generate",
+        json={
+            "page_ids": [1],
+            "sources": [source.model_dump(mode="json")],
+            "hero_from_source": True,
+        },
+    )
+    draft = client.get("/drafts/1").json()
+
+    assert draft["hero_from_source"] is True
+    assert draft["hero_image_path"], "the fetched picture was not stored"
+    assert draft["composed_image_path"], "the card did not compose around it"
+
+
+def test_the_fetched_picture_is_stored_rather_than_hot_linked(
+    client, written, monkeypatch
+):
+    """Metricool keeps a link and Facebook fetches it days later.
+
+    A publisher's CDN can rotate a URL or drop the file with no notice, so the
+    bytes have to be ours by the time the post is queued.
+    """
+    png = _feed_png(monkeypatch)
+    source = _rss()
+    source.image_url = "https://example.com/photo.jpg"
+
+    client.post(
+        "/generate",
+        json={
+            "page_ids": [1],
+            "sources": [source.model_dump(mode="json")],
+            "hero_from_source": True,
+        },
+    )
+    draft = client.get("/drafts/1").json()
+
+    assert media.store.read(draft["hero_image_path"]) == png
+    assert "example.com" not in (draft["hero_image_path"] or "")
+
+
+def test_a_source_with_no_picture_warns_rather_than_buying_one(client, written):
+    """The operator asked for the feed's picture. Silently billing them for a
+    different one is the wrong kind of helpful — and `hero.generate` raising
+    here is what proves it did not happen."""
+    client.post(
+        "/generate",
+        json={
+            "page_ids": [1],
+            "sources": [_rss().model_dump(mode="json")],
+            "hero_from_source": True,
+        },
+    )
+    draft = client.get("/drafts/1").json()
+
+    assert draft["status"] == "review", "the text survived a missing picture"
+    assert any("has none" in w for w in draft["warnings"]), draft["warnings"]
+    assert draft["hero_image_path"] is None
+
+
+def test_a_competitors_picture_is_never_reused_as_our_hero(
+    client, written, session, monkeypatch
+):
+    """Reposting a rival page's own creative under our watermark.
+
+    The request was for "the image provided by the RSS feed" specifically, and
+    the narrow reading is also the defensible one — a feed image accompanies a
+    story we are retelling, a competitor's is the thing they made.
+    """
+    _feed_png(monkeypatch)
+    session.add(
+        SourceItem(
+            kind=SourceKind.COMPETITOR_POST,
+            external_id="rival-1",
+            image_url="https://example.com/theirs.jpg",
+        )
+    )
+    session.commit()
+
+    client.post(
+        "/generate",
+        json={
+            "page_ids": [1],
+            "sources": [
+                {
+                    "kind": "competitor_post",
+                    "external_id": "rival-1",
+                    "image_url": "https://example.com/theirs.jpg",
+                }
+            ],
+            "hero_from_source": True,
+        },
+    )
+    draft = client.get("/drafts/1").json()
+
+    assert any("belongs to whoever published it" in w for w in draft["warnings"]), (
+        draft["warnings"]
+    )
+    assert draft["hero_image_path"] is None
+
+
+def test_a_topic_only_run_never_carries_the_flag(client, written, illustrated):
+    """There is no Source Item to take a picture from, so carrying it would
+    guarantee the warning above on every topic draft."""
+    client.post(
+        "/generate",
+        json={"page_ids": [1], "topic": "The Great Molasses Flood", "hero_from_source": True},
+    )
+
+    assert client.get("/drafts/1").json()["hero_from_source"] is False
+
+
+def test_a_feed_serving_html_fails_at_the_fetch(client):
+    """Rather than as a broken composite twenty seconds later."""
+    import httpx
+
+    from app.image import hero
+
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(200, text="<html>404 not found</html>")
+    )
+    with httpx.Client(transport=transport) as http:
+        with pytest.raises(hero.HeroError, match="not one Pillow can read"):
+            hero.from_url("https://example.com/gone.jpg", client=http)
+
+
+def test_a_feed_image_that_answers_an_error_is_not_treated_as_a_picture():
+    import httpx
+
+    from app.image import hero
+
+    transport = httpx.MockTransport(lambda request: httpx.Response(403))
+    with httpx.Client(transport=transport) as http:
+        with pytest.raises(hero.HeroError, match="403"):
+            hero.from_url("https://example.com/forbidden.jpg", client=http)
 
 
 # --- the circular inset ------------------------------------------------------

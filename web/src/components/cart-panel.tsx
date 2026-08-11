@@ -52,6 +52,32 @@ export function CartPanel() {
   const usingTopic = cart.count === 0;
   const draftCount = usingTopic ? (topic.trim() ? 1 : 0) : cart.count;
 
+  /**
+   * Use the sources' own pictures instead of buying heroes.
+   *
+   * Offered only when the Cart actually holds some — the option is meaningless
+   * against a topic run, which has no Source Item, and dishonest against items
+   * with no `image_url`, where every draft would come back carrying a warning
+   * instead of a picture.
+   *
+   * Not sticky between runs. It is a property of *these* sources rather than a
+   * preference: the next cart may be competitor posts with nothing to take.
+   */
+  const [heroFromSource, setHeroFromSource] = useState(false);
+  /**
+   * RSS only, mirroring the server, which refuses the rest.
+   *
+   * A competitor post's picture is a rival page's own creative and a tweet's
+   * belongs to whoever posted it, so reusing either as our hero is reposting
+   * their content under our watermark. A feed image accompanies a story we are
+   * retelling. The client asked for "the image provided by the RSS feed", and
+   * the narrower reading is also the defensible one.
+   */
+  const withPictures = cart.items.filter(
+    (item) => item.kind === "rss" && item.image_url,
+  ).length;
+  const offerSourceHero = !usingTopic && withPictures > 0;
+
   async function run() {
     if (!page || draftCount === 0) return;
     setRunning(true);
@@ -62,9 +88,11 @@ export function CartPanel() {
         sources: usingTopic ? [] : cart.items,
         page_ids: [page.id],
         topic: usingTopic ? topic.trim() : undefined,
+        hero_from_source: offerSourceHero && heroFromSource,
       });
       cart.clear();
       setTopic("");
+      setHeroFromSource(false);
       toast.success(`${ids.length} draft${ids.length === 1 ? "" : "s"} generating.`, {
         description: "Progress is on the Review screen.",
       });
@@ -133,6 +161,31 @@ export function CartPanel() {
               </li>
             ))}
           </ul>
+
+          {/* Beside Generate, not in a settings screen: it changes what the
+              next click costs, so it belongs where the cost is incurred. The
+              count is the honest part — it says how many of the ticked items
+              can actually supply one, which is the difference between "free
+              heroes" and "some free heroes and some warnings". */}
+          {offerSourceHero ? (
+            <label
+              className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs text-muted-foreground"
+              title="Use each source's own photograph instead of generating one. No Gemini call, and the rights are the publisher's."
+            >
+              <input
+                type="checkbox"
+                checked={heroFromSource}
+                onChange={(event) => setHeroFromSource(event.target.checked)}
+                className="size-3.5 cursor-pointer accent-primary"
+              />
+              Use source picture
+              {withPictures < cart.count ? (
+                <span className="tabular-nums">
+                  ({withPictures}/{cart.count})
+                </span>
+              ) : null}
+            </label>
+          ) : null}
 
           <Button variant="ghost" size="sm" className="shrink-0" onClick={cart.clear}>
             Clear

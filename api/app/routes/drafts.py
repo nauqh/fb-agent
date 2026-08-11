@@ -43,6 +43,14 @@ class GenerateRequest(BaseModel):
     sources: list[SourceItemBase] = []
     topic: str | None = None
 
+    hero_from_source: bool = False
+    """Use each Source Item's own picture as the hero instead of buying one.
+
+    Off by default, so the paid path stays the one you have to ask for — the
+    same reasoning as `new_hero` on the rebuild route, in the opposite
+    direction.
+    """
+
 
 @router.post("/generate", status_code=202)
 def start_generate(
@@ -53,7 +61,11 @@ def start_generate(
     """202: accepted, not finished. One real draft took ~130s."""
     try:
         draft_ids = generate.start_run(
-            session, request.page_ids, request.sources, request.topic
+            session,
+            request.page_ids,
+            request.sources,
+            request.topic,
+            request.hero_from_source,
         )
     except generate.GenerateError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error

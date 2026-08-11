@@ -86,6 +86,7 @@ def start_run(
     page_ids: list[int],
     sources: list[SourceItemBase],
     topic: str | None = None,
+    hero_from_source: bool = False,
 ) -> list[int]:
     """Insert one placeholder Draft per (source × page) and return the ids.
 
@@ -110,6 +111,10 @@ def start_run(
             page_id=page_id,
             source_item_id=row.id if row else None,
             topic=topic if row is None else None,
+            # Only where there is a Source Item to take a picture from. A
+            # topic-only draft has no feed and no image_url, so carrying the
+            # flag would guarantee the warning above on every one of them.
+            hero_from_source=hero_from_source and row is not None,
             status=DraftStatus.GENERATING,
             progress_step="queued",
             progress_pct=0,
@@ -244,6 +249,40 @@ def build_image(session: Session, draft: Draft, page: Page) -> list[str]:
 
         if draft.hero_image_path:
             image_bytes = media.store.read(draft.hero_image_path)
+        elif draft.hero_from_source:
+            # The publisher's own photograph. Free, and the rights are whatever
+            # the feed already carried — which is the whole reason this is worth
+            # having beside a model that cannot browse.
+            #
+            # A missing url is a warning rather than a fallback to Gemini: the
+            # operator asked for this picture, and quietly billing them for a
+            # different one is the wrong kind of helpful.
+            source = (
+                session.get(SourceItem, draft.source_item_id)
+                if draft.source_item_id
+                else None
+            )
+            # **RSS only, and that is not an arbitrary narrowing.** The request
+            # was "use the image provided by the RSS feed". A competitor post's
+            # picture is a rival page's own creative and a tweet's belongs to
+            # whoever posted it, so reusing either as our hero is reposting
+            # their content under our watermark. A feed image accompanies a
+            # story we are retelling, which is the one case that reads as
+            # sourcing rather than lifting.
+            if source is None or source.kind is not SourceKind.RSS:
+                return [
+                    f"{IMAGE_WARNING}only an RSS item's picture can be reused; "
+                    "a competitor post or tweet belongs to whoever published it."
+                ]
+            if not source.image_url:
+                return [
+                    f"{IMAGE_WARNING}this draft was set to use the feed's "
+                    "picture and its source has none."
+                ]
+            image_bytes = hero.from_url(source.image_url)
+            draft.hero_image_path = media.store.save(
+                image_bytes, media.filename(draft.id or 0, "hero", "png")
+            )
         else:
             drawn = hero.generate(draft.image_prompt or "", plan.hero_height_px)
             image_bytes = drawn.data
