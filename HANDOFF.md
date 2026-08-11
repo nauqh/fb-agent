@@ -1,6 +1,6 @@
 # Handoff
 
-**Updated:** 2026-08-10 · **Next focus:** authentication on the API, then the Railway deploy
+**Updated:** 2026-08-11 · **Next focus:** the deploy — web on Vercel, API on Railway
 
 Conventions and integration traps live in `CLAUDE.md`, which loads automatically.
 This file is state: what is proven, what is mid-flight, what to do next.
@@ -12,30 +12,36 @@ content agent. The **old** app is `D:\Laboratory\social-agent`: reference only,
 still deployed, still the thing publishing History Retraced. Read it for prior
 art; never edit it.
 
-Branch `main`, clean except one file (below), **10 commits ahead of origin,
-nothing pushed**.
+Branch `main`, clean, and **in sync with origin** — `github.com/nauqh/fb-agent`
+is at `bb4c81e`. This is a change from what this file said for a long time
+("nothing pushed"); commits reach the remote without anyone running `git push`
+in the session, so assume a commit is public the moment it exists.
 
 Recent work, newest first — read the commit messages rather than re-deriving the
 reasoning, they carry the evidence:
 
 | Commit | What |
 |---|---|
-| `0c72511` | Review queue grouped by day; "Publish now" wired up |
-| `9e33efd` | Schedule tab — Metricool's planner, read live |
-| `be21124` | Publish path — Supabase upload → Metricool schedule |
-| `ebfbdfa` | Heroes were being generated without the brand style block |
-| `02a8b74` | Circular inset — upload, resize, reposition |
-
-**Uncommitted work that is not the media change**: a nav → sidebar refactor
-(`components/sidebar.tsx`, `logo.tsx`, `app/icon.svg`, `layout.tsx`, `nav.tsx`
-deleted) and `design/`. That is the user's own, in flight. Stage by filename.
+| `bb4c81e` | Sign-in on the web app; `(app)` route group; session cookie |
+| `0675c1d` | Publish field seeds on the Page's clock; footer is one strip |
+| `b5aa168` | A publication time can be chosen; Schedule screen was on the browser's clock |
+| `0c7c7fa` | Feeds for the eight Pages that had none |
+| `62586da` | The old app's second card template, with its headline badge |
 
 ## What is actually proven vs merely written
 
 Verified against live services:
 
 - Metricool **reads** work with the existing token — `/admin/simpleProfiles`,
-  `/v2/scheduler/posts` (302 posts), and the image normalize endpoint.
+  `/v2/scheduler/posts` and the image normalize endpoint. Read across all ten
+  Pages on 2026-08-11: **4,975 planner rows**, the largest being History
+  Retraced at 2,135; `GYM Motivation` ×2 and `House of Common Sense` return
+  zero. Every row was written by the old app.
+- The **sign-in** works end to end, driven in a browser: a deep link while
+  signed out lands on `/login?next=…`, the wrong pair is refused, the right one
+  returns to where it started, `/api/pages` answers 200 with the cookie and 401
+  after `POST /auth/logout`. Local dev server only — **not** exercised on a
+  deploy, and `proxy.ts` failing to be picked up is silent by design.
 - Supabase Storage is now the app's only media backend, exercised for real:
   12 files uploaded through `SupabaseMediaStore`'s own code path, every one
   fetched back over its unauthenticated public URL with matching byte counts,
@@ -43,20 +49,60 @@ Verified against live services:
 - One real Gemini image call, to confirm the image model accepts a
   `system_instruction`. It does.
 
-**Never run: the Metricool write path.** No draft has a `metricool_post_id`.
+**Never run: the Metricool write path.** No draft has a `metricool_post_id`, and
+the planner holds **0 rows with `draft: true`** across all ten Pages — measured,
+not assumed, so nothing this app sent is sitting there unnoticed.
 `METRICOOL_PUBLISH_AS_DRAFT=true` in `.env`, so the first push lands in the
 planner without going to the page. Keep it true until a push has been watched
 end to end.
 
-## Media is done. Uncommitted.
+Note what that flag does and does not do, because it has been misread: it is a
+field on the *planner row*. The post still reaches Metricool. What it stops is
+Metricool pushing on to Facebook.
+
+## Sign-in — done 2026-08-11
+
+The web app was open to anyone who found the URL, and it is the thing holding
+`API_KEY` (`proxy.ts` attaches it on the caller's behalf), so an open UI was an
+open API with extra steps.
+
+One signed cookie, no session store — ADR-0002 left nothing to look a session up
+in. `lib/auth.ts` HMACs an expiry with `AUTH_SECRET`; the expiry is inside the
+signed payload as well as on the cookie, so editing `Max-Age` in devtools
+extends nothing. Web Crypto rather than `node:crypto`, because `proxy.ts` runs
+on Edge.
+
+Three things not to rediscover:
+
+- **The routes cannot live under `/api/`** — `next.config.ts` rewrites that
+  prefix wholesale to FastAPI, so a handler there is never reached. Hence
+  `/auth/login` and `/auth/logout`.
+- **`proxy.ts`'s matcher must exclude `_next/static` and `_next/image`.** The
+  login page is built from them, so redirecting them serves a page with no
+  styles and no bundle.
+- **The rail moved into an `(app)` route group.** It lived in the root layout,
+  which wraps `/login` too. A group, not a segment — every URL is unchanged.
+
+Both directions fail closed: blank `AUTH_SECRET` denies every session, blank
+`APP_PASSWORD` refuses every login.
+
+What it is not: the password is a **plaintext env var, not a hash** — there is
+no user record to put one in. `/auth/login` has **no rate limiting**. Sessions
+cannot be revoked one at a time; rotating `AUTH_SECRET` is the only "sign out
+everywhere".
+
+Local credentials are in `web/.env.local` (gitignored): `admin@gmail.com` /
+`fb-agent2`. That password is a placeholder and is too weak for a public domain.
+
+## Media is done
 
 Storage moved to Supabase on 2026-08-09, after a `grilling` session that settled
 eleven questions. The shape that was actually built is **not** the plan this file
 carried before — `MEDIA_BACKEND=local|supabase` was rejected in favour of one
 backend, and the publish-time upload was deleted rather than kept.
 
-Nine steps, seven of them done. 260 tests pass, `tsc` clean, eslint unchanged
-(the `review-list.tsx:87` error is still the pre-existing one).
+Nine steps, seven of them done. 260 tests passed at the time; the suite is
+**302** now.
 
 - **One store.** `SupabaseMediaStore` is the only implementation in `app/`;
   `LocalMediaStore` moved to `tests/conftest.py` as a fake, which is what keeps
@@ -94,26 +140,45 @@ two databases hand out the same draft ids.
 Verified in a browser, not just in tests: the Review screen renders all six
 composites from the dev bucket, `896x1120`, zero failed requests.
 
-## The next task
+## The next task — the deploy
 
-**The API has no authentication and no CORS middleware.** Grepped and confirmed
-empty. Every route is unauthenticated, including the ones that spend money
-(`POST /generate` calls Gemini) and the one that publishes to a real Facebook
-page. The database being locked down does not help: requests arrive *through*
-the API, which holds the `postgres` credential. A shared-secret header is about
-twenty lines and is the last thing standing between this and a public Railway
-domain. `METRICOOL_PUBLISH_AS_DRAFT=true` is the only thing currently stopping a
-stranger's request from reaching a page.
+Both halves are authenticated now (`settings.api_key` on FastAPI, the session
+cookie on Next), so this is the last thing left.
 
-Then the deploy itself: root directory `api`, start command
+**API on Railway.** Root directory `api`, start command
 `uvicorn app.main:app --host 0.0.0.0 --port $PORT`, **one replica**
 (`generate.sweep_stranded` assumes a single writer), and the same `.env` values —
-`DATABASE_URL` on the session pooler, `SUPABASE_BUCKET=fb-agent-media`.
+`DATABASE_URL` on the session pooler, `SUPABASE_BUCKET=fb-agent-media`. Run
+`uv run alembic check` first; the suite builds its schema with `create_all` and
+so can never catch a missing revision.
+
+**Web on Vercel.** Root directory `web`, and **five** variables, none of them
+`NEXT_PUBLIC_`:
+
+| | |
+|---|---|
+| `APP_EMAIL`, `APP_PASSWORD` | the sign-in. Not the placeholder in `.env.local` |
+| `AUTH_SECRET` | signs the cookie. `openssl rand -base64 32` |
+| `API_KEY` | must equal the API's |
+| `API_ORIGIN` | the Railway URL — **not** the `127.0.0.1:8000` default |
+
+`API_ORIGIN` is the one that breaks quietly: left unset it points at the
+serverless container itself, and every `/api/*` call fails against an API that
+is plainly running. Set all five for Preview as well as Production, or a preview
+comes up with a blank `AUTH_SECRET`, which denies every session and reads as a
+broken login rather than a missing variable. Vercel bakes variables at build, so
+a change needs a redeploy.
+
+Unverified and worth checking first: `proxy.ts` is Next 16's renamed middleware
+convention and has only ever run on the local dev server. If pages load straight
+through without a sign-in, that file not being picked up is the first suspect —
+it fails silently.
 
 ## Done on 2026-08-10 — the database moved
 
 **Supabase Postgres, session pooler on `:5432`.** 2 pages / 954 source items /
-6 drafts, ids and their gaps preserved, sequences resynced to 3 / 955 / 15.
+6 drafts were migrated, ids and their gaps preserved, sequences resynced to
+3 / 955 / 15. It has grown since — **10 / 2,435 / 17** on 2026-08-11.
 Verified in a browser: Review renders all six composites from the production
 bucket, zero broken images, zero console errors.
 
@@ -201,11 +266,24 @@ session. What remains here is state.
   now carries `inset_image_path`, `inset_size_px`, `inset_x_ratio`,
   `inset_y_ratio`, `metricool_post_id`. A fresh clone gets these from
   `create_all`.
-- Pre-existing lint error at `web/src/components/review-list.tsx:87`
-  (`set-state-in-effect`) — not yours, leave it.
+- `npx eslint src` is **clean, zero problems**. The long-standing
+  `set-state-in-effect` error at `review-list.tsx:87` is gone; both this file
+  and `CLAUDE.md` described it as pre-existing and to be left alone, and neither
+  noticed it being fixed. A warning there now is new — treat it as yours.
 - Known unfixed: `sm:max-w-sm` in `web/src/components/ui/dialog.tsx` makes the
   image lightbox render 384px instead of its requested 1100px. One-word fix,
   never approved.
+- **Every clock in the web app is the Page's, `Asia/Ho_Chi_Minh`.** The operator
+  is in Melbourne and the client in Vietnam, and one clock is the decision — do
+  not add a helper that renders an instant in the browser's zone, there is a
+  note in `format.ts` where the last one was deleted. Two screens had it wrong
+  (`getTimezoneOffset()` for "today" against planner stamps that are naive
+  Ho Chi Minh); `pageToday()` / `pageNoon()` are the fix. The one thing that
+  cannot be reached is `<input type="datetime-local">`, whose picker always
+  offers the OS clock — which is why the publish field is seeded rather than
+  empty, and why its label carries `(GMT+7)`.
+- Row timestamps stay **UTC** (`models.py:26`) and are rendered into the Page's
+  zone. That is storage, not a second clock.
 
 ## Suggested skills
 
