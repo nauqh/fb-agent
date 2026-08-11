@@ -566,6 +566,24 @@ class Draft(SQLModel, table=True):
     `Layout.portrait.clamp`.
     """
 
+    inset_border_width_px: int | None = None
+    """Ring thickness. Null takes `layout.portrait.border_width_px`; 0 is no ring.
+
+    Per draft for the same reason the diameter is: the right ring depends on the
+    picture in the disc, not on the brand. A dark portrait wants a light ring to
+    separate it from the panel; a bright one usually wants none at all. Null and
+    0 are different answers — null tracks whatever the Page is set to, 0 is this
+    draft choosing to have no ring.
+    """
+
+    inset_border_color: str | None = None
+    """Ring colour. Null takes `layout.portrait.border_color`.
+
+    The Page's default is black, which reads as a cut-out where the ring crosses
+    the panel. That is the right default and the wrong answer for a picture that
+    is itself mostly black, which is what this column is for.
+    """
+
     inset_x_ratio: float | None = None
     inset_y_ratio: float | None = None
     """Centre of the disc, as fractions of card width and height. Null is the seam.

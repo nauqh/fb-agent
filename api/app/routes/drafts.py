@@ -101,6 +101,8 @@ class DraftEdit(BaseModel):
     inset_size_px: int | None = None
     inset_x_ratio: float | None = None
     inset_y_ratio: float | None = None
+    inset_border_width_px: int | None = None
+    inset_border_color: str | None = None
 
 
 DRAWN_FIELDS = (
@@ -109,6 +111,8 @@ DRAWN_FIELDS = (
     "inset_size_px",
     "inset_x_ratio",
     "inset_y_ratio",
+    "inset_border_width_px",
+    "inset_border_color",
 )
 """The only edits that change the picture. Caption and body are not on it."""
 
@@ -148,6 +152,13 @@ def update_draft(
     if changes.get("inset_size_px") is not None:
         changes["inset_size_px"] = layout.portrait.clamp(
             changes["inset_size_px"], layout.image.width
+        )
+    # Same reasoning, and the same bounds the old app used
+    # (`clampInsetBorderWidthPx`, 0–48). 0 is a legitimate value meaning "no
+    # ring" and must survive the clamp — it is null that means "the Page's".
+    if changes.get("inset_border_width_px") is not None:
+        changes["inset_border_width_px"] = min(
+            MAX_INSET_BORDER_PX, max(0, changes["inset_border_width_px"])
         )
     for axis in ("inset_x_ratio", "inset_y_ratio"):
         # 0-1 of the card, as the old app stored it. Off the edge is allowed
@@ -209,6 +220,12 @@ def rebuild_image(
     return _save(session, draft)
 
 
+MAX_INSET_BORDER_PX = 48
+"""The old app's `MAX_INSET_BORDER_WIDTH_PX`. Past this the ring is thicker than
+most of the picture it surrounds. Not in `layout.yml`, because it is a bound on
+what a draft may choose rather than a value a Page renders with."""
+
+
 MAX_INSET_BYTES = 8 * 1024 * 1024
 """A phone photograph is 3-5MB. Bounded because the body is read into memory."""
 
@@ -263,9 +280,11 @@ async def upload_inset(
 def remove_inset(draft_id: int, session: Session = Depends(get_session)) -> Draft:
     """Take the circle off. Returns the draft, not 204, because the card changed.
 
-    Size and position go with it, so the next upload starts on the seam at the
-    default diameter rather than inheriting geometry chosen for a picture that
-    is no longer there. Replacing keeps them, which is the point of Replace.
+    Size, position and the ring go with it, so the next upload starts on the
+    seam at the Page's defaults rather than inheriting styling chosen for a
+    picture that is no longer there — a white ring picked for a dark portrait is
+    wrong for whatever replaces it. Replacing keeps them, which is the point of
+    Replace.
 
     The file is left on disk: an approved composite may already have been drawn
     with it, and the row that points at that composite has no way to say which
@@ -280,6 +299,8 @@ def remove_inset(draft_id: int, session: Session = Depends(get_session)) -> Draf
     draft.inset_size_px = None
     draft.inset_x_ratio = None
     draft.inset_y_ratio = None
+    draft.inset_border_width_px = None
+    draft.inset_border_color = None
     return _redrawn(session, draft, page)
 
 

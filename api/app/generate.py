@@ -333,6 +333,8 @@ def _inset(draft: Draft) -> compositor.Inset | None:
         draft.inset_size_px,
         draft.inset_x_ratio,
         draft.inset_y_ratio,
+        draft.inset_border_width_px,
+        draft.inset_border_color,
     )
 
 

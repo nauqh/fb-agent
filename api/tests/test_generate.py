@@ -663,6 +663,121 @@ def test_replacing_the_picture_keeps_where_it_was(
     assert replaced["inset_y_ratio"] == 0.4
 
 
+# --- the inset's ring --------------------------------------------------------
+#
+# Per draft, over the Page's `page_layout.portrait_*`. Null means "whatever the
+# Page says", which is why none of these assert against a number from
+# `layout.yml` — they assert the *relationships* that a clipped or filled ring
+# would break, since a wrong ring still produces a perfectly valid PNG.
+
+
+def test_the_ring_is_per_draft_and_redraws_the_card(
+    client, written, illustrated, a_photograph
+):
+    _generate(client)
+    before = _upload(client, a_photograph).json()
+
+    after = client.patch(
+        "/drafts/1", json={"inset_border_width_px": 12, "inset_border_color": "#ffffff"}
+    ).json()
+
+    assert after["inset_border_width_px"] == 12
+    assert after["inset_border_color"] == "#ffffff"
+    assert after["composed_image_path"] != before["composed_image_path"], (
+        "the ring is drawn into the composite, so changing it must redraw"
+    )
+
+
+def test_a_border_of_zero_draws_no_ring_rather_than_a_filled_disc(a_photograph):
+    """Pillow reads `width=0` as *fill the shape*, not as "draw nothing".
+
+    So the unguarded call paints a solid disc of the border colour straight over
+    the picture — the inset survives as a flat coloured circle, which is a valid
+    image and an obviously broken card. `0` is the client's own "No border"
+    option, so this is the value the feature is most likely to be used with.
+    """
+    from app.image import compositor
+    from app.settings import layout
+
+    disc = compositor.circular_portrait(
+        a_photograph, layout, size_px=200, border_width_px=0, border_color="#ff0000"
+    )
+
+    # The centre is the photograph, not the border colour. Sampling the middle
+    # is enough: a filled ellipse covers it completely.
+    centre = disc.convert("RGB").getpixel((disc.width // 2, disc.height // 2))
+    assert centre != (255, 0, 0), "a zero-width border filled the disc"
+
+
+def test_a_thick_ring_is_not_clipped_by_the_canvas(a_photograph):
+    """The ring is a stroke centred on the disc edge, so half of it falls outside.
+
+    The canvas used to be a constant `ring_pad_px: 3` larger, which was enough
+    only for the file's 2px border. At the 48px maximum the overhang is 24px and
+    the outer half of the ring was being cropped away — silently, in a valid
+    PNG. `PortraitLayout.ring_pad` derives the padding instead.
+    """
+    from app.image import compositor
+    from app.settings import layout
+
+    thick = compositor.circular_portrait(
+        a_photograph, layout, size_px=200, border_width_px=48, border_color="#ff0000"
+    )
+
+    assert thick.width == 200 + 48, "the canvas did not grow with the border"
+    # The ring reaches the canvas edge: its outer radius is exactly half the
+    # canvas. Sampling the midpoint of the top edge finds border, not blank.
+    top = thick.convert("RGBA").getpixel((thick.width // 2, 1))
+    assert top[3] > 0, "the outer half of the ring was clipped away"
+
+
+def test_the_ring_falls_back_to_the_pages_layout(client, written, illustrated, a_photograph):
+    """Null is not zero. A draft that has chosen nothing tracks the Page."""
+    _generate(client)
+    _upload(client, a_photograph)
+
+    draft = client.get("/drafts/1").json()
+
+    assert draft["inset_border_width_px"] is None
+    assert draft["inset_border_color"] is None
+
+
+def test_a_border_wider_than_the_maximum_is_clamped(client, written, illustrated):
+    _generate(client)
+
+    out = client.patch("/drafts/1", json={"inset_border_width_px": 900}).json()
+
+    assert out["inset_border_width_px"] == 48
+
+
+def test_a_negative_border_is_clamped_to_none_rather_than_refused(
+    client, written, illustrated
+):
+    """A slider cannot send this; a client hand-rolling the PATCH can."""
+    _generate(client)
+
+    out = client.patch("/drafts/1", json={"inset_border_width_px": -5}).json()
+
+    assert out["inset_border_width_px"] == 0
+
+
+def test_removing_the_circle_forgets_its_ring_too(
+    client, written, illustrated, a_photograph
+):
+    """A white ring chosen for a dark portrait is wrong for whatever replaces it."""
+    _generate(client)
+    _upload(client, a_photograph)
+    client.patch(
+        "/drafts/1", json={"inset_border_width_px": 20, "inset_border_color": "#ffffff"}
+    )
+
+    client.delete("/drafts/1/inset")
+    fresh = _upload(client, a_photograph).json()
+
+    assert fresh["inset_border_width_px"] is None
+    assert fresh["inset_border_color"] is None
+
+
 def test_moving_the_circle_redraws_the_card(client, written, illustrated, a_photograph):
     _generate(client)
     before = _upload(client, a_photograph).json()

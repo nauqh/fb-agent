@@ -256,22 +256,35 @@ stops being visible at 140px.
 
 
 def circular_portrait(
-    data: bytes, layout: Layout, size_px: int | None = None
+    data: bytes,
+    layout: Layout,
+    size_px: int | None = None,
+    border_width_px: int | None = None,
+    border_color: str | None = None,
 ) -> Image.Image:
     """The inset: a cover-cropped picture in a disc, with a ring around it.
 
     The ring is a stroke *centred on the circle edge*, matching the old app's
     `buildCircularPortrait` — half of it sits over the picture and half outside,
-    which is why the canvas is `ring_pad_px` larger on every side. It is black,
-    so the half that crosses the panel disappears into it and the disc reads as
-    a cut-out rather than a sticker.
+    which is why the canvas is padded (`PortraitLayout.ring_pad`). Black by
+    default, so the half that crosses the panel disappears into it and the disc
+    reads as a cut-out rather than a sticker.
 
-    `size_px` is the draft's chosen diameter, clamped here as well as on write:
-    a row can predate a change to the bounds in `layout.yml`.
+    `size_px`, `border_width_px` and `border_color` are the draft's own choices;
+    `None` on any of them takes the Page's layout. Clamped here as well as on
+    write, because a row can predate a change to the bounds in `layout.yml`.
+
+    A border width of **0 draws no ring at all** rather than a hairline — Pillow
+    treats `width=0` as "fill the shape", so an unguarded call would paint a
+    solid disc of the border colour straight over the picture.
     """
     portrait = layout.portrait
     diameter = portrait.clamp(size_px, layout.image.width)
-    size = portrait.ring_size(size_px, layout.image.width)
+    border = portrait.border_width_px if border_width_px is None else border_width_px
+    border = max(0, border)
+    colour = border_color or portrait.border_color
+    pad = portrait.ring_pad(border)
+    size = diameter + pad * 2
 
     try:
         source = Image.open(io.BytesIO(data)).convert("RGBA")
@@ -286,28 +299,40 @@ def circular_portrait(
     face.putalpha(mask.resize((diameter, diameter), Image.LANCZOS))
 
     canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    canvas.paste(face, (portrait.ring_pad_px, portrait.ring_pad_px), face)
+    canvas.paste(face, (pad, pad), face)
 
-    ring = Image.new("RGBA", (size * SUPERSAMPLE,) * 2, (0, 0, 0, 0))
-    centre = size * SUPERSAMPLE / 2
-    radius = (diameter / 2 + portrait.border_width_px / 2) * SUPERSAMPLE
-    ImageDraw.Draw(ring).ellipse(
-        (centre - radius, centre - radius, centre + radius, centre + radius),
-        outline=portrait.border_color,
-        width=round(portrait.border_width_px * SUPERSAMPLE),
-    )
-    canvas.alpha_composite(ring.resize((size, size), Image.LANCZOS))
+    if border > 0:
+        ring = Image.new("RGBA", (size * SUPERSAMPLE,) * 2, (0, 0, 0, 0))
+        centre = size * SUPERSAMPLE / 2
+        radius = (diameter / 2 + border / 2) * SUPERSAMPLE
+        ImageDraw.Draw(ring).ellipse(
+            (centre - radius, centre - radius, centre + radius, centre + radius),
+            outline=colour,
+            width=round(border * SUPERSAMPLE),
+        )
+        canvas.alpha_composite(ring.resize((size, size), Image.LANCZOS))
     return canvas
 
 
 class Inset(NamedTuple):
-    """The uploaded circle and where it goes. One argument, because the three
-    travel together and a `compose(..., None, None, None)` says nothing."""
+    """The uploaded circle, where it goes, and how it is ringed.
+
+    One argument, because they travel together and a `compose(..., None, None,
+    None)` says nothing.
+
+    Every field but `data` is an *override*: `None` means the Page's layout
+    decides, which is the same contract `inset_size_px` has had on the row since
+    it existed. The ring is per draft rather than only per Page because the
+    right ring depends on the picture inside it — a dark portrait wants a light
+    one and a bright one usually wants none.
+    """
 
     data: bytes
     size_px: int | None = None
     x_ratio: float | None = None
     y_ratio: float | None = None
+    border_width_px: int | None = None
+    border_color: str | None = None
 
 
 def inset_centre(
@@ -322,7 +347,10 @@ def inset_centre(
     converted from a corner to a centre.
     """
     width, height = layout.image.width, layout.image.height
-    ring = layout.portrait.ring_size(inset.size_px, width)
+    # The draft's border, because the ring's own width decides how far the drawn
+    # square extends past the disc — anchoring on a padding that assumed the
+    # Page's border would drift the disc sideways as the ring got thicker.
+    ring = layout.portrait.ring_size(inset.size_px, width, inset.border_width_px)
     margin = round(width * layout.image.edge_margin_ratio)
 
     x = width - margin - ring / 2 if inset.x_ratio is None else inset.x_ratio * width
@@ -412,7 +440,13 @@ def compose(
         # panel. That overlap is the effect — a disc wholly inside the hero is a
         # sticker, and one wholly inside the panel is an avatar. The operator
         # can drag it anywhere from there.
-        disc = circular_portrait(inset.data, layout, inset.size_px)
+        disc = circular_portrait(
+            inset.data,
+            layout,
+            inset.size_px,
+            inset.border_width_px,
+            inset.border_color,
+        )
         x, y = inset_centre(inset, plan, layout)
         canvas.alpha_composite(disc, (x - disc.width // 2, y - disc.height // 2))
 

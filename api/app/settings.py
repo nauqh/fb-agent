@@ -151,9 +151,32 @@ class PortraitLayout(Frozen):
             )
         )
 
-    def ring_size(self, size_px: int | None, image_width: int) -> int:
+    def ring_pad(self, border_width_px: int | None = None) -> int:
+        """Canvas padding on each side of the disc, in px.
+
+        The ring is a stroke *centred on the circle edge*, so exactly half of it
+        falls outside the disc and the canvas has to be that much larger or the
+        outer half is clipped away.
+
+        `ring_pad_px` alone was enough only while the border was the file's 2px:
+        1px of overhang against 3px of pad. The border is a setting now — per
+        Page, and per draft over that, up to the old app's 48px — and at that
+        width the overhang is 24px, so a constant pad would silently shave the
+        ring down to a thin arc. Derived, so no combination of the two can
+        produce a clipped ring.
+
+        `ring_pad_px` stays as the floor rather than being replaced by the
+        derivation: it is also what keeps the antialiased edge of a *border-less*
+        disc off the canvas boundary.
+        """
+        border = self.border_width_px if border_width_px is None else border_width_px
+        return max(self.ring_pad_px, -(-border // 2))
+
+    def ring_size(
+        self, size_px: int | None, image_width: int, border_width_px: int | None = None
+    ) -> int:
         """The drawn size: disc plus the padding the stroke needs on each side."""
-        return self.clamp(size_px, image_width) + self.ring_pad_px * 2
+        return self.clamp(size_px, image_width) + self.ring_pad(border_width_px) * 2
 
 
 class FontLayout(Frozen):
