@@ -1,12 +1,12 @@
 # fb-agent
 
-![Python 3.11](https://img.shields.io/badge/python-3.11-3776AB?logo=python&logoColor=white)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white)
-![Next.js 16](https://img.shields.io/badge/Next.js-16-000000?logo=nextdotjs&logoColor=white)
-![React 19](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
-![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20Storage-3FCF8E?logo=supabase&logoColor=white)
-![Gemini](https://img.shields.io/badge/Gemini-text%20%2B%20image-8E75B2?logo=googlegemini&logoColor=white)
-![Metricool](https://img.shields.io/badge/Metricool-publishing-FF6B00)
+![Python](https://img.shields.io/badge/Python-3.11-blue?colorA=363a4f&colorB=8aadf4&style=for-the-badge&logo=python&logoColor=cad3f5)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.115-blue?colorA=363a4f&colorB=8bd5ca&style=for-the-badge&logo=fastapi&logoColor=cad3f5)
+![Next.js](https://img.shields.io/badge/Next.js-16-blue?colorA=363a4f&colorB=b7bdf8&style=for-the-badge&logo=nextdotjs&logoColor=cad3f5)
+![React](https://img.shields.io/badge/React-19-blue?colorA=363a4f&colorB=91d7e3&style=for-the-badge&logo=react&logoColor=cad3f5)
+![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20Storage-blue?colorA=363a4f&colorB=a6da95&style=for-the-badge&logo=supabase&logoColor=cad3f5)
+![Gemini](https://img.shields.io/badge/Gemini-text%20%2B%20image-blue?colorA=363a4f&colorB=c6a0f6&style=for-the-badge&logo=googlegemini&logoColor=cad3f5)
+![Metricool](https://img.shields.io/badge/Metricool-publishing-blue?colorA=363a4f&colorB=f5a97f&style=for-the-badge&logo=rss&logoColor=cad3f5)
 
 The one document: what the system is for, what its words mean, how a post gets
 made, how to run it, and what it needs.
