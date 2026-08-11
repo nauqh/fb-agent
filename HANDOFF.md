@@ -1,33 +1,49 @@
 # Handoff
 
-**Updated:** 2026-08-11 · **Next focus:** the deploy — web on Vercel, API on Railway
+**Updated:** 2026-08-12 · **Next focus:** the client's feedback — `docs/feedback-2026-08-11.md`
 
 Conventions and integration traps live in `CLAUDE.md`, which loads automatically.
 This file is state: what is proven, what is mid-flight, what to do next.
 
 ## Where you are
 
-Repo: `D:\Laboratory\fb-agent` — a Python/FastAPI + Next.js rewrite of a Facebook
+Repo: `D:\Laboratoryb-agent` — a Python/FastAPI + Next.js rewrite of a Facebook
 content agent. The **old** app is `D:\Laboratory\social-agent`: reference only,
 still deployed, still the thing publishing History Retraced. Read it for prior
 art; never edit it.
 
-Branch `main`, clean, and **in sync with origin** — `github.com/nauqh/fb-agent`
-is at `bb4c81e`. This is a change from what this file said for a long time
-("nothing pushed"); commits reach the remote without anyone running `git push`
-in the session, so assume a commit is public the moment it exists.
+Branch `main`, pushed to `github.com/nauqh/fb-agent` at `3f46754`.
 
-Recent work, newest first — read the commit messages rather than re-deriving the
-reasoning, they carry the evidence:
+**Push explicitly. This file used to claim commits reach the remote without
+anyone running `git push`, and that is wrong** — eight commits sat unpushed
+through a whole session while that sentence was being repeated back to the
+operator as fact. Something pushed once, early, and the note was written from
+it. Check `git ls-remote origin main` against `git rev-parse main` rather than
+trusting either this file or the output of a push.
 
-| Commit | What |
-|---|---|
-| `bb4c81e` | Sign-in on the web app; `(app)` route group; session cookie |
-| `0675c1d` | Publish field seeds on the Page's clock; footer is one strip |
-| `b5aa168` | A publication time can be chosen; Schedule screen was on the browser's clock |
-| `0c7c7fa` | Feeds for the eight Pages that had none |
-| `62586da` | The old app's second card template, with its headline badge |
+## The current job: the client's feedback
 
+`docs/feedback-2026-08-11.md` is the tracker — sixteen items from
+`fbtool1.docx`, each quoting the request it came from, with a status table at
+the top. Read it before starting anything; several items are not what their
+one-line summary suggests.
+
+Nine are done (A1, B2, B3, C3, D1, D2, D3, and B4 bar its generate half). Three
+are open (B1, C1, C2), three blocked on the client (D4, F2, F3), one declined
+(E1, hashtags stay — the operator's call, against the written request), one
+parked (P1).
+
+**Two lessons from those nine, because both cost a rebuild:**
+
+- **A screenshot says where something goes, not what it is.** B2 shipped as a
+  topic field on a new Manual page because the client's screenshot showed the
+  topic strip. The old app's Manual is the opposite — a form the operator fills
+  in entirely, defined by *not* calling Gemini. Check the old app before
+  building anything described as "bring back".
+- **A green suite is not a working screen, and neither is a running server.**
+  See the duplicate-server trap now recorded in `CLAUDE.md`.
+
+## What is actually proven vs merely written
 ## What is actually proven vs merely written
 
 Verified against live services:
@@ -102,7 +118,7 @@ carried before — `MEDIA_BACKEND=local|supabase` was rejected in favour of one
 backend, and the publish-time upload was deleted rather than kept.
 
 Nine steps, seven of them done. 260 tests passed at the time; the suite is
-**302** now.
+**339** now.
 
 - **One store.** `SupabaseMediaStore` is the only implementation in `app/`;
   `LocalMediaStore` moved to `tests/conftest.py` as a fake, which is what keeps
@@ -140,10 +156,12 @@ two databases hand out the same draft ids.
 Verified in a browser, not just in tests: the Review screen renders all six
 composites from the dev bucket, `896x1120`, zero failed requests.
 
-## The next task — the deploy
+## Still to do: the deploy
 
 Both halves are authenticated now (`settings.api_key` on FastAPI, the session
-cookie on Next), so this is the last thing left.
+cookie on Next). This was "the next task" until the client's feedback arrived
+and took priority; nothing below has changed, but note that three migrations
+have landed since it was written and `alembic upgrade head` runs at startup.
 
 **API on Railway.** Root directory `api`, start command
 `uvicorn app.main:app --host 0.0.0.0 --port $PORT`, **one replica**
@@ -255,6 +273,43 @@ in the bucket: 12 objects, 17.0MB, 6 drafts (draft 9 is FAILED and has none)
 
 The latency figures are laptop-to-cloud. On a server co-located with the bucket
 they should collapse to tens of ms — expected, **not** measured.
+
+## Done 2026-08-11/12 — the client feedback round
+
+Nine items, each with its evidence in the commit message rather than here.
+`docs/feedback-2026-08-11.md` tracks them.
+
+Three migrations landed and are **applied to production**, since that is the
+only database this app has:
+
+| | |
+|---|---|
+| `3749e016826e` | `draft.inset_border_width_px`, `inset_border_color` — nullable, null means the Page's |
+| `20974f89ec28` | `draft.hero_from_source` — backfilled false, server default then dropped |
+| `e95cf1ff6545` | `page_time_slot` — a new table |
+
+Four things worth knowing before touching the same code:
+
+- **The Review preview reads `GET /layout` now.** `LAYOUT` in
+  `lib/fixtures/pages.ts` and the dead `lib/api/config.ts` are gone. Do not
+  reintroduce a second copy of `layout.yml` on the web side — that copy is what
+  made every padding and type-size override invisible on the screen the operator
+  uses, which is what the client reported as "padding doesn't work".
+- **`page_time_slot` is policy, not schedule state.** It does not reverse
+  ADR-0001: what is *queued* is still read live from Metricool on every call.
+  A slot is a standing decision that exists whether or not anything is queued.
+- **Approve is gone from the UI.** `DraftStatus.APPROVED` and `unapprove` stay
+  for rows that already carry it; nothing writes it. Publish never required it.
+- **A manual draft calls no model.** `POST /drafts/manual` builds a row from
+  typed text, and brand rules are *recorded as warnings, not enforced* — which
+  is why `rewrite` validates only the field it is rewriting. Validating the
+  whole draft would make the model burn its retries fixing text the operator
+  asked to keep.
+
+**Not proven against the real models.** `writer.rewrite` (B3) and
+`hero.from_url` (C3) are covered by tests that stub the model and the transport;
+neither has been exercised against live Gemini or a live feed URL. "Next slot"
+*was* driven against the live planner.
 
 ## Things that will bite you
 

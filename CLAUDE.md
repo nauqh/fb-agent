@@ -16,7 +16,7 @@ and the current state of play is `HANDOFF.md`.
 ## Checks
 
 ```
-api/   uv run pytest -q          # 265 at time of writing
+api/   uv run pytest -q          # 339 at time of writing
 api/   uv run alembic check      # "No new upgrade operations detected"
 web/   npx tsc --noEmit
 web/   npx eslint src            # clean — keep it that way
@@ -28,10 +28,12 @@ the migrations. `check` diffs the models against the **live** database. Anything
 it reports means a revision is missing, and a deploy would take the schema and
 the code out of step.
 
-`eslint src` exits 0. It carried one standing `set-state-in-effect` error in
-`review-list.tsx` for a long time, described here as pre-existing and to be left
-alone; it was neither hard nor a false positive once read. A new error is a new
-error — do not add a note here instead of fixing it.
+`eslint src` exits 0, **including warnings**. It carried one standing
+`set-state-in-effect` error in `review-list.tsx` for a long time, described here
+as pre-existing and to be left alone; it was neither hard nor a false positive
+once read. A new problem is a new problem — fix it rather than adding a note
+here. Deleting a feature usually strands an import or a handler, and that is
+what the warning is telling you.
 
 ## Verify in a browser, not just in tests
 
@@ -43,9 +45,30 @@ scratchpad:
 const { chromium } = require("D:/Laboratory/social-agent/node_modules/playwright");
 ```
 
-Servers: the API on `:8000` (start with `--reload`; it has been left serving
-stale code more than once), the web dev server on `:3000`. Both are usually
-already running — check before starting another.
+Servers: the API on `:8000` (start with `--reload`), the web dev server on
+`:3000`. Both are usually already running.
+
+**Check the port's owner, not the process list.** Windows lets a second process
+bind a port that is already bound, so a new server logs `Application startup
+complete` and serves nothing while the old one keeps answering. A whole session
+was spent on 404s from routes that were plainly on disk, with tests passing,
+because a stale API from before the session still held `:8000`. Diagnose it by
+asking the server what it has, not by reading the source:
+
+```
+curl -s localhost:8000/openapi.json | grep <your-new-route>
+Get-NetTCPConnection -LocalPort 8000 -State Listen   # OwningProcess
+```
+
+`--reload` also orphans its worker when the parent is killed, so the port stays
+held by a process that no longer reloads. Kill the tree (`taskkill /PID n /T
+/F`), or kill the worker directly. And `--reload` does **not** reliably pick up
+a brand-new route on a detached process: if `/openapi.json` disagrees with the
+file, restart rather than editing further.
+
+The web dev server has the same failure in a different shape: it served 404 for
+`/auth/login` while the file was plainly there, and a `touch` on the route file
+fixed it.
 
 **Drive `http://localhost:3000`, never `http://127.0.0.1:3000`.** Next 16 blocks
 `/_next/*` dev resources from any origin not in `allowedDevOrigins`, so the
