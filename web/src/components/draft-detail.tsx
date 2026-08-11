@@ -38,8 +38,8 @@ import {
   updateDraft,
   uploadInset,
 } from "@/lib/api/drafts";
+import { getPageLayout, type ResolvedLayout } from "@/lib/api/layout";
 import { listPages } from "@/lib/api/pages";
-import { LAYOUT } from "@/lib/fixtures/pages";
 import { chars, pageLocalSoon, words } from "@/lib/format";
 import type { Draft } from "@/lib/types";
 import { useQuery } from "@/lib/use-query";
@@ -59,6 +59,13 @@ interface Form {
   inset_size_px: number | null;
   inset_x_ratio: number | null;
   inset_y_ratio: number | null;
+  /**
+   * The ring. Null is "the Page's", `0` is "no ring" — two different answers,
+   * which is why the controls below have an explicit way back to null rather
+   * than treating the Page's current value as the off position.
+   */
+  inset_border_width_px: number | null;
+  inset_border_color: string | null;
 }
 
 export function DraftDetail({
@@ -96,6 +103,26 @@ export function DraftDetail({
     pollWhile: (row) => row === null || row.status === "generating",
   });
   const generating = draft?.status === "generating";
+
+  /**
+   * This Page's layout, which the preview and the inset slider are both drawn
+   * from.
+   *
+   * Fetched rather than taken from a constant. `ComposedImage` used to read a
+   * hand-kept copy of `layout.yml` with no per-Page values in it, so every
+   * override on Global — the four paddings, the type size, the panel colour,
+   * the template — moved the card on Global and moved nothing here.
+   *
+   * Keyed on the *draft's* Page, not the switcher's. The drawer can be opened
+   * from a queue that was scoped when it loaded, and drawing one Page's draft
+   * with another Page's layout is exactly the class of bug this replaces.
+   */
+  const { data: layoutResult } = useQuery(
+    () => getPageLayout(draft!.page_id),
+    [draft?.page_id],
+    { enabled: draft != null },
+  );
+  const layout = layoutResult?.layout ?? null;
 
   /**
    * Seed the editor when a different Draft is selected, or when this one
@@ -176,20 +203,15 @@ export function DraftDetail({
   if (error) {
     return <Panel>Could not load draft {draftId}: {error}</Panel>;
   }
-  if (!draft) {
-    return (
-      <div className="grid gap-6 lg:grid-cols-[340px_minmax(0,1fr)]">
-        <Skeleton className="aspect-[896/1120] rounded-md" />
-        <div className="space-y-4">
-          <Skeleton className="h-8" />
-          <Skeleton className="h-28" />
-          <Skeleton className="h-40" />
-        </div>
-      </div>
-    );
-  }
+  if (!draft) return <DetailSkeleton />;
 
   if (generating) return <Generating draft={draft} />;
+
+  // The layout and the Page are what the card is drawn from, and neither has a
+  // safe stand-in: a default layout is a second copy of `layout.yml`, and a
+  // missing Page means no watermark decision. Both are one fast read that
+  // starts as soon as the draft lands, so this is a flicker, not a wait.
+  if (!layout || !page) return <DetailSkeleton />;
 
   async function save() {
     if (!form) return;
@@ -315,9 +337,10 @@ export function DraftDetail({
    */
   const picture = (
     <ComposedImage
+      layout={layout}
+      page={page}
       overlayText={form?.hook ?? draft.hook}
       highlightPhrases={form?.highlight_phrases ?? draft.highlight_phrases}
-      watermarkPath={page?.watermark_image_path ?? null}
       heroSrc={draft.hero_image_url}
       insetSrc={draft.inset_image_url}
       // From the form, not the row: the slider and the drag have to move the
@@ -325,6 +348,10 @@ export function DraftDetail({
       insetSizePx={form?.inset_size_px ?? draft.inset_size_px}
       insetXRatio={form ? form.inset_x_ratio : draft.inset_x_ratio}
       insetYRatio={form ? form.inset_y_ratio : draft.inset_y_ratio}
+      insetBorderWidthPx={
+        form ? form.inset_border_width_px : draft.inset_border_width_px
+      }
+      insetBorderColor={form ? form.inset_border_color : draft.inset_border_color}
       seed={draft.id}
     />
   );
@@ -453,7 +480,9 @@ export function DraftDetail({
             <div className="flex items-baseline justify-between">
               <Label className="text-xs">Circular inset</Label>
               <span className="text-[11px] tabular-nums text-muted-foreground">
-                {draft.inset_image_path ? `${clampInset(form?.inset_size_px)}px` : "none"}
+                {draft.inset_image_path
+                  ? `${clampInset(form?.inset_size_px, layout)}px`
+                  : "none"}
               </span>
             </div>
 
@@ -464,10 +493,16 @@ export function DraftDetail({
                 <input
                   type="range"
                   className="w-full accent-foreground"
-                  min={LAYOUT.portraitMinPx}
-                  max={Math.round(LAYOUT.width * LAYOUT.portraitMaxWidthRatio)}
+                  // The Page's own bounds, not the file's. `portrait.min_px`
+                  // and `max_width_ratio` are both overridable, and a slider
+                  // running to a diameter the compositor would clamp is a
+                  // control that lies about what it is set to.
+                  min={layout.portrait.min_px}
+                  max={Math.round(
+                    layout.image.width * layout.portrait.max_width_ratio,
+                  )}
                   step={2}
-                  value={clampInset(form.inset_size_px)}
+                  value={clampInset(form.inset_size_px, layout)}
                   onChange={(event) =>
                     setForm({ ...form, inset_size_px: Number(event.target.value) })
                   }
@@ -475,6 +510,8 @@ export function DraftDetail({
                 <p className="text-[11px] text-muted-foreground">
                   Drag the circle on the image, or click where you want it.
                 </p>
+
+                <InsetRing layout={layout} form={form} onChange={setForm} />
               </>
             ) : (
               <p className="text-[11px] leading-relaxed text-muted-foreground">
@@ -769,6 +806,135 @@ function PublishAction({
   );
 }
 
+/** The old app's ceiling (`MAX_INSET_BORDER_WIDTH_PX`), and the API's clamp. */
+const MAX_INSET_BORDER_PX = 48;
+
+/**
+ * The ring around the disc: how thick, and what colour.
+ *
+ * Per draft, over the Page's defaults on Global, because the right ring depends
+ * on the picture inside the circle rather than on the brand — a dark portrait
+ * wants a light ring to lift it off the panel, a bright one usually wants none.
+ * The old app had both here for the same reason
+ * (`circular-inset-dialog.tsx:608-680`).
+ *
+ * **Null and zero are different answers, and the UI has to keep them apart.**
+ * Null means "whatever the Page is set to" and follows it when that changes;
+ * zero means this draft has chosen to have no ring. So the slider cannot be the
+ * only control — sliding to 0 would be indistinguishable from inheriting a Page
+ * whose default happens to be 0 — hence the explicit "Use the Page's" reset,
+ * which is the only way back to null once either has been touched.
+ */
+function InsetRing({
+  layout,
+  form,
+  onChange,
+}: {
+  layout: ResolvedLayout;
+  form: Form;
+  onChange: (next: Form) => void;
+}) {
+  const inherited =
+    form.inset_border_width_px === null && form.inset_border_color === null;
+  const width = form.inset_border_width_px ?? layout.portrait.border_width_px;
+  const colour = form.inset_border_color ?? layout.portrait.border_color;
+
+  return (
+    <div className="space-y-2 border-t pt-2">
+      <div className="flex items-baseline justify-between gap-2">
+        <Label className="text-xs">Ring</Label>
+        <span className="text-[11px] tabular-nums text-muted-foreground">
+          {width === 0 ? "none" : `${width}px`}
+          {inherited ? " · from Page" : ""}
+        </span>
+      </div>
+
+      <input
+        type="range"
+        className="w-full accent-foreground"
+        min={0}
+        max={MAX_INSET_BORDER_PX}
+        step={1}
+        value={width}
+        onChange={(event) =>
+          onChange({
+            ...form,
+            inset_border_width_px: Number(event.target.value),
+            // The colour comes along the moment the width is touched, so the
+            // draft stops tracking the Page on both at once. Leaving the colour
+            // null here makes a draft that follows the Page's colour and not
+            // its width, which is a state nobody asked for and cannot be seen.
+            inset_border_color: form.inset_border_color ?? colour,
+          })
+        }
+      />
+
+      <div className="flex items-center gap-2">
+        <input
+          type="color"
+          value={colour}
+          aria-label="Ring colour"
+          // Disabled at zero rather than hidden: the control keeping its place
+          // is what says the colour is still there and simply has nothing to
+          // paint, instead of the row appearing to lose a setting.
+          disabled={width === 0}
+          onChange={(event) =>
+            onChange({
+              ...form,
+              inset_border_color: event.target.value,
+              inset_border_width_px: form.inset_border_width_px ?? width,
+            })
+          }
+          className="size-7 shrink-0 cursor-pointer rounded border bg-transparent disabled:opacity-40"
+        />
+        <Input
+          value={colour}
+          disabled={width === 0}
+          aria-label="Ring colour hex"
+          onChange={(event) =>
+            onChange({
+              ...form,
+              inset_border_color: event.target.value,
+              inset_border_width_px: form.inset_border_width_px ?? width,
+            })
+          }
+          className="h-7 w-24 font-mono text-[11px]"
+        />
+        {inherited ? null : (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-[11px] text-muted-foreground"
+            onClick={() =>
+              onChange({
+                ...form,
+                inset_border_width_px: null,
+                inset_border_color: null,
+              })
+            }
+          >
+            Use the Page&rsquo;s
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** The shape of the screen before the draft, its Page or its layout arrive. */
+function DetailSkeleton() {
+  return (
+    <div className="grid gap-6 lg:grid-cols-[340px_minmax(0,1fr)]">
+      <Skeleton className="aspect-896/1120 rounded-md" />
+      <div className="space-y-4">
+        <Skeleton className="h-8" />
+        <Skeleton className="h-28" />
+        <Skeleton className="h-40" />
+      </div>
+    </div>
+  );
+}
+
 function Generating({ draft }: { draft: Draft }) {
   return (
     <div className="flex min-h-72 items-center justify-center rounded-lg border border-dashed p-10">
@@ -846,5 +1012,7 @@ function toForm(draft: Draft): Form {
     inset_size_px: draft.inset_size_px,
     inset_x_ratio: draft.inset_x_ratio,
     inset_y_ratio: draft.inset_y_ratio,
+    inset_border_width_px: draft.inset_border_width_px,
+    inset_border_color: draft.inset_border_color,
   };
 }

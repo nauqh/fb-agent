@@ -45,6 +45,8 @@ export type DraftEdit = Partial<
     | "inset_size_px"
     | "inset_x_ratio"
     | "inset_y_ratio"
+    | "inset_border_width_px"
+    | "inset_border_color"
   >
 >;
 

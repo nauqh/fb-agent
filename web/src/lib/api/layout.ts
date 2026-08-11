@@ -83,7 +83,19 @@ export interface LayoutPatch {
   watermark_top_ratio?: number | null;
   badge_color?: string | null;
   badge_font_size_px?: number | null;
+  /**
+   * The circular inset's defaults. A draft overrides diameter, border width and
+   * border colour on its own row, and null there means "whatever these say" —
+   * so these are the Page's house style rather than the last word.
+   *
+   * `min_px`, `max_width_ratio` and `ring_pad_px` are deliberately absent, as
+   * `line_height_ratio` is: they are bounds and drawing mechanics, not
+   * decisions, and a form that offers a minimum larger than the maximum is a
+   * way to make every inset on a Page unrenderable.
+   */
   portrait_size_px?: number | null;
+  portrait_border_width_px?: number | null;
+  portrait_border_color?: string | null;
 }
 
 export async function getPageLayout(pageId?: number): Promise<LayoutResult> {

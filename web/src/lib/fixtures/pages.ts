@@ -133,37 +133,13 @@ Strict exclusions — your image must contain NONE of these:
 ].map((file) => ({ ...file, chars: file.body.length }));
 
 /**
- * The Composed Image constants the preview has to agree with.
+ * `LAYOUT` used to live here: a hand-kept copy of `api/config/layout.yml`, with
+ * no per-Page values in it because it predates `page_layout`.
  *
- * Mirrors `api/config/layout.yml`. The preview is a CSS approximation — browser
- * text metrics are not fontTools advance widths — so these govern proportion,
- * not pixels.
+ * It is gone rather than kept in sync. `ComposedImage` and the drawer's inset
+ * slider now read `GET /layout`, which is the resolved layout — the file's
+ * defaults with the Page's overrides laid over them, the same object
+ * `layout_for.resolve` hands the compositor. Nothing on this side of the wire
+ * should hold a second copy of those numbers; that copy is what made every
+ * padding and type-size override on Global invisible on the Review screen.
  */
-export const LAYOUT = {
-  width: 896,
-  height: 1120,
-  panelRatio: 0.2,
-  panelMaxRatio: 0.85,
-  panelColor: "#000000",
-  textColor: "#ffffff",
-  highlightColor: "#F5C542",
-  fontSizePx: 36,
-  lineHeightRatio: 1.26,
-  edgeMarginRatio: 0.02,
-  /** Watermark width cap. Capped again at 0.22 × width by the compositor. */
-  watermarkMaxPx: 138,
-  /**
-   * The circular inset. `portraitSizePx` is the default diameter, not a cap —
-   * the draft carries its own `inset_size_px` between the two bounds, and the
-   * slider in the drawer is these numbers.
-   *
-   * The preview draws the ring outside the disc rather than astride it: a 2px
-   * difference on a black panel, against negative outline offsets in container
-   * units for no visible gain.
-   */
-  portraitSizePx: 140,
-  portraitMinPx: 40,
-  portraitMaxWidthRatio: 0.45,
-  portraitBorderPx: 2,
-  portraitBorderColor: "#000000",
-} as const;

@@ -133,6 +133,14 @@ export interface Draft {
    */
   inset_x_ratio: number | null;
   inset_y_ratio: number | null;
+  /**
+   * The ring around the disc. Null on either means the Page's layout decides.
+   *
+   * Null and `0` are different answers for the width: null tracks whatever the
+   * Page is set to, `0` is this draft choosing to have no ring at all.
+   */
+  inset_border_width_px: number | null;
+  inset_border_color: string | null;
 
   /** Brand rules still failing after the writer exhausted its retries. */
   warnings: string[];
