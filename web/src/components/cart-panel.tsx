@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Loader2, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
@@ -9,8 +10,6 @@ import { generate } from "@/lib/api/drafts";
 import { sourceKey, useCart } from "@/lib/cart";
 import { usePageScope } from "@/lib/page-scope";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 
 /**
  * The Cart, a dock under the source grids. Starts the run itself.
@@ -20,10 +19,10 @@ import { Label } from "@/components/ui/label";
  * height and the grid gets the full width — three columns at 1440 instead of
  * two, and four above 1900.
  *
- * Always on screen, never hidden when empty, for two reasons: the topic field
- * below only applies while the Cart *is* empty, so a dock that hides would
- * stranded it in some header; and Generate is the screen's primary action, which
- * was the one thing the pinned column got right and a scrolling Cart would lose.
+ * Always on screen, never hidden when empty. Generate is the screen's primary
+ * action — the one thing the pinned column got right and a scrolling Cart would
+ * lose — and a dock that appeared on the first tick would push the grid up under
+ * the cursor that just ticked.
  *
  * It used to navigate to a `/generate` screen instead. That screen showed the
  * same cart again, a Page that could not be changed, and `N sources × 1 page =
@@ -33,13 +32,15 @@ import { Label } from "@/components/ui/label";
  * was written for the old app's ten brands. With one Page there is nothing to
  * pick, so the count moved onto the button and the screen went.
  *
- * The topic field was the only thing on it that existed nowhere else, so it
- * lives here now, in the empty state — which is exactly when it applies.
+ * The topic field was the only thing on that screen which existed nowhere else,
+ * so it moved into this dock's empty state. It has since moved again, to
+ * `/manual`, at the client's request — they want a destination they can grow,
+ * and a strip in another screen's footer has nowhere to grow. The dock's empty
+ * state points at it rather than duplicating it.
  */
 export function CartPanel() {
   const cart = useCart();
   const router = useRouter();
-  const [topic, setTopic] = useState("");
   const [running, setRunning] = useState(false);
 
   // The switcher's Page, not `pages[0]`. Generate writes `draft.page_id`, so
@@ -47,18 +48,16 @@ export function CartPanel() {
   // looks right and is not.
   const { page } = usePageScope();
 
-  // A topic run and a source run are exclusive: a ticked Cart is what the
-  // operator meant, and the topic box is only reachable while it is empty.
-  const usingTopic = cart.count === 0;
-  const draftCount = usingTopic ? (topic.trim() ? 1 : 0) : cart.count;
+  // One draft per ticked source. The topic run is `/manual`'s now, so this
+  // dock no longer has two modes to keep apart.
+  const draftCount = cart.count;
 
   /**
    * Use the sources' own pictures instead of buying heroes.
    *
-   * Offered only when the Cart actually holds some — the option is meaningless
-   * against a topic run, which has no Source Item, and dishonest against items
-   * with no `image_url`, where every draft would come back carrying a warning
-   * instead of a picture.
+   * Offered only when the Cart actually holds some — it would be dishonest
+   * against items with no `image_url`, where every draft would come back
+   * carrying a warning instead of a picture.
    *
    * Not sticky between runs. It is a property of *these* sources rather than a
    * preference: the next cart may be competitor posts with nothing to take.
@@ -76,7 +75,7 @@ export function CartPanel() {
   const withPictures = cart.items.filter(
     (item) => item.kind === "rss" && item.image_url,
   ).length;
-  const offerSourceHero = !usingTopic && withPictures > 0;
+  const offerSourceHero = withPictures > 0;
 
   async function run() {
     if (!page || draftCount === 0) return;
@@ -85,13 +84,11 @@ export function CartPanel() {
       const ids = await generate({
         // By value: generate is the only thing that writes a source_item row,
         // so it needs the item rather than a pointer to one.
-        sources: usingTopic ? [] : cart.items,
+        sources: cart.items,
         page_ids: [page.id],
-        topic: usingTopic ? topic.trim() : undefined,
         hero_from_source: offerSourceHero && heroFromSource,
       });
       cart.clear();
-      setTopic("");
       setHeroFromSource(false);
       toast.success(`${ids.length} draft${ids.length === 1 ? "" : "s"} generating.`, {
         description: "Progress is on the Review screen.",
@@ -112,24 +109,18 @@ export function CartPanel() {
   return (
     <aside className="flex shrink-0 items-center gap-3 rounded-lg border p-2">
       {cart.count === 0 ? (
-        <>
-          <Label htmlFor="topic" className="shrink-0 pl-1 text-xs text-muted-foreground">
-            Tick a source, or write from a topic
-          </Label>
-          <Input
-            id="topic"
-            value={topic}
-            onChange={(event) => setTopic(event.target.value)}
-            placeholder="The Great Molasses Flood, Boston 1919"
-            className="max-w-sm flex-1 text-xs"
-          />
-          {/* The distinction the operator is actually making by typing here, so
-              it stays next to the box rather than moving to a tooltip. */}
-          <p className="hidden min-w-0 flex-1 truncate text-[11px] text-muted-foreground xl:block">
-            A topic-only Draft has no Source Item — nothing binds the story except the topic
-            itself.
-          </p>
-        </>
+        // The topic box lived here and is on `/manual` now — a move at the
+        // client's request, not a copy, so there is one place to type a topic.
+        // The dock keeps its space rather than collapsing: it is the screen's
+        // primary action, and a row that appears on the first tick would push
+        // the grid up under the cursor that just ticked.
+        <p className="min-w-0 flex-1 pl-1 text-xs text-muted-foreground">
+          Tick a source to generate from it, or write from a topic on{" "}
+          <Link href="/manual" className="underline underline-offset-2">
+            Manual
+          </Link>
+          .
+        </p>
       ) : (
         <>
           <span className="shrink-0 pl-1 text-sm font-medium">

@@ -9,6 +9,7 @@ import {
   Inbox,
   Layers,
   PanelLeft,
+  PenLine,
   Settings2,
   type LucideIcon,
 } from "lucide-react";
@@ -47,6 +48,10 @@ import { cn } from "@/lib/utils";
 
 const LINKS: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/sources", label: "Sources", icon: Layers },
+  // Beside Sources rather than after Review: both are ways of starting a run,
+  // and the loop below them — Review, Schedule — is the same whichever one fed
+  // it. The topic field used to live in the Sources dock and moved here.
+  { href: "/manual", label: "Manual", icon: PenLine },
   { href: "/review", label: "Review", icon: Inbox },
   { href: "/schedule", label: "Schedule", icon: CalendarDays },
 ];
