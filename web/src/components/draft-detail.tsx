@@ -7,6 +7,7 @@ import {
   Check,
   ImagePlus,
   Loader2,
+  Rocket,
   RotateCcw,
   Sparkles,
   TriangleAlert,
@@ -17,6 +18,8 @@ import { toast } from "sonner";
 import { ComposedImage, clampInset } from "@/components/composed-image";
 import { HookField } from "@/components/hook-field";
 import { FacebookPreview } from "@/components/facebook-preview";
+import { PublishAt } from "@/components/publish-at";
+import { PublishDialog } from "@/components/publish-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -27,6 +30,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   approveDraft,
   getDraft,
+  publishDraft,
   regenerateHero,
   rejectDraft,
   removeInset,
@@ -641,6 +645,7 @@ export function DraftDetail({
                 <p className="text-xs text-muted-foreground">
                   {draft.status === "approved" ? "Approved." : "Rejected."}
                 </p>
+                <PublishAction draft={draft} onPublished={refresh} />
                 <Button variant="outline" size="sm" onClick={() => void returnToReview(draftId)}>
                   Return to queue
                 </Button>
@@ -656,6 +661,7 @@ export function DraftDetail({
                   <X className="size-4" />
                   Reject
                 </Button>
+                <PublishAction draft={draft} onPublished={refresh} />
                 {failed ? (
                   <p className="text-xs text-muted-foreground">
                     Failed — nothing to approve.
@@ -678,6 +684,83 @@ export function DraftDetail({
             )}
           </div>
     </div>
+  );
+}
+
+/**
+ * Publish, from inside the drawer.
+ *
+ * The queue's row menu has always had this; the drawer is where the operator
+ * actually reads the post, and having to close it and find the row again to
+ * send what they just read was a step with no purpose. The old app offered both
+ * for the same reason — `draft-review-row.tsx:1000` in the row menu and `:1390`
+ * in the sheet footer, from one handler.
+ *
+ * Shown for a decided draft too, unlike Reject and Approve. Approved *is* the
+ * state a draft is published from, and the server never required it
+ * (`routes/drafts.py:361` refuses only a republish, a FAILED row, and one with
+ * no composite) — the disabled conditions here are those three and nothing
+ * more, so the button is never offered for a call that would 409.
+ */
+function PublishAction({
+  draft,
+  onPublished,
+}: {
+  draft: Draft;
+  onPublished: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [when, setWhen] = useState("");
+
+  if (draft.metricool_post_id) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        In Metricool — change it in the planner.
+      </p>
+    );
+  }
+
+  async function publish() {
+    setBusy(true);
+    try {
+      await publishDraft(draft.id, when || undefined);
+      toast(when ? "Scheduled in Metricool." : "Handed to Metricool.");
+      onPublished();
+      setOpen(false);
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Publish failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      {/* The field sits in the footer, not behind the button, because the
+          drawer has room for it — the old sheet did exactly this
+          (`draft-review-row.tsx:1320`). An overlay to hold one input is a
+          click and a context switch for nothing. What stays behind the button
+          is only the confirmation, which is about the irreversibility and not
+          about the time. */}
+      <PublishAt value={when} onChange={setWhen} className="w-52 space-y-0" />
+      <Button
+        variant="secondary"
+        size="sm"
+        disabled={draft.status === "failed" || !draft.composed_image_path}
+        onClick={() => setOpen(true)}
+      >
+        <Rocket className="size-4" />
+        {when ? "Schedule" : "Publish now"}
+      </Button>
+      <PublishDialog
+        open={open}
+        onOpenChange={setOpen}
+        busy={busy}
+        scheduled={Boolean(when)}
+        onConfirm={() => void publish()}
+      />
+    </>
   );
 }
 

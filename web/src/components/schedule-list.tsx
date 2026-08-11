@@ -5,6 +5,7 @@ import { ExternalLink, MessageSquareText } from "lucide-react";
 
 import { Empty } from "@/components/screen";
 import { StatusPill, type StatusTone } from "@/components/status-pill";
+import { pageToday } from "@/lib/format";
 import type { ScheduledPost } from "@/lib/types";
 
 /**
@@ -225,11 +226,10 @@ function median(counts: number[]): number {
 }
 
 function dayLabel(day: string): string {
-  const today = new Date();
-  const offset = today.getTimezoneOffset() * 60_000;
-  const todayKey = new Date(today.getTime() - offset).toISOString().slice(0, 10);
-
-  if (day === todayKey) return `Today · ${day}`;
+  // `day` came off a planner stamp, which is naive local time in the Page's
+  // zone. Comparing it against the browser's date labelled the wrong row
+  // "Today" for the three hours a day the two calendars disagree.
+  if (day === pageToday()) return `Today · ${day}`;
   return new Date(`${day}T12:00:00`).toLocaleDateString(undefined, {
     weekday: "long",
     day: "numeric",

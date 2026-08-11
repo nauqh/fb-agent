@@ -3,6 +3,7 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { pageNoon, pageToday } from "@/lib/format";
 import type { ScheduledPost } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -51,7 +52,7 @@ export function ScheduleWeek({
         <Button variant="outline" size="icon-sm" onClick={() => onWeekChange(shift(weekStart, 7))}>
           <ChevronRight className="size-4" />
         </Button>
-        <Button variant="ghost" size="sm" onClick={() => onWeekChange(startOfWeek(new Date()))}>
+        <Button variant="ghost" size="sm" onClick={() => onWeekChange(startOfWeek(pageNoon()))}>
           This week
         </Button>
         <p className="ml-2 text-sm text-muted-foreground">
@@ -202,8 +203,10 @@ function key(date: Date): string {
   return new Date(date.getTime() - offset).toISOString().slice(0, 10);
 }
 
+/** The Page's today, not the browser's — `key()` is for grid columns, which
+ *  are built from `startOfWeek(pageNoon())` and so are already in step. */
 function todayKey(): string {
-  return key(new Date());
+  return pageToday();
 }
 
 function label(day: string): string {

@@ -9,6 +9,7 @@ import { Empty } from "@/components/screen";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getSchedule } from "@/lib/api/schedule";
+import { pageNoon } from "@/lib/format";
 import { usePageScope } from "@/lib/page-scope";
 import { useQuery } from "@/lib/use-query";
 import { cn } from "@/lib/utils";
@@ -23,7 +24,7 @@ import { cn } from "@/lib/utils";
  */
 export function ScheduleView() {
   const [mode, setMode] = useState<"week" | "list">("week");
-  const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
+  const [weekStart, setWeekStart] = useState(() => startOfWeek(pageNoon()));
 
   const { pageId } = usePageScope();
 

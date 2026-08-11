@@ -196,7 +196,11 @@ def published(monkeypatch):
     def schedule(blog_id, text, first_comment, image_url, when=None, client=None):
         calls["order"].append("schedule")
         calls.update(
-            blog_id=blog_id, text=text, first_comment=first_comment, image=image_url
+            blog_id=blog_id,
+            text=text,
+            first_comment=first_comment,
+            image=image_url,
+            when=when,
         )
         return "8891"
 
@@ -235,6 +239,33 @@ def test_publishing_schedules_against_the_composite_itself(client, ready, publis
     assert published["order"] == ["normalize", "schedule"], "nothing was uploaded"
     assert published["normalized"] == media.public_url(ready.composed_image_path)
     assert response.json()["metricool_post_id"] == "8891"
+
+
+def test_a_chosen_time_reaches_the_scheduler_naive(client, ready, published):
+    """The drawer's "Publish at" is the whole of this app's scheduling.
+
+    It arrives as a naive stamp and must stay naive all the way down —
+    `publication_date` attaches `settings.timezone` itself, and an offset
+    suffix is what Metricool rejects. A `datetime-local` input cannot produce
+    one, so the guard is that nothing in between adds it.
+    """
+    from datetime import datetime
+
+    response = client.post(
+        f"/drafts/{ready.id}/publish", json={"when": "2026-08-14T18:00"}
+    )
+
+    assert response.status_code == 200
+    assert published["when"] == datetime(2026, 8, 14, 18, 0)
+    assert published["when"].tzinfo is None
+
+
+def test_no_time_means_as_soon_as_metricool_will_take_it(client, ready, published):
+    """Omitting it is not "some default hour" — it is `None`, and the sender
+    turns that into now plus `MIN_MINUTES_AHEAD`."""
+    client.post(f"/drafts/{ready.id}/publish")
+
+    assert published["when"] is None
 
 
 def test_the_link_metricool_gets_is_the_one_the_browser_showed(client, ready, published):

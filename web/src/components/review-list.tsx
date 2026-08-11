@@ -27,6 +27,8 @@ import { pageAvatarRaw } from "@/lib/page-avatar";
 import { cn } from "@/lib/utils";
 import { ViewFullButton } from "@/components/image-lightbox";
 import { PageBadge } from "@/components/page-badge";
+import { PublishAt } from "@/components/publish-at";
+import { PublishDialog } from "@/components/publish-dialog";
 import { StatusPill, type StatusTone } from "@/components/status-pill";
 import {
   QUEUE_PAGE_SIZE,
@@ -348,6 +350,7 @@ function RowMenu({
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [when, setWhen] = useState("");
 
   async function run(work: () => Promise<unknown>, done: string) {
     setBusy(true);
@@ -439,37 +442,26 @@ function RowMenu({
         </DropdownMenuContent>
       </DropdownMenu>
 
-      {/* The one action with no undo of any kind. Reject and even Delete only
-          affect our own row; this hands the post to Metricool, and from there
-          it goes to a page with an audience on a schedule we no longer own. */}
-      <Dialog open={publishing} onOpenChange={setPublishing}>
-        <DialogContent className="sm:max-w-md">
-          <DialogTitle>Publish to Metricool?</DialogTitle>
-          <DialogDescription>
-            The image is uploaded and the post is handed to Metricool, which
-            publishes it and posts the first comment. After that it is changed
-            in Metricool&apos;s planner, not here.
-          </DialogDescription>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setPublishing(false)}>
-              Cancel
-            </Button>
-            <Button
-              disabled={busy}
-              onClick={() =>
-                void run(() => publishDraft(draft.id), "Handed to Metricool.")
-              }
-            >
-              {busy ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <Rocket className="size-4" />
-              )}
-              Publish
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* A row has no footer to hold the field, so here it is the dialog's
+          content rather than a confirmation of something already chosen. The
+          drawer, which does have a footer, puts it there instead. */}
+      <PublishDialog
+        open={publishing}
+        onOpenChange={(next) => {
+          if (!next) setWhen("");
+          setPublishing(next);
+        }}
+        busy={busy}
+        scheduled={Boolean(when)}
+        onConfirm={() =>
+          void run(
+            () => publishDraft(draft.id, when || undefined),
+            when ? "Scheduled in Metricool." : "Handed to Metricool.",
+          )
+        }
+      >
+        <PublishAt value={when} onChange={setWhen} />
+      </PublishDialog>
 
       {/* Reject is undoable and needs no ceremony. Delete removes the row and
           both pictures with no way back, so it asks first. */}
