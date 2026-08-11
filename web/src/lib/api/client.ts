@@ -91,11 +91,22 @@ export function put<T>(path: string, body: unknown): Promise<T> {
   return request<T>(path, { method: "PUT", body: JSON.stringify(body) });
 }
 
-/** A file, as multipart. The one request in the app that does not send JSON. */
+/**
+ * A multipart POST. The requests in the app that do not send JSON.
+ *
+ * `FormData` rather than a typed body on purpose — see the note in `request`
+ * about the `Content-Type` header, which must be left unset so the browser can
+ * add the boundary.
+ */
+export function postForm<T>(path: string, body: FormData): Promise<T> {
+  return request<T>(path, { method: "POST", body });
+}
+
+/** The common case: one file under the field name the API expects. */
 export function upload<T>(path: string, file: File): Promise<T> {
   const body = new FormData();
   body.append("file", file);
-  return request<T>(path, { method: "POST", body });
+  return postForm<T>(path, body);
 }
 
 /** No return type: this DELETE answers 204, which has no body to parse. */

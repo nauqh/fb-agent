@@ -1,6 +1,6 @@
 import type { Draft, DraftStatus } from "@/lib/types";
 import type { LiveSourceItem } from "@/lib/api/sources";
-import { del, delJson, get, patch, post, upload } from "@/lib/api/client";
+import { del, delJson, get, patch, post, postForm, upload } from "@/lib/api/client";
 
 /**
  * `POST /generate`, `GET /drafts`, `GET /drafts/{id}`, `PATCH /drafts/{id}`,
@@ -106,6 +106,34 @@ export interface GenerateRequest {
  */
 export async function generate(request: GenerateRequest): Promise<number[]> {
   return post<number[]>("/generate", request);
+}
+
+/**
+ * A draft the operator wrote, with no model call of any kind.
+ *
+ * The old app's second generate mode. Unlike `generate` this answers with the
+ * finished row rather than ids to poll — there is no writer and no background
+ * task, so there is nothing to wait for.
+ *
+ * Multipart because of the optional picture, which becomes the draft's *hero*:
+ * the server draws the usual card around it rather than publishing it as-is.
+ */
+export async function createManualDraft(input: {
+  page_id: number;
+  hook: string;
+  caption: string;
+  first_comment: string;
+  file: File | null;
+}): Promise<Draft> {
+  const body = new FormData();
+  body.append("page_id", String(input.page_id));
+  body.append("hook", input.hook);
+  body.append("caption", input.caption);
+  body.append("first_comment", input.first_comment);
+  // Only when there is one: an empty part still arrives as an UploadFile with a
+  // blank filename, which the server would have to special-case.
+  if (input.file) body.append("file", input.file);
+  return postForm<Draft>("/drafts/manual", body);
 }
 
 /**

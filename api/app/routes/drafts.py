@@ -13,6 +13,7 @@ from fastapi import (
     BackgroundTasks,
     Depends,
     File,
+    Form,
     HTTPException,
     Query,
     UploadFile,
@@ -72,6 +73,105 @@ def start_generate(
 
     background.add_task(generate.run_drafts, draft_ids)
     return draft_ids
+
+
+MAX_HERO_BYTES = 16 * 1024 * 1024
+"""Same bound as a fetched feed image, and for the same reason: read into memory."""
+
+
+@router.post("/drafts/manual", status_code=201)
+async def create_manual_draft(
+    page_id: int = Form(...),
+    hook: str = Form(""),
+    caption: str = Form(""),
+    first_comment: str = Form(""),
+    file: UploadFile | None = File(
+        None, description="Optional. Becomes the hero the card is drawn around."
+    ),
+    session: Session = Depends(get_session),
+) -> Draft:
+    """A draft the operator wrote, with no model call of any kind.
+
+    The old app's second generate mode — "Create a draft for {page} without
+    calling Gemini" (`generate-panel.tsx:474`) — restored at the client's
+    request. It is the whole of what their Manual page was.
+
+    **Not a generate run.** There is no writer, no `image_prompt`, no retry
+    ladder and no background task, so this returns a finished row rather than
+    `202` and an id to poll. Nothing here can be slow except the upload.
+
+    The picture becomes the **hero**, not the post. It is stored exactly as a
+    generated one would be and `build_image` draws the same card around it —
+    the panel, the hook, the watermark, this Page's layout. Publishing an
+    upload untouched would bypass the entire card system, which is the thing
+    this app is for.
+
+    An image is optional, as it was in the old app. Without one there is no
+    composite and the row says so in `warnings`; the operator can still edit the
+    text and buy a hero from the review drawer, which is the same position a
+    draft whose image generation failed ends up in.
+
+    Rules are **not** enforced here. `validators.check` is the writer correcting
+    itself, and a human who types a 70-word hook has decided to; the same
+    warnings the review screen already renders are recorded instead, so nothing
+    is hidden and nothing is refused.
+    """
+    page = session.get(Page, page_id)
+    if page is None:
+        raise HTTPException(status_code=404, detail=f"No page {page_id}")
+    if not (hook.strip() or caption.strip() or first_comment.strip()):
+        raise HTTPException(
+            status_code=422,
+            detail="A manual draft needs at least a hook, a caption or a first comment.",
+        )
+
+    draft = Draft(
+        page_id=page_id,
+        status=DraftStatus.REVIEW,
+        hook=hook.strip() or None,
+        caption=caption.strip() or None,
+        first_comment=first_comment.strip() or None,
+        progress_step="written by hand",
+        progress_pct=100,
+    )
+    session.add(draft)
+    session.commit()
+    session.refresh(draft)
+
+    warnings = validators.check(hook.strip(), caption.strip(), first_comment.strip())
+
+    if file is not None and file.filename:
+        data = await file.read(MAX_HERO_BYTES + 1)
+        if len(data) > MAX_HERO_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"That image is over {MAX_HERO_BYTES // (1024 * 1024)}MB.",
+            )
+        try:
+            picture = Image.open(io.BytesIO(data))
+            picture.load()
+        except Exception as error:  # noqa: BLE001 — any decode failure is the same
+            raise HTTPException(
+                status_code=422,
+                detail=f"That file is not an image Pillow can read ({error}).",
+            ) from error
+
+        buffer = io.BytesIO()
+        picture.convert("RGB").save(buffer, format="PNG")
+        draft.hero_image_path = media.store.save(
+            buffer.getvalue(), media.filename(draft.id or 0, "hero", "png")
+        )
+        # Reuses the generate path wholesale, so a hand-written card and a
+        # generated one cannot drift apart in how they are drawn.
+        warnings += generate.build_image(session, draft, page)
+    else:
+        warnings.append(
+            f"{generate.IMAGE_WARNING}no image was uploaded, so there is no card "
+            "to publish yet."
+        )
+
+    draft.warnings = warnings
+    return _save(session, draft)
 
 
 @router.get("/drafts")

@@ -556,6 +556,77 @@ def test_deleting_something_that_is_not_there_says_so(client):
     assert client.delete("/drafts/999").status_code == 404
 
 
+# --- the manual draft --------------------------------------------------------
+#
+# The old app's second generate mode: "Create a draft for {page} without calling
+# Gemini". None of these use `illustrated`, so conftest's autouse guard raising
+# on `hero.generate` is what proves no model was called — the same evidence the
+# feed-hero tests rely on, and the whole point of the mode.
+
+
+def _manual(client, **fields):
+    data = {"page_id": 1, "hook": "", "caption": "", "first_comment": "", **fields}
+    files = data.pop("files", None)
+    return client.post("/drafts/manual", data=data, files=files)
+
+
+def test_a_hand_written_draft_needs_no_model(client):
+    response = _manual(
+        client,
+        hook="In 1925, a serum ran a thousand miles through a blizzard.",
+        caption="A relay of dog sled teams saved Nome.",
+        first_comment="The full story of the 1925 serum run.",
+    )
+
+    assert response.status_code == 201
+    draft = response.json()
+    assert draft["status"] == "review", "it is ready to look at, not queued"
+    assert draft["hook"].startswith("In 1925")
+    assert draft["image_prompt"] is None, "nothing wrote one — there was no writer"
+
+
+def test_an_uploaded_picture_becomes_the_hero_and_the_card_is_drawn(
+    client, a_photograph
+):
+    """Not the finished post. Publishing an upload untouched would bypass the
+    panel, the hook and the watermark — the whole card system."""
+    response = _manual(
+        client,
+        hook="A hand-written hook that belongs on the panel.",
+        files={"file": ("hero.png", a_photograph, "image/png")},
+    )
+
+    draft = response.json()
+    assert draft["hero_image_path"], "the upload was not stored as the hero"
+    assert draft["composed_image_path"], "the card was not composited around it"
+
+
+def test_without_a_picture_the_draft_survives_and_says_it_has_no_card(client):
+    """As the old app allowed. The text is worth keeping on its own."""
+    draft = _manual(client, caption="Words now, picture later.").json()
+
+    assert draft["composed_image_path"] is None
+    assert any("no image was uploaded" in w for w in draft["warnings"]), draft["warnings"]
+
+
+def test_an_entirely_empty_manual_draft_is_refused(client):
+    assert _manual(client).status_code == 422
+
+
+def test_a_hand_written_hook_that_breaks_a_rule_is_recorded_not_refused(client):
+    """`validators.check` is the writer correcting itself. A human who types a
+    question mark has decided to — so the rule is reported, never enforced."""
+    draft = _manual(client, hook="Did you know about the 1925 serum run?").json()
+
+    assert draft["status"] == "review"
+    assert draft["hook"].endswith("?"), "the text was altered"
+    assert draft["warnings"], "the broken rule was not recorded at all"
+
+
+def test_a_manual_draft_against_a_page_that_does_not_exist_is_a_404(client):
+    assert _manual(client, page_id=999, hook="x").status_code == 404
+
+
 # --- the feed's own picture as the hero --------------------------------------
 #
 # Note what is *absent* from these: the `illustrated` fixture. The autouse guard
