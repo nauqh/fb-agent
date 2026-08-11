@@ -40,7 +40,7 @@ import {
 } from "@/lib/api/drafts";
 import { listPages } from "@/lib/api/pages";
 import { LAYOUT } from "@/lib/fixtures/pages";
-import { chars, words } from "@/lib/format";
+import { chars, pageLocalSoon, words } from "@/lib/format";
 import type { Draft } from "@/lib/types";
 import { useQuery } from "@/lib/use-query";
 import { pageAvatarRaw } from "@/lib/page-avatar";
@@ -621,68 +621,74 @@ export function DraftDetail({
       {/* Outside the tabs: a decision is about the draft, not about the
           view you happen to be looking at, so Approve is reachable from
           the preview too. */}
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" disabled={!dirty || saving} onClick={save}>
-                {saving ? <Loader2 className="size-3.5 animate-spin" /> : null}
-                Save changes
-              </Button>
-              {dirty ? (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setForm(toForm(draft))}
-                  className="text-muted-foreground"
-                >
-                  <RotateCcw className="size-3.5" />
-                  Revert
-                </Button>
-              ) : null}
-            </div>
+      {/* One height for everything in it. The publish field is 32px and the
+          decision buttons were the default 36px, which left the row stepped and
+          the field's baseline floating between them. `size="sm"` throughout is
+          what makes it read as one strip rather than three groups. */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" disabled={!dirty || saving} onClick={save}>
+            {saving ? <Loader2 className="size-3.5 animate-spin" /> : null}
+            Save changes
+          </Button>
+          {dirty ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setForm(toForm(draft))}
+              className="text-muted-foreground"
+            >
+              <RotateCcw className="size-3.5" />
+              Revert
+            </Button>
+          ) : null}
+        </div>
 
-            {decided ? (
-              <div className="flex items-center gap-3">
-                <p className="text-xs text-muted-foreground">
-                  {draft.status === "approved" ? "Approved." : "Rejected."}
-                </p>
-                <PublishAction draft={draft} onPublished={refresh} />
-                <Button variant="outline" size="sm" onClick={() => void returnToReview(draftId)}>
-                  Return to queue
-                </Button>
-              </div>
+        {decided ? (
+          <div className="flex items-center gap-2">
+            <p className="mr-1 text-xs text-muted-foreground">
+              {draft.status === "approved" ? "Approved." : "Rejected."}
+            </p>
+            <PublishAction draft={draft} onPublished={refresh} />
+            <Button variant="outline" size="sm" onClick={() => void returnToReview(draftId)}>
+              Return to queue
+            </Button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={deciding}
+              onClick={() => decide("reject")}
+              className="text-muted-foreground"
+            >
+              <X className="size-4" />
+              Reject
+            </Button>
+            <PublishAction draft={draft} onPublished={refresh} />
+            {failed ? (
+              <p className="text-xs text-muted-foreground">
+                Failed — nothing to approve.
+              </p>
             ) : (
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="ghost"
-                  disabled={deciding}
-                  onClick={() => decide("reject")}
-                  className="text-muted-foreground"
-                >
-                  <X className="size-4" />
-                  Reject
-                </Button>
-                <PublishAction draft={draft} onPublished={refresh} />
-                {failed ? (
-                  <p className="text-xs text-muted-foreground">
-                    Failed — nothing to approve.
-                  </p>
+              <Button
+                size="sm"
+                className="bg-gold text-gold-foreground hover:bg-gold/90"
+                disabled={deciding}
+                onClick={() => decide("approve")}
+              >
+                {deciding ? (
+                  <Loader2 className="size-4 animate-spin" />
                 ) : (
-                  <Button
-                    className="bg-gold text-gold-foreground hover:bg-gold/90"
-                    disabled={deciding}
-                    onClick={() => decide("approve")}
-                  >
-                    {deciding ? (
-                      <Loader2 className="size-4 animate-spin" />
-                    ) : (
-                      <Check className="size-4" />
-                    )}
-                    Approve
-                  </Button>
+                  <Check className="size-4" />
                 )}
-              </div>
+                Approve
+              </Button>
             )}
           </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -711,7 +717,7 @@ function PublishAction({
 }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [when, setWhen] = useState("");
+  const [when, setWhen] = useState(pageLocalSoon);
 
   if (draft.metricool_post_id) {
     return (
@@ -725,7 +731,7 @@ function PublishAction({
     setBusy(true);
     try {
       await publishDraft(draft.id, when || undefined);
-      toast(when ? "Scheduled in Metricool." : "Handed to Metricool.");
+      toast("Handed to Metricool.");
       onPublished();
       setOpen(false);
     } catch (cause) {
@@ -743,7 +749,7 @@ function PublishAction({
           click and a context switch for nothing. What stays behind the button
           is only the confirmation, which is about the irreversibility and not
           about the time. */}
-      <PublishAt value={when} onChange={setWhen} className="w-52 space-y-0" />
+      <PublishAt value={when} onChange={setWhen} />
       <Button
         variant="secondary"
         size="sm"
@@ -751,13 +757,12 @@ function PublishAction({
         onClick={() => setOpen(true)}
       >
         <Rocket className="size-4" />
-        {when ? "Schedule" : "Publish now"}
+        Publish
       </Button>
       <PublishDialog
         open={open}
         onOpenChange={setOpen}
         busy={busy}
-        scheduled={Boolean(when)}
         onConfirm={() => void publish()}
       />
     </>

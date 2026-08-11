@@ -19,7 +19,7 @@ import {
   publishDraft,
   rejectDraft,
 } from "@/lib/api/drafts";
-import { dayHeading, dayKey, timeOfDay } from "@/lib/format";
+import { dayHeading, dayKey, pageLocalSoon, timeOfDay } from "@/lib/format";
 import { usePageScope } from "@/lib/page-scope";
 import type { Draft, Page } from "@/lib/types";
 import { useQuery } from "@/lib/use-query";
@@ -350,7 +350,7 @@ function RowMenu({
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [publishing, setPublishing] = useState(false);
-  const [when, setWhen] = useState("");
+  const [when, setWhen] = useState(pageLocalSoon);
 
   async function run(work: () => Promise<unknown>, done: string) {
     setBusy(true);
@@ -448,15 +448,16 @@ function RowMenu({
       <PublishDialog
         open={publishing}
         onOpenChange={(next) => {
-          if (!next) setWhen("");
+          // Re-seeded rather than kept: a menu left open while the operator did
+          // something else would otherwise offer a time that has since passed.
+          if (!next) setWhen(pageLocalSoon());
           setPublishing(next);
         }}
         busy={busy}
-        scheduled={Boolean(when)}
         onConfirm={() =>
           void run(
             () => publishDraft(draft.id, when || undefined),
-            when ? "Scheduled in Metricool." : "Handed to Metricool.",
+            "Handed to Metricool.",
           )
         }
       >

@@ -29,15 +29,12 @@ export function PublishDialog({
   onOpenChange,
   busy,
   onConfirm,
-  scheduled,
   children,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   busy: boolean;
   onConfirm: () => void;
-  /** Whether a time was chosen — the button says which thing it is about to do. */
-  scheduled: boolean;
   children?: ReactNode;
 }) {
   return (
@@ -57,7 +54,7 @@ export function PublishDialog({
             ) : (
               <Rocket className="size-4" />
             )}
-            {scheduled ? "Schedule" : "Publish"}
+            Publish
           </Button>
         </DialogFooter>
       </DialogContent>

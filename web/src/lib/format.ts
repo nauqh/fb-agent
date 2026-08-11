@@ -51,6 +51,21 @@ export function pageLocalInput(date: Date = new Date()): string {
 }
 
 /**
+ * The soonest round time worth offering, on the Page's clock.
+ *
+ * Five minutes ahead and rounded up to the next five, so the publish field
+ * seeds with something that reads as a decision rather than as a stopwatch.
+ * `MIN_MINUTES_AHEAD` server-side is two, so this is always acceptable, and
+ * anything that goes stale while the operator reads the draft is clamped up
+ * rather than rejected.
+ */
+export function pageLocalSoon(): string {
+  const soon = new Date(Date.now() + 5 * 60_000);
+  soon.setMinutes(Math.ceil(soon.getMinutes() / 5) * 5, 0, 0);
+  return pageLocalInput(soon);
+}
+
+/**
  * There is deliberately nothing here that converts *out* of the Page's zone.
  *
  * The operator is in Melbourne and the client is in Vietnam; one clock, GMT+7,
