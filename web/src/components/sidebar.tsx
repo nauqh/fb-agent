@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  BarChart3,
   CalendarDays,
   Globe,
   Inbox,
@@ -47,6 +48,9 @@ import { cn } from "@/lib/utils";
  */
 
 const LINKS: { href: string; label: string; icon: LucideIcon }[] = [
+  // First: it is the only screen about what already went out, and the one an
+  // operator opens to decide what to write next.
+  { href: "/overview", label: "Overview", icon: BarChart3 },
   { href: "/sources", label: "Sources", icon: Layers },
   // Beside Sources rather than after Review: both are ways of starting a run,
   // and the loop below them — Review, Schedule — is the same whichever one fed

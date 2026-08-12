@@ -19,6 +19,7 @@ from app.routes import (
     config,
     drafts,
     feeds,
+    overview,
     pages,
     prompts,
     schedule,
@@ -104,6 +105,7 @@ app.include_router(competitors.router)
 app.include_router(config.router)
 app.include_router(drafts.router)
 app.include_router(feeds.router)
+app.include_router(overview.router)
 app.include_router(pages.router)
 app.include_router(prompts.router)
 app.include_router(schedule.router)

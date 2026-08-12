@@ -298,6 +298,65 @@ class Feed(SQLModel, table=True):
     created_at: datetime = Field(default_factory=_now)
 
 
+class SavedPost(SQLModel, table=True):
+    """A published post kept on purpose, for reference or reuse.
+
+    **The one thing on the Overview screen that needs a table.** Performance is
+    read live from Metricool and cached by nothing; this is not that. A saved
+    post is a decision — "this one worked, write more like it" — and it has to
+    outlive the analytics window it was found in. Metricool's `/stats` call
+    takes a date range, so a post drops out of every read once it is old enough,
+    and a reference that vanishes on a rolling window is not a reference.
+
+    The metrics are copied in, deliberately. They are **what the post scored
+    when it was saved**, not a live figure — a snapshot is the honest thing to
+    show beside "saved 3 months ago", and re-reading them would need the post to
+    still be inside the window it has by definition left.
+
+    Not a `Draft`. Most of these were published by the old app or written in
+    Metricool's composer and have no draft of ours behind them; `draft_id` is
+    there for the ones that do.
+    """
+
+    __tablename__ = "saved_post"
+    __table_args__ = (
+        # Saving the same post twice is one decision recorded twice. The UI
+        # toggles on this, so the constraint is what makes the toggle honest.
+        UniqueConstraint("page_id", "metricool_post_id", name="uq_saved_post_page_post"),
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    page_id: int = Field(foreign_key="page.id", index=True)
+
+    metricool_post_id: str = Field(index=True)
+    """Facebook's own `postId` as Metricool reports it (`<pageId>_<postId>`).
+    The join back to a stats row, and stable in a way a permalink is not."""
+
+    text: str = ""
+    permalink_url: str | None = None
+    picture_url: str | None = None
+    """Facebook's CDN URL, which **expires**. Kept for the thumbnail and
+    expected to rot: the competitor pictures document the same trap. A saved
+    post whose thumbnail has gone is still a saved post, so nothing here treats
+    a broken image as a broken row."""
+
+    published_at: datetime | None = None
+
+    reactions: int = 0
+    comments: int = 0
+    shares: int = 0
+    impressions: int = 0
+    """What it scored **when saved**. A snapshot, never refreshed — see above."""
+
+    note: str | None = None
+    """Why this one was worth keeping. The whole point of saving it."""
+
+    created_at: datetime = Field(default_factory=_now)
+
+    draft_id: int | None = Field(default=None, foreign_key="draft.id", index=True)
+    """Ours, when the post came from this app. Null for everything else."""
+
+
 class PageTimeSlot(SQLModel, table=True):
     """One time of day this Page publishes at. The same times every day.
 
