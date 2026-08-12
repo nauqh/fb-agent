@@ -222,7 +222,14 @@ def get_schedule(
             detail=f"{page.name} has no metricool_blog_id to read a schedule from.",
         )
 
-    now = datetime.now()
+    # The Page's clock, not the server's. `list_scheduled` sends these as naive
+    # local times *and* tells Metricool the timezone is `Asia/Ho_Chi_Minh`, so a
+    # bare `datetime.now()` labels the server's wall clock as Vietnamese and
+    # shifts the whole window by the offset — 7h on Railway, which runs UTC, and
+    # 3h on the operator's own laptop in Melbourne. Posts near either edge of
+    # the window simply go missing. `next_slot` above has always done this
+    # correctly; this call did not.
+    now = datetime.now(ZoneInfo(settings.timezone)).replace(tzinfo=None)
     try:
         rows = publisher.list_scheduled(
             page.metricool_blog_id,

@@ -219,3 +219,32 @@ def test_removing_a_slot_leaves_the_others(client, page):
 
     assert client.delete(f"/pages/1/slots/{slots[0]['id']}").status_code == 204
     assert [s["label"] for s in client.get("/pages/1/slots").json()] == ["19:00"]
+
+
+def test_the_schedule_window_is_on_the_pages_clock_not_the_servers(
+    client, page, monkeypatch
+):
+    """`list_scheduled` sends naive local times and tells Metricool they are
+    `Asia/Ho_Chi_Minh`, so a bare `datetime.now()` labels the *server's* wall
+    clock as Vietnamese and shifts the window by the offset — 7h on Railway
+    (UTC), 3h on the operator's laptop (Melbourne). Posts near either edge go
+    missing, silently.
+    """
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    seen = {}
+
+    def capture(blog_id, start, end, client=None):
+        seen["start"], seen["end"] = start, end
+        return []
+
+    monkeypatch.setattr(publisher, "list_scheduled", capture)
+    client.get("/schedule?page_id=1&days_back=0&days_ahead=1")
+
+    expected = datetime.now(ZoneInfo(settings.timezone)).replace(tzinfo=None)
+    drift = abs((seen["start"] - expected).total_seconds())
+    assert drift < 120, (
+        f"the window starts {drift / 3600:.1f}h from the Page's clock — it is on "
+        "the server's"
+    )
