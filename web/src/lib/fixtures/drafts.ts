@@ -103,7 +103,6 @@ export const DRAFTS: Draft[] = [
       "🗼 The Eiffel Tower was only ever meant to stand for twenty years, and by 1925 the city was openly complaining about the cost of painting it.\n📰 Victor Lustig read that complaint in a newspaper and had ministry stationery forged the same week.\n🤝 He invited six scrap dealers to a confidential meeting and explained that the demolition contract could not be announced publicly.\n💰 André Poisson paid for the tower — and then paid a bribe on top, because that was how he expected the deal to work.\n🔁 Poisson was too ashamed to report it, so Lustig came back and ran the whole thing a second time.",
     first_comment: LUSTIG_BODY,
     highlight_phrases: ["1925", "Victor Lustig", "Eiffel Tower", "scrap metal", "sold it again"],
-    hashtags: ["#history", "#historyretraced", "#eiffeltower", "#truecrime", "#1920s"],
     image_prompt:
       "Photorealistic documentary photograph, Paris 1925: a well-dressed man in a three-piece suit and homburg stands in a hotel suite, mid-conversation, papers spread on a walnut table. Medium close-up, natural window light, believable period dress, one readable face in the foreground. Keep the top-right quadrant clean.",
     hero_image_path: "heroes/482-lustig.png",
@@ -144,7 +143,6 @@ export const DRAFTS: Draft[] = [
       "sixty-six",
       "fifteen years",
     ],
-    hashtags: ["#history", "#historyretraced", "#china", "#tangdynasty", "#womeninhistory"],
     image_prompt:
       "Photorealistic historical reenactment photograph, Tang dynasty China: an older woman in imperial court robes seated in a hall of carved timber, torchlight and shadow, mid-shot with the face clearly readable. Documentary tone, no fantasy, no glow. Keep the top-right quadrant clean.",
     hero_image_path: "heroes/483-wu.png",
@@ -184,7 +182,6 @@ export const DRAFTS: Draft[] = [
       "Bluetooth and GPS",
       "sell war bonds",
     ],
-    hashtags: ["#history", "#historyretraced", "#hedylamarr", "#invention", "#wwii"],
     image_prompt:
       "Photorealistic photograph, 1940s Los Angeles: a woman at a drafting table in a domestic study, pencil in hand, technical diagrams under a desk lamp, warm practical lighting. Medium close-up, period dress, face readable. Keep the top-right quadrant clean.",
     hero_image_path: "heroes/484-lamarr.png",
@@ -218,7 +215,6 @@ export const DRAFTS: Draft[] = [
       "⌚ The dial painters earned three times a normal factory wage, and the work was advertised as clean.\n💋 The company taught lip-pointing — roll the brush between your lips, dip, paint — several hundred times a day.\n🦴 Radium behaves like calcium, so the bones took it in and kept it.\n🩺 Dr Theodore Blum described a pattern of dying jawbones in 1924 that he had never seen before.\n⚖️ Five women sued in 1927, and their testimony rewrote American occupational disease law.",
     first_comment: RADIUM_BODY,
     highlight_phrases: ["1917", "Radium Girls", "with their lips", "harmless", "seven more years"],
-    hashtags: ["#history", "#historyretraced", "#radiumgirls", "#labourhistory", "#1920s"],
     image_prompt:
       "Photorealistic documentary photograph, 1917 factory interior: young women in work smocks at a long bench painting watch dials, low window light, dust in the air. Mid-shot, two readable faces in the foreground. Keep the top-right quadrant clean.",
     hero_image_path: "heroes/485-radium.png",
@@ -252,7 +248,6 @@ export const DRAFTS: Draft[] = [
       "🧊 Frederic Tudor's first ice cargo sailed in 1806, and nobody in the Caribbean knew what to do with it.\n🪵 Sawdust was the breakthrough — a waste product from Maine's mills that turned out to be an excellent insulator.\n🚢 A shipment to Calcutta took four months and crossed the equator twice.\n📉 Two thirds of every load melted, and the surviving third still undercut every local alternative.\n🏦 He was jailed for debt twice before the business made him one of Boston's richest men.",
     first_comment: null,
     highlight_phrases: ["Boston sold winter", "Frederic Tudor", "Calcutta", "sawdust", "Two thirds melted"],
-    hashtags: ["#history", "#historyretraced", "#boston", "#trade", "#19thcentury"],
     image_prompt:
       "Photorealistic documentary photograph, New England 1840s: men in heavy coats cutting blocks of ice from a frozen lake with long saws, horses and sledges behind them, flat overcast winter light. Mid-shot, faces readable. Keep the top-right quadrant clean.",
     hero_image_path: null,
@@ -286,7 +281,6 @@ export const DRAFTS: Draft[] = [
       "🦤 Twenty thousand emus walked into the Western Australian wheat belt after the 1932 harvest.\n🔫 The government's answer was the Seventh Heavy Battery, two Lewis guns and ten thousand rounds.\n🏃 The emus scattered on the first burst and learned to post sentinels within days.\n📊 Six days and twenty-five hundred rounds produced a body count nobody could agree on.\n🏳️ The operation was withdrawn, and the government went back to paying a bounty.",
     first_comment: EMU_BODY,
     highlight_phrases: ["1932", "Australia", "twenty thousand emus", "six days", "the army withdrew"],
-    hashtags: ["#history", "#historyretraced", "#australia", "#emuwar", "#1930s"],
     image_prompt:
       "Photorealistic documentary photograph, Western Australia 1932: two soldiers in slouch hats beside a truck-mounted machine gun on cracked farmland, dry wheat stubble to the horizon, harsh midday sun. Mid-shot, faces readable. Keep the top-right quadrant clean.",
     hero_image_path: "heroes/487-emu.png",

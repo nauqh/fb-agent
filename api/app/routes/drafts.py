@@ -221,7 +221,6 @@ class DraftEdit(BaseModel):
     caption: str | None = None
     first_comment: str | None = None
     highlight_phrases: list[str] | None = None
-    hashtags: list[str] | None = None
     image_prompt: str | None = None
     inset_size_px: int | None = None
     inset_x_ratio: float | None = None
@@ -267,11 +266,6 @@ def update_draft(
         field in changes and changes[field] != getattr(draft, field)
         for field in DRAWN_FIELDS
     )
-
-    if "hashtags" in changes:
-        # The box is free text split on spaces, so this path never sees the
-        # model's schema. Same rule, applied where the edit lands.
-        changes["hashtags"] = validators.normalise_hashtags(changes["hashtags"])
 
     # Clamped where the edit lands, not only where it is drawn: the row is read
     # back into a slider and a drag handle, and a value they would never render
@@ -649,15 +643,19 @@ def publish_draft(
 
 
 def _post_text(draft: Draft) -> str:
-    """The caption and its hashtags, which is what Facebook shows.
+    """The caption, which is what Facebook shows.
 
     The hook is not here: it is drawn *on the image*, and repeating it as the
     caption prints the same sentence twice on one post. The first comment goes
     to Metricool separately, as `firstCommentText`.
+
+    Hashtags used to be appended here, and this was the only place the feature
+    changed what actually went out (feedback E1, reversed 2026-08-12). Drafts
+    written before the removal still *hold* tags in `Draft.hashtags`; they are
+    deliberately not published, because half-removing a feature by leaving 19
+    pending drafts to post tags is not removing it.
     """
-    caption = (draft.caption or "").strip()
-    tags = " ".join(draft.hashtags)
-    return f"{caption}\n\n{tags}".strip() if tags else caption
+    return (draft.caption or "").strip()
 
 
 @router.post("/drafts/{draft_id}/approve")

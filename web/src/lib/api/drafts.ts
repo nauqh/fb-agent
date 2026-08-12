@@ -40,7 +40,6 @@ export type DraftEdit = Partial<
     | "caption"
     | "first_comment"
     | "highlight_phrases"
-    | "hashtags"
     | "image_prompt"
     | "inset_size_px"
     | "inset_x_ratio"

@@ -183,27 +183,3 @@ def advise(first_comment: str) -> list[str]:
     missing").
     """
     return [reason for reason in [birth_death_years(first_comment)] if reason]
-
-
-def normalise_hashtags(values: list[str]) -> list[str]:
-    """`history` becomes `#history`. A hashtag without its hash is a word.
-
-    The model returns them both ways — `['#DDay', '#WWII']` on one run,
-    `['history', 'mystery']` on the next — because the field carried no
-    description for most of its life. Saying so in the schema helps and does not
-    settle it: an operator editing the box types whatever they type, and that
-    path never passed through the model at all.
-
-    So it is fixed here, where both paths meet, rather than asked for twice.
-    Internal spaces go because Facebook ends a tag at the first one — `#Bill
-    Millin` posts as `#Bill` followed by stray text.
-    """
-    seen: set[str] = set()
-    out: list[str] = []
-    for value in values:
-        tag = "".join(value.split()).lstrip("#")
-        if not tag or tag.lower() in seen:
-            continue
-        seen.add(tag.lower())
-        out.append(f"#{tag}")
-    return out

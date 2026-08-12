@@ -56,7 +56,6 @@ interface Form {
   caption: string;
   first_comment: string;
   highlight_phrases: string[];
-  hashtags: string[];
   image_prompt: string;
   /** Null means "the default", which is what the server stores for an untouched draft. */
   inset_size_px: number | null;
@@ -716,16 +715,6 @@ export function DraftDetail({
                   />
                 </Field>
 
-                <Field label="Hashtags" hint={`${form.hashtags.length} · space separated, # added if you omit it`}>
-                  <Input
-                    value={form.hashtags.join(" ")}
-                    onChange={(event) =>
-                      setForm({ ...form, hashtags: event.target.value.split(/\s+/).filter(Boolean) })
-                    }
-                    className="font-mono text-xs"
-                  />
-                </Field>
-
                 </>
               ) : null}
             </div>
@@ -738,7 +727,6 @@ export function DraftDetail({
             avatarPath={page ? pageAvatarRaw(page) : null}
             image={picture}
             caption={form?.caption ?? draft.caption ?? ""}
-            hashtags={form?.hashtags ?? draft.hashtags}
             firstComment={form?.first_comment ?? draft.first_comment ?? ""}
           />
         </TabsContent>
@@ -1264,7 +1252,6 @@ function toForm(draft: Draft): Form {
     caption: draft.caption ?? "",
     first_comment: draft.first_comment ?? "",
     highlight_phrases: [...draft.highlight_phrases],
-    hashtags: [...draft.hashtags],
     image_prompt: draft.image_prompt ?? "",
     inset_size_px: draft.inset_size_px,
     inset_x_ratio: draft.inset_x_ratio,

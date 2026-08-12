@@ -103,7 +103,6 @@ export interface Draft {
   caption: string | null;
   first_comment: string | null;
   highlight_phrases: string[];
-  hashtags: string[];
 
   image_prompt: string | null;
   hero_image_path: string | null;

@@ -220,6 +220,9 @@ def ready(session, page):
         hook="On the image.",
         caption="🌊 The recap.",
         first_comment="The body." * 40,
+        # Left set deliberately. Hashtags were removed on 2026-08-12 (feedback
+        # E1, reversed) *without* clearing the column, so a draft written before
+        # the removal still carries them. Pinned by the test below.
         hashtags=["#history", "#historyretraced"],
         composed_image_path=media.store.save(_jpeg(), "12-composed.jpg"),
     )
@@ -277,12 +280,21 @@ def test_the_link_metricool_gets_is_the_one_the_browser_showed(client, ready, pu
     ]
 
 
-def test_the_caption_and_hashtags_are_the_post_the_hook_is_not(client, ready, published):
-    """The hook is drawn on the image; repeating it prints it twice on one post."""
+def test_the_caption_is_the_post_the_hook_and_old_hashtags_are_not(
+    client, ready, published
+):
+    """The hook is drawn on the image; repeating it prints it twice on one post.
+
+    Hashtags were removed on 2026-08-12 (feedback E1, reversed by the client).
+    The column was kept, so 20 of 21 drafts still hold tags — `ready` is one of
+    them. They must not reach Facebook: a removal that still publishes tags for
+    every draft written before it is not a removal, and the operator asked for
+    the stored values to be left alone rather than for the feature to linger.
+    """
     client.post(f"/drafts/{ready.id}/publish")
 
     assert "🌊 The recap." in published["text"]
-    assert "#history #historyretraced" in published["text"]
+    assert "#history" not in published["text"], "a stored tag was published"
     assert "On the image." not in published["text"]
     assert published["first_comment"].startswith("The body."), "Metricool posts this"
 

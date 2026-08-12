@@ -27,7 +27,6 @@ GOOD = {
         "came to accept it. " * 9
     ),
     "highlight_phrases": ["Marie Tharp", "1957", "ocean floor"],
-    "hashtags": ["#history"],
     "image_prompt": "A woman at a drafting table, 1950s, documentary photograph.",
 }
 
@@ -366,34 +365,3 @@ def test_the_text_drawn_on_the_image_is_the_text_the_rules_guard(page):
     # And it is that same corrected string the compositor lays out.
     plan = overlay.plan(result.output.hook)
     assert " ".join(plan.lines).startswith("Marie Tharp")
-
-
-# --- hashtags, which arrived both ways ---------------------------------------
-
-
-@pytest.mark.parametrize(
-    ("given", "expected"),
-    [
-        (["history", "mystery"], ["#history", "#mystery"]),
-        (["#history", "#mystery"], ["#history", "#mystery"]),
-        (["##history"], ["#history"]),
-        (["  spaced  out "], ["#spacedout"]),
-        (["history", "#History"], ["#history"]),
-        (["", "   ", "#"], []),
-    ],
-)
-def test_a_hashtag_without_its_hash_is_a_word(given, expected):
-    """The model returned both shapes on consecutive runs, and the field carried
-    no description for most of its life. Fixed rather than asked for twice —
-    the operator's edit box never passes through the schema at all.
-
-    Internal spaces go because Facebook ends a tag at the first one: `#Bill
-    Millin` posts as `#Bill` and then stray text.
-    """
-    assert validators.normalise_hashtags(given) == expected
-
-
-def test_the_writer_normalises_what_the_model_returns():
-    content = writer.DraftContent(**{**GOOD, "hashtags": ["history", "#WWII"]})
-
-    assert content.hashtags == ["#history", "#WWII"]

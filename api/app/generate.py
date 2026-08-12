@@ -170,7 +170,6 @@ def _run_one(session: Session, draft_id: int) -> None:
         draft.caption = content.caption
         draft.first_comment = content.first_comment
         draft.highlight_phrases = content.highlight_phrases
-        draft.hashtags = content.hashtags
         draft.image_prompt = content.image_prompt
 
         # Residue: what the writer could not fix within its retries. Every

@@ -53,7 +53,6 @@ def writes(monkeypatch):
             caption="🐕 A relay of dog teams carried it.",
             first_comment="x" * 1850,
             highlight_phrases=["serum run"],
-            hashtags=[],
             image_prompt="a sled dog team on sea ice",
         )
 

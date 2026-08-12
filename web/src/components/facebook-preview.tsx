@@ -36,14 +36,12 @@ export function FacebookPreview({
   avatarPath,
   image,
   caption,
-  hashtags,
   firstComment,
 }: {
   pageName: string;
   avatarPath?: string | null;
   image: ReactNode;
   caption: string;
-  hashtags: string[];
   firstComment: string;
 }) {
   return (
@@ -65,12 +63,6 @@ export function FacebookPreview({
         ) : (
           <p className="px-4 pb-2.5 text-[15px] italic text-muted-foreground">No recap yet.</p>
         )}
-
-        {hashtags.length > 0 ? (
-          <p className="px-4 pb-3 text-[15px] leading-relaxed text-[#1877f2]">
-            {hashtags.join(" ")}
-          </p>
-        ) : null}
 
         {image}
 

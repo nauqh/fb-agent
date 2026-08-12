@@ -17,7 +17,6 @@ GOOD = DraftContent(
         "Marie Tharp (1920-2006) worked in ink.\n\n" + "She redrew the sea floor. " * 62
     ),
     highlight_phrases=["Marie Tharp", "1957"],
-    hashtags=[],
     image_prompt="A woman at a drafting table.",
 )
 
@@ -574,7 +573,6 @@ def rewritten(monkeypatch):
             caption="🐕 A relay of dog teams.",
             first_comment="x" * 1850,
             highlight_phrases=["twenty mushers"],
-            hashtags=[],
             image_prompt="a sled dog team on sea ice",
         )
 

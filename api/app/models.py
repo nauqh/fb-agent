@@ -651,7 +651,20 @@ class Draft(SQLModel, table=True):
     caption: str | None = None
     first_comment: str | None = None
     highlight_phrases: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+
     hashtags: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+    """**Dead as of 2026-08-12 (feedback E1, reversed). Nothing writes this.**
+
+    Kept, not dropped, because 20 of 21 drafts carry values and a dropped column
+    has no undo — one of them is already in Metricool's planner with its tags in
+    the published text, which is the only record of what that post actually says.
+    The writer no longer produces them, `_post_text` no longer appends them, and
+    the web app no longer shows the field; new drafts get the empty default.
+
+    Reading it is still fine. `schedule-list.tsx` parses tags back out of planner
+    *text* for the 302 posts the old system queued, and that is unrelated to this
+    column.
+    """
 
     image_prompt: str | None = None
 
