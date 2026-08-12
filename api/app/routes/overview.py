@@ -11,10 +11,11 @@ vanishes on a rolling window is not a reference.
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
+from app import generate
 from app.db import get_session
 from app.models import Page, SavedPost
 from app.sources import metricool
@@ -85,7 +86,7 @@ def _flatten(row: dict, saved: set[str]) -> PostStats:
 @router.get("/overview/performance")
 def performance(
     page_id: int = Query(1),
-    days: int = Query(90, ge=1, le=365),
+    days: int = Query(30, ge=1, le=365),
     session: Session = Depends(get_session),
 ) -> list[PostStats]:
     """This Page's published posts and how they did, best first.
@@ -95,9 +96,11 @@ def performance(
     nothing, with a zero-reaction post first while the window held one with
     160,282.
 
-    90 days by default because their stats lag Facebook by a day or so, so the
-    newest posts legitimately read as zeros — over a 30-day window that was most
-    of the response, and the screen looked like a dead Page.
+    30 days by default. An earlier version used 90 on the theory that their lag
+    made shorter windows read as a dead Page; measured, that is false — over 7
+    days only 1 post of 28 had no reactions, and over 30 it was 1 of 219. The
+    belief came from the sorting bug above, where the unsorted first row
+    happened to be a recent zero.
     """
     page = session.get(Page, page_id)
     if page is None:
@@ -192,6 +195,51 @@ def save_post(request: SaveRequest, session: Session = Depends(get_session)) -> 
     session.commit()
     session.refresh(row)
     return row
+
+
+@router.post("/overview/saved/{saved_id}/reuse", status_code=202)
+def reuse_saved(
+    saved_id: int,
+    background: BackgroundTasks,
+    session: Session = Depends(get_session),
+) -> list[int]:
+    """Write the saved post's story again, from scratch.
+
+    The point of keeping a top performer — "save the top-performing posts for
+    future reference/reuse". The operator confirmed the reading: **the same
+    story, written fresh**, not a copy and not a style sample. Their own data
+    already shows them doing it by hand; the best post in the 90-day window
+    appears twice, three weeks apart.
+
+    It runs as a **topic** rather than a Source Item, which is what makes the
+    subject bind without the writer treating our own prose as an article to
+    summarise. `start_run` takes it from there, so this is the ordinary generate
+    path — same prompts, same brand rules, same card — and answers 202 with ids
+    to poll like every other run.
+
+    The stored text is the *published caption*, which is the fullest description
+    of the story we have. The hook is not stored: it was drawn into the image
+    and never existed as a column on anything but our own drafts, most of which
+    these posts are not.
+    """
+    row = session.get(SavedPost, saved_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"No saved post {saved_id}")
+
+    topic = (row.text or "").strip()
+    if not topic:
+        raise HTTPException(
+            status_code=409,
+            detail="That saved post has no text to write from.",
+        )
+
+    try:
+        draft_ids = generate.start_run(session, [row.page_id], [], topic)
+    except generate.GenerateError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+
+    background.add_task(generate.run_drafts, draft_ids)
+    return draft_ids
 
 
 @router.delete("/overview/saved/{saved_id}", status_code=204)

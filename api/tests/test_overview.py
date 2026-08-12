@@ -37,6 +37,31 @@ def _row(post_id: str, reactions=0, comments=0, shares=0, created=1786468297000,
 
 
 @pytest.fixture
+def writes(monkeypatch):
+    """Stub the writer, so reuse exercises the run without a model call.
+
+    Local rather than shared with `test_generate.py`: that module's `written`
+    fixture is its own, and importing fixtures across test modules is how a
+    change to one silently breaks the other.
+    """
+    from app import generate
+    from app.writer.agent import DraftContent
+
+    class Result:
+        output = DraftContent(
+            hook="A hook about the serum run that is comfortably under the cap.",
+            caption="🐕 A relay of dog teams carried it.",
+            first_comment="x" * 1850,
+            highlight_phrases=["serum run"],
+            hashtags=[],
+            image_prompt="a sled dog team on sea ice",
+        )
+
+    monkeypatch.setattr(generate.writer, "write", lambda *a, **k: Result())
+    return Result
+
+
+@pytest.fixture
 def stats(monkeypatch):
     """Whatever the Page's stats are, without leaving the building."""
 
@@ -140,3 +165,50 @@ def test_unsaving_removes_it(client, page):
 
     assert client.delete(f"/overview/saved/{saved['id']}").status_code == 204
     assert client.get("/overview/saved?page_id=1").json() == []
+
+
+# --- writing a saved post again ----------------------------------------------
+
+
+def test_reusing_a_saved_post_writes_its_story_again(client, page, writes, illustrated):
+    """The point of keeping a top performer. The same story, written fresh —
+    not a copy, and not a style sample."""
+    saved = client.post(
+        "/overview/saved",
+        json={"page_id": 1, "post_id": "a", "text": "The 1925 serum run to Nome."},
+    ).json()
+
+    response = client.post(f"/overview/saved/{saved['id']}/reuse")
+
+    assert response.status_code == 202
+    draft_ids = response.json()
+    assert len(draft_ids) == 1
+    draft = client.get(f"/drafts/{draft_ids[0]}").json()
+    assert draft["topic"] == "The 1925 serum run to Nome.", (
+        "it runs as a topic, so the subject binds without the writer treating "
+        "our own prose as an article to summarise"
+    )
+    assert draft["source_item_id"] is None
+
+
+def test_reusing_leaves_the_saved_post_alone(client, page, writes, illustrated):
+    """Reuse is not a move. The reference stays a reference."""
+    saved = client.post(
+        "/overview/saved", json={"page_id": 1, "post_id": "a", "text": "A story."}
+    ).json()
+
+    client.post(f"/overview/saved/{saved['id']}/reuse")
+
+    assert len(client.get("/overview/saved?page_id=1").json()) == 1
+
+
+def test_a_saved_post_with_no_text_cannot_be_reused(client, page):
+    saved = client.post(
+        "/overview/saved", json={"page_id": 1, "post_id": "a", "text": ""}
+    ).json()
+
+    assert client.post(f"/overview/saved/{saved['id']}/reuse").status_code == 409
+
+
+def test_reusing_something_that_is_not_there_says_so(client, page):
+    assert client.post("/overview/saved/999/reuse").status_code == 404

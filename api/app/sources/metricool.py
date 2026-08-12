@@ -353,7 +353,7 @@ class StatsError(RuntimeError):
     """The performance read failed. The screen says so rather than showing zeros."""
 
 
-def page_posts(blog_id: str, days: int = 90, timeout: float = 60.0) -> list[dict]:
+def page_posts(blog_id: str, days: int = 30, timeout: float = 60.0) -> list[dict]:
     """Every post this Page published in the window, with its metrics.
 
     **`sortcolumn` is not honoured and is not sent.** Asking for `reactions`
@@ -361,10 +361,10 @@ def page_posts(blog_id: str, days: int = 90, timeout: float = 60.0) -> list[dict
     "sorted" response had zero reactions while the window held one with 160,282.
     Sorting is done by the caller, on the numbers that came back.
 
-    **A short window reads as an empty Page.** Metricool's stats lag Facebook by
-    a day or so, so the newest posts legitimately carry zeros — over 30 days
-    that was most of what came back. 90 days is the default for that reason,
-    not for the volume.
+    `days` is the caller's. Metricool's stats lag Facebook by about a day, so
+    the very newest posts can carry zeros — but measured against History
+    Retraced that is a rounding error, not a reason to widen the window: 1 post
+    of 28 over 7 days, 1 of 219 over 30, 4 of 657 over 90.
     """
     if not settings.metricool_api_token or not settings.metricool_user_id:
         raise StatsError("Metricool is not configured (token and user id)")

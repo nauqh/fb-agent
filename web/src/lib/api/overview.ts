@@ -70,6 +70,17 @@ export async function savePost(pageId: number, post_: PostStats): Promise<SavedP
   });
 }
 
+/**
+ * Write this saved post's story again, from scratch.
+ *
+ * The same story, not a copy and not a style sample — it runs as a topic, so
+ * the subject binds without the writer treating our own prose as an article to
+ * summarise. Answers with draft ids to poll, like any other run.
+ */
+export async function reuseSaved(savedId: number): Promise<number[]> {
+  return post<number[]>(`/overview/saved/${savedId}/reuse`, {});
+}
+
 export async function unsavePost(savedId: number): Promise<void> {
   await del(`/overview/saved/${savedId}`);
 }
