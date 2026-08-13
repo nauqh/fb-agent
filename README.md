@@ -14,6 +14,21 @@ with it, and stops. A person reads it, edits anything, and approves or throws it
 away. Approved posts go to Metricool, which does the posting and adds the first
 comment.
 
+## Pages
+
+The Pages this agent currently writes for.
+
+| | Page | Facebook |
+|---|---|---|
+| <img alt="History Retraced" src="docs/logos/history-retraced.jpg" width="40" height="40"> | History Retraced | [facebook.com](https://www.facebook.com/569035169625026) |
+| <img alt="The Fact Feed" src="docs/logos/the-fact-feed.jpg" width="40" height="40"> | The Fact Feed | [facebook.com](https://www.facebook.com/603815099479680) |
+| <img alt="Bible Focus" src="docs/logos/bible-focus.jpg" width="40" height="40"> | Bible Focus | [facebook.com](https://www.facebook.com/716243634914791) |
+| <img alt="Bodybuilding Tips N Tricks" src="docs/logos/bodybuilding-tips.png" width="40" height="40"> | Bodybuilding Tips N Tricks | [facebook.com](https://www.facebook.com/335270636513940) |
+| <img alt="Fitness Girls" src="docs/logos/fitness-girls.jpg" width="40" height="40"> | Fitness Girls | [facebook.com](https://www.facebook.com/190385971070847) |
+| <img alt="Fitness Recipes" src="docs/logos/fitness-recipes.jpg" width="40" height="40"> | Fitness Recipes | [facebook.com](https://www.facebook.com/174689475989202) |
+| <img alt="GYM Motivation" src="docs/logos/gym-motivation.jpg" width="40" height="40"> | GYM Motivation | [facebook.com](https://www.facebook.com/242430195788437) |
+| <img alt="House of Common Sense" src="docs/logos/house-of-common-sense.jpg" width="40" height="40"> | House of Common Sense | [facebook.com](https://www.facebook.com/518809444814591) |
+
 ## Language
 
 One meaning each, in the code and on screen.
@@ -27,7 +42,7 @@ One meaning each, in the code and on screen.
 | **Factual Source** | A Source Item whose subject **is** binding. Tweets and RSS items | |
 | **Cart** | Source Items ticked for the next run | selection, basket |
 | **Draft** | A generated post awaiting review: hook, caption, first comment, highlighted phrases, image. One Source Item yields one Draft per Page | post, candidate |
-| **Approve** | Accepting a Draft as ready. Reversible until published | schedule, publish |
+| **Approve** | A legacy status nothing new writes — kept only for rows that already carry it. Publishing is its own decision | schedule, publish |
 | **Warning** | A style rule the writer still broke after its retries. Residue, not advice — never blocks Approve | |
 | **Composed Image** | The finished 896×1120 image: hero photograph, text panel, gold highlights, watermark. Two forms, `card` and `full_overlay` | overlay, composite |
 | **Highlight Phrase** | An exact substring of the panel text, copied verbatim, rendered in gold | |
@@ -47,17 +62,6 @@ Its schedule table held zero rows while 237 posts sat approved. Not stale.
 Empty, and still treated as the truth.
 
 So this system reads that kind of thing live and stores none of it.
-
----
-
-## Design Principles
-
-| Principle | In practice |
-|---|---|
-| **A person is the gate** | No setting removes the approval step. Adding one would be a redesign, not a feature |
-| **Nothing external is copied** | Metricool owns the schedule and the competitor list. Asked for when needed, kept never |
-| **A Page is a row, not code** | Adding a Page, a feed, a competitor assignment or a layout override is an insert |
-| **One clock** | Every time shown or chosen is `Asia/Ho_Chi_Minh`, GMT+7 — the Page's, not the operator's, who may be anywhere. Rows store UTC and render into it; nothing converts the other way |
 
 ---
 
@@ -111,10 +115,10 @@ flowchart TD
     end
 
     subgraph decide ["👤 Operator"]
-        Read[/Read it · edit · redo the image/] --> Decide{Approve, reject,<br/>or keep editing?}
+        Read[/Read it · edit · redo the image/] --> Decide{Publish, reject,<br/>or keep editing?}
         Decide -->|edit| Read
         Decide -->|reject| Dropped([Leaves the queue · kept])
-        Decide -->|approve| When[/Choose a publication time/]
+        Decide -->|publish| When[/Publish now, at a time,<br/>or at the next free slot/]
     end
 
     subgraph out ["📤 Metricool"]
@@ -132,7 +136,7 @@ Metricool on its own. The two cylinders are the only places state lives: our
 
 **Material.** Three kinds, all shown per Page:
 
-| Kind | Comes from | The writer treats it as |
+| Type | Comes from | The writer treats it as |
 |---|---|---|
 | Competitor post | Metricool's competitor tracking | **Tone only** — the post is not about their subject |
 | RSS item | Feeds chosen for that Page | **Binding** — the post is about that story |
@@ -177,17 +181,15 @@ stateDiagram-v2
     [*] --> generating
     generating --> review: written and drawn
     generating --> failed: something went wrong
-    review --> approved
-    approved --> review: un-approve
     review --> rejected
-    approved --> [*]: handed to Metricool
+    review --> [*]: handed to Metricool
 ```
 
 | | |
 |---|---|
 | `failed` is not `review` | A run that produced nothing is not a post awaiting a decision. When they shared a state, empty rows sat in the queue looking ready |
 | A restart mid-run fails the stragglers | Otherwise they sit in the queue forever, looking like work about to finish |
-| Publishing is not tied to approval | Approve is a queue movement with an undo. Publishing cannot be taken back, so it is its own decision and its own button |
+| Publishing is not approval | Approve was the old queue movement and nothing writes it now. Publishing cannot be taken back, so it is its own decision — three ways out: now, at a time, or at the next free slot |
 
 ---
 
@@ -199,6 +201,8 @@ erDiagram
     PAGE ||--o{ PAGE_COMPETITOR : "reads"
     PAGE ||--o| PAGE_LAYOUT : "styled by"
     PAGE ||--o{ DRAFT : "posts to"
+    PAGE ||--o{ SAVED_POST : "keeps"
+    PAGE ||--o{ PAGE_TIME_SLOT : "publishes at"
     SOURCE_ITEM ||--o{ DRAFT : "written from"
 ```
 
@@ -206,6 +210,8 @@ erDiagram
 |---|---|
 | **page** | Name, Facebook and Metricool ids, which watermark and avatar files to use |
 | **feed** | One RSS feed a Page reads. Added and removed on screen |
+| **saved_post** | A published post the operator kept for reference, with its metrics as saved — it survives the rolling reporting window |
+| **page_time_slot** | A Page's standing publishing times. Policy, not schedule state, so no contradiction with the "no schedule table" rule — what is actually queued is still read live |
 | **page_competitor** | Which competitors each Page reads. **Not a copy of Metricool's list** — a decision on top of it |
 | **page_layout** | Per-Page overrides: which of the two forms, panel size, text size, colours, watermark and inset placement. **Only what that Page changed** — everything else keeps tracking the defaults file, so resetting a Page is deleting its row |
 | **source_item** | Material actually chosen. One table for all three kinds |
@@ -250,14 +256,16 @@ so changing bucket or project is configuration rather than a migration.
 | Screen | For |
 |---|---|
 | **Sign in** | Email and password. Everything else is behind it |
+| **Overview** | How the Page's posts did, read live from Metricool, and the posts worth keeping |
 | **Sources** | Browse material and collect what is worth writing |
+| **Manual** | Start a post with no source behind it: write it by hand, or from a topic |
 | **Review** | The queue of Drafts, and the decision on each |
 | **Schedule** | What is actually planned, read live from Metricool |
-| **Settings** | This Page: feeds, watermark, which competitors it reads |
+| **Settings** | This Page: feeds, watermark, publishing times, which competitors it reads |
 | **Global** | The account: the competitor pool and its budget, the card layout, the writing instructions |
 
 Every screen after sign-in is scoped to the selected Page, remembered between
-visits.
+visits — except Global, which is the whole account.
 
 ---
 
@@ -355,14 +363,3 @@ the value into the client bundle at build time and hand it to every visitor.
 | **Metricool** | Flat plan, one hard allowance: **100 competitors per account**, the same on Starter and Advanced. That number is what the shared pool exists to spend carefully; the Global screen shows how much is gone |
 | **Supabase** | Database and bucket. Storage grows with every photograph and card; superseded cards are deleted as they are replaced, by exact path |
 | **X** | One tweet at a time, on paste |
-
----
-
-## Credits
-
-Built by [nauqh](https://github.com/nauqh), as a rewrite of an earlier system
-kept read-only for prior art and for what not to repeat.
-
-FastAPI · SQLModel · Alembic · Next.js · Tailwind · shadcn/ui · Gemini for the
-words and pictures · Supabase for Postgres and Storage · Metricool for
-scheduling and publishing · Playwright for checking a screen actually works.
