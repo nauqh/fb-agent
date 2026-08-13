@@ -8,11 +8,10 @@
 ![Gemini](https://img.shields.io/badge/Gemini-text%20%2B%20image-blue?colorA=363a4f&colorB=c6a0f6&style=for-the-badge&logo=googlegemini&logoColor=cad3f5)
 ![Metricool](https://img.shields.io/badge/Metricool-publishing-blue?colorA=363a4f&colorB=f5a97f&style=for-the-badge&logo=rss&logoColor=cad3f5)
 
-The agent helps one person run several Facebook Pages. It gathers material worth
-posting about, writes a post in the Page's voice, makes the picture that goes
-with it, and stops. A person reads it, edits anything, and approves or throws it
-away. Approved posts go to Metricool, which does the posting and adds the first
-comment.
+The agent helps manage several Facebook Pages. It gathers material worth
+posting, writes a draft in the Page's voice, and produces the image that goes
+with it. A person reviews the draft, edits as needed, and either publishes it or
+discards it. Metricool handles the actual posting and adds the first comment.
 
 ## Pages
 
@@ -91,14 +90,6 @@ Two deployables. The **frontend** holds no data and can only ask the backend for
 things. The **backend** owns the database, the pictures, the AI calls and every
 outside connection.
 
-| | How, and why |
-|---|---|
-| **The browser holds no secret** | It never reaches the database and never holds the backend's key. The frontend *server* attaches that on the way through, so it stays out of every developer tools panel |
-| **Both halves are locked** | Frontend: email and password, then a signed cookie. Backend: a shared key on every request, checked centrally so a new route cannot skip it. Only the health check is open, so the platform can probe it |
-| **A missing secret denies everything** | In both halves. The opposite produces a wide-open deploy that looks perfectly healthy |
-| **One copy of the backend runs** | The startup sweep that fails stranded Drafts cannot tell "crashed" from "running elsewhere", so a second copy would kill live runs. Correctness, not capacity |
-| **The schema updates itself on start** | Code and schema cannot ship out of step. The test suite builds its schema from the code, so only a check against the live database catches a missing migration — a required step before deploying |
-
 ---
 
 ## Workflow
@@ -134,7 +125,7 @@ Four boxes, and the operator holds two of them — the agent never reaches
 Metricool on its own. The two cylinders are the only places state lives: our
 `draft` row and Metricool's planner, and there are two on purpose.
 
-**Material.** Three kinds, all shown per Page:
+**Material.** Three types, all shown per Page:
 
 | Type | Comes from | The writer treats it as |
 |---|---|---|
@@ -242,13 +233,6 @@ so changing bucket or project is configuration rather than a migration.
 | Finished cards (JPEG) | Page avatars |
 | Operator-uploaded inset photos | The font |
 
-| | |
-|---|---|
-| **Watermarks are committed, not hosted** | Hosting them is what failed before: the old system read them from storage by key, the bucket was cleared, and the compositor quietly printed the Page name as plain text. The mark vanished from output with no error anywhere |
-| **`<draft id>-<kind>-<timestamp>-<random>.<ext>`**, under a year-month folder | Draft id first so a listing sorts usefully. Salted as well as timestamped, because re-composing twice inside one second produced the same name and the second write changed what a row already pointed at. Never overwritten |
-| **The bucket is public and unsigned** | Load-bearing. Metricool does not take its own copy — tested directly, it hands the same address back — so the picture must still be fetchable when Facebook comes for it. The old system's addresses expired two hours after posting: **0 of its 105 published posts still have a working image** |
-| **Separate dev and production buckets** | Two databases both hand out draft id 1; one bucket would let them overwrite each other |
-
 ---
 
 ## Screens
@@ -309,7 +293,7 @@ The app also runs `upgrade head` at startup, so a deploy migrates itself.
 Delete-and-reseed stopped being the escape hatch when the database moved off the
 laptop: it is shared, and it holds the only copy of the drafts.
 
-**Configuration that is a file, not a row:**
+**Configuration is a file, not a row:**
 
 | | |
 |---|---|
