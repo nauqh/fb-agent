@@ -174,12 +174,21 @@ export type RegeneratableField = "hook" | "caption" | "first_comment";
  * the writer again: a caption written in isolation is a caption for a different
  * post. A regenerated hook brings new `highlight_phrases` with it and redraws
  * the card, because the hook is the text on the panel.
+ *
+ * `instruction` is the operator's own line for this one press ("too short").
+ * Omitted, the call is exactly what it was — the unargued press is the common
+ * case. **The returned row is the whole point of the return value**: the
+ * server has already written the field, so the caller must re-seed the editor
+ * from this, not from what is on screen. See `draft-detail.tsx`.
  */
 export async function regenerateField(
   id: number,
   field: RegeneratableField,
+  instruction?: string,
 ): Promise<Draft> {
-  return post<Draft>(`/drafts/${id}/regenerate?field=${field}`, {});
+  return post<Draft>(`/drafts/${id}/regenerate?field=${field}`, {
+    instruction: instruction ?? null,
+  });
 }
 
 /** Take the circle off. Answers with the redrawn draft, not 204. */

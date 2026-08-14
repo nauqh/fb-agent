@@ -19,7 +19,7 @@ from fastapi import (
     UploadFile,
 )
 from PIL import Image
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
 from app import generate, media
@@ -306,10 +306,25 @@ def update_draft(
     return _save(session, draft)
 
 
+class RewriteRequest(BaseModel):
+    """How the operator wants this one field changed. Optional, and one-shot.
+
+    Not stored on the Draft and not turned into a brand rule: it describes an
+    action, not the post. A rule that should hold for every future draft belongs
+    in `validators.py`, where the whole Page sees it.
+
+    Capped because it is pasted into the prompt in front of the brief — a whole
+    article in here is a second brief, not an instruction.
+    """
+
+    instruction: str | None = Field(default=None, max_length=500)
+
+
 @router.post("/drafts/{draft_id}/regenerate")
 def regenerate_field(
     draft_id: int,
     field: str = Query(description="hook, caption or first_comment"),
+    body: RewriteRequest | None = None,
     session: Session = Depends(get_session),
 ) -> Draft:
     """Ask the writer for one field again, keeping the rest.
@@ -328,6 +343,12 @@ def regenerate_field(
     is the hook, because they are verbatim substrings of it and phrases chosen
     for the old hook match nothing in the new one. Leaving them would render no
     gold and look like the highlight feature had broken.
+
+    An `instruction` in the body steers this one rewrite ("too short", "mention
+    the year"). Without it the call behaves exactly as it did — the no-argument
+    press is the common case and stays one click. With it the model is told to
+    follow the operator instead of chasing a new angle, because the two
+    contradict each other; see `writer.rewrite_prompt`.
 
     Synchronous, unlike `/generate`: this is one call the operator is waiting on,
     and there is no picture to draw unless the hook changed.
@@ -353,7 +374,10 @@ def regenerate_field(
     }
 
     try:
-        result = writer.rewrite(page, source, draft.topic, field, keeping)
+        instruction = (body.instruction or "").strip() if body else ""
+        result = writer.rewrite(
+            page, source, draft.topic, field, keeping, instruction or None
+        )
     except Exception as error:  # noqa: BLE001 — upstream, and the row is untouched
         raise HTTPException(
             status_code=502,

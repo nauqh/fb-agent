@@ -292,6 +292,7 @@ def rewrite_prompt(
     topic: str | None,
     field: str,
     keeping: dict[str, str],
+    instruction: str | None = None,
 ) -> str:
     """The original brief, plus what is being kept and what to replace.
 
@@ -300,6 +301,14 @@ def rewrite_prompt(
     open on the hook that is drawn on the picture above it, and the operator
     would be handed two halves that do not meet. Showing the model what stays is
     what makes the new field fit the old ones.
+
+    `instruction` is the operator's own line, and it **replaces** the demand for
+    novelty rather than joining it. The two contradict each other: "produce a
+    genuinely different one" answers *this is not the post I want*, while "make
+    it longer" answers *this is the post I want, said better*. The client's first
+    real use was a hook that was too short — no rule anywhere sets a minimum, so
+    every unargued retry was an equally valid short hook and the button could
+    only re-roll, never steer.
     """
     parts = [user_prompt(source, topic), ""]
     parts.append(
@@ -309,12 +318,26 @@ def rewrite_prompt(
     for name, value in keeping.items():
         if value:
             parts += ["", f"{name.replace('_', ' ').upper()} (keep verbatim):", value]
-    parts += [
-        "",
-        f"Rewrite ONLY the {field.replace('_', ' ')}. Produce a genuinely "
-        "different one — a new angle or a new opening, not a reworded copy of "
-        "what is there now. It must still fit the kept fields above.",
-    ]
+
+    named = field.replace("_", " ")
+    if instruction:
+        parts += [
+            "",
+            f"Rewrite ONLY the {named}, following this instruction from the "
+            "operator. It is about this post specifically and outranks any "
+            "preference for a fresh angle — if it asks for a change to what is "
+            "there now, keep the rest of that field:",
+            instruction.strip(),
+            "",
+            "The result must still fit the kept fields above and the brand rules.",
+        ]
+    else:
+        parts += [
+            "",
+            f"Rewrite ONLY the {named}. Produce a genuinely different one — a "
+            "new angle or a new opening, not a reworded copy of what is there "
+            "now. It must still fit the kept fields above.",
+        ]
     return "\n".join(parts)
 
 
@@ -324,6 +347,7 @@ def rewrite(
     topic: str | None,
     field: str,
     keeping: dict[str, str],
+    instruction: str | None = None,
     model=None,
 ):
     """One field again, written to sit with the ones being kept.
@@ -337,12 +361,17 @@ def rewrite(
     They are verbatim substrings of the hook, so phrases chosen for the old one
     match nothing in the new one and render no gold at all — a silent failure
     that looks like the highlight feature being broken.
+
+    `instruction` steers one rewrite and is **not** stored on the Draft and
+    **not** turned into a validator: it describes an action, not the post, and a
+    brand rule belongs to the Page in `validators.py` where every future draft
+    sees it. A stored one would be silently reused by the next press.
     """
     if field not in REGENERATABLE:
         raise ValueError(f"{field!r} is not a field that can be regenerated")
     return _run(
         page,
-        rewrite_prompt(source, topic, field, keeping),
+        rewrite_prompt(source, topic, field, keeping, instruction),
         _field_rules(field),
         model,
     )

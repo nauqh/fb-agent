@@ -6,6 +6,7 @@ from sqlmodel import Session, func, select
 from app import generate, media
 from app.models import Draft, DraftStatus, SourceItem, SourceItemBase, SourceKind
 from app.settings import settings
+from app.writer import agent as writer
 from app.writer.agent import DraftContent
 
 CURATED = "https://www.smithsonianmag.com/history/a-story-180987410/"
@@ -576,9 +577,10 @@ def rewritten(monkeypatch):
             image_prompt="a sled dog team on sea ice",
         )
 
-    def fake(page, source, topic, field, keeping, model=None):
+    def fake(page, source, topic, field, keeping, instruction=None, model=None):
         seen["field"] = field
         seen["keeping"] = keeping
+        seen["instruction"] = instruction
         return Result()
 
     monkeypatch.setattr(generate.writer, "rewrite", fake)
@@ -650,6 +652,58 @@ def test_regenerating_a_caption_does_not_redraw_the_card(
     after = client.post("/drafts/1/regenerate?field=caption").json()
 
     assert after["composed_image_path"] == before["composed_image_path"]
+
+
+def test_an_instruction_reaches_the_writer(client, written, illustrated, rewritten):
+    """B5. The button with no argument can only re-roll: nothing in
+    `validators.py` sets a minimum length, so every retry on "too short" is an
+    equally valid short hook. The operator's line is the only way to steer."""
+    _generate(client)
+
+    client.post("/drafts/1/regenerate?field=hook", json={"instruction": "  Too short. "})
+
+    assert rewritten["instruction"] == "Too short."
+
+
+def test_no_instruction_is_the_same_call_as_before(client, written, illustrated, rewritten):
+    """Empty, whitespace and absent all mean the no-argument press, which is the
+    common case and stays one click."""
+    _generate(client)
+
+    client.post("/drafts/1/regenerate?field=hook")
+    assert rewritten["instruction"] is None
+
+    client.post("/drafts/1/regenerate?field=hook", json={})
+    assert rewritten["instruction"] is None
+
+    client.post("/drafts/1/regenerate?field=hook", json={"instruction": "   "})
+    assert rewritten["instruction"] is None
+
+
+def test_an_operator_instruction_replaces_the_demand_for_novelty(written):
+    """The two contradict each other. "Produce a genuinely different one" answers
+    *this is not the post I want*; "make it longer" answers *this is the post I
+    want, said better*, and leaving both in the prompt asks for both."""
+    plain = writer.rewrite_prompt(None, "sled dogs", "hook", {"caption": "x"})
+    steered = writer.rewrite_prompt(
+        None, "sled dogs", "hook", {"caption": "x"}, "Make it longer."
+    )
+
+    assert "genuinely different" in plain
+    assert "genuinely different" not in steered
+    assert "Make it longer." in steered
+    # The kept fields survive either way — that is what makes the new field fit.
+    assert "keep verbatim" in plain and "keep verbatim" in steered
+
+
+def test_an_instruction_longer_than_the_cap_is_refused(client, written, illustrated):
+    """It is pasted in front of the brief. A whole article in here is a second
+    brief, not an instruction."""
+    _generate(client)
+
+    response = client.post("/drafts/1/regenerate?field=hook", json={"instruction": "x" * 501})
+
+    assert response.status_code == 422
 
 
 def test_a_field_that_is_not_regeneratable_is_refused(client, written, illustrated):

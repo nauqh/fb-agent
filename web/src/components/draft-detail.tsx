@@ -145,6 +145,30 @@ export function DraftDetail({
   const form = editor.form;
   const setForm = (next: Form) => setEditor({ key: editorKey, form: next });
 
+  /**
+   * A rewrite landed on the row, so re-seed the boxes from the row the server
+   * just returned.
+   *
+   * The seeding rule above cannot do it: the key is the draft's id and the id
+   * did not change, so a bare `refresh` re-read the new text into `draft` and
+   * left `form` holding the old. The screen then showed the pre-rewrite text —
+   * both halves of it, since the preview draws `form.hook ?? draft.hook` — while
+   * the toast said the field had been rewritten. Worse than a no-op: `dirty`
+   * compares form against row, so the draft went dirty against text the operator
+   * never typed, and the **Save changes** button that appeared wrote the old
+   * hook back over the new one. Every press was a Gemini call, then discarded by
+   * the one visible affordance after it (client feedback A2, 2026-08-14).
+   *
+   * The whole row, not just the rewritten field: the operator pressed Rewrite on
+   * this field, and the others are what the server kept verbatim. `refresh`
+   * first so `draft` and `form` land in one render and the drawer never flashes
+   * a dirty state.
+   */
+  async function applyRewrite(row: Draft) {
+    await refresh();
+    setEditor({ key: `draft:${row.id}`, form: toForm(row) });
+  }
+
   const page = pages?.find((candidate) => candidate.id === draft?.page_id);
   const dirty = useMemo(
     () => (draft && form ? JSON.stringify(toForm(draft)) !== JSON.stringify(form) : false),
@@ -652,7 +676,7 @@ export function DraftDetail({
                       label="Hook"
                       dirty={dirty}
                       form={form}
-                      onDone={refresh}
+                      onRewritten={applyRewrite}
                     />
                   }
                   hint={`${words(form.hook)} words · on the image · limit 65, no question`}
@@ -680,7 +704,7 @@ export function DraftDetail({
                       label="Caption"
                       dirty={dirty}
                       form={form}
-                      onDone={refresh}
+                      onRewritten={applyRewrite}
                     />
                   }
                   hint={`${form.caption.split("\n").filter(Boolean).length} recap lines · max 5, each opening with an emoji`}
@@ -701,7 +725,7 @@ export function DraftDetail({
                       label="First comment"
                       dirty={dirty}
                       form={form}
-                      onDone={refresh}
+                      onRewritten={applyRewrite}
                     />
                   }
                   hint={`${chars(form.first_comment)} · 1,500–2,100`}
@@ -1094,12 +1118,20 @@ function InsetRing({
 }
 
 /**
- * Ask the writer for one field again.
+ * Ask the writer for one field again, optionally saying how.
  *
- * A small control on the label rather than a button in the footer, because it
- * acts on *this* field and a row of three identical buttons somewhere else
- * would not say which. The old app put it in the same place
+ * Sits directly above its own field rather than in the footer, because it acts
+ * on *this* field and a row of three identical buttons somewhere else would not
+ * say which. The old app put it in the same place
  * (`regenerate-field-control.tsx`).
+ *
+ * **The box is always visible, not behind a toggle.** The client asked for it in
+ * as many words — *"should there be a textbox for me to input how I want it to
+ * be changed"* — after pressing the unargued button on a hook that was too short
+ * and getting another short hook. Nothing in `validators.py` sets a minimum
+ * length, so the button alone can only re-roll, never steer; a control hidden
+ * behind a chevron would leave them pressing the same button. Empty is the
+ * common case and is still one click.
  *
  * Saves first when there are unsaved edits, for the reason the inset upload
  * does: the server rewrites from the **row**, so an unsaved hook would be
@@ -1112,23 +1144,29 @@ function Regenerate({
   label,
   dirty,
   form,
-  onDone,
+  onRewritten,
 }: {
   draftId: number;
   field: RegeneratableField;
   label: string;
   dirty: boolean;
   form: Form | null;
-  onDone: () => void;
+  /** Hand back the row the server returned. Re-seeding the editor from it is
+   *  what makes the rewrite visible — see `applyRewrite`. */
+  onRewritten: (row: Draft) => Promise<void>;
 }) {
   const [busy, setBusy] = useState(false);
+  // Kept after a press, not cleared: "make it longer" is usually said twice, and
+  // the box is on screen, so nothing is being reused invisibly. It is never sent
+  // to the row — an instruction describes an action, not the post.
+  const [instruction, setInstruction] = useState("");
 
   async function run() {
     setBusy(true);
     try {
       if (dirty && form) await updateDraft(draftId, form);
-      await regenerateField(draftId, field);
-      await onDone();
+      const row = await regenerateField(draftId, field, instruction.trim() || undefined);
+      await onRewritten(row);
       toast.success(`New ${label.toLowerCase()}.`, {
         description:
           field === "hook"
@@ -1143,20 +1181,39 @@ function Regenerate({
   }
 
   return (
-    <button
-      type="button"
-      onClick={() => void run()}
-      disabled={busy}
-      title={`Ask the writer for a new ${label.toLowerCase()}, keeping the other fields.`}
-      className="inline-flex items-center gap-1 rounded px-1 py-0.5 text-[11px] font-normal text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
-    >
-      {busy ? (
-        <Loader2 className="size-3 animate-spin" />
-      ) : (
-        <RefreshCw className="size-3" />
-      )}
-      Rewrite
-    </button>
+    <div className="flex items-center gap-2">
+      <Input
+        value={instruction}
+        disabled={busy}
+        placeholder={`How should the ${label.toLowerCase()} change? Optional.`}
+        onChange={(event) => setInstruction(event.target.value)}
+        // Enter runs it. The box is one line and has no other action, and the
+        // draft form below is saved by its own button, so nothing else can be
+        // submitted by accident.
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            void run();
+          }
+        }}
+        maxLength={500}
+        className="h-7 text-xs"
+      />
+      <button
+        type="button"
+        onClick={() => void run()}
+        disabled={busy}
+        title={`Ask the writer for a new ${label.toLowerCase()}, keeping the other fields.`}
+        className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-1 text-[11px] font-normal text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+      >
+        {busy ? (
+          <Loader2 className="size-3 animate-spin" />
+        ) : (
+          <RefreshCw className="size-3" />
+        )}
+        Rewrite
+      </button>
+    </div>
   );
 }
 
@@ -1213,10 +1270,7 @@ function Field({
   return (
     <div className="space-y-2">
       <div className="flex items-baseline justify-between gap-3">
-        <Label className="flex items-center gap-2 text-sm">
-          {label}
-          {regenerate}
-        </Label>
+        <Label className="text-sm">{label}</Label>
         {hint ? (
           <span
             className={cn(
@@ -1228,6 +1282,11 @@ function Field({
           </span>
         ) : null}
       </div>
+      {/* Its own row, between the label and the box it rewrites. It used to be a
+          word inside the `<Label>`, which left nowhere for the prompt input to
+          go — and an `<input>` inside a `<label>` steals the click that should
+          focus the field. */}
+      {regenerate}
       {children}
     </div>
   );
