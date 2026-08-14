@@ -114,18 +114,9 @@ def build_agent(page: Page, model: object | None = None) -> Agent:
     return agent
 
 
-FALLBACK_MODELS: tuple[str, ...] = ()
-"""Empty: one model, until there is a reason for a second.
-
-The scar is worth keeping even with nothing in the list. Every pinned version
-rotted out of this chain — `gemini-2.0-flash` answered 404 "no longer
-available", then `gemini-2.5-flash` answered *"no longer available to new
-users"*, alive on the project the key belonged to and dead on one created that
-afternoon. Neither was detectable from `models.list()`.
-
-So if a link is added back, make it an alias like `gemini-flash-latest`, which
-Google repoints. A pinned one expires on somebody else's schedule and fails only
-where nobody is looking.
+"""The chain is `settings.text_fallback_chain` — deployment config, like the
+image one beside it, because model ids rot and a rotted id should be an env
+change rather than a release. The evidence for what is in it is on the setting.
 """
 
 @lru_cache(maxsize=4)
@@ -204,10 +195,9 @@ def _run(page: Page, prompt: str, validator, model=None):
             agent.output_validator(validator)
         return agent.run_sync(prompt)
 
-    names = [settings.gemini_text_model, *FALLBACK_MODELS]
     last: Exception | None = None
 
-    for name in dict.fromkeys(names):  # de-duplicated, order kept
+    for name in dict.fromkeys(settings.text_fallback_chain):  # de-duplicated, order kept
         try:
             agent = Agent(
                 _model(name),

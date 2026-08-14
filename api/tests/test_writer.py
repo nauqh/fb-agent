@@ -296,8 +296,9 @@ def test_thinking_is_set_for_gemini_3_and_stripped_below_it():
 
 
 def test_the_configured_model_is_tried_before_the_fallbacks():
-    names = [writer.settings.gemini_text_model, *writer.FALLBACK_MODELS]
-    assert list(dict.fromkeys(names))[0] == writer.settings.gemini_text_model
+    chain = writer.settings.text_fallback_chain
+    assert chain[0] == writer.settings.gemini_text_model
+    assert len(set(chain)) == len(chain), "a model would be tried twice"
 
 
 @pytest.mark.parametrize("retired", ["gemini-2.0-flash", "gemini-2.5-flash"])
@@ -309,14 +310,20 @@ def test_no_pinned_version_is_a_fallback(retired):
     and 404'd on a project created the same afternoon — so a pinned model can
     be alive for us and dead for a clone, and `models.list()` reports neither.
     """
-    assert retired not in writer.FALLBACK_MODELS
+    assert retired not in writer.settings.text_fallback_chain
 
 
-def test_every_fallback_is_an_alias_so_it_cannot_be_retired():
-    """Vacuous while the list is empty, and that is the point: if a link is ever
-    added back it must be an alias. A provider repoints an alias; a pinned
-    version just expires, and does so silently."""
-    assert all(name.endswith("-latest") for name in writer.FALLBACK_MODELS)
+def test_the_fallback_chain_is_the_one_that_was_checked():
+    """A tripwire on a default, not a rule. The rule used to be aliases only —
+    Google repoints an alias, a pin expires silently. Then the alias was
+    measured: `gemini-flash-latest` answered a ping and 503'd on a real
+    `writer.rewrite` in the same minute, because it points at a busy model.
+    `gemini-3.6-flash` completed a structured rewrite on 2026-08-14.
+
+    Changing this means checking the new id with a real call, not
+    `models.list()`, which reports models that 404 on use.
+    """
+    assert writer.settings.gemini_text_fallback_models == "gemini-3.6-flash"
 
 
 def test_a_supplied_model_is_never_swapped_for_a_real_one(page, monkeypatch):

@@ -305,6 +305,19 @@ class Settings(BaseSettings):
     `gemini-flash-latest` is the alias to fall back to — Google repoints it, so
     it cannot expire on somebody else's schedule.
     """
+    gemini_text_fallback_models: str = "gemini-3.6-flash"
+    """Comma-separated, tried in order when the configured model answers 503/429.
+
+    Was empty, so a 503 on `gemini-3.5-flash` — Google's *"currently experiencing
+    high demand"* — ended the run with nothing left to try, and the operator got
+    a failed Rewrite on a button that had worked all week.
+
+    Measured with real calls on 2026-08-14, not `models.list()`:
+    `gemini-3.6-flash` completed a full structured rewrite; `gemini-3.5-flash`
+    and `gemini-3.7-flash` were 503; `gemini-2.5-flash`/`-pro` were 404. The
+    alias `gemini-flash-latest` answered a ping and then 503'd on a real rewrite
+    in the same minute — it points at a busy model, so it is no answer to a 503.
+    """
     gemini_image_model: str = "gemini-2.5-flash-image"
     gemini_image_fallback_models: str = ""
     """Comma-separated, tried in order after the configured model. Empty disables.
@@ -375,6 +388,16 @@ class Settings(BaseSettings):
             if name.strip() and name.strip() != self.gemini_image_model
         )
         return (self.gemini_image_model, *rest)
+
+    @property
+    def text_fallback_chain(self) -> tuple[str, ...]:
+        """Same shape as `image_fallback_chain`, for the writer."""
+        rest = (
+            name.strip()
+            for name in self.gemini_text_fallback_models.split(",")
+            if name.strip() and name.strip() != self.gemini_text_model
+        )
+        return (self.gemini_text_model, *rest)
 
     def missing_secrets(self) -> list[str]:
         """Named, never valued. Reported by /health so a blank .env is obvious."""
