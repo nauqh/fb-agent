@@ -590,17 +590,22 @@ def rewritten(monkeypatch):
     return seen
 
 
-def test_regenerating_a_caption_leaves_the_other_fields_alone(
+def test_a_rewrite_is_a_proposal_and_writes_nothing(
     client, written, illustrated, rewritten
 ):
+    """The whole point of the shape. The route used to set the field on the row,
+    which left the screen showing the old text over a new row — and the Save
+    button that appeared wrote the old text back, undoing the call that had just
+    been paid for. Rewrite proposes; Save writes; Revert is the undo."""
     _generate(client)
     before = client.get("/drafts/1").json()
 
-    after = client.post("/drafts/1/regenerate?field=caption").json()
+    proposed = client.post("/drafts/1/regenerate?field=caption").json()
+    after = client.get("/drafts/1").json()
 
-    assert after["caption"] == "🐕 A relay of dog teams."
-    assert after["hook"] == before["hook"], "the hook was overwritten"
-    assert after["first_comment"] == before["first_comment"]
+    assert proposed["field"] == "caption"
+    assert proposed["text"] == "🐕 A relay of dog teams."
+    assert after == before, "the row was written by a rewrite"
 
 
 def test_the_kept_fields_are_shown_to_the_model(client, written, illustrated, rewritten):
@@ -616,41 +621,61 @@ def test_the_kept_fields_are_shown_to_the_model(client, written, illustrated, re
     assert rewritten["keeping"]["hook"] == before["hook"]
 
 
+def test_unsaved_kept_fields_are_taken_from_the_request(
+    client, written, illustrated, rewritten
+):
+    """What the model must fit is what the operator can see, not what was last
+    saved. The screen used to save the whole form before rewriting, purely
+    because the server read the kept fields off the row — a write nobody asked
+    for, on a button that now writes nothing at all."""
+    _generate(client)
+
+    client.post(
+        "/drafts/1/regenerate?field=caption",
+        json={"keeping": {"hook": "A hook typed a moment ago and never saved."}},
+    )
+
+    assert rewritten["keeping"]["hook"] == "A hook typed a moment ago and never saved."
+    # The field that was not sent still comes off the row.
+    assert rewritten["keeping"]["first_comment"] == client.get("/drafts/1").json()["first_comment"]
+
+
 def test_a_new_hook_brings_its_highlight_phrases_with_it(
     client, written, illustrated, rewritten
 ):
     """They are verbatim substrings of the hook. Phrases chosen for the old one
     match nothing in the new one and render no gold at all — a silent failure
-    that reads as the highlight feature being broken."""
+    that reads as the highlight feature being broken. They ride along in the
+    proposal so that saving the hook saves both together."""
+    _generate(client)
+
+    proposed = client.post("/drafts/1/regenerate?field=hook").json()
+
+    assert proposed["highlight_phrases"] == ["twenty mushers"]
+    assert all(p in proposed["text"] for p in proposed["highlight_phrases"])
+
+
+def test_only_the_hook_carries_highlight_phrases(client, written, illustrated, rewritten):
+    """They are defined as substrings of the hook and mean nothing beside a
+    caption — sending them anyway would invite the client to save them."""
+    _generate(client)
+
+    proposed = client.post("/drafts/1/regenerate?field=caption").json()
+
+    assert proposed["highlight_phrases"] is None
+
+
+def test_a_rewrite_does_not_redraw_the_card(client, written, illustrated, rewritten):
+    """`PATCH` redraws it when the proposal is saved — `hook` and
+    `highlight_phrases` are both in `DRAWN_FIELDS`. Drawing here would spend a
+    composite on a rewrite the operator may well throw away, and orphan the file
+    it superseded."""
     _generate(client)
     before = client.get("/drafts/1").json()
 
-    after = client.post("/drafts/1/regenerate?field=hook").json()
+    client.post("/drafts/1/regenerate?field=hook")
 
-    assert after["highlight_phrases"] == ["twenty mushers"]
-    assert after["highlight_phrases"] != before["highlight_phrases"]
-    assert all(p in after["hook"] for p in after["highlight_phrases"])
-
-
-def test_a_new_hook_redraws_the_card(client, written, illustrated, rewritten):
-    """The hook is drawn on the panel, so the stored PNG is stale without this."""
-    _generate(client)
-    before = client.get("/drafts/1").json()
-
-    after = client.post("/drafts/1/regenerate?field=hook").json()
-
-    assert after["composed_image_path"] != before["composed_image_path"]
-
-
-def test_regenerating_a_caption_does_not_redraw_the_card(
-    client, written, illustrated, rewritten
-):
-    """Nothing on the card changed, and a rebuild would orphan a file for nothing."""
-    _generate(client)
-    before = client.get("/drafts/1").json()
-
-    after = client.post("/drafts/1/regenerate?field=caption").json()
-
+    after = client.get("/drafts/1").json()
     assert after["composed_image_path"] == before["composed_image_path"]
 
 

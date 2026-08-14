@@ -167,27 +167,38 @@ export async function uploadInset(id: number, file: File): Promise<Draft> {
 /** The three fields the writer can be asked for again, one at a time. */
 export type RegeneratableField = "hook" | "caption" | "first_comment";
 
+/** One field as the writer would write it. Nothing has been saved. */
+export interface RewriteProposal {
+  field: RegeneratableField;
+  text: string;
+  /** Only for the hook: they are verbatim substrings of it, so they must be
+   *  saved with it or the gold matches nothing. */
+  highlight_phrases: string[] | null;
+}
+
 /**
  * Ask the writer for one field again, keeping the rest.
  *
- * The kept fields go to the model, which is what separates this from running
- * the writer again: a caption written in isolation is a caption for a different
- * post. A regenerated hook brings new `highlight_phrases` with it and redraws
- * the card, because the hook is the text on the panel.
+ * **A proposal, not a save.** The row is untouched; the text lands in the
+ * editor and the operator presses Save, exactly as they do for text they typed.
+ * Revert throws it away. That one rule — Rewrite proposes, Save writes — is what
+ * replaced the bug where the row moved and the screen did not.
+ *
+ * `keeping` is what the other fields say **on screen**, unsaved edits included:
+ * what the new field has to fit is what the operator can see. Sending it is what
+ * lets this call avoid writing anything at all.
  *
  * `instruction` is the operator's own line for this one press ("too short").
- * Omitted, the call is exactly what it was — the unargued press is the common
- * case. **The returned row is the whole point of the return value**: the
- * server has already written the field, so the caller must re-seed the editor
- * from this, not from what is on screen. See `draft-detail.tsx`.
+ * Omitted, the call is the plain re-roll it always was.
  */
 export async function regenerateField(
   id: number,
   field: RegeneratableField,
-  instruction?: string,
-): Promise<Draft> {
-  return post<Draft>(`/drafts/${id}/regenerate?field=${field}`, {
-    instruction: instruction ?? null,
+  options: { keeping?: Partial<Record<RegeneratableField, string>>; instruction?: string } = {},
+): Promise<RewriteProposal> {
+  return post<RewriteProposal>(`/drafts/${id}/regenerate?field=${field}`, {
+    instruction: options.instruction ?? null,
+    keeping: options.keeping ?? null,
   });
 }
 

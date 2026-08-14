@@ -307,17 +307,41 @@ def update_draft(
 
 
 class RewriteRequest(BaseModel):
-    """How the operator wants this one field changed. Optional, and one-shot.
+    """What to tell the writer for this one rewrite. Every field optional.
 
-    Not stored on the Draft and not turned into a brand rule: it describes an
+    `instruction` is how the operator wants the field changed ("too short"). It
+    is not stored on the Draft and not turned into a brand rule: it describes an
     action, not the post. A rule that should hold for every future draft belongs
-    in `validators.py`, where the whole Page sees it.
+    in `validators.py`, where the whole Page sees it. Capped because it is pasted
+    into the prompt in front of the brief — a whole article in here is a second
+    brief, not an instruction.
 
-    Capped because it is pasted into the prompt in front of the brief — a whole
-    article in here is a second brief, not an instruction.
+    `keeping` is what the *other* fields currently say, which for a client with
+    an open editor is what is on screen rather than what is in the row. Sent
+    rather than read so that a rewrite never has to write first: the screen used
+    to save the operator's unsaved edits before asking, purely because the server
+    read the kept fields off the row. Absent, the row is used — which is what a
+    caller with no editor open should get.
     """
 
     instruction: str | None = Field(default=None, max_length=500)
+    keeping: dict[str, str] | None = None
+
+
+class RewriteProposal(BaseModel):
+    """One field as the writer would write it. **Nothing has been saved.**
+
+    The Draft is not touched by a rewrite: the operator presses Save, exactly as
+    they do for text they typed themselves, and Revert throws the proposal away.
+    That is the whole of the undo story and it needed no history table — see the
+    route below.
+    """
+
+    field: str
+    text: str
+    highlight_phrases: list[str] | None = None
+    """Only for the hook, and it travels with it — the phrases are verbatim
+    substrings of the hook, so the old ones match nothing in the new one."""
 
 
 @router.post("/drafts/{draft_id}/regenerate")
@@ -326,8 +350,8 @@ def regenerate_field(
     field: str = Query(description="hook, caption or first_comment"),
     body: RewriteRequest | None = None,
     session: Session = Depends(get_session),
-) -> Draft:
-    """Ask the writer for one field again, keeping the rest.
+) -> RewriteProposal:
+    """Ask the writer for one field again, keeping the rest. **Saves nothing.**
 
     The old app had this per field (`regenerate-field-control.tsx`,
     `draft-regenerate.ts`) and the rewrite lost it, leaving the whole draft or
@@ -339,19 +363,30 @@ def regenerate_field(
     picture above it, and the operator would be handed two halves that do not
     meet.
 
-    Only the requested field is written back — plus `highlight_phrases` when it
-    is the hook, because they are verbatim substrings of it and phrases chosen
-    for the old hook match nothing in the new one. Leaving them would render no
-    gold and look like the highlight feature had broken.
+    **A proposal, not a write.** This used to set the field on the row and
+    recomposite the card, and that was the source of the worst bug of the round:
+    the screen kept the old text, the row held the new, and the Save button that
+    appeared wrote the old one back over it. Returning the text instead gives the
+    screen one rule — *Rewrite proposes, Save writes* — and makes Revert the
+    undo, which no amount of history on the server could have done as well. It
+    also means a rewrite the operator rejects costs no row write and no composite
+    rebuild.
+
+    Nothing is drawn here either. The card is redrawn by `PATCH` when the
+    proposal is saved, because `hook` and `highlight_phrases` are both in
+    `DRAWN_FIELDS`; until then the preview draws the text itself.
+
+    Still refuses a published draft. Nothing would be written now, but the
+    proposal could not be saved afterwards, so offering the call would be a
+    Gemini bill with nowhere to land.
 
     An `instruction` in the body steers this one rewrite ("too short", "mention
-    the year"). Without it the call behaves exactly as it did — the no-argument
-    press is the common case and stays one click. With it the model is told to
-    follow the operator instead of chasing a new angle, because the two
-    contradict each other; see `writer.rewrite_prompt`.
+    the year"). Without it the call is the plain re-roll it always was — the
+    no-argument press is the common case and stays one click. With it the model
+    is told to follow the operator instead of chasing a new angle, because the
+    two contradict each other; see `writer.rewrite_prompt`.
 
-    Synchronous, unlike `/generate`: this is one call the operator is waiting on,
-    and there is no picture to draw unless the hook changed.
+    Synchronous, unlike `/generate`: this is one call the operator is waiting on.
     """
     if field not in writer.REGENERATABLE:
         raise HTTPException(
@@ -367,8 +402,10 @@ def regenerate_field(
     source = (
         session.get(SourceItem, draft.source_item_id) if draft.source_item_id else None
     )
+    sent = (body.keeping or {}) if body else {}
     keeping = {
-        name: getattr(draft, name) or ""
+        name: (sent.get(name) if sent.get(name) is not None else getattr(draft, name))
+        or ""
         for name in writer.REGENERATABLE
         if name != field
     }
@@ -384,18 +421,13 @@ def regenerate_field(
             detail=f"The writer could not rewrite that ({type(error).__name__}).",
         ) from error
 
-    setattr(draft, field, getattr(result.output, field))
-    if field == "hook":
-        draft.highlight_phrases = result.output.highlight_phrases
-        # The hook is drawn on the card, so the stored PNG is now stale. Free —
-        # the hero is reused and only the panel is redrawn — which is the same
-        # rule `PATCH` follows on every save that touches the drawn text.
-        if draft.hero_image_path:
-            fresh = generate.build_image(session, draft, page)
-            kept = [w for w in draft.warnings if not w.startswith(generate.IMAGE_WARNING)]
-            draft.warnings = kept + fresh
-
-    return _save(session, draft)
+    return RewriteProposal(
+        field=field,
+        text=getattr(result.output, field),
+        highlight_phrases=(
+            result.output.highlight_phrases if field == "hook" else None
+        ),
+    )
 
 
 @router.post("/drafts/{draft_id}/image")

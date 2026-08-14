@@ -43,7 +43,7 @@ import { getPageLayout, type ResolvedLayout } from "@/lib/api/layout";
 import { listPages } from "@/lib/api/pages";
 import { getNextSlot, type NextSlot } from "@/lib/api/schedule";
 import { chars, pageLocalSoon, words } from "@/lib/format";
-import type { RegeneratableField } from "@/lib/api/drafts";
+import type { RegeneratableField, RewriteProposal } from "@/lib/api/drafts";
 import type { Draft } from "@/lib/types";
 import { useQuery } from "@/lib/use-query";
 import { pageAvatarRaw } from "@/lib/page-avatar";
@@ -146,27 +146,37 @@ export function DraftDetail({
   const setForm = (next: Form) => setEditor({ key: editorKey, form: next });
 
   /**
-   * A rewrite landed on the row, so re-seed the boxes from the row the server
-   * just returned.
+   * A rewrite came back. It goes in the boxes, not in the database.
    *
-   * The seeding rule above cannot do it: the key is the draft's id and the id
-   * did not change, so a bare `refresh` re-read the new text into `draft` and
-   * left `form` holding the old. The screen then showed the pre-rewrite text —
-   * both halves of it, since the preview draws `form.hook ?? draft.hook` — while
-   * the toast said the field had been rewritten. Worse than a no-op: `dirty`
-   * compares form against row, so the draft went dirty against text the operator
-   * never typed, and the **Save changes** button that appeared wrote the old
-   * hook back over the new one. Every press was a Gemini call, then discarded by
-   * the one visible affordance after it (client feedback A2, 2026-08-14).
+   * **Rewrite proposes, Save writes, Revert undoes** — the same three words that
+   * describe typing in the box by hand, which is the point. The old shape had
+   * the server write the field and the screen re-read it, and the screen did not
+   * re-read it: the editor re-seeds on a key change and the key is the draft's
+   * id, so a rewrite left `form` holding the pre-rewrite text over a row that
+   * had moved. Both halves of the screen showed the old text — the preview draws
+   * `form.hook ?? draft.hook` — while the toast said it had been rewritten, the
+   * draft went dirty against text nobody typed, and pressing the **Save changes**
+   * that appeared wrote the old text back over the new. Every press was a paid
+   * Gemini call undone by the one visible affordance after it (client feedback
+   * A2, 2026-08-14).
    *
-   * The whole row, not just the rewritten field: the operator pressed Rewrite on
-   * this field, and the others are what the server kept verbatim. `refresh`
-   * first so `draft` and `form` land in one render and the drawer never flashes
-   * a dirty state.
+   * Putting the proposal in the form instead makes all of that impossible rather
+   * than fixed: there is no second copy to disagree with, `dirty` is true
+   * because something really did change, and the undo the operator wanted is the
+   * Revert button that was already there.
+   *
+   * The phrases must move with the hook. They are verbatim substrings of it, so
+   * keeping the old ones would render no gold at all.
    */
-  async function applyRewrite(row: Draft) {
-    await refresh();
-    setEditor({ key: `draft:${row.id}`, form: toForm(row) });
+  function applyProposal(proposal: RewriteProposal) {
+    if (!form) return;
+    setForm({
+      ...form,
+      [proposal.field]: proposal.text,
+      ...(proposal.highlight_phrases
+        ? { highlight_phrases: proposal.highlight_phrases }
+        : {}),
+    });
   }
 
   const page = pages?.find((candidate) => candidate.id === draft?.page_id);
@@ -674,9 +684,8 @@ export function DraftDetail({
                       draftId={draftId}
                       field="hook"
                       label="Hook"
-                      dirty={dirty}
                       form={form}
-                      onRewritten={applyRewrite}
+                      onProposal={applyProposal}
                     />
                   }
                   hint={`${words(form.hook)} words · on the image · limit 65, no question`}
@@ -702,9 +711,8 @@ export function DraftDetail({
                       draftId={draftId}
                       field="caption"
                       label="Caption"
-                      dirty={dirty}
                       form={form}
-                      onRewritten={applyRewrite}
+                      onProposal={applyProposal}
                     />
                   }
                   hint={`${form.caption.split("\n").filter(Boolean).length} recap lines · max 5, each opening with an emoji`}
@@ -723,9 +731,8 @@ export function DraftDetail({
                       draftId={draftId}
                       field="first_comment"
                       label="First comment"
-                      dirty={dirty}
                       form={form}
-                      onRewritten={applyRewrite}
+                      onProposal={applyProposal}
                     />
                   }
                   hint={`${chars(form.first_comment)} · 1,500–2,100`}
@@ -1133,27 +1140,25 @@ function InsetRing({
  * behind a chevron would leave them pressing the same button. Empty is the
  * common case and is still one click.
  *
- * Saves first when there are unsaved edits, for the reason the inset upload
- * does: the server rewrites from the **row**, so an unsaved hook would be
- * ignored and then overwritten — losing an edit the operator could still see on
- * screen.
+ * **Writes nothing.** It used to save the whole form first, because the server
+ * read the kept fields off the row — so pressing Rewrite on the hook silently
+ * committed an unsaved caption. The kept fields are sent from the form now, and
+ * the result comes back as a proposal for the editor to hold.
  */
 function Regenerate({
   draftId,
   field,
   label,
-  dirty,
   form,
-  onRewritten,
+  onProposal,
 }: {
   draftId: number;
   field: RegeneratableField;
   label: string;
-  dirty: boolean;
   form: Form | null;
-  /** Hand back the row the server returned. Re-seeding the editor from it is
-   *  what makes the rewrite visible — see `applyRewrite`. */
-  onRewritten: (row: Draft) => Promise<void>;
+  /** Put the writer's text in the boxes. Saving it is the operator's press —
+   *  see `applyProposal`. */
+  onProposal: (proposal: RewriteProposal) => void;
 }) {
   const [busy, setBusy] = useState(false);
   // Kept after a press, not cleared: "make it longer" is usually said twice, and
@@ -1164,14 +1169,19 @@ function Regenerate({
   async function run() {
     setBusy(true);
     try {
-      if (dirty && form) await updateDraft(draftId, form);
-      const row = await regenerateField(draftId, field, instruction.trim() || undefined);
-      await onRewritten(row);
+      // What the new field has to fit is what is on screen, so the kept fields
+      // are sent from the form — unsaved edits included. This is what lets the
+      // press write nothing at all: the server used to read them off the row,
+      // which is why the screen had to save first.
+      const proposal = await regenerateField(draftId, field, {
+        keeping: form
+          ? { hook: form.hook, caption: form.caption, first_comment: form.first_comment }
+          : undefined,
+        instruction: instruction.trim() || undefined,
+      });
+      onProposal(proposal);
       toast.success(`New ${label.toLowerCase()}.`, {
-        description:
-          field === "hook"
-            ? "The card was redrawn and the highlights are new."
-            : "The other fields were kept.",
+        description: "Not saved yet — Save changes keeps it, Revert throws it away.",
       });
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : "Could not rewrite that");
