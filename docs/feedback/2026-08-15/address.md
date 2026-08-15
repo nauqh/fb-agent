@@ -86,7 +86,15 @@ immediately either way, which is the screen the operator works on.
 
 ## Still open from this round
 
-`F5` (read the prompts the client already wrote in the old tool — do this before
-C5–C7), then `C6`/`C7` (the numbers, which have to move in the prompt, the field
-description and the validator together), then `C5` (the hero prose). The
-questions at the foot of `comprehension.md` are unanswered.
+`F5` is **done** (2026-08-16, `old-tool-prompts.md`): Fitness Recipes has a real
+prompt to build from, Bodybuilding Tips has none — its rows are History
+Retraced's, byte for byte, which is what the client was actually complaining
+about.
+
+Next is `C6`/`C7` (the numbers, which have to move in the prompt, the field
+description and the validator together), then `C5` (the hero prose). Both are
+now blocked on a short reply from the client rather than on reading: their July
+prompt and their August message give **different numbers** for the hook cap
+(35 vs 30 words) and the first comment (800–1,300 vs ≤1,500 chars), and BBTT's
+prompt has to be drafted and approved rather than ported. The revised question
+list is at the foot of `comprehension.md`.

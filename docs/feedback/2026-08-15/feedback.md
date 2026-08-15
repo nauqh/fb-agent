@@ -23,11 +23,11 @@ file; `address.md` gets written as things ship.
 | Item | Summary | Status |
 |------|---------|--------|
 | **B6** | Logos / watermarks | ✅ Confirmed done by the client |
-| **C4** | Overlay text in ALL CAPS for BBTT and FR, and nowhere to set it | 🔴 Not built, and no per-Page switch exists |
+| **C4** | Overlay text in ALL CAPS for BBTT and FR, and nowhere to set it | ✅ Shipped 2026-08-15 — per-Page `text_uppercase`, applied at draw time |
 | **C5** | Hero should be modern, bright, fitness-magazine — not sepia history | 🔴 `image.txt` names History Retraced in its first line |
 | **C6** | Hook: straight to the point, no year/event/character scaffolding, ≤30 words | 🔴 `system.txt` *requires* a name and year; cap is 65 words |
 | **C7** | First comment: ≤1,500 chars, 3–4 short paragraphs, straight to content | 🔴 **Impossible today** — 1,500 is our *minimum*, and 4 paragraphs fails a rule |
-| **F5** | The client already wrote new prompts in the **old** tool's Settings tab | ❓ We have not read them; they are the client's actual spec |
+| **F5** | The client already wrote new prompts in the **old** tool's Settings tab | ✅ Read 2026-08-16 — `old-tool-prompts.md`. FR has a real spec; **BBTT has none** |
 
 C4–C7 all resolve to the same missing thing, so they are best read together:
 see "One voice, ten Pages" in `comprehension.md`.
@@ -130,6 +130,12 @@ The client has already written the BBTT and FR prompts, in
 `D:\Laboratory\social-agent`, where prompts are per-Page rows editable from a
 Settings tab. Those rows are their real specification; items C5–C7 are a summary
 of them. Read them before writing anything new.
+
+**Read 2026-08-16 — `old-tool-prompts.md`.** Half true. Fitness Recipes has a
+real, detailed prompt. **Bodybuilding Tips does not**: all four of its prompt
+columns are byte-identical to History Retraced's and have been since 2026-07-05.
+The client believes they wrote one. That belief is also the explanation for
+their complaint.
 
 It also carries a request we have to answer honestly: prompts here are **files
 in git**, deliberately (`app/writer/prompts.py`), so "I edit them in Settings"
