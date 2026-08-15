@@ -1,6 +1,6 @@
 # Handoff
 
-**Updated:** 2026-08-12 · **Next focus:** the client's feedback — `docs/feedback-2026-08-11.md`
+**Updated:** 2026-08-15 · **Next focus:** round 3 of the client's feedback — `docs/feedback/2026-08-15/`
 
 Conventions and integration traps live in `CLAUDE.md`, which loads automatically.
 This file is state: what is proven, what is mid-flight, what to do next.
@@ -23,7 +23,7 @@ trusting either this file or the output of a push.
 
 ## The current job: the client's feedback
 
-`docs/feedback-2026-08-11.md` is the tracker — sixteen items from
+`docs/feedback/2026-08-11/` is the tracker — sixteen items from
 `fbtool1.docx`, each quoting the request it came from, with a status table at
 the top. Read it before starting anything; several items are not what their
 one-line summary suggests.
@@ -277,7 +277,7 @@ they should collapse to tens of ms — expected, **not** measured.
 ## Done 2026-08-11/12 — the client feedback round
 
 Nine items, each with its evidence in the commit message rather than here.
-`docs/feedback-2026-08-11.md` tracks them.
+`docs/feedback/2026-08-11/` tracks them.
 
 Three migrations landed and are **applied to production**, since that is the
 only database this app has:
