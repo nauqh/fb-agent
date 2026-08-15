@@ -102,10 +102,22 @@ export function ComposedImage({
   seed?: number;
   className?: string;
 }) {
-  const segments = useMemo(
-    () => splitOnHighlights(overlayText ?? "", highlightPhrases),
-    [overlayText, highlightPhrases],
-  );
+  // The Page's case, applied to the text *and* to every phrase, exactly as
+  // `image/text.cased` does it server-side. Both sides or neither: a phrase is
+  // matched as an exact substring below, so shouting only the text would drop
+  // every highlight without any error to show for it.
+  //
+  // In the strings, not in a CSS `uppercase` class, so `splitOnHighlights`
+  // segments the same characters the compositor segmented. See the note further
+  // down where a CSS version of this used to live.
+  const segments = useMemo(() => {
+    const shout = (value: string) =>
+      layout.text.uppercase ? value.toUpperCase() : value;
+    return splitOnHighlights(
+      shout(overlayText ?? ""),
+      highlightPhrases.map(shout),
+    );
+  }, [overlayText, highlightPhrases, layout.text.uppercase]);
 
   const hue = (seed * 47) % 360;
   const full = layout.template === "full_overlay";
@@ -258,8 +270,11 @@ export function ComposedImage({
           }}
         />
         <p
-          // Not `uppercase`: the compositor draws the hook verbatim, and
-          // shouting it here made the preview disagree with the PNG beside it.
+          // Still not a CSS `uppercase`, for the reason it was removed the
+          // first time: shouting here alone made the preview disagree with the
+          // PNG beside it. The case now comes from `layout.text.uppercase` and
+          // is applied to the segment strings above, which is the same input
+          // the compositor wraps and highlights.
           className="relative font-bold"
           style={{
             color: layout.text.color,

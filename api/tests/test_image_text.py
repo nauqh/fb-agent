@@ -296,3 +296,70 @@ def test_a_quoted_phrase_keeps_the_space_in_front_of_it():
 
     assert overlay.normalise(written) == written
     assert '"girl talk."' in " ".join(overlay.plan(written).lines)
+
+
+# --- capitals, per Page ------------------------------------------------------
+
+SHOUTING = layout.model_validate(
+    {**layout.model_dump(), "text": {**layout.text.model_dump(), "uppercase": True}}
+)
+"""`layout.yml` with `text.uppercase` on — what a Page that set it resolves to."""
+
+
+def test_the_default_layout_draws_the_hook_as_it_was_written():
+    """The file's answer is no. Only a Page that asked for capitals gets them."""
+    assert layout.text.uppercase is False
+    assert overlay.cased("Eugen Sandow") == "Eugen Sandow"
+
+
+def test_capitals_are_applied_after_the_sentence_spacing_rule():
+    """The trap: `_SENTENCE_END` needs two *lowercase* letters before the stop.
+
+    Uppercase first and the rule can never fire, so `tomb.The` reaches the
+    measurer as one unbroken token — wrapped as a single word, and drawn without
+    the space the mixed-case card has. `plan` normalises, then shouts.
+    """
+    lines = overlay.plan("a sealed tomb.The pharaoh", SHOUTING).lines
+
+    assert " ".join(lines) == "A SEALED TOMB. THE PHARAOH"
+    assert "TOMB.THE" not in " ".join(lines)
+
+
+def test_the_gold_lands_on_a_shouted_panel_without_shouting_the_phrases():
+    """Why `panel_svg` does *not* put the phrases through `cased`.
+
+    The writer returns phrases copied out of the hook as written. `segment`
+    matches them case-insensitively and keeps the line's own casing, so they
+    find their runs in a shouted panel and the gold comes back in capitals.
+
+    The browser is the half that cannot do this — `splitOnHighlights` matches
+    exactly — which is why the case transform there is applied to the text *and*
+    the phrases, and why this test exists to say the two are not the same
+    problem.
+    """
+    text = "Eugen Sandow built massive arms without a single cable machine"
+    plan = overlay.plan(text, SHOUTING)
+
+    runs = overlay.segment_lines(plan.lines, ["Eugen Sandow", "massive arms"])
+    gold = [part.text for line in runs for part in line if part.highlight]
+
+    assert gold == ["EUGEN SANDOW", "MASSIVE ARMS"]
+
+
+def test_capitals_are_wider_and_the_panel_grows_to_take_them():
+    """Measured, not assumed — it is what decides how much hero is left.
+
+    Same hook, same font size: capitals wrap to more lines, and the panel is a
+    floor that grows, so the hero shrinks by exactly that much.
+    """
+    text = (
+        "According to bodybuilding pioneer Eugen Sandow, massive arms do not "
+        "require modern cable machines. You can unlock rapid arm growth using "
+        "three beginner exercises that bypass the cable crossover entirely."
+    )
+    written = overlay.plan(text)
+    shouted = overlay.plan(text, SHOUTING)
+
+    assert len(shouted.lines) >= len(written.lines)
+    assert shouted.panel_height_px >= written.panel_height_px
+    assert shouted.hero_height_px + shouted.panel_height_px == layout.image.height

@@ -144,6 +144,27 @@ def normalise(text: str) -> str:
     return re.sub(r"\s+", " ", result).strip()
 
 
+def cased(text: str, layout: Layout | None = None) -> str:
+    """The panel's own case. Identity unless the Page draws in capitals.
+
+    **Apply it after `normalise`, never before.** `_SENTENCE_END` requires two
+    *lowercase* letters in front of the full stop — that is the acronym guard,
+    the thing that leaves `U.S.A.` alone while putting the missing space into
+    `tomb.The`. Uppercase first and the rule can never fire, so those two words
+    reach the measurer as one unbroken token and get wrapped as one word.
+
+    **The highlight phrases do not go through this**, on the compositor's side:
+    `segment` matches with `re.IGNORECASE` and keeps the matched text verbatim,
+    so an as-written phrase still finds its run in a shouted line and the gold
+    lands on the capitals. The browser's `splitOnHighlights` is the half that
+    matches exactly — it shouts the phrases with the text, and has to, or every
+    highlight silently stops matching there: no error, no gold, a plain white
+    panel next to a correct PNG.
+    """
+    layout = layout or default_layout
+    return text.upper() if layout.text.uppercase else text
+
+
 # --- wrapping ----------------------------------------------------------------
 
 
@@ -357,7 +378,10 @@ def plan(text: str, layout: Layout | None = None) -> OverlayPlan:
     font_size = layout.text.font_size_px
     line_height = round(font_size * layout.text.line_height_ratio)
 
-    lines = wrap(text, available * WIDTH_SAFETY, font_size, measurer)
+    # `normalise` first, then the case, then wrap — see `cased` for why that
+    # order is not interchangeable. `wrap` normalises again, which is a no-op on
+    # a string that has already been through it.
+    lines = wrap(cased(normalise(text), layout), available * WIDTH_SAFETY, font_size, measurer)
 
     floor = round(layout.image.height * layout.panel.ratio)
     ceiling = max(floor, round(layout.image.height * layout.panel.max_ratio))

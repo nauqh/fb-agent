@@ -86,6 +86,12 @@ def panel_svg(plan: OverlayPlan, phrases: list[str], layout: Layout) -> str:
     }[layout.text.align]
     start_y = plan.font_size_px + padding.top_px
 
+    # The phrases are *not* put through `text.cased` alongside the lines, and
+    # that is deliberate rather than an omission: `segment` matches with
+    # `re.IGNORECASE` and keeps the line's own casing, so an as-written phrase
+    # still finds its run in a shouted panel. The browser's `splitOnHighlights`
+    # is the one that matches exactly, which is why the case transform there has
+    # to be applied to both sides.
     coloured = segment_lines(plan.lines, phrases)
     lines = "".join(
         f'<tspan x="{x}" dy="{0 if i == 0 else plan.line_height_px}">'

@@ -243,6 +243,18 @@ export function LayoutEditor() {
             changed={data.overridden.includes("text_align")}
             onChange={(v) => set("text_align", v)}
           />
+          {/* Case is a drawing setting, so the hook stays in the case the
+              writer produced and every existing draft follows this switch with
+              no regeneration. It applies to the highlight phrases too — both
+              sides, or an exact-substring match finds nothing and the gold
+              disappears. */}
+          <Choice
+            label="Case"
+            value={shown.text.uppercase ? "capitals" : "as_written"}
+            options={["as_written", "capitals"]}
+            changed={data.overridden.includes("text_uppercase")}
+            onChange={(v) => set("text_uppercase", v === "capitals")}
+          />
           <Colour
             label="Colour"
             value={shown.text.color}
@@ -335,6 +347,7 @@ function preview(base: ResolvedLayout, draft: LayoutPatch): ResolvedLayout {
       line_height_ratio: at(draft.text_line_height_ratio, base.text.line_height_ratio),
       align: at(draft.text_align, base.text.align),
       color: at(draft.text_color, base.text.color),
+      uppercase: at(draft.text_uppercase, base.text.uppercase),
       padding: {
         left_px: at(draft.text_padding_left_px, base.text.padding.left_px),
         right_px: at(draft.text_padding_right_px, base.text.padding.right_px),
@@ -393,7 +406,13 @@ function Preview({ layout, page }: { layout: ResolvedLayout; page: Page }) {
   const markTop = full
     ? `${layout.watermark.top_ratio * 1.25 * 100}cqw`
     : `${layout.watermark.top_ratio * 100}%`;
-  const runs = splitOnHighlights(sample, phrases);
+  // The third renderer of the same panel, after the compositor and
+  // `ComposedImage`. It takes the case the same way both of those do — text and
+  // phrases together, in the strings — or the switch beside it reads as a
+  // control that does nothing, which is what this preview exists to prevent.
+  const shout = (value: string) =>
+    layout.text.uppercase ? value.toUpperCase() : value;
+  const runs = splitOnHighlights(shout(sample), phrases.map(shout));
 
   return (
     <div className="space-y-2 lg:sticky lg:top-0 lg:self-start">

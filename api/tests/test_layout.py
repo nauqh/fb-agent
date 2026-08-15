@@ -256,3 +256,61 @@ def test_an_alignment_that_is_not_one_is_refused_by_both_routes(
         ).status_code
         == 200
     )
+
+
+# --- capitals, per Page ------------------------------------------------------
+
+
+def test_capitals_are_a_page_setting_that_the_file_defaults_to_off(client, page):
+    """Null tracks `layout.yml`; `false` is a Page that decided against it.
+
+    Three-valued like every other override, which is what `overridden` reports —
+    a Page that has chosen "as written" no longer follows the file, and the
+    screen has to be able to say so.
+    """
+    assert client.get("/layout", params={"page_id": page.id}).json()["layout"]["text"][
+        "uppercase"
+    ] is False
+
+    saved = client.patch(
+        "/layout", params={"page_id": page.id}, json={"text_uppercase": True}
+    ).json()
+    assert saved["layout"]["text"]["uppercase"] is True
+    assert "text_uppercase" in saved["overridden"]
+
+    cleared = client.patch(
+        "/layout", params={"page_id": page.id}, json={"text_uppercase": None}
+    ).json()
+    assert cleared["layout"]["text"]["uppercase"] is False
+    assert "text_uppercase" not in cleared["overridden"]
+
+
+def test_a_shouting_page_wraps_and_draws_the_panel_in_capitals(
+    client, session, page, a_photograph
+):
+    """Through the real compositor, not the helper — the wrap sees the capitals.
+
+    The lines come back from `text.plan`, so this also pins the thing that made
+    the setting worth measuring: capitals are wider, so a shouted panel needs at
+    least as many lines as the same hook drawn as written.
+    """
+    _with_hero(session, page, a_photograph)
+
+    def lines(patch: dict) -> list[str]:
+        response = client.post(
+            "/layout/sample",
+            params={"page_id": page.id},
+            json={
+                "text": SAMPLE,
+                "highlight_phrases": ["deadly outbreak"],
+                "patch": patch,
+            },
+        )
+        assert response.status_code == 200, response.text
+        return response.json()["lines"]
+
+    written = lines({})
+    shouted = lines({"text_uppercase": True})
+
+    assert " ".join(shouted) == " ".join(written).upper()
+    assert len(shouted) >= len(written)

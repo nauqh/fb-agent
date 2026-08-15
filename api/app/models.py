@@ -515,6 +515,14 @@ class PageLayout(SQLModel, table=True):
     text_line_height_ratio: float | None = None
     text_align: str | None = None
     text_color: str | None = None
+    text_uppercase: bool | None = None
+    """Draw the panel in capitals. Null tracks `layout.yml`, which says no.
+
+    Three-valued on purpose, like every column here: `False` is a Page that has
+    decided against capitals and will not follow the file if the file changes,
+    and `None` is a Page that has not decided. `_merge` skips only `None`, so
+    the difference survives resolution.
+    """
     text_padding_left_px: int | None = None
     text_padding_right_px: int | None = None
     text_padding_top_px: int | None = None

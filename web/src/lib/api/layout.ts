@@ -28,6 +28,11 @@ export interface ResolvedLayout {
     line_height_ratio: number;
     align: string;
     color: string;
+    /**
+     * Draw the panel in capitals. Applied to the hook and to every highlight
+     * phrase, in both renderers — see `composed-image.tsx`.
+     */
+    uppercase: boolean;
     padding: {
       left_px: number;
       right_px: number;
@@ -74,6 +79,7 @@ export interface LayoutPatch {
   text_line_height_ratio?: number | null;
   text_align?: string | null;
   text_color?: string | null;
+  text_uppercase?: boolean | null;
   text_padding_left_px?: number | null;
   text_padding_right_px?: number | null;
   text_padding_top_px?: number | null;

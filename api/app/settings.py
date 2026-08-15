@@ -81,6 +81,14 @@ class TextLayout(Frozen):
     line_height_ratio: float
     align: Align
     color: str
+    uppercase: bool = False
+    """Draw the panel in capitals. Applied by `image.text.cased`, at draw time.
+
+    The one field here with a default, because it is the one that was added
+    after there were callers: `layout.yml` always supplies it, but a test that
+    builds a `TextLayout` by hand should not have to name it to keep meaning
+    what it meant.
+    """
     padding: PaddingLayout
 
 

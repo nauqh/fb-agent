@@ -58,6 +58,7 @@ def as_overrides(row: PageLayout | None) -> dict:
             "line_height_ratio": row.text_line_height_ratio,
             "align": row.text_align,
             "color": row.text_color,
+            "uppercase": row.text_uppercase,
             "padding": {
                 "left_px": row.text_padding_left_px,
                 "right_px": row.text_padding_right_px,

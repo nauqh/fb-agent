@@ -37,6 +37,16 @@ text:
     # (overlay-layout-plan.ts:248) and the panel grows instead of the type
     # shrinking. The old font_min/font_max columns were never read.
     font_size_px: 36
+    # Draw the panel in capitals. History Retraced's answer is no; Bodybuilding
+    # Tips and Fitness Recipes set `text_uppercase` on their own row.
+    #
+    # A drawing setting, not a writing one, so the hook stays in the case the
+    # writer produced: the operator edits normal prose, existing drafts change
+    # with the switch and cost nothing to redraw, and the model cannot drift off
+    # an instruction it was never given. `text.cased` applies it to the hook
+    # *and* to every highlight phrase, because a phrase is matched as an exact
+    # substring — shouting one side and not the other renders no gold at all.
+    uppercase: false
     line_height_ratio: 1.26
     align: center
     color: "#ffffff"

@@ -136,6 +136,7 @@ class LayoutPatch(BaseModel):
     text_line_height_ratio: float | None = None
     text_align: Align | None = None
     text_color: str | None = None
+    text_uppercase: bool | None = None
     text_padding_left_px: int | None = None
     text_padding_right_px: int | None = None
     text_padding_top_px: int | None = None
