@@ -132,4 +132,15 @@ All nullable, backfilled, or new tables — no existing row rendering changed. T
 
 ## Deploy Note
 
-**Railway must set `METRICOOL_PUBLISH_AS_DRAFT=false`** for real Facebook posts. Currently `true` (rehearsal mode) — every publish lands as Metricool draft only. See `metricool-publishing-review-2026-08-12.md` for risks (rehearsal mode ON, duplicate-on-retry, timezone bug in `get_schedule`).
+**Railway must set `METRICOOL_PUBLISH_AS_DRAFT=false`** for real Facebook posts. See `metricool-publishing-review-2026-08-12.md` for the rest of the risks (duplicate-on-retry, timezone bug in `get_schedule`).
+
+**Done — the operator set it on Railway, and the planner proves it took.** Read
+live 2026-08-16: the five drafts pushed on 08-14 (48, 53, 54, 55, 57) are
+`draft=false status=PUBLISHED`, out on Facebook on 08-15. The local `.env` stays
+`true` and should — that is the rehearsal environment, and nothing on a laptop
+should be able to publish to an audience.
+
+Do not read this file for the flag's current value again. It said `true` for
+four days after it stopped being true, and was quoted back as fact. The value
+lives on Railway; the *evidence* is the planner, which `list_scheduled` will
+answer for at any time.

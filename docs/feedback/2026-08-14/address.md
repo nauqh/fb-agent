@@ -99,9 +99,43 @@ usually said twice, and the box is on screen, so nothing is reused invisibly.
 
 ---
 
+## D5 — Rehearsal mode is off in production ✅
+
+**The operator set `METRICOOL_PUBLISH_AS_DRAFT=false` on Railway.** Verified
+against the planner on 2026-08-16 rather than taken on trust — the five drafts
+pushed on 08-14 (48, 53, 54, 55, 57) come back `draft=false status=PUBLISHED`,
+published to Facebook on 08-15. Across a ±45-day window History Retraced has
+338 rows, 331 of them not-draft.
+
+The local `.env` is still `true` and stays that way. It is the rehearsal
+environment; nothing run from a laptop should be able to reach an audience.
+
+**Two things the same read turned up.**
+
+*Seven posts are stranded.* `361373471`, `361375892`, `361378352`, `361381672`,
+`361383660`, `361386518`, `361389421` — pushed 08-12 under the old flag,
+`draft=true status=PENDING`, publication dates on 08-13 and so three days past.
+They are the entire draft half of that 7/331 split and they will never go out.
+Our app cannot clear them: there is no delete or update call in
+`publish/metricool.py`, which is D6. Someone has to delete or re-date them in
+Metricool's own planner.
+
+*The Review queue was calling published posts "Pending review".* Fixed in
+`review-list.tsx` — `metricool_post_id` now outranks `status` on the badge,
+which reads **In Metricool**. Not "Published": a post id means handed over, and
+those seven prove handed-over is not published. The Schedule screen reads the
+planner and is the only screen that can say which.
+
+**What is left of the silence.** The publish confirmation still does not name
+the mode. It matters less now that production is correct and the badge is
+honest, but a laptop push lands as a draft and says the same thing a real one
+does. Small, and worth doing next time this file is open.
+
+---
+
 ## Still open from this round
 
 `B6` (watermark upload — needs the artwork as white-ink transparent PNGs, which
-is a question for the client), `D5` (say which mode a push used, then flip the
-flag and watch one post), `D6` (gated on a live spike of Metricool's delete),
-`F4` (nothing to build).
+is a question for the client), `D6` (gated on a live spike of Metricool's
+delete, and now with seven stranded posts waiting on it), `F4` (nothing to
+build — and no longer blocked, since the client confirmed B6 done).

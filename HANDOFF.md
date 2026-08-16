@@ -65,12 +65,22 @@ Verified against live services:
 - One real Gemini image call, to confirm the image model accepts a
   `system_instruction`. It does.
 
-**Never run: the Metricool write path.** No draft has a `metricool_post_id`, and
-the planner holds **0 rows with `draft: true`** across all ten Pages — measured,
-not assumed, so nothing this app sent is sitting there unnoticed.
-`METRICOOL_PUBLISH_AS_DRAFT=true` in `.env`, so the first push lands in the
-planner without going to the page. Keep it true until a push has been watched
-end to end.
+**The Metricool write path has been run, and it publishes.** This paragraph said
+the opposite for days after it stopped being true — "never run", "no draft has a
+`metricool_post_id`", "0 rows with `draft: true`" — so re-measure before quoting
+any of it. As of a live read on **2026-08-16**:
+
+- **14 drafts carry a `metricool_post_id`**, all on History Retraced.
+- **5 are `PUBLISHED` on Facebook** (48, 53, 54, 55, 57), pushed 08-14, out
+  08-15. Production has `METRICOOL_PUBLISH_AS_DRAFT=false` on Railway.
+- **7 are stranded** — pushed 08-12 under the old flag, still `draft=true`,
+  publication dates on 08-13 and now past. They will never go out, and nothing
+  in this app can clear them (no delete call; that is round 2's D6).
+
+`METRICOOL_PUBLISH_AS_DRAFT=true` in the local `.env`, and it stays true. That
+is the rehearsal environment; a laptop should not be able to reach an audience.
+**Production is the opposite, and the two are not marked apart on any screen** —
+a push confirms the same way in both.
 
 Note what that flag does and does not do, because it has been misread: it is a
 field on the *planner row*. The post still reaches Metricool. What it stops is
@@ -243,7 +253,10 @@ public fetch against byte counts, nothing deleted from `fb-agent-media-dev`.
 
 **There is no sandbox any more.** One database and one bucket means a local
 Generate writes production rows and production objects. Only
-`METRICOOL_PUBLISH_AS_DRAFT=true` keeps output off a real page.
+`METRICOOL_PUBLISH_AS_DRAFT=true` keeps output off a real page — and it is true
+*here* only. Railway is `false` and publishing for real since 2026-08-14, so the
+same code on the same rows has two different consequences depending on which
+process runs it.
 
 `seed_media_bucket.py` rewrites **no rows**. A stored path is `<yyyy-mm>/<name>`
 and means the same thing in either bucket, which is the whole reason rows hold a

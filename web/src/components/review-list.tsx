@@ -512,11 +512,30 @@ const STATUS: Record<string, { label: string; tone: StatusTone }> = {
   failed: { label: "Failed", tone: "negative" },
 };
 
+/**
+ * `metricool_post_id` outranks `status`, because pushing does not move it.
+ *
+ * Approve is queue movement only (round 1's D1), so a draft handed to Metricool
+ * keeps whatever status it had — and every one of them so far was pushed
+ * straight from `review`. Read live on 2026-08-16: fourteen drafts carry a post
+ * id, five of them are `PUBLISHED` on Facebook, and all fourteen were rendering
+ * a blue **Pending review** pill on this screen. The row menu had it right all
+ * along — it disables everything and says "In Metricool" — but the badge is
+ * what you read when you scan the column.
+ *
+ * "In Metricool" and not "Published", because the row cannot tell. A post id
+ * means handed over, and the planner decides what became of it: seven of those
+ * fourteen are still `draft=True` with a publication date three days past, and
+ * will never go out. `PUBLISHED` / `Draft` / `Error` are the Schedule screen's
+ * to say — it reads the planner, this screen reads a column.
+ */
 function StatusBadge({ draft }: { draft: Draft }) {
-  const { label, tone } = STATUS[draft.status] ?? {
-    label: draft.status,
-    tone: "neutral" as const,
-  };
+  const { label, tone } = draft.metricool_post_id
+    ? { label: "In Metricool", tone: "positive" as const }
+    : (STATUS[draft.status] ?? {
+        label: draft.status,
+        tone: "neutral" as const,
+      });
 
   return <StatusPill tone={tone} label={label} />;
 }

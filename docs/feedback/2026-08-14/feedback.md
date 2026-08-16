@@ -20,7 +20,7 @@ shipped is `address.md`.
 | **A2** | regression in B3 | Rewrite says it worked and the screen does not change | ✅ Fixed 2026-08-14, driven in a browser |
 | **B5** | extends B3 | Wants a prompt box: *say how* to rewrite a field | ✅ Shipped 2026-08-14 |
 | **B6** | extends A1 | Cannot add a logo for the eight Pages without one | 🔴 API exists, no UI, and the artwork is wrong shape |
-| **D5** | new | Everything went to Metricool as a **draft** and never published | 🔴 Config + the app never said so |
+| **D5** | new | Everything went to Metricool as a **draft** and never published | ✅ Flag off in prod, verified in the planner 2026-08-16 — 5 posts `PUBLISHED`. 7 pushed under the old flag are stranded (see D6) |
 | **D6** | new | Cannot change the image once a post is in Metricool | ❓ By design, but there is no way back at all |
 | **F4** | new | Google Alerts as a source — untried | ⏸ Blocked behind B6 in the client's own sequencing |
 
