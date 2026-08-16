@@ -404,3 +404,33 @@ def test_a_published_draft_cannot_be_deleted(client, ready, published):
     assert response.status_code == 409
     assert client.get(f"/drafts/{ready.id}").status_code == 200
     assert media.store.path(ready.composed_image_path).exists(), "picture survives"
+
+
+def test_the_screen_can_ask_whether_publish_reaches_an_audience(client, monkeypatch):
+    """Rehearsal mode was invisible, and seven real posts paid for it.
+
+    `METRICOOL_PUBLISH_AS_DRAFT` differs between environments on purpose — false
+    on Railway, true on a laptop — and until this endpoint existed no screen
+    could tell which it was talking to. Both said "Handed to Metricool".
+    """
+    monkeypatch.setattr(settings, "metricool_publish_as_draft", True)
+    assert client.get("/publish/mode").json() == {"rehearsal": True}
+
+    monkeypatch.setattr(settings, "metricool_publish_as_draft", False)
+    assert client.get("/publish/mode").json() == {"rehearsal": False}
+
+
+def test_publish_mode_is_read_per_request_not_captured_at_import(client, monkeypatch):
+    """The value a deploy is running under, not the one this process booted with.
+
+    Reading it into a module constant would answer correctly in every test that
+    never changed it, and be wrong for exactly the environment this exists to
+    describe.
+    """
+    monkeypatch.setattr(settings, "metricool_publish_as_draft", False)
+    first = client.get("/publish/mode").json()["rehearsal"]
+
+    monkeypatch.setattr(settings, "metricool_publish_as_draft", True)
+    second = client.get("/publish/mode").json()["rehearsal"]
+
+    assert (first, second) == (False, True)

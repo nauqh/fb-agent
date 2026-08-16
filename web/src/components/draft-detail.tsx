@@ -31,6 +31,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   getDraft,
   publishDraft,
+  publishMode,
   regenerateField,
   regenerateHero,
   rejectDraft,
@@ -885,6 +886,10 @@ function PublishAction({
   const [when, setWhen] = useState(pageLocalSoon);
   const [slot, setSlot] = useState<NextSlot | null>(null);
   const [finding, setFinding] = useState(false);
+  // Whether this deployment publishes for real. Undefined until it answers —
+  // treated as "no claim" below rather than as either mode, because guessing
+  // wrong in the reassuring direction is the bug this is here to fix.
+  const { data: mode } = useQuery(() => publishMode(), []);
 
   if (draft.metricool_post_id) {
     return (
@@ -901,7 +906,11 @@ function PublishAction({
     setBusy(true);
     try {
       await publishDraft(draft.id, at);
-      toast("Handed to Metricool.");
+      toast(
+        mode?.rehearsal
+          ? "Handed to Metricool as a draft. It will not publish."
+          : "Handed to Metricool.",
+      );
       onPublished();
       setOpen(false);
       setSlot(null);
@@ -1004,6 +1013,16 @@ function PublishAction({
             <>It will go out as soon as Metricool will take it.</>
           )}
         </p>
+
+        {/* Said before the press, because there is no undo after it. Only when
+            rehearsal is on: a warning shown in both modes is one nobody reads,
+            and publishing for real is what the button already claims to do. */}
+        {mode?.rehearsal ? (
+          <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
+            Rehearsal mode. This lands in the planner as a draft and will not
+            reach the page — the time above is when it would have gone out.
+          </p>
+        ) : null}
       </PublishDialog>
     </>
   );

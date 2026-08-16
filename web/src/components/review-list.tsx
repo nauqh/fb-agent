@@ -17,6 +17,7 @@ import {
   deleteDraft,
   listDrafts,
   publishDraft,
+  publishMode,
   rejectDraft,
 } from "@/lib/api/drafts";
 import { dayHeading, dayKey, pageLocalSoon, timeOfDay } from "@/lib/format";
@@ -89,6 +90,14 @@ export function ReviewList() {
     pollWhile: (rows) =>
       rows === null || rows.some((row) => row.status === "generating"),
   });
+
+  /**
+   * Whether Publish reaches an audience. Fetched here and passed down, not read
+   * per row: `useQuery` holds no cache and re-runs on every store notification,
+   * so a hook inside `RowMenu` would be one request per visible draft on every
+   * mutation. It is a per-environment constant either way.
+   */
+  const { data: mode } = useQuery(() => publishMode(), []);
 
   const total = drafts?.length ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / QUEUE_PAGE_SIZE));
@@ -187,6 +196,7 @@ export function ReviewList() {
                       (candidate) => candidate.id === draft.page_id,
                     )}
                     onChanged={refresh}
+                    rehearsal={mode?.rehearsal ?? false}
                   />
                 ))}
               </tbody>
@@ -220,10 +230,13 @@ function Row({
   draft,
   page,
   onChanged,
+  rehearsal,
 }: {
   draft: Draft;
   page?: Page;
   onChanged: () => void;
+  /** Publish only reaches the planner. Threaded from `ReviewList`, not fetched. */
+  rehearsal: boolean;
 }) {
   const router = useRouter();
   const generating = draft.status === "generating";
@@ -333,7 +346,9 @@ function Row({
         className="px-5 py-4 align-middle text-right"
         onClick={(e) => e.stopPropagation()}
       >
-        {generating ? null : <RowMenu draft={draft} onChanged={onChanged} />}
+        {generating ? null : (
+          <RowMenu draft={draft} onChanged={onChanged} rehearsal={rehearsal} />
+        )}
       </td>
     </tr>
   );
@@ -342,9 +357,11 @@ function Row({
 function RowMenu({
   draft,
   onChanged,
+  rehearsal,
 }: {
   draft: Draft;
   onChanged: () => void;
+  rehearsal: boolean;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -457,11 +474,23 @@ function RowMenu({
         onConfirm={() =>
           void run(
             () => publishDraft(draft.id, when || undefined),
-            "Handed to Metricool.",
+            rehearsal
+              ? "Handed to Metricool as a draft. It will not publish."
+              : "Handed to Metricool.",
           )
         }
       >
         <PublishAt value={when} onChange={setWhen} />
+
+        {/* Before the press. The row menu is the fast path — the drawer at
+            least shows the post first — so this is the one that most needs to
+            say what the button does. */}
+        {rehearsal ? (
+          <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
+            Rehearsal mode. This lands in the planner as a draft and will not
+            reach the page.
+          </p>
+        ) : null}
       </PublishDialog>
 
       {/* Reject is undoable and needs no ceremony. Delete removes the row and

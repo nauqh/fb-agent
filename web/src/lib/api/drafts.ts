@@ -221,6 +221,27 @@ export async function publishDraft(id: number, when?: string): Promise<Draft> {
   return post<Draft>(`/drafts/${id}/publish`, when ? { when } : {});
 }
 
+/** True when Publish only reaches Metricool's planner, not an audience. */
+export interface PublishMode {
+  rehearsal: boolean;
+}
+
+/**
+ * Which of the two things the button above is about to do.
+ *
+ * `METRICOOL_PUBLISH_AS_DRAFT` is per-environment and the two environments
+ * disagree on purpose — `false` on Railway, `true` on a laptop, where nothing
+ * should be able to reach an audience. Neither screen could tell, and both said
+ * "Handed to Metricool" either way. Seven real posts went into the planner as
+ * drafts under that sentence and never published.
+ *
+ * Read before the press rather than reported after it. Afterwards is too late to
+ * be worth saying about an action with no undo.
+ */
+export async function publishMode(): Promise<PublishMode> {
+  return get<PublishMode>("/publish/mode");
+}
+
 /**
  * Gone for good, pictures and all.
  *

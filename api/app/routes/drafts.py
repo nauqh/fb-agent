@@ -26,7 +26,7 @@ from app import generate, media
 from app.db import get_session
 from app.models import Draft, DraftStatus, Page, SourceItem, SourceItemBase
 from app.publish import metricool as publisher
-from app.settings import layout
+from app.settings import layout, settings
 from app.writer import agent as writer
 from app.writer import validators
 
@@ -604,6 +604,37 @@ def delete_draft(draft_id: int, session: Session = Depends(get_session)) -> None
 
     session.delete(draft)
     session.commit()
+
+
+class PublishMode(BaseModel):
+    """Whether pressing Publish reaches an audience, or only Metricool's planner."""
+
+    rehearsal: bool
+    """`METRICOOL_PUBLISH_AS_DRAFT`. True means the post will not go out."""
+
+
+@router.get("/publish/mode")
+def publish_mode() -> PublishMode:
+    """Which of the two things Publish is about to do.
+
+    A per-environment constant, not a per-draft one, which is why it is its own
+    read rather than a field on the publish response: the operator needs it
+    *before* pressing a button that cannot be taken back, and afterwards is too
+    late to be worth saying.
+
+    The screen had no way to know this and said "Handed to Metricool" in both
+    modes. That is round 2's D5, and the cost of it is on the record: seven posts
+    were pushed on 2026-08-12 while production was still in rehearsal, reported
+    as scheduled, and are still sitting in the planner as drafts with publication
+    dates that have long passed. Nothing told anyone. The client found out by
+    noticing their page had gone quiet.
+
+    It reads the setting live rather than caching it at import, because the two
+    environments differ and always will: this is `false` on Railway and stays
+    `true` locally, where nothing on a laptop should be able to reach an
+    audience.
+    """
+    return PublishMode(rehearsal=settings.metricool_publish_as_draft)
 
 
 class PublishRequest(BaseModel):
