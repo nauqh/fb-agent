@@ -221,10 +221,61 @@ Suite is **391** (was 390). `tsc` and `eslint src` clean.
 
 ---
 
+## G4 — Save stays explicit, but dismissal no longer eats the text ✅
+
+**Shipped 2026-08-17.** Closing the drawer with unsaved edits now asks *"Discard
+unsaved changes?"* — **Keep editing** or **Discard**. Only when there is
+something to lose.
+
+**The question had two readings and only one of them was about clicks.** Read as
+"the extra click annoys me", the answer is a reply. Read as "I lost text", there
+was a real hole — and the measurement says it was the second.
+
+Verified before changing anything, on draft 57: typing into the caption enabled
+**Save changes**, Escape closed the drawer with no prompt, and reopening showed
+the caption back at its original 747 characters. Approve, Reject and the inset
+upload each carry an explicit `if (dirty && form) await updateDraft(...)` with a
+comment saying why. Plain dismissal — Escape, the backdrop, the back button — was
+the one path nobody had covered.
+
+**It asks rather than saves, and that is the answer to what they asked.**
+Auto-saving on close would commit a Gemini rewrite that the operator closed the
+drawer to escape, which is precisely what their own round-2 `A2` asked us to make
+impossible: *rewrite proposes, Save writes, Revert undoes*. Auto-save trades a
+silent loss for a silent write. Asking loses neither.
+
+**Driven in a browser** on draft 47:
+
+| | |
+|---|---|
+| clean escape | no prompt, closes |
+| dirty escape | prompt, stays on the draft |
+| keep editing | text still there |
+| discard | closes, caption back to 701 chars |
+| save, then escape | no prompt, and the text persisted |
+
+Draft 57 turned out to be locked — it is in Metricool, and `PATCH` answers 409
+with an explanation rather than writing. Correct behaviour, and worth knowing:
+it is why the first attempt at this looked like a broken save.
+
+No API change, so the suite is unchanged at **391**. `tsc` and `eslint src` clean.
+
+---
+
 ## Still open from this round
 
-Nothing in `G2`. `G3` is done but **not deployed**. `G4` is a question awaiting a
-reply — see `comprehension.md`.
+Nothing. All four items are addressed in code.
+
+`G3` and `G4` are both **undeployed**, along with everything else on `main`.
+Neither should be reported to the client before it ships — that was round 2's
+mistake with the publish flag.
+
+Two things in this round are the client's to decide, not ours to build:
+
+- five Pages still have no competitors in Metricool, and the account is at
+  **92 of 100**. Which Pages should hold the remaining 8?
+- Metricool returns `type` as null on every post row we have seen, so "all post
+  types (vid, image, long caption)" cannot be labelled from their data.
 
 `G3` is **done** (`000b856`) but **not deployed**. It should not be reported to
 the client until it is.

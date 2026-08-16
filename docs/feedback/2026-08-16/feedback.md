@@ -16,7 +16,7 @@ Our reading of each against the code is `comprehension.md` beside this file;
 | **G1** | Sort the Sources grid by reactions, not newest | ✅ Shipped 2026-08-16 — both orders, reactions default, windowed so it cannot freeze |
 | **G2** | None of the chosen posts generated; no idea which source a draft came from | ✅ **All three causes addressed.** (c) 2026-08-16, the drawer names the source. (a) 2026-08-17, an empty grid says why — and found Bible Focus hiding 430 posts behind one assignment. (b) 2026-08-17, the used count no longer stops at the window. What remains is theirs: five Pages still have no competitors in Metricool |
 | **G3** | Status still says "Pending review" after scheduling to Metricool | ✅ **Already fixed** 2026-08-16 in `000b856`, before this message arrived. Not yet deployed |
-| **G4** | Auto-save on edit, or press Save every time? | ❓ A question, not a defect. Auto-save would undo their own round-2 request (A2) |
+| **G4** | Auto-save on edit, or press Save every time? | ✅ Shipped 2026-08-17 — Save stays explicit (auto-save would undo their own round-2 A2), but dismissing the drawer with unsaved text now asks instead of discarding it silently |
 
 ---
 
