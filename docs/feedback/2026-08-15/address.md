@@ -135,8 +135,8 @@ generate anything.**
 
 **Both keep our body numbers**, 1,800–1,900 chars over 2–3 paragraphs, not the
 July prompt's 800–1,300. `BODY_MIN_CHARS` is 1,500, so porting that number
-fails `check()` on every draft and burns both retries. That is C7, and it is
-blocked on the client — who has since asked for a third set of numbers.
+fails `check()` on every draft and burns both retries. That was C7, since
+dropped — the numbers stay as they are.
 
 **Verified against the live database and a running API.** Of ten Pages exactly 4
 and 6 resolve to their own files, all three each; page 1 is unchanged on the
