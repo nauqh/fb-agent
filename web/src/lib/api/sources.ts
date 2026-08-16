@@ -30,9 +30,12 @@ export type LiveSourceItem = Omit<SourceItem, "id" | "created_at">;
  * open paid six seconds to learn nothing. The server still syncs by itself when
  * it has nothing stored.
  */
+export type SourceSort = "reactions" | "newest";
+
 export async function getCompetitorPosts(
   pageIds: number[],
   refresh = false,
+  sort: SourceSort = "reactions",
 ): Promise<SourceItem[]> {
   return get<SourceItem[]>("/sources/competitors", {
     // An empty array sends no `page_ids` at all, which the server reads as
@@ -41,6 +44,7 @@ export async function getCompetitorPosts(
     // and any Page assigned it can read its posts.
     ...(pageIds.length > 0 ? { page_ids: pageIds } : {}),
     ...(refresh ? { refresh: "true" } : {}),
+    sort,
   });
 }
 

@@ -14,9 +14,12 @@ already 502'd twice at the front of a 60-second run. See docs/plan.md, "But
 competitor posts stay stored".
 """
 
+from datetime import timedelta
+from enum import Enum
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlmodel import Session, func, select
+from sqlmodel import Session, col, func, select
 
 from app.db import get_session
 from app.models import (
@@ -129,12 +132,27 @@ def _visible_to(session: Session, scope_ids: list[int]):
     return base & SourceItem.synced_for_page_id.in_(scope_ids)  # type: ignore[union-attr]
 
 
+class SourceSort(str, Enum):
+    """How the grid is ranked. The operator's choice, not a constant.
+
+    `REACTIONS` is the default and matches both Metricool's own Competitors tab
+    and `fetch_competitor_posts`, which has always sorted this way before
+    handing the rows over — the grid read was throwing that order away.
+    """
+
+    REACTIONS = "reactions"
+    NEWEST = "newest"
+
+
 @router.get("/competitors")
 def get_competitor_posts(
     page_ids: list[int] | None = Query(
         None, description="Narrow to these Pages' competitor sets. Omit for all."
     ),
     refresh: bool = Query(False, description="Force a Metricool sync"),
+    sort: SourceSort = Query(
+        SourceSort.REACTIONS, description="Rank by reactions (default) or recency"
+    ),
     session: Session = Depends(get_session),
 ) -> list[StoredSourceItem]:
     """Stored competitor posts across every Page, or a chosen subset.
@@ -190,23 +208,51 @@ def get_competitor_posts(
             _upsert(session, fetched, refresh_volatile=True)
         session.commit()
 
-    rows = session.exec(
-        select(SourceItem)
-        .where(visible)
-        # Newest first, not most-reacted.
+    query = select(SourceItem).where(visible)
+
+    if sort is SourceSort.REACTIONS:
+        # **Ranked by reactions, but only inside the lookback window.**
         #
-        # This tab exists to find something *new* to write from, and reactions
-        # are a stable ranking: the same winners sit at the top every day, so
-        # the operator reads the same grid every morning. Worse, nothing prunes
-        # this table — rows accumulate week after week — so once sixty older
-        # posts out-performed this week's, `limit` meant a genuinely new post
-        # could never enter the grid at all.
+        # The window is the whole reason this is safe, and dropping it brings
+        # back the failure the old newest-only order existed to avoid. Reactions
+        # is a *stable* ranking and nothing prunes `source_item` — History
+        # Retraced's pool is 1,244 rows and grows daily — so ranking the whole
+        # table and taking 60 freezes the grid on whatever went viral in July.
+        # Measured on that pool: 42 of the top 60 unwindowed were already older
+        # than the window, against 0 windowed.
         #
-        # Reactions are still on the card, where they inform a choice rather
-        # than deciding what is visible.
-        .order_by(SourceItem.published_at.desc())  # type: ignore[union-attr]
-        .limit(sources_config.competitors.grid_limit)
-    ).all()
+        # **Anchored to the newest post in scope, not to `now()`.** The obvious
+        # version subtracts the window from the clock, and that returns an
+        # *empty grid* for a Page whose pool has not been synced this week —
+        # trading a stale ranking for no ranking, and an unexplained empty grid
+        # is the failure this file already warns about twice. Anchoring to the
+        # data means the answer is always "the best of the most recent week we
+        # have", which is the same thing whenever the pool is fresh.
+        #
+        # `published_at` descending is the tiebreak, so equal reactions still
+        # read newest-first rather than by insertion order.
+        newest_at = session.exec(
+            select(func.max(SourceItem.published_at)).where(visible)
+        ).one()
+        if newest_at is not None:
+            window = newest_at - timedelta(
+                days=sources_config.competitors.lookback_days
+            )
+            query = query.where(
+                col(SourceItem.published_at).is_not(None),
+                col(SourceItem.published_at) >= window,
+            )
+        query = query.order_by(
+            col(SourceItem.reactions).desc().nulls_last(),
+            col(SourceItem.published_at).desc(),
+        )
+    else:
+        # Newest first, unwindowed — a strict "what has arrived lately" read.
+        # No window is needed because recency *is* the ranking here: the newest
+        # 60 of a growing pool are recent by construction.
+        query = query.order_by(col(SourceItem.published_at).desc())
+
+    rows = session.exec(query.limit(sources_config.competitors.grid_limit)).all()
 
     return _with_used(session, rows)
 

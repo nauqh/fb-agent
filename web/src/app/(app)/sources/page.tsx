@@ -14,11 +14,13 @@ import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getRss, getCompetitorPosts, getTweet } from "@/lib/api/sources";
+import type { SourceSort } from "@/lib/api/sources";
 import type { LiveSourceItem } from "@/lib/fixtures/sources";
 import { useCart } from "@/lib/cart";
 import { usePageScope } from "@/lib/page-scope";
 import { emit } from "@/lib/store";
 import { useQuery } from "@/lib/use-query";
+import { cn } from "@/lib/utils";
 
 // The Page every competitor set and feed list belongs to used to be `const
 // PAGE_ID = 1`. It comes from the switcher now — the competitor sets do not
@@ -75,9 +77,25 @@ function CompetitorsTab() {
   // `pageId` gates the query: null means the Pages have not landed yet, and
   // firing against a guessed id would show the wrong Page's competitors for a
   // beat before correcting itself.
+  /**
+   * Reactions by default, recency on request (client feedback G1).
+   *
+   * Reactions is what Metricool's own Competitors tab shows and what
+   * `fetch_competitor_posts` has always sorted by — the grid read was the only
+   * thing throwing that order away. Newest-first was showing the weakest posts:
+   * measured on History Retraced's real pool, the newest 60 topped out at 2,031
+   * reactions while the same week held one at 42,738.
+   *
+   * Held here rather than in the URL. It is a way of reading one grid, not a
+   * place to link someone to, and it re-queries the server rather than
+   * re-sorting on the client — the ranking decides which 60 of 1,244 rows come
+   * back at all.
+   */
+  const [sort, setSort] = useState<SourceSort>("reactions");
+
   const { data, loading, error, refresh } = useQuery(
-    () => getCompetitorPosts(pageId === null ? [] : [pageId]),
-    [pageId],
+    () => getCompetitorPosts(pageId === null ? [] : [pageId], false, sort),
+    [pageId, sort],
     { enabled: pageId !== null },
   );
   const [syncing, setSyncing] = useState(false);
@@ -106,17 +124,45 @@ function CompetitorsTab() {
     <>
       <div className="flex items-center justify-between gap-3 pb-3">
         <p className="text-xs text-muted-foreground">
-          Synced from Metricool, newest first. Which competitors this Page reads is
-          set on Settings.
+          {sort === "reactions"
+            ? "Synced from Metricool, best of the last 7 days first."
+            : "Synced from Metricool, newest first."}{" "}
+          Which competitors this Page reads is set on Settings.
         </p>
-        <Button variant="outline" size="sm" disabled={syncing || loading} onClick={sync}>
-          {syncing ? (
-            <Loader2 className="size-3.5 animate-spin" />
-          ) : (
-            <RefreshCw className="size-3.5" />
-          )}
-          Sync
-        </Button>
+
+        <div className="flex items-center gap-2">
+          {/* Two words, not a dropdown: there are exactly two orders and both
+              fit. The window in the hint above moves with the choice because
+              the two are not independent — ranking by reactions is bounded to
+              seven days server-side so that a post that went viral in July
+              cannot hold the top of the grid forever. */}
+          <div className="flex gap-1" role="group" aria-label="Sort competitor posts">
+            {(["reactions", "newest"] as const).map((option) => (
+              <button
+                key={option}
+                type="button"
+                onClick={() => setSort(option)}
+                className={cn(
+                  "rounded-md border px-2 py-1 text-xs capitalize transition-colors",
+                  option === sort
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "text-muted-foreground hover:bg-muted",
+                )}
+              >
+                {option}
+              </button>
+            ))}
+          </div>
+
+          <Button variant="outline" size="sm" disabled={syncing || loading} onClick={sync}>
+            {syncing ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <RefreshCw className="size-3.5" />
+            )}
+            Sync
+          </Button>
+        </div>
       </div>
 
       {/* A five-second wait behind a spinning icon reads as a hung button. The

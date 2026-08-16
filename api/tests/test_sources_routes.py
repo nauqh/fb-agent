@@ -5,7 +5,7 @@ curated-feed guard, dedup, and not rewriting an existing row — moved to
 tests/test_generate.py when generate became the only write point.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlmodel import Session, func, select
 
@@ -47,16 +47,13 @@ def test_browsing_rss_writes_nothing(client, engine, monkeypatch):
     assert _count(engine) == 0
 
 
-def test_competitor_posts_are_written_on_arrival_and_sorted_newest_first(
-    client, engine, monkeypatch
-):
-    """The one kind that browsing *does* write — they arrive by sync.
+def _two_posts(monkeypatch, *, apart_days: int = 4):
+    """One old-and-loud post, one new-and-quiet, `apart_days` apart.
 
-    Newest first, not most-reacted. Reactions are a stable ranking, so the same
-    winners sat at the top every day and the tab exists to find something new;
-    and because nothing prunes this table, `grid_limit` applied to a
-    reaction-sorted set meant a fresh post could never enter the grid at all.
+    The pair the ordering tests need: whichever way the grid is sorted, the two
+    answers are different, so an assertion cannot pass by accident.
     """
+    louder = datetime(2026, 8, 1, tzinfo=timezone.utc)
     monkeypatch.setattr(
         routes.metricool,
         "fetch_competitor_posts",
@@ -66,7 +63,7 @@ def test_competitor_posts_are_written_on_arrival_and_sorted_newest_first(
                 external_id="older-but-louder",
                 synced_for_page_id=page.id,
                 reactions=9_000,
-                published_at=datetime(2026, 8, 1, tzinfo=timezone.utc),
+                published_at=louder,
                 text="…",
             ),
             SourceItemBase(
@@ -74,19 +71,92 @@ def test_competitor_posts_are_written_on_arrival_and_sorted_newest_first(
                 external_id="newer-but-quieter",
                 synced_for_page_id=page.id,
                 reactions=12,
-                published_at=datetime(2026, 8, 5, tzinfo=timezone.utc),
+                published_at=louder + timedelta(days=apart_days),
                 text="…",
             ),
         ],
     )
 
+
+def test_competitor_posts_are_written_on_arrival_and_ranked_by_reactions(
+    client, engine, monkeypatch
+):
+    """The one kind that browsing *does* write — they arrive by sync.
+
+    Reactions by default (client feedback G1, 2026-08-16). It is what
+    Metricool's own Competitors tab shows and what `fetch_competitor_posts`
+    already sorted by before this read discarded that order. Newest-first was
+    surfacing the weakest posts: on the real pool the newest 60 topped out at
+    2,031 reactions while the same week held one at 42,738.
+    """
+    _two_posts(monkeypatch)
+
     rows = client.get("/sources/competitors", params={"page_ids": 1}).json()
+
+    assert [row["external_id"] for row in rows] == [
+        "older-but-louder",
+        "newer-but-quieter",
+    ]
+    assert _count(engine, SourceKind.COMPETITOR_POST) == 2
+
+
+def test_newest_is_still_available_and_really_reorders(client, monkeypatch):
+    """Both orders, because the client asked to keep the old one beside the new."""
+    _two_posts(monkeypatch)
+
+    rows = client.get(
+        "/sources/competitors", params={"page_ids": 1, "sort": "newest"}
+    ).json()
 
     assert [row["external_id"] for row in rows] == [
         "newer-but-quieter",
         "older-but-louder",
     ]
-    assert _count(engine, SourceKind.COMPETITOR_POST) == 2
+
+
+def test_a_reactions_sort_cannot_be_frozen_by_an_old_viral_post(client, monkeypatch):
+    """The reason the old order existed, and the reason the window has to stay.
+
+    Nothing prunes `source_item`, so ranking the whole table by reactions and
+    taking `grid_limit` would pin the top of the grid to whatever went viral
+    weeks ago — measured on History Retraced's real pool, 42 of the top 60
+    unwindowed were already older than the window. A genuinely new post could
+    never enter the grid again.
+
+    Fifty days apart is well outside `lookback_days`, so the loud one is out of
+    the window and must not be shown *despite* having 750x the reactions.
+    """
+    _two_posts(monkeypatch, apart_days=50)
+
+    rows = client.get("/sources/competitors", params={"page_ids": 1}).json()
+
+    assert [row["external_id"] for row in rows] == ["newer-but-quieter"]
+    assert "older-but-louder" not in [row["external_id"] for row in rows]
+
+    # …and it is still reachable by asking for recency, which is unwindowed.
+    everything = client.get(
+        "/sources/competitors", params={"page_ids": 1, "sort": "newest"}
+    ).json()
+    assert len(everything) == 2, "the window hides a row from one order, not from the table"
+
+
+def test_a_stale_pool_still_ranks_rather_than_answering_empty(client, monkeypatch):
+    """The window is anchored to the newest post in scope, not to the clock.
+
+    Subtracting the window from `now()` is the obvious version and it returns an
+    **empty grid** for a Page nobody has synced this week — trading a stale
+    ranking for no ranking at all. An unexplained empty grid is the failure this
+    module already guards against twice elsewhere.
+
+    Both fixtures here are dated 2026-08 and the suite runs long after that, so
+    a clock-anchored window would return nothing.
+    """
+    _two_posts(monkeypatch)
+
+    rows = client.get("/sources/competitors", params={"page_ids": 1}).json()
+
+    assert rows, "a pool older than the window still has a best post"
+    assert rows[0]["external_id"] == "older-but-louder"
 
 
 def test_a_resync_refreshes_the_image_url_and_metrics_but_not_the_text(
