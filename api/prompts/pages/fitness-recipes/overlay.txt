@@ -1,0 +1,14 @@
+Image text panel (composited in post-processing — not drawn by the image model):
+
+The hook is what goes on the panel. It is defined above; nothing is restated
+here, because this file used to carry a second copy of its rules under a second
+field name and the two drifted.
+
+highlightPhrases (coloured highlights on the text panel):
+* Return 1-3 exact substrings copied verbatim from the hook. Never more than 3.
+* Use phrases of 2-8 words: numbers with units, the name of the exercise or movement or ingredient or action, a time, a health benefit — e.g. "3 times", "15 minutes before bed", "pairing green tea with ginger", "deep yoga squat", "stronger joints" as separate entries.
+* Pick the phrases that carry the promise of the post. Fewer and longer beats more and shorter here.
+* Keep each phrase short enough to sit on one line. The panel wraps at roughly 45 characters, and a phrase broken across two lines renders no gold at all.
+
+Visual rendering (added in code — for your awareness only):
+* Black panel, white body text drawn in capitals, {highlight_color} on highlightPhrases, League Spartan, centered.

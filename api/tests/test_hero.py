@@ -181,6 +181,26 @@ def test_the_brand_photography_rules_are_sent_with_every_hero(transport):
     assert "ZERO readable text" in contents, "the no-text reminder rides on the prompt"
 
 
+def test_a_page_with_its_own_brief_is_not_drawn_under_history_retraceds(transport):
+    """C5, end to end. `page_name` is what stops every hero being a history photo.
+
+    Without it this call sends `prompts/image.txt`, whose first line names
+    History Retraced and whose style block asks for reenactment and torchlight —
+    which is what the client saw on Bodybuilding Tips and called sepia.
+    """
+    models = transport(_drawn())
+
+    REAL_GENERATE("a lifter mid-set", 800, None, "Bodybuilding Tips N Tricks")
+
+    [(_, config)] = models.sent
+    asked_for, _, forbidden = config.system_instruction.partition("NEVER:")
+    assert "Bodybuilding Tips N Tricks" in asked_for
+    assert "History Retraced" not in config.system_instruction
+    assert "reenactment" not in asked_for.lower(), "still ordering a history photo"
+    assert "reenactment" in forbidden.lower(), "and it has to be ruled out, not just omitted"
+    assert "BRIGHT lighting" in asked_for
+
+
 def test_the_panel_share_in_the_prompt_comes_from_the_layout(transport):
     """`{panel_pct}` is substituted, not sent as a literal brace.
 

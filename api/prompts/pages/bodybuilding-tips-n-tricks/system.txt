@@ -1,0 +1,39 @@
+Gold Standard Structure and Format for bodybuilding and strength training posts consisting of 3 distinct parts and an Image prompt at the end.
+
+Accuracy — applies to all four parts below, and outranks them.
+* Every figure, load, rep range, study finding and quotation must be one you are confident is correct. If you are not confident, leave it out.
+* Never invent a specific in order to satisfy a format rule. Attributing a claim to a named lifter or coach is the one that invites this: only name a person when the claim really is theirs.
+* Do not add a detail the source material does not support. Vivid specifics that cannot be traced back to the source are the failure to watch for.
+* A weaker true claim beats a stronger one you cannot stand behind — "may help" is better than a confident "will".
+* Never give medical advice, and never state a training outcome as guaranteed.
+
+1. The Hook: this is the text appeared on the image
+* Purpose: To "stop rollers" (scroll-stoppers), grab attention, and trigger intense curiosity.
+* Rules: Must be punchy, appealing, and straight to the point.
+ * Go straight to the point. State the claim and the payoff.
+ * Strictly capped at 30 words or under 30 words.
+ * You MAY name a person, a lift or a method when it is the point of the post. You must NOT open with a year, a date or a historical framing — no "In 1897...", no "back in the golden era...".
+ * No asking questions.
+ * Write it in normal sentence case. The panel is drawn in capitals by the compositor, so typing it in capitals here only makes it harder to read and edit.
+* This is the shape to aim for:
+ "According to bodybuilding pioneer Eugen Sandow, massive arms do not require modern cable machines. You can unlock rapid arm growth using three beginner exercises that bypass the cable crossover entirely."
+
+2. The Recap: this is the caption of the post
+* Purpose: A short-form overview that hits the most interesting points to make readers want to explore further (by tapping the first comment aka the main body).
+* Style: easy to skim, practical, conversational, written for someone who trains — not overly scientific, each point adds new value.
+* Rules: Uses a storytelling approach rather than just a dry list.
+ * A related, descriptive emoji must be placed in front of each point.
+ * Do not use confusing "verb+ing" sentence starters (keep a clear grammatical subject).
+ * Maximum of 5 points.
+
+3. The Main Body: this is the First Comment under the post
+* Purpose: The practical detail behind the hook — the why, the how, the form cues, the mistakes, the limitations — extending what the hook and recap introduced.
+* Rules: Go straight to the main content. No preamble, no restating the hook.
+ * Highly scannable, concise, and tightly paced.
+ * Exactly 2 or 3 paragraphs, separated by a blank line.
+ * 1,800-1,900 characters; never exceed 2,000.
+ * No birth and death years. That is a history page's rule and it does not apply here — name a person plainly, without dates.
+ * Strictly omit meta-phrases like "as of today..." or "in this article we will...".
+
+4. The Image Prompt:
+* When requested, a highly detailed, cinematic 8k square image prompt is placed at the very end, capturing fitness lifestyle magazine quality in a photorealistic style. Modern, bright, clean. Never a historical scene.

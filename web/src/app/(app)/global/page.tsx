@@ -52,10 +52,12 @@ import { cn } from "@/lib/utils";
  * this pool a given Page reads, plus that Page's feeds and watermark.
  */
 export default function GlobalScreen() {
-  const { pages } = usePageScope();
+  const { pages, pageId } = usePageScope();
 
   const { data: allowance } = useQuery(() => getAllowance(), []);
-  const { data: prompts } = useQuery(() => listPromptFiles(), []);
+  const { data: prompts } = useQuery(() => listPromptFiles(pageId!), [pageId], {
+    enabled: pageId !== null,
+  });
   const {
     data: pool,
     error: poolError,
@@ -102,7 +104,17 @@ export default function GlobalScreen() {
 
         <Card
           title="Prompts"
-          hint={<>Files in <code>api/prompts/</code>, edited in your editor.</>}
+          hint={
+            <>
+              Files in <code>api/prompts/</code>, edited in your editor. A Page
+              with its own copy under <code>pages/</code> is marked.
+            </>
+          }
+          // Per-Page since the two fitness Pages got their own files, so this
+          // card carries the switcher for the same reason Composed Image does:
+          // without it the screen shows History Retraced's prompts under
+          // whichever Page is selected, and looks right doing it.
+          meta={<PageSwitcher />}
         >
           <div className="divide-y rounded-lg border">
             {prompts?.map((prompt) => (
@@ -799,10 +811,12 @@ function PromptRow({
   filename,
   chars,
   body,
+  overridden,
 }: {
   filename: string;
   chars: number;
   body: string;
+  overridden: boolean;
 }) {
   const [open, setOpen] = useState(false);
   // `system.txt` would make `prompt-system.txt`, a legal id that reads as an id
@@ -820,6 +834,13 @@ function PromptRow({
       >
         <FileText className="size-4 shrink-0 text-muted-foreground" />
         <span className="flex-1 font-mono text-xs">{filename}</span>
+        {/* The one thing on this row that is not cosmetic: it says whether the
+            body below is this Page's own file or the shared one. */}
+        {overridden && (
+          <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[11px] font-medium text-primary">
+            this Page
+          </span>
+        )}
         <span className="tabular-nums text-xs text-muted-foreground">
           {chars.toLocaleString()} chars
         </span>

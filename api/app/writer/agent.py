@@ -39,20 +39,24 @@ class DraftContent(BaseModel):
     the post no rule guarded. One field, validated, drawn.
     """
 
-    hook: str = Field(
-        description=(
-            "The text drawn on the image panel. Under 65 words, no questions."
-        )
-    )
+    # These say what each field *is*, and leave the numbers to the prompt.
+    #
+    # They used to restate them — "Under 65 words", "5-8 short substrings" — and
+    # that was survivable while one prompt served every Page. It stops being
+    # survivable the moment a Page has its own: Fitness Recipes asks for a
+    # 35-word hook and 1-3 highlights, so a description carrying the old numbers
+    # sends the model two caps in the same request and lets it pick. The
+    # validators are still the backstop; the prompt is the instruction.
+    hook: str = Field(description="The text drawn on the image panel. No questions.")
     caption: str = Field(description="The recap: at most 5 points, each opening with an emoji.")
     first_comment: str = Field(
         description=(
-            "The main body, 1800-1900 characters, as 2-3 paragraphs separated "
-            "by a blank line."
+            "The main body, as paragraphs separated by a blank line. Length and "
+            "paragraph count are stated in the prompt."
         )
     )
     highlight_phrases: list[str] = Field(
-        description="5-8 short substrings copied verbatim out of the hook."
+        description="Short substrings copied verbatim out of the hook."
     )
     image_prompt: str = Field(description="A photorealistic hero prompt for this story.")
 
@@ -64,11 +68,16 @@ def _instructions(page: Page, layout: Layout) -> str:
     whether the Source Item's *subject* binds; reversing it tells the model to
     treat a Smithsonian piece as a writing sample, and the result is confident,
     well-formed output about the wrong story that nothing downstream catches.
+
+    The sentence naming the page used to be the *whole* per-Page dimension of
+    this prompt. It is now the fallback: `page.name` also selects
+    `prompts/pages/<slug>/`, and a Page with its own files never sees History
+    Retraced's voice at all.
     """
     return "\n\n".join(
         [
-            prompts.system_prompt(layout),
-            prompts.overlay_prompt(layout),
+            prompts.system_prompt(layout, page.name),
+            prompts.overlay_prompt(layout, page.name),
             f"You are writing for the Facebook page {page.name}.",
         ]
     )

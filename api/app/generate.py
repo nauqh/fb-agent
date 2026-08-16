@@ -292,7 +292,9 @@ def build_image(session: Session, draft: Draft, page: Page) -> list[str]:
                 image_bytes, media.filename(draft.id or 0, "hero", "png")
             )
         else:
-            drawn = hero.generate(draft.image_prompt or "", plan.hero_height_px)
+            drawn = hero.generate(
+                draft.image_prompt or "", plan.hero_height_px, layout, page.name
+            )
             image_bytes = drawn.data
             if drawn.model != settings.gemini_image_model:
                 # A backup model draws in a different style, and the operator is

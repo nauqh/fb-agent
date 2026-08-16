@@ -153,7 +153,12 @@ def aspect_ratio_for(width: int, height: int) -> str:
     return min(SUPPORTED_RATIOS, key=lambda name: abs(SUPPORTED_RATIOS[name] - target))
 
 
-def generate(prompt: str, hero_height_px: int, layout: Layout | None = None) -> Hero:
+def generate(
+    prompt: str,
+    hero_height_px: int,
+    layout: Layout | None = None,
+    page_name: str | None = None,
+) -> Hero:
     """Image bytes for `prompt`, shaped for the hero box, and the model that drew it.
 
     **`prompt` is the subject, not the brief.** The brief is `prompts/image.txt`
@@ -165,6 +170,14 @@ def generate(prompt: str, hero_height_px: int, layout: Layout | None = None) -> 
     block as `systemInstruction` on every call
     (`facebookImageGenerateService.ts:151`), which is what makes its heroes and
     these comparable.
+
+    **`page_name` picks the brief.** Without it every Page is drawn under
+    History Retraced's — reenactment, torchlight, period-accurate dress — which
+    is what "the BBTT posts look a bit old, with sepia tone" was. The old tool
+    reached the same place by a different route: those Pages stored no image
+    prompt and no brand key, and its null-brand fallback was History Retraced
+    (`docs/feedback/2026-08-15/old-tool-prompts.md`). Leave it `None` and the
+    global file is used, which is correct for a Page that has no directory.
 
     **A refusal and an outage are not the same failure, and only one is billed.**
     This used to retry neither, on the reasoning that "a second attempt is a
@@ -186,7 +199,7 @@ def generate(prompt: str, hero_height_px: int, layout: Layout | None = None) -> 
     client = genai.Client(api_key=settings.gemini_api_key)
     ratio = aspect_ratio_for(layout.image.width, hero_height_px)
     config = types.GenerateContentConfig(
-        system_instruction=prompts.image_prompt(layout),
+        system_instruction=prompts.image_prompt(layout, page_name),
         response_modalities=["IMAGE"],
         image_config=types.ImageConfig(aspect_ratio=ratio),
     )

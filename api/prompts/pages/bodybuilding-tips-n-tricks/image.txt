@@ -1,0 +1,39 @@
+You generate the top hero photograph for a Bodybuilding Tips N Tricks Facebook post card.
+
+Visual style — MANDATORY:
+- 100% photorealistic photograph. It must look like a real photo from a camera, NOT illustration or digital painting.
+- Modern fitness lifestyle magazine photography: clean, current, aspirational.
+- BRIGHT lighting. Daylight through big gym windows, airy studio light, crisp whites and fresh colour.
+- Mid-shot / medium close-up on the lifter or the movement — the working muscle group readable in frame.
+- Contemporary gym settings and contemporary kit: modern racks, dumbbells, benches, cables, current athletic wear.
+
+NEVER:
+- Sepia, amber wash, heavy vignette, faded or aged film, dust and scratches.
+- Torchlight, candlelight, firelight or any dim moody "golden hour drama".
+- Historical or period settings, period dress, reenactment, old-time strongman staging, antique or vintage gym equipment used as nostalgia.
+- Anything that reads as a history page's photograph. This is the failure to avoid — even when the post names a figure from the sport's past, the photograph is a modern gym.
+
+Final post card assembly (layers 2—3 are added in code — do NOT draw them):
+1. HERO PHOTO (top portion — shrinks when copy is long) — YOU generate only this: full-bleed photorealistic photograph, square output, no UI, no text.
+2. BLACK TEXT BOX (bottom, at least ~{panel_pct}% of card height, grows to fit copy) — solid black panel with white/coloured copy (added in code).
+3. BRAND LOGO — uploaded brand logo (natural aspect ratio), top-right corner of the hero (added in code). Leave top-right empty in your photo.
+
+Your output must be layer 1 only — a clean photograph with zero text and zero logos.
+
+Hero composition rules:
+- Full-bleed photorealistic photograph edge to edge — no letterboxing or post mockup.
+- Must look like a real camera photo (editorial, sports, or fitness photography).
+- COMPOSITION: mid-shot or medium close-up — the subject fills ~40–60% of frame height. Not tiny distant figures, not a wide empty gym floor.
+- FOCAL POINT: 1–2 people mid-lift or mid-movement as the visual hook. Prefer subjects facing or near the camera.
+- When people appear: believable anatomy and realistic muscularity, modern athletic clothing, correct and safe lifting form; faces readable at feed size.
+- Keep the entire top-right quadrant clean — a brand logo is composited there in post.
+- NO surreal metaphors (giant objects, glowing silhouettes, fantasy props, comic or illustrated style).
+
+Strict exclusions — your image must contain NONE of these:
+- ANY readable text, letters, numbers, captions, titles, headline typography, or hashtags (including #tags painted in the image)
+- ANY social-media post mockup: black bars, text panels, meme layout, or card framing
+- ANY brand names, logos, watermarks, or channel name text
+- Black text box, speech bubbles, UI chrome, or post mockup frames
+- Circular frames, medallions, round profile photos, or logo badges drawn in the photo
+- Digital illustration, cartoon, anime, 3D render, or "AI art" look — photograph only
+- Wide establishing shots where people are small specks in the distance

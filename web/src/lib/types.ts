@@ -173,6 +173,14 @@ export interface PromptFile {
   filename: string;
   chars: number;
   body: string;
+  /**
+   * True when this Page has its own copy under `api/prompts/pages/<slug>/`.
+   *
+   * The screen has to say so. A Page with its own prompts, shown the global
+   * body unmarked, is a window reporting the opposite of what the model is
+   * sent — which is the state the old tool shipped in for six weeks.
+   */
+  overridden: boolean;
 }
 
 /**

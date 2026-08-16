@@ -78,9 +78,15 @@ export function watermarkUrl(page: Page): string | null {
  *
  * Served rather than bundled because the bundled copy drifted — it went on
  * listing `image_rules.txt` after that file was merged into `image.txt`.
+ *
+ * `pageId` resolves the per-Page overrides in `api/prompts/pages/<slug>/`.
+ * Always pass it. Omitting it renders the global files under a Page's name,
+ * which is the same lie the old tool's Settings tab told.
  */
-export async function listPromptFiles(): Promise<PromptFile[]> {
-  return get<PromptFile[]>("/prompts");
+export async function listPromptFiles(pageId?: number): Promise<PromptFile[]> {
+  return get<PromptFile[]>(
+    pageId === undefined ? "/prompts" : `/prompts?page_id=${pageId}`,
+  );
 }
 
 /**
