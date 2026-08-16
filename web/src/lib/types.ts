@@ -58,6 +58,28 @@ export interface Page {
    * photograph and there is room above it.
    */
   badge_text: string | null;
+
+  /**
+   * How long this Page writes. **Null means the house number**, not zero —
+   * 65 words, 1,500–2,100 characters, 2–3 paragraphs, from
+   * `api/app/writer/validators.py`.
+   *
+   * Nullable rather than defaulted so a chosen value can be told from a copied
+   * one: with defaults, changing the house number would leave every Page pinned
+   * to the old one with nothing recording that anybody meant it.
+   */
+  hook_max_words: number | null;
+  first_comment_min_chars: number | null;
+  first_comment_max_chars: number | null;
+  first_comment_min_paragraphs: number | null;
+  first_comment_max_paragraphs: number | null;
+
+  /** This Page's own prompt text, or null to inherit the file. Edited through
+   *  `setPromptFile`, and read back through `listPromptFiles`. */
+  system_prompt: string | null;
+  overlay_prompt: string | null;
+  image_prompt: string | null;
+
   created_at: string;
   updated_at: string;
 }
@@ -181,6 +203,20 @@ export interface PromptFile {
    * sent — which is the state the old tool shipped in for six weeks.
    */
   overridden: boolean;
+
+  /**
+   * Which of the three places the text came from: `"page"` (stored on the Page
+   * row, editable here), `"file-override"` (`api/prompts/pages/<slug>/`) or
+   * `"global"` (`api/prompts/`).
+   *
+   * `overridden` alone cannot answer what the operator is about to do. Editing
+   * text that is in fact inherited creates an override nobody asked for, and a
+   * file-backed one cannot be edited from a browser at all.
+   */
+  source: "page" | "file-override" | "global";
+
+  /** False for a prompt with no column behind it — it can only be a file. */
+  editable: boolean;
 }
 
 /**

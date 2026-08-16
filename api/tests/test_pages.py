@@ -207,3 +207,95 @@ def test_a_page_serves_the_url_the_browser_fetches(client, session, page):
 
     session.refresh(page)
     assert Page.model_validate(page).watermark_upload_url is not None
+
+
+# --- how long this Page writes (C6, C7) ----------------------------------------
+
+
+def test_a_page_can_be_given_its_own_lengths(client, page):
+    response = client.patch(
+        f"/pages/{page.id}",
+        json={
+            "hook_max_words": 30,
+            "first_comment_min_chars": 800,
+            "first_comment_max_chars": 1_500,
+            "first_comment_min_paragraphs": 3,
+            "first_comment_max_paragraphs": 4,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["hook_max_words"] == 30
+    assert response.json()["first_comment_max_chars"] == 1_500
+
+
+def test_lengths_no_draft_could_satisfy_are_refused_before_they_are_saved(client, page):
+    """C7 as the client wrote it: a 1,500 ceiling against the 1,500 house floor.
+
+    Saved, this does not produce short posts — it produces dead runs, because
+    every draft fails one end, burns both retries and ends at `Exceeded maximum
+    output retries`. The model cannot report that as a settings problem, so the
+    route has to.
+    """
+    response = client.patch(f"/pages/{page.id}", json={"first_comment_max_chars": 1_400})
+
+    assert response.status_code == 422
+    assert "1,400" in response.json()["detail"]
+
+    assert client.get(f"/pages/{page.id}").json()["first_comment_max_chars"] is None
+
+
+def test_clearing_a_length_returns_the_page_to_the_house_number(client, page):
+    client.patch(f"/pages/{page.id}", json={"hook_max_words": 30})
+
+    response = client.patch(f"/pages/{page.id}", json={"hook_max_words": None})
+
+    assert response.status_code == 200
+    assert response.json()["hook_max_words"] is None
+
+
+# --- a Page's own prompts ------------------------------------------------------
+
+
+def test_a_page_can_be_given_its_own_prompt(client, page):
+    response = client.put(
+        f"/prompts/{page.id}/system.txt", json={"body": "Write like a gym coach."}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["body"] == "Write like a gym coach."
+    assert response.json()["source"] == "page"
+    assert response.json()["overridden"] is True
+
+
+def test_the_stored_prompt_is_what_the_next_read_returns(client, page):
+    client.put(f"/prompts/{page.id}/system.txt", json={"body": "Write like a coach."})
+
+    listed = client.get("/prompts", params={"page_id": page.id}).json()
+
+    entry = next(f for f in listed if f["filename"] == "system.txt")
+    assert entry["body"] == "Write like a coach."
+    assert entry["source"] == "page"
+
+
+def test_emptying_the_box_clears_the_override_rather_than_storing_nothing(client, page):
+    client.put(f"/prompts/{page.id}/system.txt", json={"body": "Write like a coach."})
+
+    response = client.put(f"/prompts/{page.id}/system.txt", json={"body": "   "})
+
+    assert response.status_code == 200
+    assert response.json()["source"] == "global"
+    assert response.json()["body"], "the inherited prompt, not an empty string"
+
+
+def test_a_prompt_with_no_column_cannot_be_stored(client, page):
+    response = client.put(f"/prompts/{page.id}/nonsense.txt", json={"body": "x"})
+
+    assert response.status_code == 422
+    assert "system.txt" in response.json()["detail"], "it names what can be edited"
+
+
+def test_editing_a_prompt_for_a_page_that_does_not_exist_is_a_404(client):
+    response = client.put("/prompts/999/system.txt", json={"body": "x"})
+
+    assert response.status_code == 404

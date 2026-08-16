@@ -1,5 +1,5 @@
 import type { Page, PromptFile } from "@/lib/types";
-import { del, delJson, get, patch, post, upload } from "@/lib/api/client";
+import { del, delJson, get, patch, post, put, upload } from "@/lib/api/client";
 /**
  * `GET /pages`, `GET /pages/{id}`, `PATCH /pages/{id}`, `GET /prompts`.
  *
@@ -28,6 +28,21 @@ export interface PageUpdate {
   watermark_enabled?: boolean | null;
   /** The headline chip's word. Null draws no chip. `full_overlay` only. */
   badge_text?: string | null;
+
+  /**
+   * How long this Page writes (C6, C7). **Null clears the override** and
+   * returns the Page to the house numbers in `api/app/writer/validators.py` —
+   * so an emptied box must send null, never 0.
+   *
+   * The API refuses a combination no draft could satisfy (422) rather than
+   * saving it: a 1,500-character ceiling against the 1,500 house floor is not
+   * a strict Page, it is a Page whose every run dies on retries.
+   */
+  hook_max_words?: number | null;
+  first_comment_min_chars?: number | null;
+  first_comment_max_chars?: number | null;
+  first_comment_min_paragraphs?: number | null;
+  first_comment_max_paragraphs?: number | null;
 }
 
 /**
@@ -70,23 +85,42 @@ export function watermarkUrl(page: Page): string | null {
 }
 
 /**
- * The prompt files on disk, as the API reads them.
- *
- * Read-only on purpose. They are files so that they are reviewable and
- * revertable in git; a textarea here would quietly become the place they are
- * edited and undo that.
+ * The prompts as the model is sent them.
  *
  * Served rather than bundled because the bundled copy drifted — it went on
  * listing `image_rules.txt` after that file was merged into `image.txt`.
  *
- * `pageId` resolves the per-Page overrides in `api/prompts/pages/<slug>/`.
- * Always pass it. Omitting it renders the global files under a Page's name,
- * which is the same lie the old tool's Settings tab told.
+ * `pageId` resolves the overrides. Always pass it. Omitting it renders the
+ * global files under a Page's name, which is the same lie the old tool's
+ * Settings tab told.
+ *
+ * Each entry says which of three places its text came from — see
+ * `PromptFile.source`.
  */
 export async function listPromptFiles(pageId?: number): Promise<PromptFile[]> {
   return get<PromptFile[]>(
     pageId === undefined ? "/prompts" : `/prompts?page_id=${pageId}`,
   );
+}
+
+/**
+ * Give one Page its own text for one prompt. **Blank clears the override.**
+ *
+ * Per Page only; there is no call that edits a global. The globals are the
+ * reviewed default and live in git, and every Page reads them — editing one
+ * from here is what would reopen the drift the files were chosen to prevent.
+ *
+ * This is stored on the Page row rather than written to
+ * `api/prompts/pages/<slug>/`, and that is not a preference: Railway's
+ * filesystem is ephemeral, so a written file would vanish on the next
+ * redeploy — silently, days later.
+ */
+export async function setPromptFile(
+  pageId: number,
+  filename: string,
+  body: string,
+): Promise<PromptFile> {
+  return put<PromptFile>(`/prompts/${pageId}/${filename}`, { body });
 }
 
 /**

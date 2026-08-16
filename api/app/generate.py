@@ -177,7 +177,10 @@ def _run_one(session: Session, draft_id: int) -> None:
         # survived correction. `advise` adds the rules that were never enforced
         # because they cannot be satisfied on demand.
         draft.warnings = validators.check(
-            content.hook, content.caption, content.first_comment
+            content.hook,
+            content.caption,
+            content.first_comment,
+            validators.Limits.for_page(page),
         )
         draft.warnings += validators.advise(content.first_comment)
         draft.warnings += _highlight_warnings(content)
@@ -293,7 +296,7 @@ def build_image(session: Session, draft: Draft, page: Page) -> list[str]:
             )
         else:
             drawn = hero.generate(
-                draft.image_prompt or "", plan.hero_height_px, layout, page.name
+                draft.image_prompt or "", plan.hero_height_px, layout, page.name, page
             )
             image_bytes = drawn.data
             if drawn.model != settings.gemini_image_model:

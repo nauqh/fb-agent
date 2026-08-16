@@ -161,3 +161,78 @@ def test_the_history_page_is_untouched(client, page: Page, session: Session):
     assert "History Retraced" in next(
         f["body"] for f in scoped if f["filename"] == "image.txt"
     )
+
+
+# --- a Page's own text, over the files -----------------------------------------
+#
+# Prompts were files and read-only until 2026-08-17. Two things changed the
+# answer, and neither weakens the reasoning that put them in files:
+#
+#   - only *overrides* are stored, so nothing holds a copy of text it did not
+#     change, and the drift the file layout was chosen against needs copies;
+#   - Railway's filesystem is ephemeral, so a screen that wrote a file would
+#     lose the edit on the next redeploy — which is the shape of the client's
+#     F5 complaint, believing for six weeks in prompts that did not exist.
+
+
+def test_a_page_with_stored_text_is_sent_that_instead_of_any_file():
+    page = Page(name=BODYBUILDING, facebook_page_id="1", system_prompt="Write short.")
+
+    assert prompts.system_prompt(layout, page.name, page) == "Write short."
+
+
+def test_stored_text_beats_the_pages_own_file_not_just_the_global():
+    """Bodybuilding Tips has a `prompts/pages/` directory, so this is the case
+    where both overrides exist and only one can win."""
+    page = Page(name=BODYBUILDING, facebook_page_id="1", system_prompt="Write short.")
+    from_file = prompts.system_prompt(layout, BODYBUILDING)
+
+    assert from_file != "Write short.", "the fixture must not equal the file"
+    assert prompts.system_prompt(layout, page.name, page) == "Write short."
+
+
+def test_a_page_with_no_stored_text_still_reads_its_file():
+    page = Page(name=BODYBUILDING, facebook_page_id="1")
+
+    assert prompts.system_prompt(layout, page.name, page) == prompts.system_prompt(
+        layout, BODYBUILDING
+    )
+
+
+def test_an_emptied_textarea_clears_the_override_rather_than_silencing_the_model():
+    """`""` stored would send the model no system prompt at all — a Page with no
+    voice, failing in a way that looks like the model misbehaving."""
+    page = Page(name=BODYBUILDING, facebook_page_id="1", system_prompt="   ")
+
+    assert prompts.stored("system.txt", page) is None
+    assert prompts.system_prompt(layout, page.name, page) == prompts.system_prompt(
+        layout, BODYBUILDING
+    )
+
+
+def test_the_three_sources_are_named_not_just_flagged():
+    """`overridden` cannot answer what the operator is about to act on: editing
+    inherited text creates an override they did not ask for, and a file-backed
+    one cannot be edited from the screen at all."""
+    stored = Page(name=BODYBUILDING, facebook_page_id="1", system_prompt="Mine.")
+    filed = Page(name=BODYBUILDING, facebook_page_id="1")
+    plain = Page(name="History Retraced", facebook_page_id="1")
+
+    def source_of(page, filename="system.txt"):
+        files = prompts.list_prompt_files(layout, page.name, page)
+        return next(f for f in files if f["filename"] == filename)
+
+    assert source_of(stored)["source"] == "page"
+    assert source_of(filed)["source"] == "file-override"
+    assert source_of(plain)["source"] == "global"
+    assert source_of(plain)["overridden"] is False
+    assert source_of(stored)["overridden"] is True
+
+
+def test_only_the_three_known_prompts_can_be_stored_on_a_page():
+    """A prompt with no column is a file and says so, rather than offering a
+    textarea whose Save has nowhere to go."""
+    page = Page(name="History Retraced", facebook_page_id="1")
+
+    for entry in prompts.list_prompt_files(layout, page.name, page):
+        assert entry["editable"] == (entry["filename"] in prompts.COLUMN)

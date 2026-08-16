@@ -30,6 +30,21 @@ export const PAGES: Page[] = [
     watermark_enabled: true,
     // History Retraced draws the `card` template, which has no headline chip.
     badge_text: null,
+    // All null, and that is the seeded row rather than a gap in the fixture.
+    // Null means "the house number" — 65 words, 1,500–2,100 characters, 2–3
+    // paragraphs — and History Retraced is the Page those numbers were written
+    // for. The two Pages that asked for their own are Bodybuilding Tips and
+    // Fitness Recipes (C6, C7).
+    hook_max_words: null,
+    first_comment_min_chars: null,
+    first_comment_max_chars: null,
+    first_comment_min_paragraphs: null,
+    first_comment_max_paragraphs: null,
+    // Likewise: no stored prompt means the files in `api/prompts/` are what
+    // this Page is sent, which is what they were written for.
+    system_prompt: null,
+    overlay_prompt: null,
+    image_prompt: null,
     created_at: "2026-08-03T02:10:00Z",
     updated_at: "2026-08-03T02:10:00Z",
   },

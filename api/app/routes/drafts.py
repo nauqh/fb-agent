@@ -151,7 +151,12 @@ async def create_manual_draft(
     session.commit()
     session.refresh(draft)
 
-    warnings = validators.check(hook.strip(), caption.strip(), first_comment.strip())
+    warnings = validators.check(
+        hook.strip(),
+        caption.strip(),
+        first_comment.strip(),
+        validators.Limits.for_page(page),
+    )
 
     if file is not None and file.filename:
         data = await file.read(MAX_HERO_BYTES + 1)

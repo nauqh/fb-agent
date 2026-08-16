@@ -158,6 +158,7 @@ def generate(
     hero_height_px: int,
     layout: Layout | None = None,
     page_name: str | None = None,
+    page=None,
 ) -> Hero:
     """Image bytes for `prompt`, shaped for the hero box, and the model that drew it.
 
@@ -199,7 +200,7 @@ def generate(
     client = genai.Client(api_key=settings.gemini_api_key)
     ratio = aspect_ratio_for(layout.image.width, hero_height_px)
     config = types.GenerateContentConfig(
-        system_instruction=prompts.image_prompt(layout, page_name),
+        system_instruction=prompts.image_prompt(layout, page_name, page),
         response_modalities=["IMAGE"],
         image_config=types.ImageConfig(aspect_ratio=ratio),
     )

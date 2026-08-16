@@ -372,3 +372,105 @@ def test_the_text_drawn_on_the_image_is_the_text_the_rules_guard(page):
     # And it is that same corrected string the compositor lays out.
     plan = overlay.plan(result.output.hook)
     assert " ".join(plan.lines).startswith("Marie Tharp")
+
+
+# --- lengths, per Page (C6, C7) ------------------------------------------------
+#
+# The client's C6 and C7 (2026-08-15) are the same complaint C5 was: the numbers
+# were History Retraced's and every Page got them. Bodybuilding Tips and Fitness
+# Recipes want a 30-word hook and a first comment capped at 1,500 characters over
+# 3–4 paragraphs; the history page wants none of that.
+#
+# C7 sat dropped for two days because 1,500 was the global *floor* — their
+# ceiling was our minimum, so no draft could satisfy both. That is why `Limits`
+# carries `disagrees()` and why the route calls it before saving.
+
+
+def _page(**overrides) -> Page:
+    return Page(name="Bodybuilding Tips N Tricks", facebook_page_id="1", **overrides)
+
+
+def test_a_page_that_asks_for_nothing_gets_the_house_numbers():
+    """Nine of the ten Pages, and every test written before this existed."""
+    assert validators.Limits.for_page(_page()) == validators.Limits()
+
+
+def test_a_page_can_ask_for_a_shorter_hook_than_the_house():
+    limits = validators.Limits.for_page(_page(hook_max_words=30))
+
+    assert validators.hook_length("word " * 31, limits), "31 words breaks a 30 cap"
+    assert validators.hook_length("word " * 31) is None, "but not the house 65"
+
+
+def test_a_page_can_ask_for_a_shorter_first_comment():
+    """C7 as written: capped at 1,500, which the house treats as a floor."""
+    limits = validators.Limits.for_page(
+        _page(first_comment_min_chars=800, first_comment_max_chars=1_500)
+    )
+    body = "x" * 1_200
+
+    assert validators.body_length(body, limits) is None
+    reason = validators.body_length(body)
+    assert reason and "expand it past 1500" in reason, "the house would reject it"
+
+
+def test_a_page_can_ask_for_four_paragraphs():
+    limits = validators.Limits.for_page(
+        _page(first_comment_min_paragraphs=3, first_comment_max_paragraphs=4)
+    )
+    four = "\n\n".join(["para"] * 4)
+
+    assert validators.first_comment_paragraphs(four, limits) is None
+    assert validators.first_comment_paragraphs(four), "the house range is 2-3"
+
+
+def test_one_end_of_a_range_can_move_without_the_other():
+    """Null inherits, so a Page setting only the ceiling keeps the house floor.
+    That is the combination `disagrees` exists to catch."""
+    limits = validators.Limits.for_page(_page(first_comment_max_chars=1_500))
+
+    assert limits.body_min_chars == validators.BODY_MIN_CHARS
+    assert limits.body_max_chars == 1_500
+
+
+def test_a_band_no_draft_could_satisfy_is_named_rather_than_left_to_the_model():
+    """1,500 floor against a 1,500 ceiling is not strictness, it is a dead run:
+    every draft fails one end, burns both retries and dies at
+    `Exceeded maximum output retries`."""
+    limits = validators.Limits.for_page(_page(first_comment_max_chars=1_400))
+
+    assert limits.disagrees(), "1,500 floor vs 1,400 ceiling is unsatisfiable"
+    assert validators.Limits().disagrees() is None
+    assert validators.Limits.for_page(
+        _page(first_comment_min_chars=800, first_comment_max_chars=1_500)
+    ).disagrees() is None
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"first_comment_min_paragraphs": 4, "first_comment_max_paragraphs": 2},
+        {"hook_max_words": 3},
+    ],
+    ids=["backwards-paragraphs", "unwritable-hook"],
+)
+def test_the_other_impossible_settings_are_caught_too(overrides):
+    assert validators.Limits.for_page(_page(**overrides)).disagrees()
+
+
+def test_the_prompt_states_this_pages_lengths_so_the_check_cannot_surprise_it():
+    """A rule the model was never told is a retry it cannot act on.
+
+    The house numbers are already in the prompt prose, so they are *not*
+    repeated — a second copy is the drift `prompts.py` is written against.
+    """
+    from app.settings import layout
+
+    plain = writer._instructions(_page(), layout)
+    capped = writer._instructions(_page(hook_max_words=30), layout)
+
+    assert "LENGTHS FOR THIS PAGE" not in plain, "no second copy of the house numbers"
+    assert "at most 30 words" in capped
+    assert capped.index("LENGTHS FOR THIS PAGE") > capped.index(
+        "You are writing for the Facebook page"
+    ), "the override has to come last to win"

@@ -112,30 +112,68 @@ def source_of(name: str, page_name: str | None = None):
     return PROMPTS_DIR / name
 
 
-def _read(name: str, layout: Layout, page_name: str | None = None) -> str:
-    text = source_of(name, page_name).read_text(encoding="utf-8").strip()
+COLUMN = {
+    "system.txt": "system_prompt",
+    "overlay.txt": "overlay_prompt",
+    "image.txt": "image_prompt",
+}
+"""Which `Page` column overrides which file, for the three known prompts.
+
+A prompt with no column here can only be a file. That is deliberate: the column
+exists to be edited from the Settings screen, and a prompt nothing edits does
+not need a second place to live.
+"""
+
+
+def stored(name: str, page) -> str | None:
+    """This Page's own text for `name`, if someone has written one.
+
+    Blank is not an override. A textarea that has been emptied means "go back to
+    the inherited prompt", and storing `""` would instead send the model nothing
+    at all — a Page with no voice, failing in a way that looks like the model
+    misbehaving rather than like a setting.
+    """
+    if page is None:
+        return None
+    text = (getattr(page, COLUMN.get(name, ""), None) or "").strip()
+    return text or None
+
+
+def _read(
+    name: str, layout: Layout, page_name: str | None = None, page=None
+) -> str:
+    """The text the model is sent: the Page's own, else the file for it.
+
+    `page` is optional so the writer's own tests, and any caller that only has a
+    name, keep working against files alone.
+    """
+    text = stored(name, page)
+    if text is None:
+        text = source_of(name, page_name).read_text(encoding="utf-8").strip()
     for token, value in _tokens(layout).items():
         text = text.replace(token, value)
     return text
 
 
-def system_prompt(layout: Layout, page_name: str | None = None) -> str:
-    return _read("system.txt", layout, page_name)
+def system_prompt(layout: Layout, page_name: str | None = None, page=None) -> str:
+    return _read("system.txt", layout, page_name, page)
 
 
-def overlay_prompt(layout: Layout, page_name: str | None = None) -> str:
-    return _read("overlay.txt", layout, page_name)
+def overlay_prompt(layout: Layout, page_name: str | None = None, page=None) -> str:
+    return _read("overlay.txt", layout, page_name, page)
 
 
-def image_prompt(layout: Layout, page_name: str | None = None) -> str:
-    return _read("image.txt", layout, page_name)
+def image_prompt(layout: Layout, page_name: str | None = None, page=None) -> str:
+    return _read("image.txt", layout, page_name, page)
 
 
 ORDER = ("system.txt", "overlay.txt", "image.txt")
 """Reading order, which is also the order the run uses them in."""
 
 
-def list_prompt_files(layout: Layout, page_name: str | None = None) -> list[dict]:
+def list_prompt_files(
+    layout: Layout, page_name: str | None = None, page=None
+) -> list[dict]:
     """Every prompt file, for the Settings screen.
 
     Returns the text **as substituted**, not as typed, because what the operator
@@ -160,13 +198,35 @@ def list_prompt_files(layout: Layout, page_name: str | None = None) -> list[dict
 
     files = []
     for name in names:
-        body = _read(name, layout, page_name)
+        body = _read(name, layout, page_name, page)
+        from_db = stored(name, page) is not None
         files.append(
             {
                 "filename": name,
                 "chars": len(body),
                 "body": body,
-                "overridden": source_of(name, page_name).parent != PROMPTS_DIR,
+                "overridden": from_db
+                or source_of(name, page_name).parent != PROMPTS_DIR,
+                # Which of the three places this text came from. The screen has
+                # to say it plainly: an operator editing a prompt that is in
+                # fact inherited is about to create an override they did not
+                # ask for, and one editing a file-backed override on Railway
+                # would lose it on the next redeploy.
+                "source": (
+                    "page"
+                    if from_db
+                    else (
+                        "file-override"
+                        if source_of(name, page_name).parent != PROMPTS_DIR
+                        else "global"
+                    )
+                ),
+                "editable": name in COLUMN,
             }
         )
     return files
+
+
+def list_prompt_files_for(layout: Layout, page) -> list[dict]:
+    """`list_prompt_files` for a Page row, which is what every caller now has."""
+    return list_prompt_files(layout, page.name if page else None, page)

@@ -20,6 +20,7 @@ from sqlmodel import Session, select
 from app import media
 from app.db import get_session
 from app.models import Page, PageTimeSlot
+from app.writer import validators
 
 router = APIRouter(prefix="/pages", tags=["pages"])
 
@@ -40,6 +41,15 @@ class PageUpdate(BaseModel):
 
     badge_text: str | None = None
     """The headline chip's word. Null draws no chip. `full_overlay` only."""
+
+    # How long this Page writes (C6, C7). Null clears the override and returns
+    # the Page to the house numbers in `writer/validators.py` — which is why
+    # these are `int | None` and why the form sends null rather than 0.
+    hook_max_words: int | None = Field(default=None, ge=5, le=200)
+    first_comment_min_chars: int | None = Field(default=None, ge=100, le=10_000)
+    first_comment_max_chars: int | None = Field(default=None, ge=100, le=10_000)
+    first_comment_min_paragraphs: int | None = Field(default=None, ge=1, le=12)
+    first_comment_max_paragraphs: int | None = Field(default=None, ge=1, le=12)
 
 
 @router.get("")
@@ -164,8 +174,21 @@ def update_page(
     changes = update.model_dump(exclude_unset=True)
     for field, value in changes.items():
         setattr(page, field, value)
-    page.updated_at = datetime.now(timezone.utc)
 
+    # Refused before it is saved, not after a run dies.
+    #
+    # The client's C7 asked for a 1,500-character ceiling while 1,500 was the
+    # floor: a band of zero width, where every draft fails one end, burns both
+    # retries and the run ends at `Exceeded maximum output retries`. That is
+    # what made C7 look unbuildable. The numbers are the operator's to choose
+    # now, so the screen has to catch the unsatisfiable combination itself —
+    # the model cannot, and reports it as a dead run.
+    impossible = validators.Limits.for_page(page).disagrees()
+    if impossible:
+        session.rollback()
+        raise HTTPException(status_code=422, detail=impossible)
+
+    page.updated_at = datetime.now(timezone.utc)
     session.add(page)
     session.commit()
     session.refresh(page)

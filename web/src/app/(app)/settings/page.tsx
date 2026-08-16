@@ -19,24 +19,43 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
 import { getCompetitorPages, getSourcesConfig } from "@/lib/api/sources";
 import { setAssignments } from "@/lib/api/competitors";
 import { addFeed, removeFeed } from "@/lib/api/feeds";
-import { addSlot, listSlots, removeSlot } from "@/lib/api/pages";
+import {
+  addSlot,
+  listPromptFiles,
+  listSlots,
+  removeSlot,
+  setPromptFile,
+  updatePage,
+} from "@/lib/api/pages";
+import type { Page, PromptFile } from "@/lib/types";
 import { usePageScope } from "@/lib/page-scope";
 import { emit } from "@/lib/store";
 import { useQuery } from "@/lib/use-query";
 import { cn } from "@/lib/utils";
 
 /**
- * One Page, and nothing to type into.
+ * One Page: what it is, and how it writes.
  *
- * Read-only throughout, which is the honest shape rather than a missing
- * feature. Identity comes from Metricool. Layout is `layout.yml`. The prompts
- * are files precisely so they are reviewed in git rather than typed into a box,
- * and a textarea here would quietly undo that. What is left is a window onto
- * what the run is actually configured with — and every piece of it is edited
- * somewhere a diff can be read.
+ * Read-only throughout until 2026-08-17, and the reasoning held for what it was
+ * aimed at — identity comes from Metricool, layout is `layout.yml`, and the
+ * prompts are files so they are reviewed in git rather than typed into a box.
+ *
+ * Two things are editable now, and both are per-Page overrides that inherit
+ * when empty rather than copies of a shared default:
+ *
+ * - **the lengths** (C6, C7), because the client asked for a 30-word hook and a
+ *   1,500-character first comment on two Pages and not on the others;
+ * - **the prompts** (F5), because they have been asking since 2026-08-15 and
+ *   believed for six weeks that they had already written them. A file cannot
+ *   answer that: Railway's filesystem is ephemeral, so an edit written to
+ *   `api/prompts/pages/<slug>/` would be gone on the next redeploy.
+ *
+ * The globals stay files and stay uneditable here. Every Page reads them, and
+ * a textarea on a shared default is what the drift was.
  */
 export default function SettingsScreen() {
   const { page, pageId } = usePageScope();
@@ -221,6 +240,34 @@ export default function SettingsScreen() {
           }
         >
           <TimeSlots pageId={pageId} />
+        </Card>
+
+        <Card
+          title="How this Page writes"
+          hint={
+            <>
+              Leave a box empty to use the house number. These are the lengths
+              the writer is told to hit <em>and</em> the ones a draft is checked
+              against &mdash; they cannot disagree.
+            </>
+          }
+        >
+          <WritingLimits page={page} />
+        </Card>
+
+        {/* Full width: three prompts of a few thousand characters each. */}
+        <Card
+          className="xl:col-span-2"
+          title="Prompts"
+          hint={
+            <>
+              What this Page tells the model. Empty means it inherits the
+              reviewed default in <code>api/prompts/</code> &mdash; saving text
+              here overrides it for this Page only.
+            </>
+          }
+        >
+          <PromptEditors pageId={pageId} />
         </Card>
 
         {/* Full width: at 26 rows this is the longest thing on the screen, and
@@ -604,6 +651,239 @@ function TimeSlots({ pageId }: { pageId: number | null }) {
             </span>
           ))}
         </div>
+      )}
+    </div>
+  );
+}
+
+/** The house numbers, from `api/app/writer/validators.py`. Shown as the
+ *  placeholder so an empty box reads as "65", not as "unset". */
+const HOUSE = {
+  hook_max_words: 65,
+  first_comment_min_chars: 1500,
+  first_comment_max_chars: 2100,
+  first_comment_min_paragraphs: 2,
+  first_comment_max_paragraphs: 3,
+} as const;
+
+type LimitField = keyof typeof HOUSE;
+
+const LIMIT_ROWS: { field: LimitField; label: string }[] = [
+  { field: "hook_max_words", label: "Hook, max words" },
+  { field: "first_comment_min_chars", label: "First comment, min chars" },
+  { field: "first_comment_max_chars", label: "First comment, max chars" },
+  { field: "first_comment_min_paragraphs", label: "First comment, min paragraphs" },
+  { field: "first_comment_max_paragraphs", label: "First comment, max paragraphs" },
+];
+
+/**
+ * The five numbers, per Page (C6, C7).
+ *
+ * One Save for all five rather than a save per box, because they constrain each
+ * other: a 1,500 ceiling is fine beside an 800 floor and impossible beside the
+ * house 1,500. Saved one at a time, the operator would be refused halfway
+ * through a change that is valid once finished.
+ *
+ * An emptied box sends null, never 0 — null is what returns the Page to the
+ * house number, and 0 would be a Page that cannot write anything.
+ */
+function WritingLimits({ page }: { page: Page }) {
+  const initial = () =>
+    Object.fromEntries(
+      LIMIT_ROWS.map(({ field }) => [field, page[field]?.toString() ?? ""]),
+    ) as Record<LimitField, string>;
+
+  const [form, setForm] = useState(initial);
+  const [busy, setBusy] = useState(false);
+
+  const dirty = LIMIT_ROWS.some(
+    ({ field }) => form[field] !== (page[field]?.toString() ?? ""),
+  );
+
+  async function save() {
+    setBusy(true);
+    try {
+      const update = Object.fromEntries(
+        LIMIT_ROWS.map(({ field }) => [
+          field,
+          form[field].trim() === "" ? null : Number(form[field]),
+        ]),
+      );
+      await updatePage(page.id, update);
+      toast("Saved. New drafts for this Page use these lengths.");
+      emit();
+    } catch (cause) {
+      // The API refuses a band no draft could satisfy, and its message names
+      // the numbers. Surfaced verbatim: "cannot be both over 1,500 and under
+      // 1,400" is the whole explanation, and a generic failure would send the
+      // operator looking for a bug instead of a typo.
+      toast.error(cause instanceof Error ? cause.message : "Could not save");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      {LIMIT_ROWS.map(({ field, label }) => (
+        <div key={field} className="flex items-center gap-3">
+          <Label className="flex-1 text-xs font-normal">{label}</Label>
+          <Input
+            type="number"
+            inputMode="numeric"
+            className="w-28"
+            placeholder={String(HOUSE[field])}
+            value={form[field]}
+            onChange={(event) =>
+              setForm({ ...form, [field]: event.target.value })
+            }
+          />
+        </div>
+      ))}
+
+      <div className="flex items-center gap-3 pt-1">
+        <Button size="sm" disabled={!dirty || busy} onClick={() => void save()}>
+          {busy ? <Loader2 className="size-4 animate-spin" /> : null}
+          Save lengths
+        </Button>
+        {dirty ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={busy}
+            onClick={() => setForm(initial)}
+          >
+            Revert
+          </Button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+/** Where a prompt's text came from, in the words the operator needs. */
+const SOURCE_LABEL: Record<PromptFile["source"], string> = {
+  page: "this Page's own",
+  "file-override": "file, api/prompts/pages/",
+  global: "inherited from api/prompts/",
+};
+
+/**
+ * The three prompts, editable per Page (F5).
+ *
+ * Each box shows the text **as sent**, which for an inherited prompt is the
+ * global file's. That is deliberate and it is also the trap: typing into a box
+ * that reads "inherited" and saving creates an override of the whole thing. The
+ * label above each box says which of the three it is, and Save is disabled
+ * until the text actually differs, so inheriting is never ended by accident.
+ */
+function PromptEditors({ pageId }: { pageId: number | null }) {
+  const { data: files } = useQuery(() => listPromptFiles(pageId!), [pageId], {
+    enabled: pageId !== null,
+  });
+
+  if (files === null) return <Skeleton className="h-64" />;
+
+  return (
+    <div className="space-y-6">
+      {files.map((file) => (
+        <PromptEditor key={file.filename} pageId={pageId!} file={file} />
+      ))}
+    </div>
+  );
+}
+
+function PromptEditor({ pageId, file }: { pageId: number; file: PromptFile }) {
+  const [text, setText] = useState(file.body);
+  const [busy, setBusy] = useState(false);
+  const dirty = text !== file.body;
+
+  async function save(body: string) {
+    setBusy(true);
+    try {
+      const saved = await setPromptFile(pageId, file.filename, body);
+      toast(
+        saved.source === "page"
+          ? `${file.filename} is now this Page's own.`
+          : `${file.filename} is back to the inherited prompt.`,
+      );
+      emit();
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Could not save");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <Label className="font-mono text-xs">{file.filename}</Label>
+        <span
+          className={cn(
+            "text-xs",
+            file.source === "page"
+              ? "font-medium text-foreground"
+              : "text-muted-foreground",
+          )}
+        >
+          {SOURCE_LABEL[file.source]}
+        </span>
+        <span className="text-xs text-muted-foreground">
+          {file.chars.toLocaleString()} chars
+        </span>
+      </div>
+
+      {file.editable ? (
+        <>
+          <Textarea
+            rows={10}
+            className="font-mono text-xs"
+            value={text}
+            onChange={(event) => setText(event.target.value)}
+          />
+          <div className="flex items-center gap-3">
+            <Button
+              size="sm"
+              disabled={!dirty || busy}
+              onClick={() => void save(text)}
+            >
+              {busy ? <Loader2 className="size-4 animate-spin" /> : null}
+              Save for this Page
+            </Button>
+            {dirty ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={busy}
+                onClick={() => setText(file.body)}
+              >
+                Revert
+              </Button>
+            ) : null}
+            {/* Only when there is an override to clear. On an inherited prompt
+                this button would claim to undo something that is not there. */}
+            {file.source === "page" ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={busy}
+                onClick={() => void save("")}
+              >
+                Use the default
+              </Button>
+            ) : null}
+          </div>
+        </>
+      ) : (
+        <>
+          <pre className="max-h-48 overflow-auto rounded-lg border bg-muted/40 p-3 font-mono text-xs whitespace-pre-wrap">
+            {file.body}
+          </pre>
+          <p className="text-xs text-muted-foreground">
+            No per-Page column behind this one, so it is a file only.
+          </p>
+        </>
       )}
     </div>
   );

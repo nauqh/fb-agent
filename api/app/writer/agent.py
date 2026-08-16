@@ -73,14 +73,30 @@ def _instructions(page: Page, layout: Layout) -> str:
     this prompt. It is now the fallback: `page.name` also selects
     `prompts/pages/<slug>/`, and a Page with its own files never sees History
     Retraced's voice at all.
+
+    **The lengths are stated only when the Page has changed one.** The prompts
+    already carry the house numbers in prose, so repeating them would be a
+    second copy to drift — the exact failure `prompts.py` is written against. A
+    Page that has asked for 30 words gets a line saying so, and it goes last, so
+    it wins over whatever the inherited prose says.
     """
-    return "\n\n".join(
-        [
-            prompts.system_prompt(layout, page.name),
-            prompts.overlay_prompt(layout, page.name),
-            f"You are writing for the Facebook page {page.name}.",
-        ]
-    )
+    parts = [
+        prompts.system_prompt(layout, page.name, page),
+        prompts.overlay_prompt(layout, page.name, page),
+        f"You are writing for the Facebook page {page.name}.",
+    ]
+    house = validators.Limits()
+    limits = validators.Limits.for_page(page)
+    if limits != house:
+        low, high = limits.paragraphs
+        parts.append(
+            "LENGTHS FOR THIS PAGE. These override any length given above.\n"
+            f"- The hook must be at most {limits.hook_max_words} words.\n"
+            f"- The first comment must be between {limits.body_min_chars:,} and "
+            f"{limits.body_max_chars:,} characters.\n"
+            f"- The first comment must be {low}–{high} paragraphs."
+        )
+    return "\n\n".join(parts)
 
 
 def source_instruction(kind: SourceKind) -> str:
@@ -96,14 +112,26 @@ def source_instruction(kind: SourceKind) -> str:
     )
 
 
-def _validate(_ctx: RunContext, output: DraftContent) -> DraftContent:
-    reasons = validators.check(output.hook, output.caption, output.first_comment)
-    if reasons:
-        raise ModelRetry(
-            "The draft breaks brand rules. Fix all of these and return the whole "
-            "draft again:\n- " + "\n- ".join(reasons)
+def _validator_for(limits: validators.Limits):
+    """The output validator, closed over one Page's lengths.
+
+    A closure rather than a module-level function because the numbers are now
+    per-Page, and judging a draft against the house numbers while the prompt
+    asked for the Page's would fail a rule the model was never given.
+    """
+
+    def _validate(_ctx: RunContext, output: DraftContent) -> DraftContent:
+        reasons = validators.check(
+            output.hook, output.caption, output.first_comment, limits
         )
-    return output
+        if reasons:
+            raise ModelRetry(
+                "The draft breaks brand rules. Fix all of these and return the whole "
+                "draft again:\n- " + "\n- ".join(reasons)
+            )
+        return output
+
+    return _validate
 
 
 def build_agent(page: Page, model: object | None = None) -> Agent:
@@ -119,7 +147,7 @@ def build_agent(page: Page, model: object | None = None) -> Agent:
         model_settings=_model_settings(settings.gemini_text_model),
         retries=MAX_RETRIES,
     )
-    agent.output_validator(_validate)
+    agent.output_validator(_validator_for(validators.Limits.for_page(page)))
     return agent
 
 
@@ -177,7 +205,12 @@ def write(page: Page, source: SourceItem | None, topic: str | None = None, model
     A caller passing `model` gets exactly that model and no fallback: tests
     supply a fake, and silently swapping it for a real one would bill them.
     """
-    return _run(page, user_prompt(source, topic), _validate, model)
+    return _run(
+        page,
+        user_prompt(source, topic),
+        _validator_for(validators.Limits.for_page(page)),
+        model,
+    )
 
 
 def _run(page: Page, prompt: str, validator, model=None):
@@ -190,18 +223,19 @@ def _run(page: Page, prompt: str, validator, model=None):
     supply a fake, and silently swapping it for a real one would bill them.
     """
     if model is not None:
-        agent = build_agent(page, model)
-        if validator is not _validate:
-            # `build_agent` already attached the whole-draft validator; a
-            # rewrite needs the narrower one instead, and pydantic-ai has no
-            # way to detach.
-            agent = Agent(
-                model,
-                output_type=DraftContent,
-                instructions=_instructions(page, layout),
-                retries=MAX_RETRIES,
-            )
-            agent.output_validator(validator)
+        # Built here rather than through `build_agent`, which attaches the
+        # whole-draft validator and offers no way to detach it. This used to
+        # call it and then rebuild when the validator differed, testing
+        # `validator is not _validate` — an identity check that stopped meaning
+        # anything once the validators became per-Page closures. Constructing
+        # with the validator the caller asked for is what both branches wanted.
+        agent = Agent(
+            model,
+            output_type=DraftContent,
+            instructions=_instructions(page, layout),
+            retries=MAX_RETRIES,
+        )
+        agent.output_validator(validator)
         return agent.run_sync(prompt)
 
     last: Exception | None = None
@@ -239,7 +273,7 @@ editable by hand for exactly that purpose.
 """
 
 
-def _field_rules(field: str):
+def _field_rules(field: str, limits: validators.Limits | None = None):
     """The blocking rules that apply to **one** field, as an output validator.
 
     The whole-draft validator cannot be reused here. It checks all three fields,
@@ -257,7 +291,7 @@ def _field_rules(field: str):
     def reasons(content: DraftContent) -> list[str]:
         if field == "hook":
             found = [
-                validators.hook_length(content.hook),
+                validators.hook_length(content.hook, limits),
                 validators.hook_has_no_question(content.hook),
             ]
         elif field == "caption":
@@ -268,8 +302,8 @@ def _field_rules(field: str):
             ]
         else:
             found = [
-                validators.first_comment_paragraphs(content.first_comment),
-                validators.body_length(content.first_comment),
+                validators.first_comment_paragraphs(content.first_comment, limits),
+                validators.body_length(content.first_comment, limits),
                 validators.no_meta_phrases("", content.first_comment),
             ]
         return [reason for reason in found if reason]
@@ -371,6 +405,6 @@ def rewrite(
     return _run(
         page,
         rewrite_prompt(source, topic, field, keeping, instruction),
-        _field_rules(field),
+        _field_rules(field, validators.Limits.for_page(page)),
         model,
     )

@@ -17,6 +17,7 @@ from enum import StrEnum
 
 from pydantic import computed_field
 from sqlalchemy import Enum as SAEnum
+from sqlalchemy import Text
 from sqlmodel import JSON, Column, Field, SQLModel, UniqueConstraint
 
 from app import media
@@ -204,6 +205,60 @@ class Page(SQLModel, table=True):
     silences the image and the text together — a half-off switch that still
     printed the name would be the confusing one.
     """
+
+    # --- how long this Page writes -------------------------------------------
+    #
+    # Null means "the house number" in `writer/validators.py`. Nullable rather
+    # than defaulted for the reason `PageLayout` gives: a copied default cannot
+    # be told from a chosen one, so changing the house number would leave every
+    # Page pinned to the old value with nothing recording that anyone meant it.
+    #
+    # These exist because the client's C6 and C7 (2026-08-15) are the same
+    # complaint C5 was: the numbers were History Retraced's and every Page got
+    # them. Bodybuilding Tips and Fitness Recipes want a short hook and a short
+    # first comment; the history page does not.
+
+    hook_max_words: int | None = None
+    """C6: "capped at 30 words". The house number is 65."""
+
+    first_comment_min_chars: int | None = None
+    first_comment_max_chars: int | None = None
+    """C7: "capped at 1,500 characters".
+
+    Both ends move together or not at all. 1,500 is the *floor* globally, so a
+    Page that sets only the ceiling to 1,500 would have a band of zero width and
+    every draft would fail whichever end it missed — which is exactly why C7 was
+    dropped in August as unbuildable by prompt alone.
+    """
+
+    first_comment_min_paragraphs: int | None = None
+    first_comment_max_paragraphs: int | None = None
+    """C7: "3-4 short paragraphs". The house range is 2–3."""
+
+    # --- what this Page tells the model ---------------------------------------
+    #
+    # Null means the file: `prompts/pages/<slug>/x.txt` if it exists, else
+    # `prompts/x.txt`. Only overrides are stored, never a copy of the inherited
+    # text, and that is the whole answer to why prompts left the database in the
+    # first place. The failure then was **drift between copies**: all three
+    # configured pages in the old tool stored the full 2,350-character image
+    # prompt, 2,030 characters byte-identical, and the copies went stale while
+    # the code moved on. A column that is null until someone deliberately writes
+    # it cannot drift from a global it does not contain.
+    #
+    # Files alone could not answer the client's F5 ("I did write new prompts
+    # already in Setting tab"), because Railway's filesystem is ephemeral —
+    # see db.py. An editor that wrote `prompts/pages/<slug>/system.txt` would
+    # lose every edit on the next redeploy.
+
+    # `TEXT`, declared rather than inferred. SQLModel maps a bare `str` to
+    # `AutoString`, which renders as unbounded VARCHAR — the same storage in
+    # Postgres, but `alembic check` then reports a type difference against the
+    # migration on every run, and a check that always fails is a check nobody
+    # reads. Declaring it here makes the models and the database agree.
+    system_prompt: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
+    overlay_prompt: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
+    image_prompt: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
 
     created_at: datetime = Field(default_factory=_now)
     updated_at: datetime = Field(default_factory=_now)
