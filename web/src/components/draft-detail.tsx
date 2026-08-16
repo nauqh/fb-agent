@@ -79,11 +79,22 @@ interface Form {
 export function DraftDetail({
   draftId,
   onDecided,
+  dirtyRef,
 }: {
   draftId: number;
   /** Close the drawer. Supplied by `DraftSheet` so a decision animates out the
    *  same way a dismissal does. */
   onDecided?: () => void;
+  /**
+   * Whether there is unsaved text, for whoever owns the closing.
+   *
+   * A ref rather than an `onDirtyChange` callback: the drawer only needs the
+   * answer at the moment it is dismissed, and a callback would re-render the
+   * sheet on every keystroke to keep a copy of something it does not draw.
+   * Written in an effect, never during render — the rule `use-query.ts` states
+   * for its own ref, and for the same reason.
+   */
+  dirtyRef?: React.RefObject<boolean>;
 }) {
   const router = useRouter();
   const [editor, setEditor] = useState<{ key: string; form: Form | null }>({
@@ -188,6 +199,25 @@ export function DraftDetail({
     () => (draft && form ? JSON.stringify(toForm(draft)) !== JSON.stringify(form) : false),
     [draft, form],
   );
+
+  /**
+   * Tell the drawer, so dismissing it can ask before throwing the text away.
+   *
+   * Approve, Reject and the inset upload all save first — each says so in a
+   * comment above its own `if (dirty && form) await updateDraft(...)`. Closing
+   * the drawer was the one path that did not, and it discarded silently:
+   * verified in a browser on draft 57, where typing enabled **Save changes**,
+   * Escape closed the drawer with no prompt, and reopening showed the caption
+   * back at its original 747 characters. That is the likeliest thing behind the
+   * client's "auto save when edit the text directly?" (2026-08-16, G4).
+   *
+   * The save stays explicit rather than automatic, because auto-saving on close
+   * would commit a Gemini rewrite the operator closed the drawer to escape —
+   * which is what their own round-2 A2 asked us to make impossible.
+   */
+  useEffect(() => {
+    if (dirtyRef) dirtyRef.current = dirty;
+  }, [dirty, dirtyRef]);
 
   /**
    * Drag the circle, or click anywhere on the card to put it there — the same
