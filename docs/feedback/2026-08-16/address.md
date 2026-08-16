@@ -75,11 +75,53 @@ different shirt.
 
 ---
 
+## G2(c) — the drawer names the source ✅
+
+**Shipped 2026-08-16.** `GET /sources/items/{id}`, and a line under the Page name
+in the review drawer: kind, competitor, age, the first two lines of their post,
+and **Open** straight to it.
+
+**Nothing was missing from the data.** 35 of the 38 drafts carry a
+`source_item_id`, it has been in every Draft response since the first day, and no
+screen turned it into a sentence. That is the whole of the client's "I have no
+idea which source or which competitor posts the tool gens content from" — half of
+it, anyway; the other half is G2(a) and G2(b).
+
+**A second request rather than a field on the Draft.** Every route that returns a
+Draft returns the table class directly, so the alternatives were a wrapper model
+on all ten of them — where the field comes back null from each mutation route and
+the line blinks out the moment you press Save — or a `Relationship`, which
+SQLModel does not serialise on a `table=True` model at all. One extra GET when a
+drawer opens is cheaper than either.
+
+**In the drawer, not on the queue rows.** `useQuery` re-runs on every store
+notification, so a hook per row would turn one save into N requests against a
+queue of any length. The drawer is also where the question gets asked, with the
+copy it produced beside it.
+
+The label and the glyph are **imported from `source-card.tsx`**, not restated: the
+operator is being asked to recognise a card they ticked, so "Competitor post" has
+to be the same two words in both places.
+
+**Driven in a browser.** Draft 55 opens on "Competitor post · Ancient Files · 2
+days ago" over their text, with a working Open link; the request goes out as
+`200 /sources/items/2468`. A topic draft has no Source Item and says so rather
+than leaving the space blank — the absence is the answer there.
+
+Suite is **389** (was 387). `tsc` and `eslint src` clean.
+
+**Worth knowing, and visible for the first time because of this.** A competitor
+post is borrowed for *tone*, not for its facts — `SourceKind.is_factual` is false
+for that kind, so the subject does not bind. Draft 55's hook is about Semmelweis
+while its source is about Heinrich Hertz, and that is the system working. It now
+looks like a mismatch on screen, and may well be the next thing they ask about.
+
+---
+
 ## Still open from this round
 
-`G2` in all three parts — the six Pages with no competitors (theirs to fix in
-Metricool, ours to *say*), the used marker invisible outside the window, and no
-screen naming the source a Draft came from.
+`G2(a)` and `G2(b)` — the six Pages with no competitors (theirs to fix in
+Metricool, ours to *say*), and the used marker invisible outside the window.
 
 `G3` is **done** (`000b856`) but **not deployed**. It should not be reported to
 the client until it is.

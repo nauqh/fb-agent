@@ -14,7 +14,7 @@ Our reading of each against the code is `comprehension.md` beside this file;
 | Item | Summary | Status |
 |------|---------|--------|
 | **G1** | Sort the Sources grid by reactions, not newest | ✅ Shipped 2026-08-16 — both orders, reactions default, windowed so it cannot freeze |
-| **G2** | None of the chosen posts generated; no idea which source a draft came from | 🔴 **Three separate causes, one of them large.** Six Pages have **zero** competitors in Metricool, including both Pages this round is about |
+| **G2** | None of the chosen posts generated; no idea which source a draft came from | 🟡 **Three separate causes, one of them large.** (c) shipped 2026-08-16 — the drawer names the source. (a) six Pages have **zero** competitors in Metricool, including both Pages this round is about; (b) the used marker is invisible outside the grid window |
 | **G3** | Status still says "Pending review" after scheduling to Metricool | ✅ **Already fixed** 2026-08-16 in `000b856`, before this message arrived. Not yet deployed |
 | **G4** | Auto-save on edit, or press Save every time? | ❓ A question, not a defect. Auto-save would undo their own round-2 request (A2) |
 
