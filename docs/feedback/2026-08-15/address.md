@@ -155,13 +155,64 @@ prompt to build from, Bodybuilding Tips has none — its rows are History
 Retraced's, byte for byte, which is what the client was actually complaining
 about.
 
-`C5` is **done** (above). What is left is `C6`/`C7` — the numbers, which have to
-move in the prompt, the field description and the validator together. The
-descriptions are already out of the way, so the change is now two places rather
-than three, and the per-Page prompt files are where it lands.
+`C5` is **done** (above).
 
-Both are blocked on a short reply from the client rather than on any reading:
-their July prompt and their August message give **different numbers** for the
-hook cap (35 vs 30 words) and the first comment (800–1,300 vs ≤1,500 chars),
-and BBTT's prompt is our draft awaiting their approval, not their words. The
-revised question list is at the foot of `comprehension.md`.
+`C7` is **dropped** — 2026-08-16, the operator's call. Nothing was built and
+nothing is planned. The row stays in the status table marked ⛔ rather than
+being deleted, because it is a written client request and a tracker that a
+request can disappear from stops being a record of what was asked.
+
+What it would have cost, for whoever revisits this: the client wants the first
+comment at **≤1,500 characters over 3–4 short paragraphs**. Our floor is
+`validators.BODY_MIN_CHARS = 1_500` and both prompt files ask for 1,800–1,900
+over 2–3 paragraphs. Their ceiling is our minimum, so their number cannot be
+adopted by editing a prompt alone — every draft would fail `check()`, burn both
+retries and come back long anyway. It needs the validator and the prompt moved
+together, per Page. Their own July prompt asks for 800–1,300, which disagrees
+with their August message as well, so the number was never settled.
+
+`C6` is the one still worth doing, and only half of it is left — see below.
+
+---
+
+## C6 — half done, and the half that is left is one number
+
+The request has two parts and they are not the same job.
+
+**Part one, done.** "Straight to the point, no year/event/character
+scaffolding." Our `system.txt` did not merely allow that opening, it *required*
+it — the Gold Standard structure told the model to name a person and a year.
+Fitness Recipes and Bodybuilding Tips now have their own `system.txt` with the
+client's July wording, so neither is forced into it any more. This shipped with
+C5, because it is prose in a prompt file and that is what C5 built.
+
+**Part two, not done.** The hook is still capped at **65 words**. The client
+asked for 30.
+
+**Why the number is not a one-line edit.** It is written down twice and both
+copies have to agree:
+
+- `api/prompts/pages/<slug>/system.txt` — what the model is *asked* for.
+- `api/app/writer/validators.py` — `HOOK_MAX_WORDS = 65`, what is *enforced*.
+  `check()` raises `ModelRetry` above it, and `MAX_RETRIES = 2`.
+
+Change the prompt alone and nothing improves: the model is asked for 30, the
+validator still accepts 65, and a 50-word hook sails through. Change the
+validator alone and it is worse: the model is still asked for 65, produces it,
+gets retried twice, and the draft lands with a warning on it. They move
+together or not at all.
+
+It used to be three copies — `DraftContent`'s field descriptions restated the
+caps too. C5 removed the numbers from those, so the prompt owns them now and
+this is a two-place change instead of three.
+
+**The number itself is the blocker, and it is the client's to give.** Their own
+two sources disagree: the July prompt in the old tool says "strictly capped at
+35 words", the August message says 30, and the example they sent is exactly 30
+words. We build whichever they name — per Page, since the validator would have
+to take the cap as an argument rather than read a module constant.
+
+**One thing to weigh when they answer.** Shorter hooks are not only a style
+choice here; they buy back space. Measured on the three real Bodybuilding Tips
+hooks in the C4 section above, capitals cost 45–135px of hero on a 1120px card
+at today's 52–54 word hooks. A 30-word cap would give most of that back.

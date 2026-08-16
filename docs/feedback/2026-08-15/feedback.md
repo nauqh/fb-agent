@@ -26,7 +26,7 @@ file; `address.md` gets written as things ship.
 | **C4** | Overlay text in ALL CAPS for BBTT and FR, and nowhere to set it | ✅ Shipped 2026-08-15 — per-Page `text_uppercase`, applied at draw time |
 | **C5** | Hero should be modern, bright, fitness-magazine — not sepia history | ✅ Shipped 2026-08-16 — per-Page prompts in `api/prompts/pages/<slug>/`. BBTT's are **drafted, not the client's**, and need approval |
 | **C6** | Hook: straight to the point, no year/event/character scaffolding, ≤30 words | 🟡 Unblocked by C5 — FR's own July wording is now in its `system.txt`, but 30 vs 35 words is still the client's to settle |
-| **C7** | First comment: ≤1,500 chars, 3–4 short paragraphs, straight to content | 🔴 **Still impossible** — both new `system.txt` files keep *our* 1,800–1,900 / 2–3 paras, because `BODY_MIN_CHARS = 1500` would fail every draft otherwise |
+| **C7** | First comment: ≤1,500 chars, 3–4 short paragraphs, straight to content | ⛔ **Dropped 2026-08-16, the operator's call.** Not built. Left here rather than deleted: it is a written client request, and a tracker a request can vanish from is not a record |
 | **F5** | The client already wrote new prompts in the **old** tool's Settings tab | ✅ Read 2026-08-16 — `old-tool-prompts.md`. FR has a real spec; **BBTT has none** |
 
 C4–C7 all resolve to the same missing thing, so they are best read together:
