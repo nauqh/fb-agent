@@ -171,48 +171,57 @@ retries and come back long anyway. It needs the validator and the prompt moved
 together, per Page. Their own July prompt asks for 800–1,300, which disagrees
 with their August message as well, so the number was never settled.
 
-`C6` is the one still worth doing, and only half of it is left — see below.
+`C6` is **dropped** too — 2026-08-16, same call, same day. Its first half had
+already shipped with C5 and stays shipped. The second half, the word cap, is not
+being enforced: `HOOK_MAX_WORDS` stays 65. See below for what that leaves.
+
+**Nothing from this round is open.** Four shipped, two dropped.
 
 ---
 
-## C6 — half done, and the half that is left is one number
+## C6 — the scaffolding is gone; the word cap is not enforced ⛔
 
-The request has two parts and they are not the same job.
+Dropped 2026-08-16. Half of it had already shipped and stays shipped, so this
+records what the code actually does now rather than what was not built.
 
-**Part one, done.** "Straight to the point, no year/event/character
-scaffolding." Our `system.txt` did not merely allow that opening, it *required*
-it — the Gold Standard structure told the model to name a person and a year.
-Fitness Recipes and Bodybuilding Tips now have their own `system.txt` with the
-client's July wording, so neither is forced into it any more. This shipped with
-C5, because it is prose in a prompt file and that is what C5 built.
+**Shipped, with C5.** "Straight to the point, no year/event/character
+scaffolding." The global `system.txt` did not merely permit that opening, it
+*required* it — the Gold Standard structure told the model to name a person and
+a year. Fitness Recipes and Bodybuilding Tips have their own `system.txt` now,
+carrying the client's own July wording, and neither is forced into it.
 
-**Part two, not done.** The hook is still capped at **65 words**. The client
-asked for 30.
+**Not built: the cap is not enforced.** `validators.HOOK_MAX_WORDS` stays **65**
+and nothing retries a hook for length below that.
 
-**Why the number is not a one-line edit.** It is written down twice and both
-copies have to agree:
+**But the prompts already ask for less, and that is not an accident to clean up.**
+Porting the client's July prompt carried their own number with it:
 
-- `api/prompts/pages/<slug>/system.txt` — what the model is *asked* for.
-- `api/app/writer/validators.py` — `HOOK_MAX_WORDS = 65`, what is *enforced*.
-  `check()` raises `ModelRetry` above it, and `MAX_RETRIES = 2`.
+| File | Asks for |
+|---|---|
+| `prompts/system.txt` (the other eight Pages) | under 65 words |
+| `prompts/pages/fitness-recipes/system.txt` | 35 words |
+| `prompts/pages/bodybuilding-tips-n-tricks/system.txt` | 30 words |
 
-Change the prompt alone and nothing improves: the model is asked for 30, the
-validator still accepts 65, and a 50-word hook sails through. Change the
-validator alone and it is worse: the model is still asked for 65, produces it,
-gets retried twice, and the draft lands with a warning on it. They move
-together or not at all.
+So the two Pages the client complained about *are* being asked for a short hook.
+What they are not getting is enforcement: a 50-word hook on Fitness Recipes is
+over its prompt's 35 and under the validator's 65, and it will be saved without
+a warning.
 
-It used to be three copies — `DraftContent`'s field descriptions restated the
-caps too. C5 removed the numbers from those, so the prompt owns them now and
-this is a two-place change instead of three.
+**That asymmetry is deliberate and worth understanding before anyone "fixes" it.**
+The prompt instructs and the validator is a backstop; a backstop set looser than
+the instruction costs nothing, because the model is still asked for 35. Tighten
+`HOOK_MAX_WORDS` to 30 without making it per-Page and every History Retraced
+draft starts failing `check()` and burning both retries — the eight Pages on the
+global prompt are still being asked for 65.
 
-**The number itself is the blocker, and it is the client's to give.** Their own
-two sources disagree: the July prompt in the old tool says "strictly capped at
-35 words", the August message says 30, and the example they sent is exactly 30
-words. We build whichever they name — per Page, since the validator would have
-to take the cap as an argument rather than read a module constant.
+So enforcing it is not "change the constant". It is making the cap an argument
+`check()` takes per Page, and that is the work that was dropped.
 
-**One thing to weigh when they answer.** Shorter hooks are not only a style
-choice here; they buy back space. Measured on the three real Bodybuilding Tips
-hooks in the C4 section above, capitals cost 45–135px of hero on a 1120px card
-at today's 52–54 word hooks. A 30-word cap would give most of that back.
+**If it is ever picked up, the number is still unsettled by the client** — their
+July prompt says 35, their August message says 30, their example is exactly 30.
+
+**One measurement worth keeping**, from the C4 section above: capitals cost
+45–135px of hero on a 1120px card at today's 52–54 word hooks. Shorter hooks buy
+that back. The client's own request would have helped the thing they complained
+about in C4, which is an argument for revisiting this rather than a reason it
+was dropped.
