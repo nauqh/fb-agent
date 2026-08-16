@@ -120,6 +120,9 @@ Our app cannot clear them: there is no delete or update call in
 `publish/metricool.py`, which is D6. Someone has to delete or re-date them in
 Metricool's own planner.
 
+**Superseded 2026-08-17.** D6 shipped, so the app clears them itself. Two are
+already gone; the remaining five are two clicks each. See the D6 section below.
+
 *The Review queue was calling published posts "Pending review".* Fixed in
 `review-list.tsx` — `metricool_post_id` now outranks `status` on the badge,
 which reads **In Metricool**. Not "Published": a post id means handed over, and
@@ -133,9 +136,82 @@ does. Small, and worth doing next time this file is open.
 
 ---
 
+## D6 — a scheduled post can be changed again ✅
+
+**Shipped 2026-08-17.** `update`, `delete` and `get_post` in
+`publish/metricool.py`; `POST /drafts/{id}/reschedule` and
+`/unschedule`; and in the drawer, the sentence "In Metricool — change it in the
+planner" replaced by **Move** and **Remove from Metricool**.
+
+**Metricool has no in-place update, and nothing said so.** Spiked against the
+live planner because the docs have already been wrong twice on this project.
+One variable at a time:
+
+| PUT body | outcome | id |
+|---|---|---|
+| with `id` | old deleted, new created | **changes** |
+| without `id` | old survives, second post created | **changes** |
+
+The id moves on every edit. That is the whole design constraint: it is not a
+stable handle, so `update` returns the new id and the caller must write it down.
+
+**The old app gets both halves of this wrong**, which is worth telling the
+client rather than leaving them to find. It sends no `id`
+(`metricoolService.ts:622` builds one body for POST and PUT alike) and then
+discards the response (`facebookPublishService.ts:293`). So every edit made in
+the old tool leaves a **duplicate** in the planner and the row goes on pointing
+at the id its own edit deleted. Their planner may hold duplicates they never
+made deliberately.
+
+**DELETE is clean.** 200 `{"data":true}`, confirmed gone by re-reading the
+planner, and 404 on a repeat — so treating 404 as success is right and a retry
+is safe. The 404 body is **XML** despite being tagged `JsonErrorMessage`;
+nothing may call `.json()` on the failure path.
+
+**A text edit reads the post's time before sending it.** `build_body` with no
+`when` means `publication_date(None)` — two minutes from now. Without the read,
+fixing a typo would silently reschedule the post to immediately. Read from the
+planner rather than stored locally, per ADR-0001.
+
+**The picture is still frozen, and that half of the client's ask is not
+granted.** Metricool stores a link and Facebook fetches it when the post is due;
+`build_image` deletes the composite it supersedes (`generate.py:337`), and that
+deletion's own safety comment names this freeze as the reason it is allowed.
+So drawn fields are refused while a draft is scheduled, and **Unschedule** is
+the way through — it removes the post from the planner *before* anything can
+delete the file it was pointing at. Pinned by
+`test_unscheduling_lets_the_picture_be_redrawn_again`.
+
+Unschedule keeps the draft rather than deleting it. The complaint was that a
+mistake could not be taken back, not that the work should be lost.
+
+**Delete-then-schedule was rejected.** Between the two calls the post does not
+exist, and a failure in the second loses it outright. One PUT has no such
+window.
+
+**Driven in a browser** on draft 38, against the live planner: caption edit
+`362765666 → 362766020`, Move `→ 362766068`, Remove `→ id null` with Publish
+offered again and the caption intact. Four mutating requests, all 200.
+
+Suite is **407** (was 391). `alembic check`, `tsc`, `eslint src` and
+`next build` all clean.
+
+**Two of the seven stranded posts are gone** as a side effect: `361373471`
+(the delete spike) and `361375892` (draft 38's, through the new Unschedule).
+Both drafts are back in the queue. Five remain — `361378352`, `361381672`,
+`361383660`, `361386518`, `361389421` — and Unschedule now clears them in two
+clicks each, whenever the operator wants.
+
+**What this does not do:** replace the image with an uploaded file. The client
+asked for that too ("upload a new image — not re-generate or change inset pic").
+It needs the composite lifecycle reordered so the old file survives until
+Metricool confirms the new one, and it is a bigger change than the three that
+shipped. Unschedule → edit → publish is the route to it today.
+
+---
+
 ## Still open from this round
 
 `B6` (watermark upload — needs the artwork as white-ink transparent PNGs, which
-is a question for the client), `D6` (gated on a live spike of Metricool's
-delete, and now with seven stranded posts waiting on it), `F4` (nothing to
-build — and no longer blocked, since the client confirmed B6 done).
+is a question for the client), `F4` (nothing to build — and no longer blocked,
+since the client confirmed B6 done).
