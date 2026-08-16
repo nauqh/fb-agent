@@ -9,7 +9,14 @@ from datetime import datetime, timedelta, timezone
 
 from sqlmodel import Session, func, select
 
-from app.models import Feed, Page, SourceItem, SourceItemBase, SourceKind
+from app.models import (
+    Feed,
+    Page,
+    PageCompetitor,
+    SourceItem,
+    SourceItemBase,
+    SourceKind,
+)
 from app.routes import sources as routes
 from app.settings import sources as sources_config
 from app.sources import rss
@@ -452,3 +459,75 @@ def test_an_unknown_source_item_says_so(client):
     draw an empty box that looks exactly like a source with no author.
     """
     assert client.get("/sources/items/424242").status_code == 404
+
+
+def test_a_page_nothing_reaches_says_so_rather_than_showing_an_empty_grid(
+    client, session
+):
+    """The grid's three empty states are one blank screen without this.
+
+    Client feedback G2 (2026-08-16), sent about two Pages that have zero
+    competitors configured in Metricool: six of the ten do. The grid renders an
+    empty div for all of them, so "nobody is configured" is indistinguishable
+    from "quiet week" — and the operator's next move is different.
+    """
+    other = Page(
+        name="Bodybuilding Tips N Tricks",
+        facebook_page_id="100064861479386",
+        metricool_blog_id="5600363",
+    )
+    session.add(other)
+    session.commit()
+    session.refresh(other)
+
+    reach = client.get(
+        "/sources/competitors/reach", params={"page_ids": other.id}
+    ).json()
+
+    assert reach == {"assigned": 0, "own_set_posts": 0, "visible_posts": 0}
+
+
+def test_an_assigned_page_with_a_quiet_week_is_a_different_empty(client, session):
+    """Assignments exist, posts do not. Pressing Sync is the right move here.
+
+    The state above it is the one where Sync cannot help, and telling them apart
+    is the whole reason this reads `assigned` from the local table instead of
+    asking Metricool who is configured.
+    """
+    session.add(PageCompetitor(page_id=1, competitor_page_id="1225577819", name="Historic Vids"))
+    session.commit()
+
+    reach = client.get("/sources/competitors/reach", params={"page_ids": 1}).json()
+
+    assert reach["assigned"] == 1
+    assert reach["visible_posts"] == 0
+
+
+def test_reach_shows_a_pool_hidden_by_its_own_assignment(client, session):
+    """The empty state that looks like a quiet week and is not.
+
+    Measured on Bible Focus, 2026-08-17: one assignment, zero visible posts, and
+    **430 posts sitting in its own Metricool set**. A Page reads its own set only
+    until its first assignment lands — after that it reads exactly what is
+    ticked, and one assignment to a competitor that never posts hides everything.
+
+    Both numbers are reported because the screen needs both to say that: `0
+    visible` alone is indistinguishable from having nothing at all.
+    """
+    session.add(
+        PageCompetitor(page_id=1, competitor_page_id="silent-one", name="Publishes Nothing")
+    )
+    session.add(
+        SourceItem(
+            kind=SourceKind.COMPETITOR_POST,
+            external_id="in-the-set-but-unassigned",
+            competitor_page_id="1225577819",
+            synced_for_page_id=1,
+            published_at=datetime(2026, 8, 1, tzinfo=timezone.utc),
+        )
+    )
+    session.commit()
+
+    reach = client.get("/sources/competitors/reach", params={"page_ids": 1}).json()
+
+    assert reach == {"assigned": 1, "own_set_posts": 1, "visible_posts": 0}

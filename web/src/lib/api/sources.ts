@@ -48,6 +48,30 @@ export async function getCompetitorPosts(
   });
 }
 
+/** Mirrors `CompetitorReach`. Counts over rows we hold — no Metricool call. */
+export interface CompetitorReach {
+  /** Assignments for this Page. Zero means it is on the provenance fallback. */
+  assigned: number;
+  /** Posts that arrived through this Page's own Metricool set. */
+  own_set_posts: number;
+  /** Everything it may read, before the reactions window. Zero empties the grid. */
+  visible_posts: number;
+}
+
+/**
+ * Why the grid is empty. Read only when it is.
+ *
+ * "Nobody is configured", "nothing has been synced" and "quiet week" are one
+ * blank screen otherwise, and the operator's next move differs for each. Six of
+ * the ten Pages have zero competitors in Metricool — including both Pages the
+ * client's 2026-08-16 note was about — and the grid said nothing at all.
+ */
+export async function getCompetitorReach(pageIds: number[]): Promise<CompetitorReach> {
+  return get<CompetitorReach>("/sources/competitors/reach", {
+    ...(pageIds.length > 0 ? { page_ids: pageIds } : {}),
+  });
+}
+
 /**
  * One stored Source Item by id — what a Draft was generated from.
  *

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { AlertTriangle, Loader2, RefreshCw, Search } from "lucide-react";
 import { toast } from "sonner";
 
@@ -13,7 +14,12 @@ import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { getRss, getCompetitorPosts, getTweet } from "@/lib/api/sources";
+import {
+  getCompetitorReach,
+  getRss,
+  getCompetitorPosts,
+  getTweet,
+} from "@/lib/api/sources";
 import type { SourceSort } from "@/lib/api/sources";
 import type { LiveSourceItem } from "@/lib/fixtures/sources";
 import { useCart } from "@/lib/cart";
@@ -177,6 +183,8 @@ function CompetitorsTab() {
         <QueryError error={error} onRetry={refresh} />
       ) : loading ? (
         <CardGridSkeleton />
+      ) : data?.length === 0 ? (
+        <EmptyGrid pageId={pageId} />
       ) : (
         <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(360px,1fr))]">
           {data?.map((item) => (
@@ -190,6 +198,102 @@ function CompetitorsTab() {
         </div>
       )}
     </>
+  );
+}
+
+/**
+ * An empty grid, with the reason on it.
+ *
+ * Client feedback G2 (2026-08-16): *"NONE from chosen posts were generated."*
+ * They were working on Pages that have **zero** competitors configured in
+ * Metricool — six of the ten do — and this tab rendered an empty `<div>`, which
+ * looks exactly like a quiet week. Nothing on screen said there was nothing to
+ * choose from, so the reasonable conclusion was that generation was broken.
+ *
+ * The three causes need three different next moves, which is why they are told
+ * apart rather than sharing one "no results" line:
+ *
+ * - nothing reaches this Page at all — **Sync cannot help**, competitors have to
+ *   be added in Metricool and assigned on Settings;
+ * - competitors are assigned but no post has arrived — Sync is exactly right;
+ * - anything else, where saying less is better than guessing.
+ *
+ * The counts are local, so this cannot hang or 502 while explaining an outage.
+ * See `get_competitor_reach`.
+ */
+function EmptyGrid({ pageId }: { pageId: number | null }) {
+  const { data: reach, error } = useQuery(
+    () => getCompetitorReach(pageId === null ? [] : [pageId]),
+    [pageId],
+    { enabled: pageId !== null },
+  );
+
+  // No reason to give, but still an empty grid to account for. Saying only the
+  // part we are sure of beats rendering nothing, which is the bug being fixed —
+  // this branch is how it came back during verification, when the counts 404'd
+  // against a stale server and the screen went blank again.
+  if (error !== null) {
+    return (
+      <div className="rounded-lg border border-dashed p-8 text-center">
+        <p className="text-sm font-medium">No competitor posts to show</p>
+      </div>
+    );
+  }
+
+  // Silence until the counts land, rather than a wrong reason for half a second.
+  if (!reach) return null;
+
+  // Nothing is assigned and nothing ever arrived under this Page's own name.
+  const nothingReaches = reach.assigned === 0 && reach.own_set_posts === 0;
+
+  // Assignments exist and are reading nothing, while this Page's own set holds
+  // posts. Measured on Bible Focus, 2026-08-17: one assignment, zero visible
+  // posts, **430 posts in its own set**. Not an empty week — a hidden pool.
+  const hiddenByAssignment = reach.assigned > 0 && reach.own_set_posts > 0;
+
+  return (
+    <div className="rounded-lg border border-dashed p-8 text-center">
+      <p className="text-sm font-medium">
+        {nothingReaches
+          ? "No competitors reach this Page yet"
+          : hiddenByAssignment
+            ? "This Page's assignments are reading nothing"
+            : "Nothing has been synced for this Page"}
+      </p>
+      <p className="mx-auto mt-2 max-w-lg text-xs leading-relaxed text-muted-foreground">
+        {nothingReaches ? (
+          <>
+            Nothing is assigned to it, and nothing has ever arrived through its own
+            Metricool set — so <strong>Sync will not help</strong>. Add competitors
+            under this Page in Metricool, then tick the ones it should read on{" "}
+            <Link href="/settings" className="underline underline-offset-2">
+              Settings
+            </Link>
+            . A competitor added under any Page can be read by all of them, which
+            is what the 100-per-account ceiling forces.
+          </>
+        ) : hiddenByAssignment ? (
+          <>
+            {reach.assigned} competitor{reach.assigned === 1 ? " is" : "s are"}{" "}
+            assigned to this Page and none of them has a stored post — while{" "}
+            <strong>{reach.own_set_posts.toLocaleString()} posts</strong> sit in its
+            own Metricool set, hidden. A Page reads its own set only until it has
+            its first assignment; after that it reads exactly what is ticked. Fix
+            it on{" "}
+            <Link href="/settings" className="underline underline-offset-2">
+              Settings
+            </Link>{" "}
+            — tick competitors that are actually posting, or untick them all to go
+            back to reading the whole set.
+          </>
+        ) : (
+          <>
+            This Page reads its own Metricool set and none of those posts is stored
+            yet. Sync pulls the last seven days.
+          </>
+        )}
+      </p>
+    </div>
   );
 }
 

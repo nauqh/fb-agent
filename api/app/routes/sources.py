@@ -290,6 +290,75 @@ def _with_used(session: Session, rows) -> list[StoredSourceItem]:
     ]
 
 
+class CompetitorReach(BaseModel):
+    """What actually reaches this Page's grid. Read when the grid comes back empty.
+
+    An empty grid has three causes that look identical on screen, and the
+    operator's next move is different for each: nobody is configured, somebody is
+    configured but nothing has been synced, or everything is fine and the week was
+    quiet. The client's round-4 note — "NONE from chosen posts were generated" —
+    was sent about two Pages that have **zero** competitors in Metricool, and the
+    grid said nothing at all.
+
+    **Entirely local.** No Metricool call, deliberately: this is read at the
+    moment the operator is already looking at an empty screen, and answering
+    "why is this empty" with a 5.5s vendor round trip that has 502'd twice is the
+    wrong trade. Everything here is a count over rows we already hold, so it
+    cannot fail and cannot be slow.
+
+    That costs one distinction — a Page with no competitors configured against a
+    Page whose competitors have all gone quiet — and `assigned` recovers most of
+    it, because assignment is a local fact.
+    """
+
+    assigned: int
+    """`page_competitor` rows for the scope. Zero means the provenance fallback."""
+
+    own_set_posts: int
+    """Stored posts that arrived through these Pages' own Metricool sets.
+
+    What a sync would have filled. Zero alongside `assigned == 0` is the state
+    worth naming out loud: nothing reaches this Page at all, and no amount of
+    pressing Sync will change that.
+    """
+
+    visible_posts: int
+    """Everything these Pages may read, before the reactions window narrows it.
+
+    Zero here is exactly the condition that empties the grid, so the screen can
+    trust this rather than inferring from a list length it also has to sort.
+    """
+
+
+@router.get("/competitors/reach")
+def get_competitor_reach(
+    page_ids: list[int] | None = Query(
+        None, description="Narrow to these Pages. Omit for all."
+    ),
+    session: Session = Depends(get_session),
+) -> CompetitorReach:
+    pages = _scope(session, page_ids)
+    scope_ids = [page.id for page in pages]
+
+    def count(where) -> int:
+        return session.exec(
+            select(func.count()).select_from(SourceItem).where(where)
+        ).one()
+
+    return CompetitorReach(
+        assigned=session.exec(
+            select(func.count())
+            .select_from(PageCompetitor)
+            .where(PageCompetitor.page_id.in_(scope_ids))  # type: ignore[union-attr]
+        ).one(),
+        own_set_posts=count(
+            (SourceItem.kind == SourceKind.COMPETITOR_POST)
+            & SourceItem.synced_for_page_id.in_(scope_ids)  # type: ignore[union-attr]
+        ),
+        visible_posts=count(_visible_to(session, scope_ids)),
+    )
+
+
 @router.get("/items/{item_id}")
 def get_source_item(
     item_id: int, session: Session = Depends(get_session)
