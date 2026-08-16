@@ -259,13 +259,36 @@ def update_draft(
 
     Free, so there is nothing to weigh: the hero is reused and only the panel is
     redrawn. Buying a *new* hero stays an explicit request.
+
+    **A draft already in Metricool may still be edited here**, which is what the
+    client asked for (D6): in the old tool they could fix a typo without opening
+    the planner, and freezing the row took that away. The edit is pushed to
+    Metricool in the same request, so the row and the post never disagree.
+
+    Only the text, though. `DRAWN_FIELDS` are refused while a draft is
+    scheduled, because changing one redraws the composite and `build_image`
+    deletes the file it supersedes — the picture Metricool is holding a link to.
+    Caption and first comment are not on the image, so they are free of that.
     """
-    draft = _editable(session, draft_id)
+    draft = _require(session, draft_id)
+    scheduled = _in_metricool(draft)
+    if not scheduled:
+        _editable(session, draft_id)
+
     changes = edit.model_dump(exclude_unset=True)
     redraw = any(
         field in changes and changes[field] != getattr(draft, field)
         for field in DRAWN_FIELDS
     )
+    if scheduled and redraw:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Draft {draft_id} is in Metricool as post {draft.metricool_post_id}. "
+                "Its caption and first comment can still be edited, but anything "
+                "drawn on the image cannot — remove it from Metricool first."
+            ),
+        )
 
     # Clamped where the edit lands, not only where it is drawn: the row is read
     # back into a slider and a drag handle, and a value they would never render
@@ -303,7 +326,12 @@ def update_draft(
             kept = [w for w in draft.warnings if not w.startswith(generate.IMAGE_WARNING)]
             draft.warnings = kept + fresh
 
-    return _save(session, draft)
+    saved = _save(session, draft)
+    if scheduled:
+        # After the row is written, not before: if Metricool refuses, the edit
+        # is still here to retry, and a 502 says the post is the stale one.
+        _push_to_metricool(session, saved)
+    return saved
 
 
 class RewriteRequest(BaseModel):
@@ -587,10 +615,16 @@ def delete_draft(draft_id: int, session: Session = Depends(get_session)) -> None
     can reach. A missing file is not an error here: the row may never have got
     one.
 
-    A published draft cannot be deleted, and that is `_editable` rather than a
+    A scheduled draft cannot be deleted, and that is `_editable` rather than a
     rule about tidiness: Metricool holds a link to this draft's composite and
     Facebook has not fetched it yet. Deleting the row would take the picture
     with it and the post would go out blank.
+
+    `POST /drafts/{id}/unschedule` is the way through — it removes the post from
+    the planner first, so there is nothing left pointing at the file. Two steps
+    rather than one on purpose: cancelling a scheduled post and destroying the
+    work are different intentions, and the client's D6 complaint was about the
+    first being impossible, not about the second being slow.
     """
     draft = _editable(session, draft_id)
 
@@ -811,11 +845,149 @@ def _editable(session: Session, draft_id: int) -> Draft:
             status_code=409,
             detail=(
                 f"That draft is in Metricool as post {draft.metricool_post_id}. "
-                "Change it in the planner — editing it here would not change "
-                "what goes out, and would break the image the post points at."
+                "Unschedule it first — redrawing the image here would delete the "
+                "file the scheduled post is pointing at."
             ),
         )
     return draft
+
+
+QUEUED = "queued"
+"""What `publish` writes when Metricool accepted the post but did not name it.
+
+A marker that something is scheduled, not a handle — nothing can be edited or
+cancelled through it, because there is no id to send."""
+
+
+def _in_metricool(draft: Draft) -> bool:
+    return bool(draft.metricool_post_id)
+
+
+def _metricool_target(session: Session, draft: Draft) -> tuple[Page, str]:
+    """The Page and blog id a scheduled draft belongs to, or a 409 saying why not."""
+    if draft.metricool_post_id == QUEUED:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Draft {draft.id} was accepted by Metricool without an id, so it "
+                "cannot be changed from here. Find it in the planner."
+            ),
+        )
+    page = session.get(Page, draft.page_id)
+    if page is None:
+        raise HTTPException(status_code=404, detail=f"No page {draft.page_id}")
+    if not page.metricool_blog_id:
+        raise HTTPException(
+            status_code=409,
+            detail=f"{page.name} has no metricool_blog_id.",
+        )
+    return page, page.metricool_blog_id
+
+
+def _push_to_metricool(
+    session: Session, draft: Draft, when: datetime | None = None
+) -> Draft:
+    """Send this row's text to the post it is scheduled as, and record the new id.
+
+    **The id changes on every edit** — Metricool has no in-place update, and
+    `publisher.update` explains what was measured. So this writes the returned
+    id back; skipping that is the exact bug the old app has, where a draft goes
+    on pointing at a post its own edit deleted.
+
+    `when=None` keeps the post where the operator put it, by reading the time
+    off the planner first. It does *not* mean "now", which is what the payload
+    builder would otherwise assume — a caption fix would have rescheduled the
+    post to two minutes' time.
+    """
+    _, blog_id = _metricool_target(session, draft)
+    post_id = str(draft.metricool_post_id)
+
+    try:
+        if when is None:
+            current = publisher.get_post(blog_id, post_id)
+            if current is None:
+                raise HTTPException(
+                    status_code=409,
+                    detail=(
+                        f"Post {post_id} is no longer in Metricool — it was "
+                        "deleted there. Unschedule this draft to edit it here."
+                    ),
+                )
+            when = publisher.scheduled_at(current)
+
+        normalized = None
+        if draft.composed_image_path:
+            normalized = publisher.normalize_image(
+                media.public_url(draft.composed_image_path), blog_id
+            )
+        new_id = publisher.update(
+            blog_id,
+            post_id,
+            _post_text(draft),
+            draft.first_comment,
+            normalized,
+            when,
+        )
+    except publisher.PublishError as error:
+        raise HTTPException(status_code=502, detail=str(error)) from error
+
+    draft.metricool_post_id = new_id
+    return _save(session, draft)
+
+
+class RescheduleRequest(BaseModel):
+    when: datetime
+    """Naive local time in the Page's timezone, as everywhere else here."""
+
+
+@router.post("/drafts/{draft_id}/reschedule")
+def reschedule_draft(
+    draft_id: int,
+    request: RescheduleRequest,
+    session: Session = Depends(get_session),
+) -> Draft:
+    """Move a scheduled post to a different time, without opening the planner.
+
+    Part of D6: the client could do this in the old tool and lost it here. It is
+    the same `update` call as an edit, with the time supplied rather than read.
+    """
+    draft = _require(session, draft_id)
+    if not _in_metricool(draft):
+        raise HTTPException(
+            status_code=409,
+            detail=f"Draft {draft_id} is not in Metricool, so there is nothing to move.",
+        )
+    return _push_to_metricool(session, draft, when=request.when)
+
+
+@router.post("/drafts/{draft_id}/unschedule")
+def unschedule_draft(draft_id: int, session: Session = Depends(get_session)) -> Draft:
+    """Take the post out of Metricool and put the draft back in the queue.
+
+    The way back that D6 said did not exist. Deliberately **not** a delete of the
+    draft: the work — the text, the picture, the source it came from — is still
+    good, and the operator's complaint was that a mistake was unrecoverable, not
+    that they wanted to lose the post.
+
+    Clearing `metricool_post_id` is what unfreezes the row, so the composite may
+    be redrawn again. That is safe in this order only: the post is gone from the
+    planner before anything can delete the file it was pointing at.
+    """
+    draft = _require(session, draft_id)
+    if not _in_metricool(draft):
+        raise HTTPException(
+            status_code=409,
+            detail=f"Draft {draft_id} is not in Metricool.",
+        )
+    _, blog_id = _metricool_target(session, draft)
+    try:
+        publisher.delete(blog_id, str(draft.metricool_post_id))
+    except publisher.PublishError as error:
+        raise HTTPException(status_code=502, detail=str(error)) from error
+
+    draft.metricool_post_id = None
+    draft.status = DraftStatus.APPROVED
+    return _save(session, draft)
 
 
 def _set_status(session: Session, draft_id: int, status: DraftStatus) -> Draft:

@@ -208,17 +208,47 @@ export async function removeInset(id: number): Promise<Draft> {
 }
 
 /**
- * Hand the post to Metricool. The one action with no undo.
+ * Hand the post to Metricool.
  *
  * Uploads the composite, then schedules — in that order, because Metricool
  * stores a link and Facebook fetches it when the post is due. Metricool
- * publishes and posts the first comment itself; after this call the post is
- * changed in its planner, not here (ADR-0001).
+ * publishes and posts the first comment itself.
  *
  * `when` is a local time. Omitted means as soon as Metricool will take it.
+ *
+ * It used to be the one action with no undo. `unscheduleDraft` is the way back
+ * now (D6), so long as the post has not gone out yet.
  */
 export async function publishDraft(id: number, when?: string): Promise<Draft> {
   return post<Draft>(`/drafts/${id}/publish`, when ? { when } : {});
+}
+
+/**
+ * Move a scheduled post to a different time.
+ *
+ * Answers with the draft carrying a **new** `metricool_post_id`: Metricool has
+ * no in-place update, so every edit replaces the post with a different one. The
+ * returned draft is the only thing that knows which post is now ours — do not
+ * hold the old id anywhere.
+ *
+ * `when` is a naive local time, as `publishDraft` takes.
+ */
+export async function rescheduleDraft(id: number, when: string): Promise<Draft> {
+  return post<Draft>(`/drafts/${id}/reschedule`, { when });
+}
+
+/**
+ * Take the post out of Metricool and put the draft back in the queue.
+ *
+ * Not a delete: the text, the picture and the source it came from are all still
+ * good. The client's complaint (D6) was that a scheduled post could not be
+ * taken back, not that they wanted to lose the work.
+ *
+ * This is also what unfreezes the image — while a draft is in Metricool the
+ * composite cannot be redrawn, because Metricool is holding a link to the file.
+ */
+export async function unscheduleDraft(id: number): Promise<Draft> {
+  return post<Draft>(`/drafts/${id}/unschedule`, {});
 }
 
 /** True when Publish only reaches Metricool's planner, not an audience. */

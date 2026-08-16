@@ -24,6 +24,7 @@ import { PublishAt } from "@/components/publish-at";
 import { PublishDialog } from "@/components/publish-dialog";
 import { KIND_GLYPH, KIND_LABEL } from "@/components/source-card";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogFooter, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
@@ -38,7 +39,9 @@ import {
   regenerateHero,
   rejectDraft,
   removeInset,
+  rescheduleDraft,
   returnToReview,
+  unscheduleDraft,
   updateDraft,
   uploadInset,
 } from "@/lib/api/drafts";
@@ -927,11 +930,7 @@ function PublishAction({
   const { data: mode } = useQuery(() => publishMode(), []);
 
   if (draft.metricool_post_id) {
-    return (
-      <p className="text-xs text-muted-foreground">
-        In Metricool — change it in the planner.
-      </p>
-    );
+    return <ScheduledActions draft={draft} onChanged={onPublished} />;
   }
 
   const blocked = draft.status === "failed" || !draft.composed_image_path;
@@ -1059,6 +1058,104 @@ function PublishAction({
           </p>
         ) : null}
       </PublishDialog>
+    </>
+  );
+}
+
+/**
+ * What can still be done to a post that is already in Metricool.
+ *
+ * This used to be the sentence "In Metricool — change it in the planner." The
+ * client's D6 feedback is that the old tool let them fix a typo, move the time
+ * and cancel the post without leaving the app, and that losing all three was
+ * the regression — so the sentence is now three controls.
+ *
+ * What is *not* here is the picture. While a draft is in Metricool the
+ * composite cannot be redrawn, because Metricool holds a link to that exact
+ * file and Facebook fetches it when the post is due; redrawing deletes it and
+ * the post goes out blank. Removing the post is what unfreezes it, which is why
+ * the copy says so rather than leaving the disabled controls unexplained.
+ */
+function ScheduledActions({
+  draft,
+  onChanged,
+}: {
+  draft: Draft;
+  onChanged: () => void;
+}) {
+  const [when, setWhen] = useState(pageLocalSoon);
+  const [busy, setBusy] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+
+  async function move() {
+    setBusy(true);
+    try {
+      await rescheduleDraft(draft.id, when);
+      toast("Moved in Metricool.");
+      onChanged();
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Could not move it");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove() {
+    setBusy(true);
+    try {
+      await unscheduleDraft(draft.id);
+      toast("Taken out of Metricool. The draft is back in the queue.");
+      setConfirming(false);
+      onChanged();
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Could not remove it");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <p className="text-xs text-muted-foreground">
+        In Metricool as post {draft.metricool_post_id}. The caption and first
+        comment can still be edited here; the image cannot, until it is removed.
+      </p>
+
+      <PublishAt value={when} onChange={setWhen} />
+
+      <Button variant="outline" size="sm" disabled={busy} onClick={() => void move()}>
+        <CalendarClock className="size-4" />
+        Move
+      </Button>
+
+      <Button
+        variant="outline"
+        size="sm"
+        disabled={busy}
+        onClick={() => setConfirming(true)}
+      >
+        <X className="size-4" />
+        Remove from Metricool
+      </Button>
+
+      <Dialog open={confirming} onOpenChange={setConfirming}>
+        <DialogContent className="sm:max-w-md" aria-describedby={undefined}>
+          <DialogTitle>Remove this post from Metricool?</DialogTitle>
+          <p className="text-sm text-muted-foreground">
+            Post {draft.metricool_post_id} is deleted from the planner and will
+            not go out. The draft stays here, with its text and picture, and can
+            be published again.
+          </p>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setConfirming(false)}>
+              Keep it scheduled
+            </Button>
+            <Button variant="destructive" disabled={busy} onClick={() => void remove()}>
+              Remove
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

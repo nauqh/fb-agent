@@ -211,6 +211,73 @@ def list_scheduled(
     return rows or []
 
 
+def get_post(
+    blog_id: str, post_id: str, client: httpx.Client | None = None
+) -> dict | None:
+    """One planner post, or `None` if it is not there any more.
+
+    Needed because `update` replaces the whole post: a caller editing only the
+    caption still has to send a publication date, and sending nothing means
+    `publication_date(None)` — two minutes from now. A text edit would silently
+    reschedule the post to immediately. This is where the existing time comes
+    from, and reading it rather than storing it is ADR-0001: the planner is the
+    schedule, and a local copy could only be wrong.
+    """
+    if not settings.metricool_api_token or not settings.metricool_user_id:
+        raise PublishError("Metricool is not configured (token and user id)")
+
+    owned = client is None
+    client = client or httpx.Client(timeout=TIMEOUT)
+    try:
+        response = client.get(
+            f"{BASE}/v2/scheduler/posts/{post_id}",
+            params=_params(blog_id),
+            headers=_headers(),
+        )
+    except httpx.HTTPError as error:
+        raise PublishError(
+            f"Metricool did not answer the post read: {type(error).__name__}"
+        ) from error
+    finally:
+        if owned:
+            client.close()
+
+    if response.status_code == 404:
+        return None
+    if response.is_error:
+        raise PublishError(
+            f"Metricool refused the post read ({response.status_code}): "
+            f"{response.text[:200]}"
+        )
+    try:
+        payload = response.json()
+    except ValueError:
+        return None
+    data = payload.get("data") if isinstance(payload, dict) else None
+    return data if isinstance(data, dict) else None
+
+
+def scheduled_at(post: dict) -> datetime | None:
+    """The post's own publication time, as a naive local datetime.
+
+    Naive on purpose: `publication_date` treats a naive value as already being
+    in the Page's timezone, so a round trip through here leaves the time where
+    the operator put it. Attaching a tzinfo would convert it and move the post.
+
+    Metricool answers the timezone as `Asia/Bangkok` where we sent
+    `Asia/Ho_Chi_Minh`, and rounds the seconds off. Same instant, different
+    spelling — which is why this reads the wall-clock string and ignores the
+    zone rather than trying to reconcile the two.
+    """
+    when = (post.get("publicationDate") or {}).get("dateTime")
+    if not isinstance(when, str) or not when:
+        return None
+    try:
+        return datetime.fromisoformat(when).replace(tzinfo=None)
+    except ValueError:
+        return None
+
+
 def _post_id(payload: object) -> str | None:
     """Dig the id out of whatever shape came back.
 
@@ -289,3 +356,128 @@ def schedule(
         return _post_id(response.json())
     except ValueError:
         return None
+
+
+def update(
+    blog_id: str,
+    post_id: str,
+    text: str,
+    first_comment: str | None,
+    image_url: str | None,
+    when: datetime | None = None,
+    client: httpx.Client | None = None,
+) -> str:
+    """Change a post already in the planner. Returns **its new id**.
+
+    The return value is not a courtesy. Metricool has no in-place update: the
+    post that comes back is a different post with a different id, and the caller
+    must write it onto the Draft or the row is left pointing at something that
+    no longer exists. Measured against the live planner on 2026-08-17, one
+    variable at a time:
+
+    | body | outcome | id |
+    |---|---|---|
+    | with `id` | old deleted, new created | changes |
+    | without `id` | **old survives**, second post created | changes |
+
+    So `id` in the body is the difference between replacing a post and
+    duplicating it, and it is in the body here for that reason alone — the path
+    already carries it, and sending it twice looks redundant right up until the
+    planner has two of everything.
+
+    **The old app omits it** (`metricoolService.ts:622` builds one body for POST
+    and PUT alike) and then discards the id it gets back
+    (`facebookPublishService.ts:293`). Both halves of the bug: every edit there
+    leaves a duplicate behind and keeps pointing at the dead id. That is worth
+    knowing before trusting anything the old planner shows.
+
+    Delete-then-schedule was the obvious alternative and is worse: between the
+    two calls the post does not exist, and a failure in the second loses it
+    outright. One PUT has no such window — Metricool does the swap or does not.
+    """
+    if not settings.metricool_api_token or not settings.metricool_user_id:
+        raise PublishError("Metricool is not configured (token and user id)")
+
+    body = build_body(text, first_comment, image_url, when)
+    body["id"] = int(post_id) if str(post_id).isdigit() else post_id
+
+    owned = client is None
+    client = client or httpx.Client(timeout=TIMEOUT)
+    try:
+        response = client.put(
+            f"{BASE}/v2/scheduler/posts/{post_id}",
+            params=_params(blog_id),
+            headers=_headers(json_body=True),
+            json=body,
+        )
+    except httpx.HTTPError as error:
+        raise PublishError(
+            f"Metricool did not answer the update: {type(error).__name__}"
+        ) from error
+    finally:
+        if owned:
+            client.close()
+
+    if response.is_error:
+        raise PublishError(
+            f"Metricool refused the edit ({response.status_code}): "
+            f"{response.text[:300]}"
+        )
+
+    try:
+        new_id = _post_id(response.json())
+    except ValueError:
+        new_id = None
+
+    if not new_id:
+        # `schedule` tolerates a missing id because the post is in the planner
+        # either way and ADR-0001 makes the planner the source of truth. Here it
+        # cannot be tolerated: the id we hold now names a post this call just
+        # deleted, so not knowing the new one strands the Draft.
+        raise PublishError(
+            "Metricool accepted the edit but did not name the new post. The old "
+            f"post {post_id} no longer exists — check the planner."
+        )
+    return new_id
+
+
+def delete(blog_id: str, post_id: str, client: httpx.Client | None = None) -> None:
+    """Remove a post from the planner. Idempotent.
+
+    A 404 is success, not failure — measured: the first delete answers 200
+    `{"data": true}` and a repeat answers 404 `Post id '...' does not exist`.
+    Retrying a delete that already worked is the common case (a timeout that
+    actually landed), and treating that as an error would strand the Draft in
+    the opposite direction.
+
+    Error bodies here are **XML**, despite being tagged `JsonErrorMessage`, so
+    nothing may assume `.json()` parses on the failure path. `response.text` is
+    what goes into the message for that reason.
+    """
+    if not settings.metricool_api_token or not settings.metricool_user_id:
+        raise PublishError("Metricool is not configured (token and user id)")
+
+    owned = client is None
+    client = client or httpx.Client(timeout=TIMEOUT)
+    try:
+        response = client.request(
+            "DELETE",
+            f"{BASE}/v2/scheduler/posts/{post_id}",
+            params=_params(blog_id),
+            headers=_headers(),
+        )
+    except httpx.HTTPError as error:
+        raise PublishError(
+            f"Metricool did not answer the delete: {type(error).__name__}"
+        ) from error
+    finally:
+        if owned:
+            client.close()
+
+    if response.status_code == 404:
+        return
+    if response.is_error:
+        raise PublishError(
+            f"Metricool refused the delete ({response.status_code}): "
+            f"{response.text[:300]}"
+        )

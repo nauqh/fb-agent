@@ -355,24 +355,29 @@ def test_a_page_with_no_blog_id_cannot_publish(client, session, page, ready, pub
     assert published["order"] == []
 
 
-# A published draft is frozen. ADR-0001 gave the reason — the planner owns a
-# scheduled post — but the rule went unenforced until the composite became the
-# thing Metricool links to. Facebook fetches that link when the post is due, so
-# any edit that redraws, and any delete, would pull the picture out from under a
-# post that has not gone out yet. These pin the four ways in.
+# A scheduled draft cannot be **redrawn**. ADR-0001 gave the reason — the
+# planner owns a scheduled post — but the rule went unenforced until the
+# composite became the thing Metricool links to. Facebook fetches that link when
+# the post is due, so any edit that redraws, and any delete, would pull the
+# picture out from under a post that has not gone out yet.
+#
+# It used to freeze the whole row, and that was too much: the client could fix a
+# typo in the old tool without opening the planner, and D6 (2026-08-14) is that
+# capability going missing. The text is now editable and pushed to Metricool;
+# only the picture is held.
 
 
 @pytest.mark.parametrize(
     "method, path, kwargs",
     [
-        ("patch", "", {"json": {"hook": "Edited after publishing."}}),
+        ("patch", "", {"json": {"hook": "Drawn on the image."}}),
         ("post", "/image", {}),
         ("post", "/image?new_hero=true", {}),
         ("delete", "/inset", {}),
     ],
-    ids=["patch", "rebuild", "new-hero", "remove-inset"],
+    ids=["drawn-field", "rebuild", "new-hero", "remove-inset"],
 )
-def test_a_published_draft_cannot_be_edited(
+def test_a_scheduled_draft_cannot_be_redrawn(
     client, ready, published, method, path, kwargs
 ):
     client.post(f"/drafts/{ready.id}/publish")
@@ -380,10 +385,10 @@ def test_a_published_draft_cannot_be_edited(
     response = getattr(client, method)(f"/drafts/{ready.id}{path}", **kwargs)
 
     assert response.status_code == 409
-    assert "planner" in response.json()["detail"]
+    assert "Metricool" in response.json()["detail"]
 
 
-def test_editing_a_published_draft_changes_nothing(client, ready, published):
+def test_a_refused_redraw_changes_nothing(client, ready, published):
     """The 409 is the point, but a half-applied edit would be worse than the 409."""
     client.post(f"/drafts/{ready.id}/publish")
     before = client.get(f"/drafts/{ready.id}").json()
@@ -434,3 +439,301 @@ def test_publish_mode_is_read_per_request_not_captured_at_import(client, monkeyp
     second = client.get("/publish/mode").json()["rehearsal"]
 
     assert (first, second) == (False, True)
+
+
+# --- editing and cancelling a scheduled post (D6) ------------------------------
+#
+# Measured against the live planner on 2026-08-17, because the docs do not say
+# any of it. Metricool has **no in-place update**: PUT with the id in the body
+# deletes the post and makes a new one, PUT without it leaves the original and
+# makes a second. Either way the id changes, so the id that comes back is the
+# only thing keeping a Draft attached to its post.
+
+
+def test_an_edit_carries_the_post_id_in_its_body():
+    """Without it Metricool duplicates instead of replacing.
+
+    The path already names the post, so this looks redundant — right up until
+    the planner has two of everything. The old app omits it
+    (`metricoolService.ts:622`) and that is exactly what it does.
+    """
+    seen = {}
+
+    def handler(request):
+        seen["method"] = request.method
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(200, json={"data": {"id": 99}})
+
+    publisher.update(
+        "4605385", "42", "new text", "new body", None, client=_client(handler)
+    )
+
+    assert seen["method"] == "PUT"
+    assert seen["body"]["id"] == 42, "no id in the body means a duplicate post"
+
+
+def test_an_edit_hands_back_the_new_id_metricool_made():
+    """The post that comes back is a different post. The caller must re-record it."""
+
+    def handler(request):
+        return httpx.Response(200, json={"data": {"id": 362758916}})
+
+    assert (
+        publisher.update("4605385", "42", "t", None, None, client=_client(handler))
+        == "362758916"
+    )
+
+
+def test_an_edit_metricool_will_not_name_is_a_failure_not_a_shrug():
+    """`schedule` tolerates a missing id; this cannot.
+
+    By the time the response arrives the old post is already deleted, so a
+    caller that carried on would leave the Draft pointing at nothing.
+    """
+
+    def handler(request):
+        return httpx.Response(200, json={"data": {}})
+
+    with pytest.raises(publisher.PublishError, match="no longer exists"):
+        publisher.update("4605385", "42", "t", None, None, client=_client(handler))
+
+
+def test_deleting_a_post_that_is_already_gone_is_success():
+    """404 means gone, which is what the caller wanted.
+
+    The common case is retrying a delete that actually landed. Note the body is
+    XML despite being tagged `JsonErrorMessage`, so nothing may call `.json()`
+    on the failure path.
+    """
+
+    def handler(request):
+        return httpx.Response(
+            404,
+            text="<JsonErrorMessage><detail>Post id '42' does not exist.</detail>"
+            "</JsonErrorMessage>",
+        )
+
+    publisher.delete("4605385", "42", client=_client(handler))  # does not raise
+
+
+def test_a_refused_delete_still_reports_what_metricool_said():
+    def handler(request):
+        return httpx.Response(500, text="upstream is unwell")
+
+    with pytest.raises(publisher.PublishError, match="unwell"):
+        publisher.delete("4605385", "42", client=_client(handler))
+
+
+def test_the_time_a_post_is_scheduled_for_survives_metricools_spelling():
+    """It answers `Asia/Bangkok` for the `Asia/Ho_Chi_Minh` we sent, and drops
+    the seconds. Same instant, different words — so the wall clock is read and
+    the zone ignored, and the value stays naive so a round trip cannot move it.
+    """
+    from datetime import datetime
+
+    def handler(request):
+        return httpx.Response(
+            200,
+            json={
+                "data": {
+                    "id": 42,
+                    "publicationDate": {
+                        "dateTime": "2026-08-20T03:40:00",
+                        "timezone": "Asia/Bangkok",
+                    },
+                }
+            },
+        )
+
+    post = publisher.get_post("4605385", "42", client=_client(handler))
+    when = publisher.scheduled_at(post)
+
+    assert when == datetime(2026, 8, 20, 3, 40)
+    assert when.tzinfo is None, "a tzinfo here would convert the time and move the post"
+
+
+def test_a_post_metricool_no_longer_has_reads_as_none():
+    def handler(request):
+        return httpx.Response(404, text="<JsonErrorMessage/>")
+
+    assert publisher.get_post("4605385", "42", client=_client(handler)) is None
+
+
+@pytest.fixture
+def resyncs(monkeypatch):
+    """Metricool's side of an edit, recorded rather than performed.
+
+    `get_post` answers a fixed time so a test can prove an edit did not move the
+    post, and `update` hands back a *different* id every call — which is what the
+    real API does, and the thing a Draft has to keep up with.
+    """
+    calls: dict = {"order": [], "updates": [], "deleted": []}
+    ids = iter(["900001", "900002", "900003"])
+
+    def get_post(blog_id, post_id, client=None):
+        calls["order"].append("get")
+        return {
+            "id": post_id,
+            "publicationDate": {
+                "dateTime": "2026-09-01T09:00:00",
+                "timezone": "Asia/Bangkok",
+            },
+        }
+
+    def update(blog_id, post_id, text, first_comment, image_url, when=None, client=None):
+        calls["order"].append("update")
+        calls["updates"].append(
+            {
+                "post_id": post_id,
+                "text": text,
+                "first_comment": first_comment,
+                "image": image_url,
+                "when": when,
+            }
+        )
+        return next(ids)
+
+    def delete(blog_id, post_id, client=None):
+        calls["order"].append("delete")
+        calls["deleted"].append(post_id)
+
+    monkeypatch.setattr(publisher, "normalize_image", lambda url, blog, client=None: url)
+    monkeypatch.setattr(publisher, "get_post", get_post)
+    monkeypatch.setattr(publisher, "update", update)
+    monkeypatch.setattr(publisher, "delete", delete)
+    return calls
+
+
+def test_a_caption_edit_reaches_metricool_and_the_new_id_is_recorded(
+    client, ready, published, resyncs
+):
+    """The whole of D6's first half: fix a typo without opening the planner.
+
+    The id assertion is the load-bearing one. Metricool replaced the post, so a
+    Draft still holding `8891` would be pointing at something it just deleted —
+    which is precisely the old app's bug.
+    """
+    client.post(f"/drafts/{ready.id}/publish")
+
+    response = client.patch(f"/drafts/{ready.id}", json={"caption": "Fixed typo."})
+
+    assert response.status_code == 200
+    assert resyncs["updates"][0]["text"] == "Fixed typo."
+    assert response.json()["metricool_post_id"] == "900001", "the id moves on every edit"
+    assert client.get(f"/drafts/{ready.id}").json()["caption"] == "Fixed typo."
+
+
+def test_editing_the_text_does_not_move_the_post(client, ready, published, resyncs):
+    """`update` replaces the whole post, so an edit has to resend the time.
+
+    Sending nothing means `publication_date(None)`, which is two minutes from
+    now — a caption fix would quietly reschedule the post to immediately. So the
+    time is read off the planner first.
+    """
+    from datetime import datetime
+
+    client.post(f"/drafts/{ready.id}/publish")
+
+    client.patch(f"/drafts/{ready.id}", json={"caption": "Fixed typo."})
+
+    assert resyncs["order"][:2] == ["get", "update"], "read the time before sending it"
+    assert resyncs["updates"][0]["when"] == datetime(2026, 9, 1, 9, 0)
+
+
+def test_an_unscheduled_draft_is_not_pushed_anywhere(client, ready, resyncs):
+    """The ordinary edit pays nothing. Most drafts have never been published."""
+    client.patch(f"/drafts/{ready.id}", json={"caption": "Still in review."})
+
+    assert resyncs["order"] == []
+
+
+def test_rescheduling_sends_the_time_it_was_given(client, ready, published, resyncs):
+    """No planner read: the caller supplied the time, so there is nothing to look up."""
+    from datetime import datetime
+
+    client.post(f"/drafts/{ready.id}/publish")
+
+    response = client.post(
+        f"/drafts/{ready.id}/reschedule", json={"when": "2026-09-14T07:30:00"}
+    )
+
+    assert response.status_code == 200
+    assert resyncs["updates"][0]["when"] == datetime(2026, 9, 14, 7, 30)
+    assert resyncs["order"] == ["update"], "the time was given, not read"
+    assert response.json()["metricool_post_id"] == "900001"
+
+
+def test_a_draft_that_was_never_scheduled_cannot_be_rescheduled(client, ready, resyncs):
+    response = client.post(
+        f"/drafts/{ready.id}/reschedule", json={"when": "2026-09-14T07:30:00"}
+    )
+
+    assert response.status_code == 409
+    assert resyncs["order"] == []
+
+
+def test_unscheduling_takes_the_post_out_and_gives_the_draft_back(
+    client, ready, published, resyncs
+):
+    """The way back that D6 said did not exist.
+
+    The draft survives — the text and the picture are still good, and the
+    complaint was that a mistake could not be undone, not that the work should
+    be thrown away.
+    """
+    client.post(f"/drafts/{ready.id}/publish")
+
+    response = client.post(f"/drafts/{ready.id}/unschedule")
+
+    assert response.status_code == 200
+    assert resyncs["deleted"] == ["8891"]
+    assert response.json()["metricool_post_id"] is None
+    assert response.json()["status"] == DraftStatus.APPROVED
+
+
+def test_unscheduling_lets_the_picture_be_redrawn_again(
+    client, ready, published, resyncs
+):
+    """Clearing the id is what unfreezes the composite, and the order matters.
+
+    The post is out of the planner before anything can delete the file it was
+    pointing at — which is the whole reason the freeze existed.
+    """
+    client.post(f"/drafts/{ready.id}/publish")
+    assert client.post(f"/drafts/{ready.id}/image").status_code == 409
+
+    client.post(f"/drafts/{ready.id}/unschedule")
+
+    assert client.post(f"/drafts/{ready.id}/image").status_code == 200
+
+
+def test_a_post_metricool_no_longer_has_says_so_rather_than_editing_a_ghost(
+    client, ready, published, resyncs, monkeypatch
+):
+    """Deleted in Metricool's own UI, which the operator is free to do (ADR-0001)."""
+    client.post(f"/drafts/{ready.id}/publish")
+    monkeypatch.setattr(publisher, "get_post", lambda blog, post, client=None: None)
+
+    response = client.patch(f"/drafts/{ready.id}", json={"caption": "Fixed typo."})
+
+    assert response.status_code == 409
+    assert "Unschedule" in response.json()["detail"]
+
+
+def test_a_post_metricool_never_named_cannot_be_edited(
+    client, ready, session, published, resyncs
+):
+    """`publish` writes "queued" when the id was withheld. It is a marker, not a
+    handle — there is nothing to send, so this has to say so rather than PUT to
+    `/posts/queued`."""
+    client.post(f"/drafts/{ready.id}/publish")
+    draft = session.get(Draft, ready.id)
+    draft.metricool_post_id = "queued"
+    session.add(draft)
+    session.commit()
+
+    response = client.patch(f"/drafts/{ready.id}", json={"caption": "Fixed typo."})
+
+    assert response.status_code == 409
+    assert "planner" in response.json()["detail"]
+    assert resyncs["order"] == []
