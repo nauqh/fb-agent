@@ -178,9 +178,53 @@ Suite is **390** (was 389). `tsc` and `eslint src` clean.
 
 ---
 
+## G2(b) — the used count is no longer hidden by the window ✅
+
+**Shipped 2026-08-17.** The hint above the grid now carries the number the
+60-row window is hiding: *"3 sources have been generated from — none of them is
+marked below."*
+
+The `used` marker was never wrong. It is computed over the rows the grid
+returns, and the pool behind them is an order of magnitude larger. Measured
+today:
+
+| Page | drafts from sources | markers in the grid |
+|---|---:|---:|
+| **Bodybuilding Tips N Tricks** | 3 | **0** |
+| History Retraced | 31 | 2 |
+| The Fact Feed | 2 | **0** |
+
+Bodybuilding Tips N Tricks is one of the two Pages this round is about. They
+generated three drafts from posts they chose, and the only screen that could
+have confirmed it showed nothing. *"NONE from chosen posts were generated"* is a
+fair description of that screen.
+
+**Deliberately not built:** a used filter, a used tab, a re-ranked grid, or
+anything that changes which 60 rows come back. The complaint is that something
+true was invisible. The fix is to say it.
+
+**The count comes from the Pages' own drafts, not from the visible pool.** The
+first version intersected the two and answered **0** for Bodybuilding Tips N
+Tricks — its three used sources are no longer visible to it at all — so the
+number went silent in precisely the case it exists for. Caught in the browser
+rather than by the suite, because no fixture had that state; one does now.
+
+Distinct sources, not drafts: two drafts from one post is one used source, which
+is what the marker means. History Retraced reads 30 against 31 drafts for that
+reason.
+
+`/sources/competitors/reach` is read on every grid load now instead of only when
+the grid is empty — the number is needed precisely when there *are* rows. Still
+local, still no Metricool call.
+
+Suite is **391** (was 390). `tsc` and `eslint src` clean.
+
+---
+
 ## Still open from this round
 
-`G2(b)` — the used marker is invisible outside the 60-row grid window.
+Nothing in `G2`. `G3` is done but **not deployed**. `G4` is a question awaiting a
+reply — see `comprehension.md`.
 
 `G3` is **done** (`000b856`) but **not deployed**. It should not be reported to
 the client until it is.
