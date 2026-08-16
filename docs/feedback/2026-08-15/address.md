@@ -157,32 +157,24 @@ about.
 
 `C5` is **done** (above).
 
-`C7` is **dropped** — 2026-08-16, the operator's call. Nothing was built and
-nothing is planned. The row stays in the status table marked ⛔ rather than
-being deleted, because it is a written client request and a tracker that a
-request can disappear from stops being a record of what was asked.
+`C5` is **done** (above), and `C6`, `C7` and the buried half of `F5` shipped on
+**2026-08-17** — see "Lengths and prompts became settings" below.
 
-What it would have cost, for whoever revisits this: the client wants the first
-comment at **≤1,500 characters over 3–4 short paragraphs**. Our floor is
-`validators.BODY_MIN_CHARS = 1_500` and both prompt files ask for 1,800–1,900
-over 2–3 paragraphs. Their ceiling is our minimum, so their number cannot be
-adopted by editing a prompt alone — every draft would fail `check()`, burn both
-retries and come back long anyway. It needs the validator and the prompt moved
-together, per Page. Their own July prompt asks for 800–1,300, which disagrees
-with their August message as well, so the number was never settled.
+`C6` and `C7` were dropped on 2026-08-16 and undropped a day later. The note
+written then said what it would cost, and it was right about the shape: *"it
+needs the validator and the prompt moved together, per Page."* That is exactly
+what was built. The estimate that proved wrong was that this was too much for
+what it bought.
 
-`C6` is **dropped** too — 2026-08-16, same call, same day. Its first half had
-already shipped with C5 and stays shipped. The second half, the word cap, is not
-being enforced: `HOOK_MAX_WORDS` stays 65. See below for what that leaves.
-
-**Nothing from this round is open.** Four shipped, two dropped.
+**Nothing from this round is open.**
 
 ---
 
-## C6 — the scaffolding is gone; the word cap is not enforced ⛔
+## C6 — the scaffolding is gone; the word cap now is too ✅
 
-Dropped 2026-08-16. Half of it had already shipped and stays shipped, so this
-records what the code actually does now rather than what was not built.
+Dropped 2026-08-16, shipped 2026-08-17. The section below is the state as it
+stood while it was dropped, kept because the reasoning in it is what the fix had
+to answer; what changed is recorded under "Lengths and prompts became settings".
 
 **Shipped, with C5.** "Straight to the point, no year/event/character
 scaffolding." The global `system.txt` did not merely permit that opening, it
@@ -225,3 +217,89 @@ July prompt says 35, their August message says 30, their example is exactly 30.
 that back. The client's own request would have helped the thing they complained
 about in C4, which is an argument for revisiting this rather than a reason it
 was dropped.
+
+---
+
+## Lengths and prompts became settings — C6, C7, F5 ✅
+
+**Shipped 2026-08-17**, a day after C6 and C7 were dropped as not worth the
+change. The note written when they were dropped named the fix correctly — *"it
+needs the validator and the prompt moved together, per Page"* — and understated
+what else it would unlock.
+
+### The numbers
+
+Five nullable columns on `Page`. **Null means the house number**, so the nine
+Pages that asked for nothing are untouched and no default was copied onto them:
+
+| | House | Bodybuilding Tips / Fitness Recipes |
+|---|---:|---:|
+| Hook, max words | 65 | **30** |
+| First comment, chars | 1,500–2,100 | **800–1,500** |
+| First comment, paragraphs | 2–3 | **3–4** |
+
+**The prompt states the same numbers the check enforces**, from one `Limits`
+value. A rule the model was never told is a retry it cannot act on. The house
+numbers are deliberately *not* restated in the prompt — they are already in the
+prose, and a second copy is the drift `prompts.py` exists to prevent.
+
+**C7 was genuinely unbuildable by prompt alone, and that is now enforced rather
+than remembered.** Their 1,500 ceiling was our floor: every draft fails one end,
+burns both retries and the run dies at `Exceeded maximum output retries`. Since
+the numbers are the operator's to choose now, `Limits.disagrees()` catches the
+unsatisfiable combination and `PATCH /pages/{id}` answers **422** with the
+numbers in the message. Verified in a browser: a 1,400 ceiling against the 1,500
+floor is refused with *"cannot be both over 1,500 and under 1,400"*.
+
+The number itself was never settled with the client — their July prompt asks for
+800–1,300 and their August message for ≤1,500. That is no longer ours to
+resolve: it is a box on the Settings screen.
+
+### The prompts
+
+`system.txt`, `overlay.txt` and `image.txt` are editable **per Page**, stored on
+the Page row. This reverses the read-only decision in `routes/prompts.py`, and
+the reasoning there was right about what it was aimed at. Two things change the
+answer rather than weaken it:
+
+- **Only overrides are stored.** Null inherits the file; nothing holds a copy of
+  text it did not change. The measured failure was drift *between copies* —
+  three pages in the old tool each storing the whole 2,350-character image
+  prompt, 2,030 characters byte-identical, going stale — and there are no
+  copies here.
+- **A file cannot be edited in production at all.** Railway's filesystem is
+  ephemeral, so a screen writing `prompts/pages/<slug>/x.txt` would lose the
+  edit on the next redeploy, silently, days later.
+
+That second point is the whole of F5's buried half. The client wrote *"Within
+the old tool, I did write new prompts already in Setting tab"* — and they had
+not; Bodybuilding Tips' four columns were History Retraced's, byte for byte,
+unedited since 2026-07-05. They believed for six weeks in prompts that did not
+exist. A screen that silently discarded their edits on the next deploy would
+have reproduced that exactly.
+
+**The globals stay files, stay in git, stay uneditable from the screen.** Every
+Page reads them; a textarea on a shared default is what the drift was.
+
+**Blank clears rather than stores.** An emptied box means "go back to the
+inherited prompt". Storing `""` would send the model no system prompt at all —
+a Page with no voice, failing in a way that looks like the model misbehaving.
+
+**Each prompt says which of three places its text came from** — `page`,
+`file-override`, `global` — not merely that it differs. `overridden` alone
+cannot answer what the operator is about to do: editing text that is in fact
+inherited creates an override nobody asked for. Measured today: Bible Focus
+reads all three globals, Bodybuilding Tips all three from its own files.
+
+**Driven in a browser** on Bodybuilding Tips: 30/800/1,500/3/4 saved and
+survived a reload, a stored system prompt saved, persisted and cleared back to
+the file, and the Page was left as it was found.
+
+Suite is **430** (was 407). `alembic check`, `tsc` and `eslint src` clean.
+
+### Still theirs to decide
+
+The prompts the two Pages inherit from `prompts/pages/` are **ours**, drafted
+for C5 and never approved — Bodybuilding Tips had no prompt in the old tool to
+port. They can now be edited on the Settings screen without us, which is the
+answer to that, but somebody should tell them the current text is a draft.
