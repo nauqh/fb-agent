@@ -415,3 +415,40 @@ def test_the_competitor_pool_spans_every_page_by_default(client, session, monkey
     # And narrowing still works, for looking at one set specifically.
     narrowed = client.get("/sources/competitors", params={"page_ids": other.id}).json()
     assert {row["external_id"] for row in narrowed} == {"b"}
+
+
+def test_a_draft_can_name_the_source_it_came_from(client, session):
+    """One stored Source Item by id, which is how a Draft says where it came from.
+
+    Client feedback G2 (2026-08-16): "I have no idea which source or which
+    competitor posts the tool gens content from." `Draft.source_item_id` was
+    already on the wire on 35 of 38 drafts — there was simply no route that
+    turned the id into a name, so no screen could render one.
+    """
+    item = SourceItem(
+        kind=SourceKind.COMPETITOR_POST,
+        external_id="the-one-it-came-from",
+        author="Historic Vids",
+        text="In 1889 a Kansas farmer traded his last mule for a broken windmill.",
+        url="https://www.facebook.com/1225577819_10160418822",
+    )
+    session.add(item)
+    session.commit()
+    session.refresh(item)
+
+    body = client.get(f"/sources/items/{item.id}").json()
+
+    assert body["author"] == "Historic Vids"
+    assert body["kind"] == "competitor_post"
+    # The link is the point: naming the competitor without a way back to the post
+    # answers half the question.
+    assert body["url"] == "https://www.facebook.com/1225577819_10160418822"
+
+
+def test_an_unknown_source_item_says_so(client):
+    """404, not an empty body.
+
+    The drawer renders this row as provenance. A 200 with nothing in it would
+    draw an empty box that looks exactly like a source with no author.
+    """
+    assert client.get("/sources/items/424242").status_code == 404

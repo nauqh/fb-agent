@@ -48,6 +48,20 @@ export async function getCompetitorPosts(
   });
 }
 
+/**
+ * One stored Source Item by id — what a Draft was generated from.
+ *
+ * The review drawer's only way to answer "which post did this come from".
+ * `Draft.source_item_id` has always been on the wire and nothing rendered it,
+ * which is exactly what the client reported on 2026-08-16.
+ *
+ * A second request rather than a field on the Draft: see `get_source_item` in
+ * api/app/routes/sources.py for why the Draft response cannot carry it.
+ */
+export async function getSourceItem(itemId: number): Promise<SourceItem> {
+  return get<SourceItem>(`/sources/items/${itemId}`);
+}
+
 export interface RssFeedResult {
   items: LiveSourceItem[];
   /** Feeds that did not answer. A feed that rots goes unnoticed off-screen. */

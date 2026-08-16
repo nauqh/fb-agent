@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   CalendarClock,
+  ExternalLink,
   ImagePlus,
   Loader2,
   Rocket,
@@ -21,6 +22,7 @@ import { HookField } from "@/components/hook-field";
 import { FacebookPreview } from "@/components/facebook-preview";
 import { PublishAt } from "@/components/publish-at";
 import { PublishDialog } from "@/components/publish-dialog";
+import { KIND_GLYPH, KIND_LABEL } from "@/components/source-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -43,7 +45,8 @@ import {
 import { getPageLayout, type ResolvedLayout } from "@/lib/api/layout";
 import { listPages } from "@/lib/api/pages";
 import { getNextSlot, type NextSlot } from "@/lib/api/schedule";
-import { chars, pageLocalSoon, words } from "@/lib/format";
+import { getSourceItem } from "@/lib/api/sources";
+import { chars, pageLocalSoon, timeAgo, words } from "@/lib/format";
 import type { RegeneratableField, RewriteProposal } from "@/lib/api/drafts";
 import type { Draft } from "@/lib/types";
 import { useQuery } from "@/lib/use-query";
@@ -412,6 +415,8 @@ export function DraftDetail({
           here — repeating them costs a line and tells you nothing new.
           `pr-10` keeps the heading clear of the drawer's close button. */}
       <h2 className="pr-10 text-base font-medium">{page?.name}</h2>
+
+      <SourceLine draft={draft} />
 
       {draft.error ? (
         <div className="space-y-2 rounded-md border border-destructive/40 bg-destructive/5 p-3">
@@ -1242,6 +1247,78 @@ function Regenerate({
         )}
         Rewrite
       </button>
+    </div>
+  );
+}
+
+/**
+ * Which Source Item this draft was written from.
+ *
+ * Client feedback G2 (2026-08-16): *"I have no idea which source or which
+ * competitor posts the tool gens content from."* Nothing was missing from the
+ * data — 35 of the 38 drafts in the database carry a `source_item_id`, and it
+ * has been on the wire since the first day. It was missing from every screen.
+ *
+ * **In the drawer, not on the queue row.** `useQuery` re-runs on every store
+ * notification, so a hook per row would turn one save into N requests against a
+ * queue of any length. The drawer is also where the question is actually asked,
+ * with the copy it produced next to it.
+ *
+ * Named the way the grid named it — same label, same glyph, imported rather than
+ * restated — because the operator is being asked to recognise a card they ticked.
+ */
+function SourceLine({ draft }: { draft: Draft }) {
+  const { data: source, error } = useQuery(
+    () => getSourceItem(draft.source_item_id!),
+    [draft.source_item_id],
+    { enabled: draft.source_item_id !== null },
+  );
+
+  // A topic run has no Source Item and never had one. Said out loud, because the
+  // absence is the answer here — silence looks identical to the row not loading.
+  if (draft.source_item_id === null) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        {draft.topic ? `Written from a topic — “${draft.topic}”` : "No source recorded."}
+      </p>
+    );
+  }
+  if (error !== null) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        Source #{draft.source_item_id} could not be read: {error}
+      </p>
+    );
+  }
+  if (source === null) return <Skeleton className="h-16" />;
+
+  const Glyph = KIND_GLYPH[source.kind];
+  return (
+    <div className="space-y-1.5 rounded-md border bg-muted/40 p-3">
+      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <Glyph className="size-3.5 shrink-0" />
+        {KIND_LABEL[source.kind]}
+        <span>·</span>
+        <span className="truncate font-medium text-foreground">
+          {source.author ?? "Unknown"}
+        </span>
+        <span>·</span>
+        {timeAgo(source.published_at)}
+        {source.url ? (
+          <a
+            href={source.url}
+            target="_blank"
+            rel="noreferrer"
+            className="ml-auto flex shrink-0 items-center gap-1 hover:text-foreground"
+          >
+            <ExternalLink className="size-3" />
+            Open
+          </a>
+        ) : null}
+      </p>
+      {/* Two lines of the source's own text. Enough to recognise the card that
+          was ticked; the rest of it is one click away, on the post itself. */}
+      <p className="line-clamp-2 text-xs leading-relaxed">{source.text}</p>
     </div>
   );
 }

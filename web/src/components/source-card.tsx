@@ -28,15 +28,19 @@ import type { SourceKind } from "@/lib/types";
 import { chars, fullDate, metric, timeAgo } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
-/** What each kind is called on screen. The stored values are not operator-facing. */
-const KIND_LABEL: Record<SourceKind, string> = {
+/** What each kind is called on screen. The stored values are not operator-facing.
+ *
+ *  Exported because the review drawer names the source a Draft came from and has
+ *  to call it the same thing the grid did — the operator is being asked to
+ *  recognise a card they ticked. */
+export const KIND_LABEL: Record<SourceKind, string> = {
   competitor_post: "Competitor post",
   tweet: "Tweet",
   rss: "RSS item",
 };
 
 /** Stands in for a picture there never was. See `SourceThumbnail`. */
-const KIND_GLYPH: Record<SourceKind, typeof Users> = {
+export const KIND_GLYPH: Record<SourceKind, typeof Users> = {
   competitor_post: Users,
   tweet: Bird,
   rss: Newspaper,

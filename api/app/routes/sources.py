@@ -290,6 +290,36 @@ def _with_used(session: Session, rows) -> list[StoredSourceItem]:
     ]
 
 
+@router.get("/items/{item_id}")
+def get_source_item(
+    item_id: int, session: Session = Depends(get_session)
+) -> SourceItem:
+    """One stored Source Item by id — what a Draft was generated from.
+
+    `Draft.source_item_id` has been on the wire since the first day and no screen
+    could turn it into a sentence, which is the whole of the client's round-4
+    note: "I have no idea which source or which competitor posts the tool gens
+    content from." 35 of 38 drafts carry one. The answer was a foreign key
+    nothing rendered.
+
+    Read one row at a time by the review drawer rather than joined onto the
+    Draft, because the Draft response has no room for it. Every route that
+    returns a Draft returns the table class directly, so attaching a source would
+    mean either a wrapper model on all ten of them — and the field coming back
+    null from every mutation route, so the line blinks out the moment you press
+    Save — or a `Relationship`, which SQLModel does not serialise on a
+    `table=True` model at all.
+
+    Only stored kinds resolve, which is every kind a Draft can point at: a tweet
+    or an RSS item becomes a row when a run uses it (`generate.resolve_sources`),
+    so a Draft never references something that was only ever browsed.
+    """
+    item = session.get(SourceItem, item_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail=f"No source item {item_id}")
+    return item
+
+
 @router.get("/rss")
 def get_rss(
     page_id: int = Query(...),
