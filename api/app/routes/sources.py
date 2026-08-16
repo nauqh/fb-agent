@@ -291,7 +291,7 @@ def _with_used(session: Session, rows) -> list[StoredSourceItem]:
 
 
 class CompetitorReach(BaseModel):
-    """What actually reaches this Page's grid. Read when the grid comes back empty.
+    """What actually reaches this Page's grid, and how much of it is off screen.
 
     An empty grid has three causes that look identical on screen, and the
     operator's next move is different for each: nobody is configured, somebody is
@@ -329,6 +329,30 @@ class CompetitorReach(BaseModel):
     trust this rather than inferring from a list length it also has to sort.
     """
 
+    used_posts: int
+    """Distinct sources these Pages have actually generated from.
+
+    `_with_used` marks them, but only across the `grid_limit` rows the grid
+    returns — 60, against History Retraced's 808 visible — so a post ticked
+    yesterday has usually dropped out of the window by the time the operator
+    comes back, and its marker with it. Measured 2026-08-17:
+
+        Bodybuilding Tips N Tricks   3 drafts from sources   0 markers in grid
+        History Retraced            31 drafts from sources   2 markers in grid
+        The Fact Feed                2 drafts from sources   0 markers in grid
+
+    That is the reading behind "NONE from chosen posts were generated": the one
+    screen that could have shown otherwise was showing zero.
+
+    **Counted from the Pages' drafts, not from the visible pool.** Intersecting
+    with `_visible_to` was the first version and it answered **0** for
+    Bodybuilding Tips N Tricks — the Page the complaint is about — because its
+    three used sources are no longer visible to it at all. A count that goes
+    quiet in exactly the case it exists for is worse than no count. Distinct,
+    because two drafts from one post is one used source, which is what the
+    grid's marker means.
+    """
+
 
 @router.get("/competitors/reach")
 def get_competitor_reach(
@@ -339,6 +363,7 @@ def get_competitor_reach(
 ) -> CompetitorReach:
     pages = _scope(session, page_ids)
     scope_ids = [page.id for page in pages]
+    visible = _visible_to(session, scope_ids)
 
     def count(where) -> int:
         return session.exec(
@@ -355,7 +380,13 @@ def get_competitor_reach(
             (SourceItem.kind == SourceKind.COMPETITOR_POST)
             & SourceItem.synced_for_page_id.in_(scope_ids)  # type: ignore[union-attr]
         ),
-        visible_posts=count(_visible_to(session, scope_ids)),
+        visible_posts=count(visible),
+        used_posts=session.exec(
+            select(func.count(func.distinct(Draft.source_item_id))).where(
+                col(Draft.page_id).in_(scope_ids),
+                col(Draft.source_item_id).is_not(None),
+            )
+        ).one(),
     )
 
 

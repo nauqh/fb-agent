@@ -56,15 +56,24 @@ export interface CompetitorReach {
   own_set_posts: number;
   /** Everything it may read, before the reactions window. Zero empties the grid. */
   visible_posts: number;
+  /**
+   * Distinct sources this Page has generated from — including ones off screen,
+   * and ones it can no longer see at all. Counted from its drafts, not the pool.
+   */
+  used_posts: number;
 }
 
 /**
- * Why the grid is empty. Read only when it is.
+ * What the grid is not showing: why it is empty, and how much it is hiding.
  *
  * "Nobody is configured", "nothing has been synced" and "quiet week" are one
- * blank screen otherwise, and the operator's next move differs for each. Six of
- * the ten Pages have zero competitors in Metricool — including both Pages the
- * client's 2026-08-16 note was about — and the grid said nothing at all.
+ * blank screen otherwise, and the operator's next move differs for each. Five of
+ * the ten Pages have zero competitors in Metricool — including one of the Pages
+ * the client's 2026-08-16 note was about — and the grid said nothing at all.
+ *
+ * `used_posts` is the same failure in the non-empty case: the marker is computed
+ * over the 60 rows returned, so a post generated from yesterday has usually
+ * fallen out of the window along with any sign it was used.
  */
 export async function getCompetitorReach(pageIds: number[]): Promise<CompetitorReach> {
   return get<CompetitorReach>("/sources/competitors/reach", {

@@ -20,7 +20,7 @@ import {
   getCompetitorPosts,
   getTweet,
 } from "@/lib/api/sources";
-import type { SourceSort } from "@/lib/api/sources";
+import type { CompetitorReach, SourceSort } from "@/lib/api/sources";
 import type { LiveSourceItem } from "@/lib/fixtures/sources";
 import { useCart } from "@/lib/cart";
 import { usePageScope } from "@/lib/page-scope";
@@ -107,6 +107,33 @@ function CompetitorsTab() {
   const [syncing, setSyncing] = useState(false);
 
   /**
+   * The two things the grid itself cannot say: why it is empty, and how much of
+   * what it is showing has already been used.
+   *
+   * Local counts, no Metricool call — see `get_competitor_reach`. Read on every
+   * grid load rather than only when empty, because the used total is needed
+   * precisely when there *are* rows.
+   */
+  const { data: reach, error: reachError } = useQuery(
+    () => getCompetitorReach(pageId === null ? [] : [pageId]),
+    [pageId],
+    { enabled: pageId !== null },
+  );
+
+  /**
+   * How many used sources are actually marked on screen.
+   *
+   * `used` is computed over the rows the grid returns — 60 — while the pool
+   * behind it is 808 for History Retraced. Measured 2026-08-17: 31 drafts
+   * generated from chosen posts against 2 markers visible, and on Bodybuilding
+   * Tips N Tricks 3 against **zero**. Ticking a post, generating, and coming
+   * back to no marker anywhere is what "NONE from chosen posts were generated"
+   * describes, so the difference between these two numbers is said out loud
+   * rather than left to be inferred from a grid that looks untouched.
+   */
+  const usedInView = data?.filter((item) => item.used).length ?? 0;
+
+  /**
    * Syncing is the operator's call, not the tab's.
    *
    * Opening the tab used to cost ~5.5s and 1.6MB to pull 500 posts and show 60,
@@ -134,6 +161,18 @@ function CompetitorsTab() {
             ? "Synced from Metricool, best of the last 7 days first."
             : "Synced from Metricool, newest first."}{" "}
           Which competitors this Page reads is set on Settings.
+          {reach && reach.used_posts > 0 ? (
+            <>
+              {" "}
+              <span className="text-foreground">
+                {reach.used_posts} source{reach.used_posts === 1 ? " has" : "s have"}{" "}
+                been generated from
+              </span>
+              {usedInView < reach.used_posts
+                ? ` — ${usedInView === 0 ? "none of them is" : `only ${usedInView} of them are`} marked below.`
+                : ", all marked below."}
+            </>
+          ) : null}
         </p>
 
         <div className="flex items-center gap-2">
@@ -184,7 +223,7 @@ function CompetitorsTab() {
       ) : loading ? (
         <CardGridSkeleton />
       ) : data?.length === 0 ? (
-        <EmptyGrid pageId={pageId} />
+        <EmptyGrid reach={reach} error={reachError} />
       ) : (
         <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(360px,1fr))]">
           {data?.map((item) => (
@@ -221,13 +260,13 @@ function CompetitorsTab() {
  * The counts are local, so this cannot hang or 502 while explaining an outage.
  * See `get_competitor_reach`.
  */
-function EmptyGrid({ pageId }: { pageId: number | null }) {
-  const { data: reach, error } = useQuery(
-    () => getCompetitorReach(pageId === null ? [] : [pageId]),
-    [pageId],
-    { enabled: pageId !== null },
-  );
-
+function EmptyGrid({
+  reach,
+  error,
+}: {
+  reach: CompetitorReach | null;
+  error: string | null;
+}) {
   // No reason to give, but still an empty grid to account for. Saying only the
   // part we are sure of beats rendering nothing, which is the bug being fixed —
   // this branch is how it came back during verification, when the counts 404'd

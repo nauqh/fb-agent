@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 from sqlmodel import Session, func, select
 
 from app.models import (
+    Draft,
     Feed,
     Page,
     PageCompetitor,
@@ -484,7 +485,12 @@ def test_a_page_nothing_reaches_says_so_rather_than_showing_an_empty_grid(
         "/sources/competitors/reach", params={"page_ids": other.id}
     ).json()
 
-    assert reach == {"assigned": 0, "own_set_posts": 0, "visible_posts": 0}
+    assert reach == {
+        "assigned": 0,
+        "own_set_posts": 0,
+        "visible_posts": 0,
+        "used_posts": 0,
+    }
 
 
 def test_an_assigned_page_with_a_quiet_week_is_a_different_empty(client, session):
@@ -530,4 +536,72 @@ def test_reach_shows_a_pool_hidden_by_its_own_assignment(client, session):
 
     reach = client.get("/sources/competitors/reach", params={"page_ids": 1}).json()
 
-    assert reach == {"assigned": 1, "own_set_posts": 1, "visible_posts": 0}
+    assert reach == {
+        "assigned": 1,
+        "own_set_posts": 1,
+        "visible_posts": 0,
+        "used_posts": 0,
+    }
+
+
+def test_reach_counts_used_sources_the_grid_window_is_hiding(client, session):
+    """The marker is right and almost never on screen.
+
+    `_with_used` flags used sources across the rows the grid returns — 60, out of
+    History Retraced's 808 visible. Measured 2026-08-17: Bodybuilding Tips N
+    Tricks had 3 drafts generated from chosen posts and **zero** used markers in
+    its grid; History Retraced, 31 against 2. Ticking a post, generating, and
+    coming back to no marker anywhere reads as "it did not use it", which is the
+    client's sentence almost word for word.
+
+    Counted from this Page's drafts rather than from the visible pool. The first
+    version intersected the two and answered **0** for Bodybuilding Tips N
+    Tricks — the Page the complaint is about — because its three used sources are
+    no longer visible to it. Distinct, because two drafts from one post is one
+    used source, which is what the marker means.
+    """
+    used, unused = (
+        SourceItem(
+            kind=SourceKind.COMPETITOR_POST,
+            external_id=name,
+            synced_for_page_id=1,
+            published_at=datetime(2026, 8, 1, tzinfo=timezone.utc),
+        )
+        for name in ("already-written-from", "never-touched")
+    )
+    session.add_all([used, unused])
+    session.commit()
+    session.refresh(used)
+
+    session.add_all(
+        [
+            Draft(page_id=1, source_item_id=used.id),
+            Draft(page_id=1, source_item_id=used.id),
+            Draft(page_id=1, topic="no source at all"),
+        ]
+    )
+    session.commit()
+
+    reach = client.get("/sources/competitors/reach", params={"page_ids": 1}).json()
+
+    assert reach["visible_posts"] == 2
+    assert reach["used_posts"] == 1, "two drafts from one post is one used source"
+
+    # A source the Page can no longer see still counts, which is the whole point:
+    # Bodybuilding Tips N Tricks generated three drafts from posts that have since
+    # left its visible set, and a count intersected with the pool called that 0.
+    invisible = SourceItem(
+        kind=SourceKind.COMPETITOR_POST,
+        external_id="out-of-this-pages-reach",
+        synced_for_page_id=None,
+    )
+    session.add(invisible)
+    session.commit()
+    session.refresh(invisible)
+    session.add(Draft(page_id=1, source_item_id=invisible.id))
+    session.commit()
+
+    reach = client.get("/sources/competitors/reach", params={"page_ids": 1}).json()
+
+    assert reach["visible_posts"] == 2, "still not something the grid may show"
+    assert reach["used_posts"] == 2, "but it was still generated from"
