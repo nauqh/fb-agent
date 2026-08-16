@@ -118,10 +118,69 @@ looks like a mismatch on screen, and may well be the next thing they ask about.
 
 ---
 
+## G2(a) — an empty grid now says why ✅
+
+**Shipped 2026-08-17.** `GET /sources/competitors/reach`, and an empty state on
+the Competitors tab that reads it.
+
+The grid rendered an empty `<div>`. That is the same picture for "nobody is
+configured", "nothing has been synced" and "quiet week", and the operator's next
+move is different for each — so the empty state tells them apart. Measured across
+every Page, today:
+
+| Page | assigned | own set | visible |
+|---|---:|---:|---:|
+| Bible Focus | 1 | 430 | **0** |
+| Bodybuilding Tips N Tricks | 2 | 0 | 1 |
+| Fitness Girls | 0 | 484 | 484 |
+| Fitness Recipes | 0 | 0 | **0** |
+| GYM Motivation | 0 | 0 | **0** |
+| GYM Motivation \| quotes \| videos \| tips\| | 0 | 0 | **0** |
+| History Retraced | 23 | 1,244 | 808 |
+| Hot Tub Timeout | 0 | 0 | **0** |
+| House of Common Sense | 0 | 0 | **0** |
+| The Fact Feed | 26 | 655 | 281 |
+
+**Five Pages reach nothing at all.** No assignment, and nothing has ever arrived
+under their own name. Pressing Sync will never change that, and the message says
+so rather than implying a retry: competitors have to be added in Metricool and
+ticked on Settings.
+
+**Bible Focus is the one worth reading twice, and it was not what I expected to
+find.** One assignment, zero visible posts, and **430 posts sitting in its own
+Metricool set, hidden**. A Page reads its own set only until its first assignment
+lands; after that it reads exactly what is ticked. That is `_visible_to` working
+as designed, and on screen it is indistinguishable from an empty week. The empty
+state now names the number being hidden and gives the two ways out — tick
+competitors that post, or untick everything to go back to the whole set.
+
+This also revises a number from `comprehension.md`. **Bodybuilding Tips N Tricks
+is no longer empty** — 2 assignments, 1 visible post. So "six Pages have zero
+competitors" is now five, and one of the two Pages that round 4 was about has
+been fixed since.
+
+**The counts are local — no Metricool call.** This is read at the moment the
+operator is already looking at an empty screen, and answering "why is this empty"
+with a 5.5s vendor round trip that has 502'd twice is the wrong trade. It costs
+one distinction (configured but silent, against not configured); `assigned`
+recovers most of it, because assignment is a local fact. Fetched only when the
+grid is empty, so the ordinary path pays nothing.
+
+If the counts fail, the state degrades to a plain "No competitor posts to show"
+rather than rendering nothing. Not hypothetical — that is exactly what the screen
+did mid-verification when the new route 404'd against a server `--reload` had not
+picked it up on, and the blank grid came straight back.
+
+**Driven in a browser**: Bible Focus renders the hidden-pool message with 430 in
+it, Fitness Recipes the nothing-reaches-this-Page message.
+
+Suite is **390** (was 389). `tsc` and `eslint src` clean.
+
+---
+
 ## Still open from this round
 
-`G2(a)` and `G2(b)` — the six Pages with no competitors (theirs to fix in
-Metricool, ours to *say*), and the used marker invisible outside the window.
+`G2(b)` — the used marker is invisible outside the 60-row grid window.
 
 `G3` is **done** (`000b856`) but **not deployed**. It should not be reported to
 the client until it is.
