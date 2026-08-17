@@ -28,6 +28,14 @@ layout to `layout.yml`, the entire migration is three constants
 runtime — collapses to `scripts/seed_page.py`, and `SUPABASE_URL` /
 `SUPABASE_SERVICE_ROLE_KEY` leave `.env`.
 
+**Superseded 2026-08-11 onwards: all ten pages are seeded.** The decision is
+kept because it was right about the mechanism — each of the other nine was an
+insert, exactly as predicted, with no schema change and no query rewritten.
+What it did not predict is how much of "the layout" turned out to be History
+Retraced's taste rather than the house style; the columns and the `page_layout`
+table that grew back are catalogued in
+[data-model.md](data-model.md#ten-pages). `is_active` never came back.
+
 ## The prompts are files
 
 `system_prompt`, `overlay_prompt` and `image_prompt` move out of `page` and into
@@ -43,6 +51,16 @@ The two numbers shared with the compositor are tokens, `{panel_pct}` and
 `{highlight_color}`, substituted from `layout.yml`. Substitution is `str.replace`
 rather than `str.format`, so a stray brace in a prompt cannot raise mid-generation.
 
+**Qualified 2026-08-17: the columns are back, as overrides only.** The house
+prompts are still files, still in git, still not editable from the screen. What
+a Page may store is its *own* text, null until somebody writes it — and a column
+that is null until then cannot drift from a global it does not contain, which is
+the failure this decision was made against. The forcing reason is deployment,
+not preference: Railway's filesystem is ephemeral, so a Settings editor that
+wrote `prompts/pages/<slug>/system.txt` would lose every edit on redeploy. Full
+argument in
+[data-model.md](data-model.md#prompts-are-files-with-per-page-overrides-in-the-database).
+
 ## v1 is a draft factory
 
 Four screens: **Sources** · **Generate** · **Review** · **Settings**.
@@ -50,6 +68,14 @@ Four screens: **Sources** · **Generate** · **Review** · **Settings**.
 Sources → Cart → Generate → review the Draft and its Composed Image. It stops
 there. Pushing to Metricool and the calendar are v2, deferred together with the
 move off local file storage (see [Deferred](#deferred-to-v2)).
+
+**Superseded: it publishes.** The Metricool write path shipped 2026-08-14 and
+production has posted to Facebook since. Seven screens now, Overview and
+Schedule among them, and a queued post can be edited, moved or cancelled from
+the Review drawer (D6, 2026-08-17). The deferral's accepted risk — "the riskiest
+integration ships unproven" — was paid in full: most of the integration traps
+listed in `CLAUDE.md` were found after this, and the largest of them is that
+Metricool has no in-place update at all.
 
 ## Stack
 
@@ -157,7 +183,25 @@ templates table. A `competitor` table, a `page_competitor` join, a `feed` table,
 [data-model.md](data-model.md#what-was-considered-and-rejected) records why, and
 the production evidence that settled each one.
 
+**Superseded: it is eight tables.** `page_layout`, `feed`, `page_competitor`,
+`page_time_slot` and `saved_post` all landed between 2026-08-10 and 08-16. Two
+of them are on the rejected list above, and the reversals are argued where the
+rejections are — a `feed` table because the API now runs from a container image
+with no writable config file, and `page_competitor` because Metricool caps an
+account at 100 competitors in total, which is a constraint the original
+measurement never looked at. `competitor`, `generation_event` and the cart table
+stay rejected.
+
 ## One layout, one image size, in a config module
+
+**Half superseded 2026-08-13.** The file is still the standard and still the
+only place a *default* lives, but a Page overrides it through `page_layout`, and
+the `full_overlay` layout and the headline badge came back with it. What holds
+is the image size and the font: one shape, 896×1120, for every Page. The
+reversal is argued in
+[data-model.md](data-model.md#layout-is-config-with-per-page-overrides) — the
+short version is that this was decided when there was one Page, and ten Pages
+with unrelated beats is evidence rather than drift.
 
 There is no per-page styling. Every layout constant — image size, font size,
 panel geometry, colours, badge, paddings — moves to
@@ -185,7 +229,7 @@ production renders, and they become the config values.
 Only `watermark_image_path` stays per-page — a per-page asset. The prompts were
 the second until they became files, and `daily_quota` was the third until the
 Quota was cut on 2026-08-06. Details and the full before/after table are in
-[data-model.md](data-model.md#layout-is-config-not-data).
+[data-model.md](data-model.md#layout-is-config-with-per-page-overrides).
 
 ## Migration
 
@@ -248,3 +292,11 @@ first.
 
 **Accepted risk:** the riskiest integration ships unproven, and Composed Images
 are only ever seen locally in v1.
+
+**All three shipped, 2026-08-09 to 08-17**, and the first line above turned out
+to understate the problem. Metricool does not merely fetch the image URL — it
+**never re-hosts it**, whatever their help centre says about the normalize
+endpoint, so the file must still resolve when Facebook comes for it days later.
+That is why the bucket is public and why the old app's signed URLs left 0 of 105
+published posts with a working image. It is also why a queued post's picture is
+frozen: rebuilding it deletes the file the planner is pointing at.

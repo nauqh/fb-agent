@@ -65,10 +65,11 @@ disk, visible in a browser.
 
 - `page` table, seeded by `scripts/seed_page.py`: four constants, read from the
   old template row and cross-checked live against Metricool. Nothing else is
-  migrated ([why](data-model.md#layout-is-config-not-data)), and the app no
-  longer talks to Supabase at all.
+  migrated ([why](data-model.md#layout-is-config-with-per-page-overrides)), and
+  the app no longer talks to Supabase at all.
 - Prompts extracted to `api/prompts/*.txt`
-  ([why](data-model.md#prompts-are-files-not-columns)), with `{panel_pct}` and
+  ([why](data-model.md#prompts-are-files-with-per-page-overrides-in-the-database)),
+  with `{panel_pct}` and
   `{highlight_color}` substituted from `layout.yml` so a prompt cannot disagree
   with the compositor.
 - `GET /pages`, `GET /pages/{id}`, `PATCH /pages/{id}`.
@@ -442,3 +443,16 @@ the server mid-run leaves an `error` row rather than a stuck one.
 Metricool push, the calendar, hosted media storage, multi-tenancy, the
 `full_overlay` layout, the headline badge, saved viral posts, a scheduler of any
 kind. See [decisions.md](decisions.md#deferred-to-v2).
+
+**Everything on that list except multi-tenancy and a scheduler has since been
+built** — between 2026-08-09 and 08-17, driven by the client's feedback rather
+than by this plan. Metricool push and the Schedule screen, Supabase Storage,
+`page_layout.template` and `page.badge_text`, and the `saved_post` table.
+Multi-tenancy stays out for good (ADR-0002). A scheduler of any kind stays out
+for ADR-0001's reason: Metricool's planner *is* the scheduler, and `page_time_slot`
+holds the times we would like to publish at, not the queue.
+
+The phases below stop at Phase 6, which has not happened: the old app is still
+deployed and still publishing History Retraced. The work since Phase 5 is
+tracked in `docs/feedback/<date>/` instead, one directory per round of the
+client's notes, and `HANDOFF.md` is the current state of play.

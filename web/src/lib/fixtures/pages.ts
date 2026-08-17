@@ -1,13 +1,15 @@
 import type { Page } from "@/lib/types";
 
 /**
- * The one Page.
+ * One Page, for tests and stories. The app itself runs ten.
  *
- * Values are the row `api/scripts/seed_page.py` inserts, not invented ones — v1
- * runs History Retraced only, and the watermark is a committed file under
+ * Values are the row `api/scripts/seed_page.py` inserts, not invented ones —
+ * History Retraced is the Page every default was written for, and its watermark
+ * is a committed file under
  * `api/assets/`, recovered from the previous Supabase project after the current
  * one's copy started 404ing. It is versioned with the code that reads it so a
- * fresh clone is complete. See docs/data-model.md#layout-is-config-not-data.
+ * fresh clone is complete. See
+ * docs/data-model.md#layout-is-config-with-per-page-overrides.
  */
 export const PAGES: Page[] = [
   {

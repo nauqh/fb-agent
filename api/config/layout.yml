@@ -1,12 +1,15 @@
-# The one Composed Image form.
+# The default Composed Image form.
 #
-# Every Page renders identically — only the watermark file differs. Values are
-# History Retraced's, verified against the composite path actually taken for a
-# `card` draft, not just against the template row. See
-# docs/data-model.md#layout-is-config-not-data.
+# Values are History Retraced's, verified against the composite path actually
+# taken for a `card` draft, not just against the template row. See
+# docs/data-model.md#layout-is-config-with-per-page-overrides.
 #
-# This file has no per-page section and should not grow one. A setting that
-# genuinely varies by Page belongs in the `page` table, not here.
+# This file still has no per-page section, and still should not grow one — but
+# the reason has changed. It used to be that every Page rendered identically.
+# What overrides it now is a `page_layout` row, holding only what that Page
+# changed, resolved as {**this file, **the row}. So a Page that has changed
+# nothing keeps tracking every edit made here, which a copied per-page block in
+# this file could never do.
 
 # Which card form. `card` is hero-above-panel; `full_overlay` is the old app's
 # Template 2, where the photograph fills the card and the panel lies over its

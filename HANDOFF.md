@@ -1,6 +1,8 @@
 # Handoff
 
-**Updated:** 2026-08-15 · **Next focus:** round 3 of the client's feedback — `docs/feedback/2026-08-15/`
+**Updated:** 2026-08-17 · **Next focus:** the deploy. Every round of client
+feedback that is not blocked on them is in `main` and none of it is deployed —
+`docs/feedback/2026-08-11/`, `-14/`, `-15/`, `-16/`, newest last.
 
 Conventions and integration traps live in `CLAUDE.md`, which loads automatically.
 This file is state: what is proven, what is mid-flight, what to do next.
@@ -12,7 +14,7 @@ content agent. The **old** app is `D:\Laboratory\social-agent`: reference only,
 still deployed, still the thing publishing History Retraced. Read it for prior
 art; never edit it.
 
-Branch `main`, pushed to `github.com/nauqh/fb-agent` at `3f46754`.
+Branch `main`, pushed to `github.com/nauqh/fb-agent` at `d2e1343` (2026-08-17).
 
 **Push explicitly. This file used to claim commits reach the remote without
 anyone running `git push`, and that is wrong** — eight commits sat unpushed
@@ -20,6 +22,13 @@ through a whole session while that sentence was being repeated back to the
 operator as fact. Something pushed once, early, and the note was written from
 it. Check `git ls-remote origin main` against `git rev-parse main` rather than
 trusting either this file or the output of a push.
+
+**And run `ls-remote`, not `git rev-list origin/main..main`.** The local
+`.git/refs/remotes/origin/main` is a file of blank characters — git reports
+`warning: ignoring broken ref refs/remotes/origin/main` and every range
+expression against it either errors or reads as zero. Four commits were reported
+to the operator as unpushed on the strength of that count while the remote
+already had them. `ls-remote` asks GitHub; nothing local can be stale.
 
 ## The current job: the client's feedback
 
@@ -43,7 +52,6 @@ parked (P1).
 - **A green suite is not a working screen, and neither is a running server.**
   See the duplicate-server trap now recorded in `CLAUDE.md`.
 
-## What is actually proven vs merely written
 ## What is actually proven vs merely written
 
 Verified against live services:
@@ -73,9 +81,14 @@ any of it. As of a live read on **2026-08-16**:
 - **14 drafts carry a `metricool_post_id`**, all on History Retraced.
 - **5 are `PUBLISHED` on Facebook** (48, 53, 54, 55, 57), pushed 08-14, out
   08-15. Production has `METRICOOL_PUBLISH_AS_DRAFT=false` on Railway.
-- **7 are stranded** — pushed 08-12 under the old flag, still `draft=true`,
-  publication dates on 08-13 and now past. They will never go out, and nothing
-  in this app can clear them (no delete call; that is round 2's D6).
+- **5 are stranded** — pushed 08-12 under the old flag, still `draft=true`,
+  publication dates on 08-13 and now past. They will never go out.
+  `361378352`, `361381672`, `361383660`, `361386518`, `361389421`.
+
+  There were seven. **The app can clear them now** — D6 shipped on 2026-08-17
+  and Remove in the drawer deletes the planner post. `361373471` went by the
+  spike and `361375892` through the button; the other five are two clicks each,
+  left in place only because nobody asked for them to go.
 
 `METRICOOL_PUBLISH_AS_DRAFT=true` in the local `.env`, and it stays true. That
 is the rehearsal environment; a laptop should not be able to reach an audience.
@@ -128,7 +141,7 @@ carried before — `MEDIA_BACKEND=local|supabase` was rejected in favour of one
 backend, and the publish-time upload was deleted rather than kept.
 
 Nine steps, seven of them done. 260 tests passed at the time; the suite is
-**339** now.
+**430** now (~170s).
 
 - **One store.** `SupabaseMediaStore` is the only implementation in `app/`;
   `LocalMediaStore` moved to `tests/conftest.py` as a fake, which is what keeps
@@ -323,6 +336,44 @@ Four things worth knowing before touching the same code:
 `hero.from_url` (C3) are covered by tests that stub the model and the transport;
 neither has been exercised against live Gemini or a live feed URL. "Next slot"
 *was* driven against the live planner.
+
+## Done 2026-08-14/17 — feedback rounds 2, 3 and 4
+
+Tracked in `docs/feedback/<date>/`, evidence in the commit messages. Two are
+worth carrying here because they change what the rest of this file says.
+
+**D6 — a queued post is editable again** (`06f8f08`). The drawer edits caption
+and first comment, Moves the time, and Removes the post from the planner. The
+image stays frozen; Remove is the way through.
+
+The spike behind it is the part to not rediscover: **Metricool has no in-place
+update.** `PUT /v2/scheduler/posts/{id}` with `id` in the body replaces the post
+(old deleted, new created); without it, duplicates. Either way **the post id
+changes**, so `metricool_post_id` is rewritten on every edit. The old app sends
+no `id` and discards the returned one — its "edit" duplicates and then points at
+the dead post, which means the client's planner may hold duplicates nobody made
+on purpose. **Not yet told to the client.**
+
+**C6/C7/F5 — a Page sets its own lengths and prompts** (`d53b093`). Eight
+nullable columns on `page`: five numbers the validator reads, three prompt
+bodies. Null means the house number / the file, and only overrides are stored,
+which is what makes this not a reversal of the prompts-are-files decision —
+`docs/data-model.md#prompts-are-files-with-per-page-overrides-in-the-database`.
+
+**The mechanism ships; the numbers are not set.** Every Page reads null for all
+eight — confirmed on the live database. So `prompts/pages/bodybuilding-tips-n-tricks/system.txt`
+asks for a 30-word hook while the validator still allows the house 65, and its
+"2 or 3 paragraphs, 1,800–1,900 characters" contradicts C7's stated ask of 1,500
+characters in 3–4 paragraphs. Somebody has to enter the client's numbers on
+Settings, and somebody has to ask the client which of the two they meant. The
+BBTT and Fitness Recipes prompt files are **our drafts, never approved** —
+there was nothing in the old tool to port.
+
+**Migrations: 17 revisions, `e232c1fcb279` is head, and the live database is at
+head.** Everything since the round-1 three landed the same way: `alembic upgrade`
+against the only database this app has. Run `uv run alembic check` before every
+deploy — the suite builds its schema with `create_all` and can never catch a
+missing revision.
 
 ## Things that will bite you
 

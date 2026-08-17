@@ -156,8 +156,15 @@ a block** — the operator decides whether it matters.
 Draft **freezes** — no edits, no image rebuild. Metricool stores a *link*, and
 Facebook fetches it when the post is due, possibly days later, so the file must
 still be there and unchanged. The time is on the Page's clock; left as it comes,
-it means as soon as Metricool will take it. Once in the planner, the planner is
-where it is rescheduled or cancelled.
+it means as soon as Metricool will take it.
+
+**A queued post is still yours.** Once it is in the planner the drawer can edit
+its caption and first comment, **Move** it to another time, or **Remove** it
+from the planner entirely — no trip to Metricool. What stays frozen is the
+picture, for the reason above: the planner holds a link to a file Facebook has
+not fetched yet, and rebuilding the image deletes what that link points at.
+Remove first, then redraw. Note that Metricool has no in-place update, so every
+edit replaces the post and **its id changes**; the app follows the new id.
 
 **Rehearsal mode** keeps everything as Metricool drafts. The post still reaches
 Metricool and appears in the planner; what it stops is Metricool pushing on to
@@ -180,7 +187,8 @@ stateDiagram-v2
 |---|---|
 | `failed` is not `review` | A run that produced nothing is not a post awaiting a decision. When they shared a state, empty rows sat in the queue looking ready |
 | A restart mid-run fails the stragglers | Otherwise they sit in the queue forever, looking like work about to finish |
-| Publishing is not approval | Approve was the old queue movement and nothing writes it now. Publishing cannot be taken back, so it is its own decision — three ways out: now, at a time, or at the next free slot |
+| Publishing is not approval | Approve was the old queue movement and nothing writes it now. Publishing is its own decision — three ways out: now, at a time, or at the next free slot |
+| Queued is recoverable; published is not | A post still in the planner can be edited, moved or removed from the drawer. Once Facebook has it, this app is done — it never touches Facebook |
 
 ---
 

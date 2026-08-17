@@ -16,7 +16,7 @@ and the current state of play is `HANDOFF.md`.
 ## Checks
 
 ```
-api/   uv run pytest -q          # 339 at time of writing
+api/   uv run pytest -q          # 430 at time of writing, ~170s
 api/   uv run alembic check      # "No new upgrade operations detected"
 web/   npx tsc --noEmit
 web/   npx eslint src            # clean — keep it that way

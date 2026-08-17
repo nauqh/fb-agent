@@ -15,9 +15,9 @@ whose every intermediate state was public to the next node.
 
 ```
         ┌───────────────────────────────┐
-        │  web/   Next.js               │   3 screens, no DB access
-        │  Sources · Review · Settings  │   talks only to /api over fetch
-        │                               │
+        │  web/   Next.js               │   7 screens, no DB access
+        │  Overview · Sources · Manual  │   talks only to /api over fetch
+        │  Review · Schedule · Settings │   plus Global, the cross-Page one
         └───────────────┬───────────────┘
                         │ HTTP + JSON
         ┌───────────────▼───────────────┐
@@ -41,20 +41,25 @@ Two processes, one machine. No queue, no worker, no Redis, no cron — see
 ```
 fb-agent/
 ├── api/
-│   ├── config/layout.yml        the one Composed Image form
-│   ├── config/sources.yml       feeds and windows, per Page
+│   ├── config/layout.yml        the default Composed Image form
+│   ├── config/sources.yml       the windows. The feed list is rows now
+│   ├── prompts/                 system · overlay · image
+│   │   └── pages/<slug>/        a Page's own, when it has one
+│   ├── alembic/versions/        17 revisions; head is e232c1fcb279
 │   ├── app/
-│   │   ├── main.py              FastAPI app, lifespan, static /media
+│   │   ├── main.py              FastAPI app, lifespan, /assets mount
 │   │   ├── settings.py          env + both yml files → frozen models
-│   │   ├── db.py                engine, pragmas, session dependency
-│   │   ├── models.py            SQLModel: Page, SourceItem, Draft
-│   │   ├── routes/              pages · sources · generate · drafts
+│   │   ├── db.py                engine, alembic upgrade, session dependency
+│   │   ├── models.py            SQLModel, eight tables
+│   │   ├── routes/              pages · prompts · sources · competitors ·
+│   │   │                        feeds · drafts · schedule · overview · config
 │   │   ├── sources/             metricool.py · x.py · rss.py
+│   │   ├── publish/             metricool.py — the planner write path
 │   │   ├── writer/              agent.py · prompts.py · validators.py
 │   │   ├── image/               hero.py · compositor.py · text.py
 │   │   ├── media.py             MediaStore
 │   │   └── generate.py          the run
-│   ├── assets/fonts/Arial-Bold.ttf
+│   ├── assets/                  fonts/Arial-Bold.ttf · watermarks/
 │   └── tests/
 ├── web/                         Next.js, fresh
 └── docs/
@@ -72,7 +77,16 @@ Seven, each stated as its interface. Everything else is implementation.
 | `Compositor` | `compose(hero, text, highlights, watermark) -> bytes` | measurement, wrapping, panel geometry, SVG, rasterisation |
 | `MediaStore` | `save(bytes, name) -> url` | where files live and how they become URLs |
 | `Metricool` | `pages()`, `competitors(page)`, `competitor_posts(page)` | auth, blog-id resolution, lookback windows |
+| `Publisher` | `schedule()`, `update()`, `delete()`, `get_post()` | the planner's payload shape, its naive-local clock, and that an edit is a replace |
 | `GenerateRun` | `run(source_ids, page_ids) -> list[draft_id]` | the whole pipeline |
+
+`Publisher` is `app/publish/metricool.py` and is a separate module from
+`sources/metricool.py` on purpose: the read side answers "what is out there",
+the write side "put this in the planner", and they share an account rather than
+a problem. The write side is where every integration trap in `CLAUDE.md` lives —
+naive local `dateTime` with `timezone` beside it, XML error bodies on a JSON
+API, images that are linked and never re-hosted, and `update()` returning a
+**new** post id because there is no in-place edit.
 
 Persistence is **SQLModel** — the table classes in `models.py` are both the
 schema and the API-facing types, so there is no second set of DTOs to keep in
@@ -325,26 +339,57 @@ process there is no other writer that could still own it.
 ## HTTP surface
 
 ```
-GET    /pages                       one row in v1
+GET    /pages                       ten rows
 GET    /pages/{id}
-PATCH  /pages/{id}                  watermark (prompts are files, no UI caller)
-GET    /prompts                     the prompt files, read-only, substituted
+PATCH  /pages/{id}                  watermark, badge, writing lengths (422 on an
+                                    unsatisfiable band)
+POST   /pages/{id}/watermark        upload a mark;  DELETE removes it
+GET    /pages/{id}/slots            the times this Page publishes at
+POST   /pages/{id}/slots            DELETE /pages/{id}/slots/{slot_id}
 
-GET    /sources/competitors?page_id=&refresh=  stored rows; syncs when empty or asked
-GET    /sources/rss?page_id=          the Page's curated feeds, live, unsaved
+GET    /prompts                     resolved per Page, with `source` and `editable`
+PUT    /prompts/{page_id}/{file}    this Page's own text. Blank body = inherit again
+
+GET    /layout                      layout.yml with the Page's overrides laid over
+PATCH  /layout                      write an override;  DELETE /layout resets
+POST   /layout/sample               render a sample card without a draft
+
+GET    /feeds                       POST /feeds ;  DELETE /feeds/{id}
+GET    /competitors/assignments     PUT to replace a Page's set
+POST   /competitors                 add one to Metricool;  DELETE /competitors/{id}
+GET    /competitors/allowance       how much of the account's 100 is spent
+
+GET    /sources/competitors?page_id=&refresh=&sort=  stored rows; reactions by default
+GET    /sources/competitors/reach   GET /sources/competitors/pages
+GET    /sources/rss?page_id=        the Page's feeds, live, unsaved
 GET    /sources/tweet?url=          single lookup, live, unsaved
+GET    /sources/items/{id}          what a draft was written from
+GET    /sources/config              the windows
 
-POST   /generate                    {sources, page_ids} → draft ids; the only write
+POST   /generate                    {sources, page_ids} → draft ids
+POST   /drafts/manual               a typed draft. No model call at all
 GET    /drafts?status=&page_id=
 GET    /drafts/{id}                 poll target
-PATCH  /drafts/{id}                 operator edits
-POST   /drafts/{id}/approve
-POST   /drafts/{id}/unapprove       back to review; Approve is reversible in v1
-POST   /drafts/{id}/reject
-POST   /drafts/{id}/recomposite     redraw the panel over the stored hero — free
-POST   /drafts/{id}/regenerate-image  new hero, then recomposite — a paid call
+PATCH  /drafts/{id}                 operator edits. Allowed on a queued post for
+                                    text only; pushes the edit to Metricool
+POST   /drafts/{id}/regenerate      one field, by the model
+POST   /drafts/{id}/image           redraw; ?new_hero=true buys a new picture
+POST   /drafts/{id}/inset           upload the disc;  DELETE removes it
+POST   /drafts/{id}/approve         /unapprove  /reject
+DELETE /drafts/{id}
 
-GET    /media/{path}                static
+GET    /publish/mode                rehearsal or live — the flag the screens cannot see
+POST   /drafts/{id}/publish         → the planner
+POST   /drafts/{id}/reschedule      move it, without opening Metricool
+POST   /drafts/{id}/unschedule      out of the planner, back to an editable draft
+
+GET    /schedule                    read live from Metricool. No local mirror (ADR-0001)
+GET    /schedule/next-slot          the next free PAGE_TIME_SLOT
+
+GET    /overview/performance        live from Metricool's stats
+GET    /overview/saved              POST to keep one;  /reuse ;  DELETE
+
+GET    /assets/{path}               committed watermarks and fonts
 ```
 
 `hero_image_path` and `composed_image_path` are stored separately so
@@ -353,29 +398,46 @@ which is why the two operations are **two routes**. Collapsing them into one
 hides the price difference from the only screen that could show it, and the
 cheap one is the common case: every overlay edit needs it.
 
-`regenerate-image` also clears `error`, because a refused hero is the one failure
+`?new_hero=true` also clears `error`, because a refused hero is the one failure
 that leaves a Draft complete except for its image, and the prompt it was refused
 for is `image_prompt` — an operator-editable field on `PATCH`, or the row is a
 dead end.
 
-`unapprove` exists because nothing publishes in v1, so Approve is a queue
-movement rather than a commitment: an approved Draft can come back. That is also
-why the Quota was cut — it capped a number Approve could raise and `unapprove`
-could lower, so it never bound anything.
+`unapprove` survives for rows that already carry `APPROVED`; **nothing writes it
+any more** and Approve is gone from the UI. Publishing never required it. That is
+also why the Quota was cut — it capped a number Approve could raise and
+`unapprove` could lower, so it never bound anything.
+
+**The three routes at the bottom of the publish block are the exception to the
+freeze**, and the shape is worth stating once. A Draft in the planner is frozen
+against anything that would change its *picture*, because Metricool holds a link
+and Facebook has not followed it yet. Its text is not frozen: `PATCH` pushes the
+edit through to the planner, `reschedule` moves it, and `unschedule` takes it out
+and unfreezes the row completely. Each of those calls Metricool's `PUT`, which
+**replaces** the post — so `metricool_post_id` is rewritten from the response
+every time. See `data-model.md#what-happens-after-publish`.
 
 ## Configuration
 
-Four tiers, and the split is deliberate:
+Four tiers, and the split is deliberate. Two of them have grown a per-Page layer
+since this was written, and in both cases the layer holds **only what a Page
+changed** — never a copy of what it inherits, which is the property that stops
+either from drifting:
 
 - **[`layout.yml`](../api/config/layout.yml)** — how the image looks. Loaded once
   into a frozen Pydantic model at startup, so a bad value fails the boot, not the
-  render. No per-page section, ever.
+  render. It said "no per-page section, ever"; `PAGE_LAYOUT` rows now override it
+  per Page and the file is the default they resolve against
+  ([why](data-model.md#layout-is-config-with-per-page-overrides)).
 - **[`prompts/*.txt`](../api/prompts)** — what the model is told. Read on every
-  call, so an edit needs no restart. Files rather than columns because they are
-  the most-edited thing here and they must be reviewable and revertable
-  ([why](data-model.md#prompts-are-files-not-columns)). `{panel_pct}` and
-  `{highlight_color}` are substituted from `layout.yml` so a prompt cannot
-  contradict the compositor.
+  call, so an edit needs no restart. Files because they are the most-edited thing
+  here and must be reviewable and revertable. Resolved in three tiers: the
+  Page's stored column, then `prompts/pages/<slug>/`, then the house file
+  ([why](data-model.md#prompts-are-files-with-per-page-overrides-in-the-database)).
+  The stored tier exists because Railway's filesystem is ephemeral, so an editor
+  that wrote a file would lose every edit on redeploy. `{panel_pct}` and
+  `{highlight_color}` are substituted from `layout.yml` after resolution, so no
+  tier can contradict the compositor.
 - **env** — secrets and model ids. Model ids belong here because they get retired
   upstream without notice; the old repo shipped
   `fix(gemini): replace retired image fallback model`. That applies twice over to
@@ -385,7 +447,8 @@ Four tiers, and the split is deliberate:
   `gemini-2.5-flash-image`). Every image link therefore expires on someone else's
   schedule, and a rotted one answers 404, which is not transient and so surfaces
   instead of being spent as three attempts and a silent step sideways.
-- **`page` rows** — identity: name, the two external ids, watermark file.
+- **`page` rows** — identity and per-Page policy: name, the two external ids, the
+  watermark and badge, the five writing lengths, the three prompt overrides.
 
 ### The three prompt files
 
@@ -394,7 +457,7 @@ prompt, one loader each.
 
 | File | Model | What it does |
 |---|---|---|
-| `system.txt` | text | The post: hook ≤65 words no questions, recap of ≤5 emoji-led points, first comment with birth/death years and no meta-phrases |
+| `system.txt` | text | The post: hook ≤65 words no questions, recap of ≤5 emoji-led points, first comment with birth/death years and no meta-phrases. The lengths are the house numbers, and a Page that sets its own gets them appended as an overriding block |
 | `overlay.txt` | text | The panel copy, then 5–8 short substrings quoted verbatim out of it |
 | `image.txt` | image | How the photo should look, which layer to draw, and what must not appear in it |
 
@@ -431,12 +494,23 @@ answered by rendering rather than by reasoning.
 
 This is the same call as `page` + `page_style` in
 [decisions.md](decisions.md): a strictly 1:1 split buys nothing and rebuilds the
-shape where one setting lives in two places and drifts. Adding page two forks
-`prompts/` into `prompts/<page>/`
-([data-model.md](data-model.md#prompts-are-files-not-columns)) — and it would
-have had to re-split these two anyway, since page two inheriting the old
-"universal" file would have inherited HR's reenactment rules exactly as Hot Tub
-Timeout did.
+shape where one setting lives in two places and drifts.
+
+**The fork it predicted has happened**, and the merge is what made it cheap.
+`prompts/pages/bodybuilding-tips-n-tricks/` and `prompts/pages/fitness-recipes/`
+each hold all three files; the other eight Pages inherit the house ones. Had the
+split survived, page two would have inherited the old "universal" file and with
+it History Retraced's reenactment rules — exactly as Hot Tub Timeout did in the
+old system.
+
+A Page overriding a file overrides **all** of it, deliberately: there is no
+merge, no block-level inheritance, and no way for a Page to take half a prompt.
+That is the same reasoning as the ERD's null columns — a partial copy is the
+thing that drifts.
+
+The two files that exist are **drafts of ours and have never been approved by
+the client**. There was nothing in the old tool to port for either Page, so
+somebody wrote a plausible prompt and it has been generating with it since.
 
 The old system glued the pair together and stored the result per page: three
 pages, ~2350 characters each, of which **2030 were byte-identical**. Every copy
@@ -447,9 +521,16 @@ what fixed it.
 
 ## Frontend
 
-Three screens — Sources, Review, Settings — in a fresh Next.js app. It holds no
-database credentials and no Supabase client; every read is `fetch` to `/api`.
-The Cart is client state, holding the items themselves, and is not persisted.
+Seven screens — Overview, Sources, Manual, Review, Schedule, Settings, and
+Global — in a fresh Next.js app. It holds no database credentials and no Supabase
+client; every read is `fetch` to `/api`. The Cart is client state, holding the
+items themselves, and is not persisted.
+
+Which Page a screen is showing is a **cookie**, `fb_page_id` (`lib/page-cookie.ts`),
+not a route segment or a query parameter. Global is the one screen with no
+switcher in its title row: the competitor pool at the top is account-wide, and a
+Page name up there read as the scope of the whole screen. The two cards below it
+that *are* per-Page carry their own switcher, beside the sentence saying so.
 
 There was a fourth, `Generate`, and removing it is the one frontend decision
 worth recording. It staged a run: the Cart again, the target Page, and
@@ -491,14 +572,29 @@ the wrong shape.
 ## Deliberately absent
 
 BullMQ · Redis · a worker process · cron · LangGraph · Supabase auth · RLS ·
-`user_id` · Postiz · Facebook Graph OAuth · `sharp` · the `full_overlay` layout ·
-the headline badge · rounded corners · a schedule table · a competitors table.
+`user_id` · Postiz · Facebook Graph OAuth · `sharp` · rounded corners ·
+a schedule table · a competitors table.
 
 Each was checked against running code or production data before removal;
 [decisions.md](decisions.md#cut-with-the-evidence) records the evidence.
 
-## Deferred to v2
+**Two came back**, and the list says so rather than quietly dropping them. The
+`full_overlay` layout and the headline badge were cut because one Page never
+used them; they are `PAGE_LAYOUT.template` (and `Draft.template` for one post)
+and `Page.badge_text` now, because a news Page wants a card a history Page does
+not. Both are still absent from `layout.yml` as *global* settings, which is what
+the original cut was actually about.
 
-Approve → Metricool push, the calendar that depends on it, and the `MediaStore`
-swap to hosted storage. Accepted risk: the riskiest integration ships unproven,
-and Composed Images are only ever seen locally in v1.
+The schedule table and the competitors table have **not** come back.
+`PAGE_TIME_SLOT` is policy — the times we publish at, which Metricool has
+nowhere to keep — and `PAGE_COMPETITOR` is an assignment on top of a list that
+is still configured in Metricool and still never mirrored here. ADR-0001 holds:
+what is queued is read live, every time.
+
+## Shipped since, having been deferred
+
+Publishing to Metricool, the Schedule screen that depends on it, and the
+`MediaStore` swap to Supabase Storage. The accepted risk was that "the riskiest
+integration ships unproven"; it is proven now, at the cost of most of the
+integration traps in `CLAUDE.md` — and one that outlived the deferral, that a
+queued post could not be edited or cancelled from this app at all until D6.

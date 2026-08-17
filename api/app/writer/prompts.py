@@ -1,4 +1,9 @@
-"""Prompts live in `api/prompts/*.txt`, not in the database.
+"""Prompts live in `api/prompts/*.txt`. A Page may override one; nothing copies.
+
+Three tiers, resolved in `_read`: this Page's stored column, else
+`prompts/pages/<slug>/`, else the house file. The house prompts are never in the
+database, and a Page that has not overridden one holds no copy of it — the two
+properties this module exists to keep.
 
 They are the product, and they are edited far more often than anything else
 here. As database columns they were invisible to git, unreviewable, and they
@@ -34,6 +39,20 @@ was that a textarea let ten copies of one prompt drift invisibly, and the
 measurement that proved it is in the paragraph above. A file per Page in git
 diffs, reviews and reverts exactly like the file it overrides; what it does not
 do is let a copy go stale without anyone seeing it.
+
+## And the columns, which came back on 2026-08-17
+
+`COLUMN` below maps each file to a nullable `Page` column that wins over both
+tiers of file. It is not the old arrangement returning: **only an override is
+ever stored**, never a copy of what a Page inherits, so there is nothing for a
+global edit to drift away from. Null is a live pointer at the file, not a
+snapshot of it.
+
+The forcing reason is where this runs. The client's F5 asked to edit prompts in
+the Settings tab, and Railway's filesystem is ephemeral (`app/db.py`) — an
+editor that wrote `prompts/pages/<slug>/system.txt` would lose every edit on the
+next redeploy. So the house prompts stay files, in git, and deliberately **not**
+editable from the screen; only a Page's own text is a row.
 
 The evidence that per-Page prose is genuinely needed came from the same place as
 the evidence against columns. The old tool's Bodybuilding Tips row was **byte

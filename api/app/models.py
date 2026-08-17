@@ -93,14 +93,17 @@ class DraftStatus(StrEnum):
 class Page(SQLModel, table=True):
     """An owned Facebook page. Rows, not constants — adding one is an insert.
 
-    v1 runs **one** page, History Retraced. The table stays rather than becoming
-    a constant because `draft.page_id` and `source_item.synced_for_page_id`
-    point at it; adding the second page should be an insert, not a schema change
-    plus a rewrite of every query (ADR-0003).
+    v1 ran one page, History Retraced; there are **ten** now, and every one of
+    them was an insert. No schema change, no query rewritten — which is ADR-0003
+    paying off rather than being argued.
 
-    Identity and policy only. The prompts moved to `api/prompts/*.txt` — see
-    app/writer/prompts.py. There is no `is_active`: with one page it is always
-    true, and a flag that is never false is not state.
+    Identity and per-Page policy. The prompt columns below are *overrides*, null
+    until somebody types into Settings, and null means the file in
+    `api/prompts/` — see app/writer/prompts.py for the three-tier resolution and
+    why storing only the override is what keeps the old drift failure dead.
+
+    Still no `is_active`. Ten pages and the flag would still never be false: a
+    page that should not publish does not get generated for.
     """
 
     __tablename__ = "page"

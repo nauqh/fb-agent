@@ -1,7 +1,8 @@
 # How wide a window Source Items are drawn through. Both numbers global.
 #
-# Separate from layout.yml on purpose. That file describes the Composed Image
-# and has no per-page section, ever — every Page renders identically.
+# Separate from layout.yml on purpose. That file describes the Composed Image,
+# and a Page that wants its own overrides it with a `page_layout` row rather
+# than with a section in the file.
 #
 # **The feed list is no longer here.** It is `feed` rows, added and removed from
 # Settings, because it is the one part of this file an operator has to change
