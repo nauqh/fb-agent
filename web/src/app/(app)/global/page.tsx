@@ -3,9 +3,7 @@
 import { useState } from "react";
 import {
   ArrowRight,
-  ChevronDown,
   ExternalLink,
-  FileText,
   Loader2,
   Plus,
   Trash2,
@@ -13,7 +11,7 @@ import {
 import { toast } from "sonner";
 
 import { CompetitorMark } from "@/components/competitor-mark";
-import { Card } from "@/components/config-card";
+import { ConfigShell, Pane } from "@/components/config-shell";
 import { LayoutEditor } from "@/components/layout-editor";
 import { PageSwitcher } from "@/components/page-switcher";
 import { QueuePagination } from "@/components/queue-pagination";
@@ -33,7 +31,6 @@ import {
   removeFromPool,
   type Allowance,
 } from "@/lib/api/competitors";
-import { listPromptFiles } from "@/lib/api/pages";
 import { getCompetitorPages, type CompetitorPage } from "@/lib/api/sources";
 import { usePageScope } from "@/lib/page-scope";
 import type { Page } from "@/lib/types";
@@ -50,14 +47,20 @@ import { cn } from "@/lib/utils";
  *
  * Here: the competitor pool and its Metricool budget. On Settings: which of
  * this pool a given Page reads, plus that Page's feeds and watermark.
+ *
+ * **Prompts left this screen on 2026-08-17.** They were here read-only, under a
+ * hint saying they are "edited in your editor" — which stopped being true the
+ * day Settings grew an editor for them, leaving the same three files described
+ * two ways on two screens. They are per-Page, so they live with the Page's other
+ * per-Page settings and only there.
+ *
+ * The two screens are also **fully separate**: no rail entry here points at
+ * Settings, and none there points here. Two scopes, two screens, no seam.
  */
 export default function GlobalScreen() {
-  const { pages, pageId } = usePageScope();
+  const { pages } = usePageScope();
 
   const { data: allowance } = useQuery(() => getAllowance(), []);
-  const { data: prompts } = useQuery(() => listPromptFiles(pageId!), [pageId], {
-    enabled: pageId !== null,
-  });
   const {
     data: pool,
     error: poolError,
@@ -65,65 +68,53 @@ export default function GlobalScreen() {
   } = useQuery(() => getCompetitorPages(), []);
 
   return (
-    // Its own scroller, like every screen: the shell is `lg:overflow-hidden` on
-    // both `body` and `main`, so a screen without `overflow-y-auto` here is not
-    // a short page — it is a clipped one, with everything below the fold simply
-    // unreachable. `pb-16` keeps the last row clear of the mobile bar.
-    <div className="w-full space-y-4 pb-16 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-3">
-      {/* No switcher in the title row. Everything above the Composed Image card
-          is account-wide, and a Page name up there read as the scope of the
-          whole screen — including the pool, which is shared by every Page. It
-          sits on the card it actually governs instead. */}
-      <ScreenHeader title="Global" switcher={false} />
-
-      <CompetitorPool
-        allowance={allowance}
-        rows={pool}
-        pages={pages}
-        error={poolError}
-        loading={poolLoading}
-      />
-
-      <div className="grid items-start gap-4 xl:grid-cols-2">
-        <Card
-          className="xl:col-span-2"
-          title="Composed Image"
-          hint={
-            <>
-              <code>api/config/layout.yml</code> holds the defaults; what you
-              change here applies to the Page in the switcher only.
-            </>
-          }
-          // The one per-Page block on this screen, so the switcher belongs to
-          // it rather than to the title row — beside the sentence that says the
-          // edits apply to whichever Page it names.
-          meta={<PageSwitcher />}
-        >
-          <LayoutEditor />
-        </Card>
-
-        <Card
-          title="Prompts"
-          hint={
-            <>
-              Files in <code>api/prompts/</code>, edited in your editor. A Page
-              with its own copy under <code>pages/</code> is marked.
-            </>
-          }
-          // Per-Page since the two fitness Pages got their own files, so this
-          // card carries the switcher for the same reason Composed Image does:
-          // without it the screen shows History Retraced's prompts under
-          // whichever Page is selected, and looks right doing it.
-          meta={<PageSwitcher />}
-        >
-          <div className="divide-y rounded-lg border">
-            {prompts?.map((prompt) => (
-              <PromptRow key={prompt.filename} {...prompt} />
-            ))}
-          </div>
-        </Card>
-      </div>
-    </div>
+    <ConfigShell
+      // No switcher in the title row. The pool is account-wide, and a Page name
+      // up there read as the scope of the whole screen. Composed Image carries
+      // its own switcher, beside the sentence saying it is per-Page.
+      header={<ScreenHeader title="Global" switcher={false} />}
+      groups={[
+        {
+          label: "Account",
+          sections: [
+            {
+              id: "pool",
+              label: "Competitor pool",
+              meta: allowance ? `${allowance.remaining} left` : "",
+              // The one number on either screen that stops you doing something.
+              gap: allowance ? allowance.remaining <= 10 : false,
+              body: (
+                <CompetitorPool
+                  allowance={allowance}
+                  rows={pool}
+                  pages={pages}
+                  error={poolError}
+                  loading={poolLoading}
+                />
+              ),
+            },
+            {
+              id: "card",
+              label: "Composed Image",
+              body: (
+                <Pane
+                  title="Composed Image"
+                  hint={
+                    <>
+                      <code>api/config/layout.yml</code> holds the defaults; what
+                      you change here applies to the Page in the switcher only.
+                    </>
+                  }
+                  action={<PageSwitcher />}
+                >
+                  <LayoutEditor />
+                </Pane>
+              ),
+            },
+          ],
+        },
+      ]}
+    />
   );
 }
 
@@ -208,10 +199,10 @@ function CompetitorPool({
       <div className="p-5 pb-4">
         <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2">
           <div className="min-w-0">
-            <h2 className="text-[15px] font-semibold tracking-tight">
+            <h2 className="text-base font-semibold tracking-tight">
               Competitor pool
             </h2>
-            <p className="pt-1 text-xs text-muted-foreground">
+            <p className="pt-1 text-[13px] text-muted-foreground">
               Every page Metricool is watching, on one allowance shared by every
               brand. Which of your Pages read one is set on Settings.
             </p>
@@ -230,7 +221,7 @@ function CompetitorPool({
               >
                 {allowance.remaining}
               </span>
-              <span className="pl-1.5 text-xs text-muted-foreground">
+              <span className="pl-1.5 text-[13px] text-muted-foreground">
                 left of {allowance.limit}
               </span>
             </p>
@@ -280,7 +271,7 @@ function CompetitorPool({
             </Chip>
           ) : null}
 
-          <span className="ml-auto text-xs text-muted-foreground">
+          <span className="ml-auto text-[13px] text-muted-foreground">
             <Unmanaged data={allowance} />
           </span>
         </div>
@@ -290,13 +281,13 @@ function CompetitorPool({
         <AddToPool />
 
         {error ? (
-          <p className="rounded-lg border border-dashed p-4 text-xs text-destructive">
+          <p className="rounded-lg border border-dashed p-4 text-[13px] text-destructive">
             {error}
           </p>
         ) : loading || !rows ? (
           <Skeleton className="h-64 rounded-lg" />
         ) : shown.length === 0 ? (
-          <p className="rounded-lg border border-dashed p-6 text-center text-xs text-muted-foreground">
+          <p className="rounded-lg border border-dashed p-6 text-center text-[13px] text-muted-foreground">
             Nothing matches that filter.
           </p>
         ) : (
@@ -409,7 +400,7 @@ function Chip({
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors",
+        "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[13px] transition-colors",
         active
           ? tone === "destructive"
             // `text-background`, not `text-white`: there is no
@@ -483,14 +474,14 @@ function AddToPool() {
         onChange={(event) => setValue(event.target.value)}
         placeholder="Facebook page id, e.g. 20528438720"
         aria-label="Facebook page id"
-        className="h-8 min-w-48 flex-1 text-xs"
+        className="h-8 min-w-48 flex-1 text-[13px]"
       />
-      <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+      <label className="flex items-center gap-1.5 text-[13px] text-muted-foreground">
         under
         <select
           value={target ?? ""}
           onChange={(event) => setUnder(Number(event.target.value))}
-          className="h-8 rounded-md border bg-background px-2 text-xs"
+          className="h-8 rounded-md border bg-background px-2 text-[13px]"
           aria-label="Which brand to add it under"
         >
           {pages.map((page) => (
@@ -555,7 +546,7 @@ function PoolTable({
       {/* Fixed layout. Auto sizing gave the first column every spare pixel, so
           a competitor's name sat a screen's width from the brand beside it and
           the eye had to travel to pair them. */}
-      <table className="w-full min-w-184 table-fixed text-xs">
+      <table className="w-full min-w-184 table-fixed text-[13px]">
         <thead>
           {/* Headings in the text colour, not muted. They name the columns; a
               grey heading over black data reads as the disabled state of a
@@ -802,86 +793,5 @@ function RemoveFromPool({
     >
       {busy ? <Loader2 className="size-3 animate-spin" /> : <Trash2 className="size-3" />}
     </button>
-  );
-}
-
-
-
-function PromptRow({
-  filename,
-  chars,
-  body,
-  overridden,
-}: {
-  filename: string;
-  chars: number;
-  body: string;
-  overridden: boolean;
-}) {
-  const [open, setOpen] = useState(false);
-  // `system.txt` would make `prompt-system.txt`, a legal id that reads as an id
-  // *and a class* to every CSS selector that goes looking for it.
-  const panelId = `prompt-${filename.replace(/\W+/g, "-")}`;
-
-  return (
-    <div>
-      <button
-        type="button"
-        onClick={() => setOpen((current) => !current)}
-        aria-expanded={open}
-        aria-controls={panelId}
-        className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-muted/50"
-      >
-        <FileText className="size-4 shrink-0 text-muted-foreground" />
-        <span className="flex-1 font-mono text-xs">{filename}</span>
-        {/* The one thing on this row that is not cosmetic: it says whether the
-            body below is this Page's own file or the shared one. */}
-        {overridden && (
-          <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[11px] font-medium text-primary">
-            this Page
-          </span>
-        )}
-        <span className="tabular-nums text-xs text-muted-foreground">
-          {chars.toLocaleString()} chars
-        </span>
-        <ChevronDown
-          className={cn("size-4 text-muted-foreground transition-transform duration-300", open && "rotate-180")}
-        />
-      </button>
-
-      {/**
-       * Animated by grid row, not by height.
-       *
-       * These bodies are 1,700–2,700 characters and wrap to whatever the column
-       * gives them, so the open height is not a number this code can know —
-       * which rules out transitioning `height` from 0 to a constant, and rules
-       * out `max-height` to a guess: too small clips the longest prompt, too
-       * large makes the close look like it hangs before it moves.
-       *
-       * `grid-template-rows: 0fr → 1fr` is transitionable and resolves to the
-       * content's own height, so it fits all three files without measuring any
-       * of them. The inner `overflow-hidden` is what makes it work — without it
-       * the row shrinks and the text spills out over the row below.
-       */}
-      <div
-        id={panelId}
-        aria-hidden={!open}
-        className={cn(
-          "grid transition-[grid-template-rows] duration-300 ease-out",
-          open ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
-        )}
-      >
-        <div className="overflow-hidden">
-          {/* `max-h-96` with its own scroller, unchanged: the animation opens to
-              the capped height, and the longest prompt scrolls inside it. The
-              top border rides on this element rather than the wrapper so it is
-              clipped along with the text, instead of sitting as a stray 1px
-              line under every closed row. */}
-          <pre className="max-h-96 overflow-auto whitespace-pre-wrap border-t bg-muted/40 px-4 py-3 font-mono text-[11px] leading-relaxed text-muted-foreground">
-            {body}
-          </pre>
-        </div>
-      </div>
-    </div>
   );
 }

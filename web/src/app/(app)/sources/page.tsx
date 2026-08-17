@@ -26,7 +26,6 @@ import { useCart } from "@/lib/cart";
 import { usePageScope } from "@/lib/page-scope";
 import { emit } from "@/lib/store";
 import { useQuery } from "@/lib/use-query";
-import { cn } from "@/lib/utils";
 
 // The Page every competitor set and feed list belongs to used to be `const
 // PAGE_ID = 1`. It comes from the switcher now — the competitor sets do not
@@ -175,31 +174,36 @@ function CompetitorsTab() {
           ) : null}
         </p>
 
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           {/* Two words, not a dropdown: there are exactly two orders and both
               fit. The window in the hint above moves with the choice because
               the two are not independent — ranking by reactions is bounded to
               seven days server-side so that a post that went viral in July
-              cannot hold the top of the grid forever. */}
-          <div className="flex gap-1" role="group" aria-label="Sort competitor posts">
-            {(["reactions", "newest"] as const).map((option) => (
-              <button
-                key={option}
-                type="button"
-                onClick={() => setSort(option)}
-                className={cn(
-                  "rounded-md border px-2 py-1 text-xs capitalize transition-colors",
-                  option === sort
-                    ? "border-primary bg-primary/10 text-primary"
-                    : "text-muted-foreground hover:bg-muted",
-                )}
-              >
-                {option}
-              </button>
-            ))}
-          </div>
+              cannot hold the top of the grid forever.
 
-          <Button variant="outline" size="sm" disabled={syncing || loading} onClick={sync}>
+              The shared pill shell (`ui/tabs.tsx`), not a pair of bordered
+              boxes: this is a choice between alternatives, which is what every
+              other such control in the app now looks like. The old active
+              state was `bg-primary/10`, a near-white tint that read as barely
+              distinguishable from the inactive one. */}
+          <Tabs value={sort} onValueChange={(next) => setSort(next as SourceSort)}>
+            <TabsList className="w-fit" aria-label="Sort competitor posts">
+              <TabsTrigger value="reactions">Reactions</TabsTrigger>
+              <TabsTrigger value="newest">Newest</TabsTrigger>
+            </TabsList>
+          </Tabs>
+
+          {/* `h-7` to match the pill shell beside it — a default-height button
+              stood a few pixels taller and the row read as two unrelated
+              controls that happened to be adjacent. Outline, not the pill's
+              solid fill: this one *does* something rather than selecting. */}
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7"
+            disabled={syncing || loading}
+            onClick={sync}
+          >
             {syncing ? (
               <Loader2 className="size-3.5 animate-spin" />
             ) : (

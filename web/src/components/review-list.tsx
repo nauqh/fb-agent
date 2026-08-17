@@ -136,7 +136,7 @@ export function ReviewList() {
     <div className="flex flex-col gap-3">
       {/* Hugs its rows. A `flex-1` container left a tall empty bordered box
           under a two-draft queue, which read as something failing to load. */}
-      <div className="overflow-hidden rounded-xl border">
+      <div className="overflow-hidden rounded-lg border">
         {loading && !drafts ? (
           <div className="space-y-2 p-4">
             {Array.from({ length: 5 }).map((_, index) => (
@@ -150,7 +150,7 @@ export function ReviewList() {
         ) : (
           <table className="w-full min-w-[980px]">
             <thead>
-              <tr className="border-b bg-muted/30 text-left text-[11px] uppercase tracking-wide text-muted-foreground">
+              <tr className="border-b bg-muted/30 text-left font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
                 <th className="w-24 px-5 py-3 font-medium">
                   <span className="sr-only">Image</span>
                 </th>
@@ -179,7 +179,7 @@ export function ReviewList() {
                 <tr className="border-b bg-muted/20">
                   <td
                     colSpan={6}
-                    className="px-5 py-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
+                    className="px-5 py-1.5 font-mono text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground"
                   >
                     {dayHeading(rows[0].created_at)}
                     <span className="ml-2 font-normal tabular-nums opacity-70">
@@ -333,7 +333,7 @@ function Row({
                 style={{ width: `${draft.progress_pct}%` }}
               />
             </div>
-            <p className="pt-1 text-[11px] tabular-nums text-muted-foreground">
+            <p className="pt-1 font-mono text-[11px] tabular-nums text-muted-foreground">
               {draft.progress_step} · {draft.progress_pct}%
             </p>
           </div>

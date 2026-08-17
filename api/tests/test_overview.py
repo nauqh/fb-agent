@@ -211,3 +211,136 @@ def test_a_saved_post_with_no_text_cannot_be_reused(client, page):
 
 def test_reusing_something_that_is_not_there_says_so(client, page):
     assert client.post("/overview/saved/999/reuse").status_code == 404
+
+
+# --- reposting the original ---------------------------------------------------
+#
+# The client asked for "a button to just repost the original", distinct from
+# writing the story again. The whole difficulty is the picture: a saved post's
+# `picture_url` is Facebook's CDN, signed and expiring, and Metricool keeps a
+# *link* that Facebook resolves days later. Measured on 2026-08-18, one of the
+# six oldest saved posts already answered 403. So the image is copied into our
+# bucket at repost time, and these tests pin that rather than the happy path
+# alone.
+
+
+@pytest.fixture
+def cdn(monkeypatch):
+    """Facebook's image host, answering however the test wants it to."""
+    import httpx
+
+    state = {"status": 200, "content": b"\xff\xd8\xff jpeg bytes", "type": "image/jpeg"}
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def get(self, url):
+            if state["status"] == "boom":
+                raise httpx.ConnectError("no route to host")
+            return httpx.Response(
+                state["status"],
+                content=state["content"],
+                headers={"content-type": state["type"]},
+                request=httpx.Request("GET", url),
+            )
+
+    monkeypatch.setattr(httpx, "Client", FakeClient)
+    return state
+
+
+def _saved_with_picture(client, text="The 1925 serum run to Nome."):
+    return client.post(
+        "/overview/saved",
+        json={
+            "page_id": 1,
+            "post_id": "a",
+            "text": text,
+            "picture_url": "https://scontent.xx.fbcdn.net/signed.jpg",
+        },
+    ).json()
+
+
+def test_reposting_copies_the_image_into_our_own_bucket(client, page, cdn):
+    """The point of the whole feature. Handing Metricool the CDN URL would
+    publish whatever it resolves to days later, which is increasingly nothing."""
+    saved = _saved_with_picture(client)
+
+    response = client.post(f"/overview/saved/{saved['id']}/repost")
+
+    assert response.status_code == 201
+    draft = response.json()
+    assert draft["status"] == "review", "a repost is reviewed, never published straight out"
+    assert draft["caption"] == "The 1925 serum run to Nome.", "the caption verbatim"
+    assert draft["composed_image_path"], "the copied image, not the CDN URL"
+    assert "fbcdn" not in draft["composed_image_path"], (
+        "the stored path must be ours — a Facebook URL here is the bug this "
+        "feature exists to avoid"
+    )
+
+
+def test_an_expired_image_is_refused_with_a_reason(client, page, cdn):
+    """The expected end state, not a bug. 403 is what a signed URL does once it
+    ages out, and the message has to say what to do instead."""
+    saved = _saved_with_picture(client)
+    cdn["status"] = 403
+
+    response = client.post(f"/overview/saved/{saved['id']}/repost")
+
+    assert response.status_code == 409
+    assert "expired" in response.json()["detail"]
+
+
+def test_a_failed_copy_leaves_no_half_built_draft(client, page, cdn):
+    """A draft with a caption and no picture looks publishable and is not."""
+    saved = _saved_with_picture(client)
+    cdn["status"] = 403
+
+    client.post(f"/overview/saved/{saved['id']}/repost")
+
+    assert client.get("/drafts").json() == [], "the row is rolled back, not left behind"
+
+
+def test_the_image_host_being_unreachable_is_a_502(client, page, cdn):
+    saved = _saved_with_picture(client)
+    cdn["status"] = "boom"
+
+    assert client.post(f"/overview/saved/{saved['id']}/repost").status_code == 502
+
+
+def test_something_that_is_not_an_image_is_refused(client, page, cdn):
+    """An HTML error page served with 200 is the classic way this fails."""
+    saved = _saved_with_picture(client)
+    cdn["type"] = "text/html"
+
+    assert client.post(f"/overview/saved/{saved['id']}/repost").status_code == 409
+
+
+def test_a_saved_post_with_no_picture_cannot_be_reposted(client, page):
+    """Nothing to repost. `Write again` is the answer, and the message says so."""
+    saved = client.post(
+        "/overview/saved", json={"page_id": 1, "post_id": "a", "text": "A story."}
+    ).json()
+
+    response = client.post(f"/overview/saved/{saved['id']}/repost")
+
+    assert response.status_code == 409
+    assert "Write again" in response.json()["detail"]
+
+
+def test_reposting_leaves_the_saved_post_alone(client, page, cdn):
+    saved = _saved_with_picture(client)
+
+    client.post(f"/overview/saved/{saved['id']}/repost")
+
+    assert len(client.get("/overview/saved?page_id=1").json()) == 1
+
+
+def test_reposting_something_that_is_not_there_says_so(client, page):
+    assert client.post("/overview/saved/999/repost").status_code == 404

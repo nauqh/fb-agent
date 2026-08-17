@@ -11,13 +11,14 @@ vanishes on a rolling window is not a reference.
 
 from datetime import datetime, timezone
 
+import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
-from app import generate
+from app import generate, media
 from app.db import get_session
-from app.models import Page, SavedPost
+from app.models import Draft, DraftStatus, Page, SavedPost
 from app.sources import metricool
 
 router = APIRouter(tags=["overview"])
@@ -240,6 +241,152 @@ def reuse_saved(
 
     background.add_task(generate.run_drafts, draft_ids)
     return draft_ids
+
+
+REPOST_TIMEOUT = 20.0
+
+MAX_REPOST_BYTES = 10 * 1024 * 1024
+"""The buckets' own cap. Checked here so an oversized file fails with a sentence
+rather than as a storage error three calls later."""
+
+
+def _copy_original_image(row: SavedPost, draft_id: int) -> str:
+    """Take the post's picture off Facebook's CDN and into our bucket.
+
+    **This is the whole difficulty of reposting, and it is not optional.**
+    Metricool stores a *link* to what we publish and Facebook fetches it when
+    the post is due, days later — so handing them `row.picture_url` publishes
+    whatever that URL resolves to *then*, not now. Facebook's CDN URLs are
+    signed and expire: measured on 2026-08-18, one of the six oldest saved posts
+    already answered 403, and the rest are on the same clock. The competitor
+    thumbnails and the old app's 105 published posts with dead images document
+    the same trap from two other directions.
+
+    Copying it here makes the URL we hand Metricool *ours*, in a public bucket,
+    with no expiry — the same reasoning and nearly the same code as
+    `hero.from_url`, which fetches a feed's photograph rather than hot-linking
+    it for exactly this reason.
+
+    Kept as the original bytes rather than re-encoded. A repost is meant to be
+    the same post; putting it through the compositor would produce a *new* card
+    from our current layout, which is the one thing this button is not for.
+    """
+    if not row.picture_url:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Saved post {row.id} has no picture stored, so there is no "
+                "original image to repost. “Write again” writes the story fresh."
+            ),
+        )
+
+    try:
+        with httpx.Client(timeout=REPOST_TIMEOUT, follow_redirects=True) as client:
+            response = client.get(row.picture_url)
+    except httpx.HTTPError as error:
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                f"Facebook's image host did not answer ({type(error).__name__}). "
+                "The original picture cannot be copied, so this post cannot be "
+                "reposted with its image."
+            ),
+        ) from error
+
+    if response.is_error:
+        # The expected end state, not a bug: these URLs are signed and rot.
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"The original image has expired — Facebook answered "
+                f"{response.status_code}. Its caption can still be reposted by "
+                "hand, or “Write again” will write the story fresh with a new "
+                "picture."
+            ),
+        )
+
+    kind = response.headers.get("content-type", "")
+    if not kind.startswith("image/"):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"That URL answered {kind or 'an unknown type'} rather than an "
+                "image, so there is nothing to repost."
+            ),
+        )
+    if len(response.content) > MAX_REPOST_BYTES:
+        raise HTTPException(
+            status_code=409,
+            detail=f"The original image is {len(response.content) // 1024}KB, over the 10MB bucket cap.",
+        )
+
+    suffix = "png" if "png" in kind else "jpg"
+    return media.store.save(response.content, media.filename(draft_id, "repost", suffix))
+
+
+@router.post("/overview/saved/{saved_id}/repost", status_code=201)
+def repost_saved(saved_id: int, session: Session = Depends(get_session)) -> Draft:
+    """Put the original post back in the queue, caption and picture as published.
+
+    The client's ask, verbatim: "would it be easy to include a button to just
+    repost the original?" — distinct from **Write again**, which sends the story
+    back through the writer for a fresh hook, caption and image. This one copies
+    what went out.
+
+    **It creates a Draft rather than publishing.** Every other route to an
+    audience in this app goes through Review and one of the three publish
+    buttons, and a button that reached Facebook directly would be the only
+    exception — on a post whose image may have expired since it was saved. So
+    the repost lands in the queue at `review`, and the operator publishes it the
+    way they publish everything else.
+
+    No model call, no cost, and deliberately no compositing: `composed_image_path`
+    is the copied original, so publish hands Metricool that file rather than a
+    new card built from today's layout.
+    """
+    row = session.get(SavedPost, saved_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"No saved post {saved_id}")
+
+    caption = (row.text or "").strip()
+    if not caption:
+        raise HTTPException(
+            status_code=409,
+            detail="That saved post has no text, so there is nothing to repost.",
+        )
+
+    draft = Draft(
+        page_id=row.page_id,
+        # The published caption verbatim — `_post_text` sends `caption` and
+        # nothing else, so what went out last time is what goes out again.
+        caption=caption,
+        status=DraftStatus.REVIEW,
+        progress_step="reposted",
+        progress_pct=100,
+        # Named so the queue says what this row is. There is no Source Item and
+        # no hook: the hook was drawn into the picture that is being reused.
+        topic=f"Repost — {caption[:60]}",
+        warnings=[
+            "A repost: the caption and picture are the ones already published. "
+            "Redrawing the image would replace it with a new card, which is not "
+            "what a repost is."
+        ],
+    )
+    session.add(draft)
+    # The id is wanted for the filename and nothing else. Flushed rather than
+    # committed so that a failed copy below rolls the row back — a draft with a
+    # caption and no picture is worse than no draft, because it looks publishable.
+    session.flush()
+
+    try:
+        draft.composed_image_path = _copy_original_image(row, draft.id or 0)
+    except HTTPException:
+        session.rollback()
+        raise
+
+    session.commit()
+    session.refresh(draft)
+    return draft
 
 
 @router.delete("/overview/saved/{saved_id}", status_code=204)

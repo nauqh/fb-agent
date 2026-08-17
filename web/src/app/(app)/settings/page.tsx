@@ -13,12 +13,13 @@ import {
 import { toast } from "sonner";
 
 import { CompetitorMark } from "@/components/competitor-mark";
-import { Card, Counts } from "@/components/config-card";
+import { Block, ConfigShell, Gap, Pane } from "@/components/config-shell";
 import { ScreenHeader } from "@/components/screen";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { getCompetitorPages, getSourcesConfig } from "@/lib/api/sources";
 import { setAssignments } from "@/lib/api/competitors";
@@ -56,11 +57,25 @@ import { cn } from "@/lib/utils";
  *
  * The globals stay files and stay uneditable here. Every Page reads them, and
  * a textarea on a shared default is what the drift was.
+ *
+ * **The screen is a rail and a pane** since 2026-08-17, not a grid of cards —
+ * see `config-shell.tsx` for the measurement that killed the grid. The queries
+ * all live here rather than in the sections that use them, because the rail
+ * shows each section's count and whether it is empty, and a count cannot be
+ * fetched by a component the rail is deciding whether to render.
  */
 export default function SettingsScreen() {
   const { page, pageId } = usePageScope();
 
   const { data: sources } = useQuery(() => getSourcesConfig(pageId!), [pageId], {
+    enabled: pageId !== null,
+  });
+  const { data: slots, refresh: refreshSlots } = useQuery(
+    () => listSlots(pageId!),
+    [pageId],
+    { enabled: pageId !== null },
+  );
+  const { data: prompts } = useQuery(() => listPromptFiles(pageId!), [pageId], {
     enabled: pageId !== null,
   });
   // Its own query, and its own error: this is the only thing on the screen that
@@ -72,7 +87,6 @@ export default function SettingsScreen() {
     loading: competitorsLoading,
   } = useQuery(() => getCompetitorPages(), []);
 
-
   /**
    * Assign or unassign this competitor for the Page in the switcher.
    *
@@ -82,7 +96,7 @@ export default function SettingsScreen() {
    *
    * The first assignment on a Page is a real change of behaviour: until then
    * the Page reads whatever competitor set it owns in Metricool, and afterwards
-   * it reads only what is assigned. The hint under the card says so, because
+   * it reads only what is assigned. The hint under the pane says so, because
    * nothing else on screen would.
    */
   async function toggleAssignment(providerId: string) {
@@ -116,99 +130,204 @@ export default function SettingsScreen() {
     );
   }
 
+  const assigned =
+    pageId === null || !competitors
+      ? 0
+      : competitors.filter((one) => one.assigned_page_ids.includes(pageId)).length;
+
+  const ownLengths = LIMIT_ROWS.filter(({ field }) => page[field] !== null).length;
+  const ownPrompts = (prompts ?? []).filter((one) => one.source !== "global").length;
+
+  /**
+   * A Page told to write short by a prompt nothing enforces.
+   *
+   * This is C6/C7's failure mode as a live check rather than a note in a doc.
+   * The two fitness Pages have their own prompt files asking for a 30-word hook
+   * while all five length columns are null, so the validator still allows the
+   * house 65 — the prompt asks and nothing holds it to it. Worth a triangle in
+   * the rail, because no screen would otherwise show the disagreement.
+   */
+  const promptsWithoutLengths = ownPrompts > 0 && ownLengths === 0;
+
   return (
-    // `lg:pr-3` — only where this element is the scroller. Below `lg` the page
-    // scrolls instead and the padding would just be a stray inset.
-    //
-    // No `max-w-3xl` any more. That width was right when the screen was four
-    // stacked sections under one Page; with Feeds and Competitors on it the
-    // column ran off the bottom while 40% of a 1400px viewport sat empty.
-    //
-    // Identity and Feeds are a pair now: both short, both about this Page, and
-    // stacked they left a column of white beside them. Composed Image and the
-    // prompts left for Global, which is where account-wide things live
-    // beside it. The shell's own `max-w-[1600px]` is the bound now.
-    <div className="w-full pb-16 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-3">
-      <ScreenHeader title="Settings" />
+    <ConfigShell
+      header={<ScreenHeader title="Settings" />}
+      groups={[
+        {
+          label: "This Page",
+          sections: [
+            {
+              id: "identity",
+              label: "Identity",
+              gap: !page.watermark_image_path && !page.watermark_upload_path,
+              body: <Identity page={page} />,
+            },
+            {
+              id: "feeds",
+              label: "Feeds",
+              meta: sources?.feeds.length ?? "",
+              gap: sources ? sources.feeds.length === 0 : false,
+              body: <Feeds pageId={pageId} sources={sources} />,
+            },
+            {
+              id: "times",
+              label: "Publishing times",
+              meta: slots?.length ?? "",
+              gap: slots ? slots.length === 0 : false,
+              body: (
+                <TimeSlots pageId={pageId} slots={slots} refresh={refreshSlots} />
+              ),
+            },
+            {
+              id: "writing",
+              label: "Writing",
+              meta: ownLengths > 0 ? `${ownLengths}/5` : "house",
+              gap: promptsWithoutLengths,
+              body: (
+                <Writing
+                  page={page}
+                  ownPrompts={ownPrompts}
+                  unenforced={promptsWithoutLengths}
+                />
+              ),
+            },
+            {
+              id: "prompts",
+              label: "Prompts",
+              meta: prompts ? `${ownPrompts}/${prompts.length}` : "",
+              body: <Prompts pageId={pageId} files={prompts} />,
+            },
+            {
+              id: "competitors",
+              label: "Competitors",
+              meta: competitors ? assigned : "",
+              body: (
+                <Competitors
+                  page={page}
+                  pageId={pageId}
+                  rows={competitors}
+                  error={competitorsError}
+                  loading={competitorsLoading}
+                  onToggle={toggleAssignment}
+                />
+              ),
+            },
+          ],
+        },
+      ]}
+    />
+  );
+}
 
-      {/* `items-start` so a short card does not stretch to its row's height —
-          Prompts beside Composed Image should keep their own sizes rather than
-          both becoming as tall as the taller. */}
-      <div className="grid items-start gap-4 xl:grid-cols-2">
-        <Card
-          title={page.name}
-          hint="Identity comes from Metricool and is not editable here."
-        >
-          <p className="font-mono text-xs text-muted-foreground">
-            facebook {page.facebook_page_id}
-            <span className="mx-2">·</span>
-            metricool {page.metricool_blog_id}
-          </p>
+/** What this Page is, all of it from Metricool except the mark. */
+function Identity({ page }: { page: Page }) {
+  const mark = page.watermark_upload_url
+    ? page.watermark_upload_url
+    : page.watermark_image_path
+      ? `/api/${page.watermark_image_path}`
+      : null;
 
-          <div className="space-y-2 pt-4">
-            <Label>Watermark</Label>
-            {page.watermark_image_path ? (
-              <div className="flex items-center gap-3">
-                {/* On black, because that is the only background it is ever
-                    drawn against and it is white ink. */}
-                <span className="rounded-md bg-black px-3 py-2">
-                  {/* eslint-disable-next-line @next/next/no-img-element -- a
-                      committed asset at its natural ratio, not a content image. */}
-                  <img
-                    src={`/api/${page.watermark_image_path}`}
-                    alt={`${page.name} watermark`}
-                    className="h-10 w-auto"
-                  />
-                </span>
-                <code className="min-w-0 truncate text-xs text-muted-foreground">
-                  {page.watermark_image_path}
-                </code>
-              </div>
-            ) : (
-              <p className="text-sm text-destructive">
-                missing — nothing to composite over
-              </p>
-            )}
-          </div>
-        </Card>
+  return (
+    <Pane
+      title={page.name}
+      hint="Identity comes from Metricool and is not editable here."
+    >
+      <div className="space-y-6">
+        <Block label="Ids">
+          <dl className="space-y-2 text-[13px]">
+            <Row label="Facebook">{page.facebook_page_id}</Row>
+            <Row label="Metricool">{page.metricool_blog_id ?? "—"}</Row>
+          </dl>
+        </Block>
 
+        <Block label="Watermark">
+          {mark ? (
+            <div className="flex items-center gap-3">
+              {/* On black, because that is the only background it is ever drawn
+                  against and it is white ink. */}
+              <span className="rounded-md bg-black px-3 py-2">
+                {/* eslint-disable-next-line @next/next/no-img-element -- a
+                    committed asset at its natural ratio, not a content image. */}
+                <img
+                  src={mark}
+                  alt={`${page.name} watermark`}
+                  className="h-10 w-auto"
+                />
+              </span>
+              <code className="min-w-0 truncate text-[13px] text-muted-foreground">
+                {page.watermark_upload_path ?? page.watermark_image_path}
+              </code>
+            </div>
+          ) : page.watermark_enabled ? (
+            <Gap title="No watermark for this Page.">
+              Its cards are stamped with the Page&rsquo;s name as text instead.
+              A committed asset or an upload is what makes a picture traceable
+              once it is reposted.
+            </Gap>
+          ) : (
+            <p className="text-[13px] text-muted-foreground">
+              Switched off. This Page&rsquo;s cards carry no mark at all.
+            </p>
+          )}
+        </Block>
+      </div>
+    </Pane>
+  );
+}
 
+/** A label/value line: name left, value right, the way a spec sheet reads. */
+function Row({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-baseline justify-between gap-4 border-b border-dashed pb-2 last:border-0">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className="truncate font-mono">{children}</dd>
+    </div>
+  );
+}
 
-        <Card
-          title="Feeds"
-          hint={
-            <>
-              This Page&rsquo;s feeds. Adding one probes it first &mdash; a feed
-              that does not answer is not saved.
-            </>
-          }
-          meta={
-            sources ? (
-              <Counts>
-                {sources.feeds.length} feeds · {sources.since_days}d window ·{" "}
-                {sources.max_items} shown
-              </Counts>
-            ) : null
-          }
-        >
-          {sources ? (
-            <div className="divide-y rounded-lg border">
-              <AddFeed pageId={pageId} />
-              {sources.feeds.map((feed) => (
-                // The row opens the feed itself. Checking a feed means looking
-                // at what it is serving right now, and this screen is where you
-                // are when you doubt one.
-                <div
-                  key={feed.url}
-                  className="group flex items-center gap-3 px-3 py-2 text-xs hover:bg-muted/50"
+function Feeds({
+  pageId,
+  sources,
+}: {
+  pageId: number | null;
+  sources: Awaited<ReturnType<typeof getSourcesConfig>> | null;
+}) {
+  return (
+    <Pane
+      title="Feeds"
+      hint={
+        <>
+          This Page&rsquo;s feeds. Adding one probes it first &mdash; a feed that
+          does not answer is not saved.
+        </>
+      }
+      meta={
+        sources
+          ? `${sources.feeds.length} feeds · ${sources.since_days}d window · ${sources.max_items} shown`
+          : undefined
+      }
+    >
+      {!sources ? (
+        <Skeleton className="h-40 rounded-lg" />
+      ) : (
+        <div className="space-y-3">
+          <div className="divide-y rounded-lg border">
+            <AddFeed pageId={pageId} />
+            {sources.feeds.map((feed) => (
+              // The row opens the feed itself. Checking a feed means looking at
+              // what it is serving right now, and this screen is where you are
+              // when you doubt one.
+              <div
+                key={feed.url}
+                className="group flex items-center gap-3 px-3 py-2 text-[13px] hover:bg-muted/50"
+              >
+                <a
+                  href={feed.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex min-w-0 flex-1 items-center gap-3"
+                  title={feed.note ?? undefined}
                 >
-                  <a
-                    href={feed.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex min-w-0 flex-1 items-center gap-3"
-                    title={feed.note ?? undefined}
-                  >
                   <Rss className="size-3.5 shrink-0 text-muted-foreground" />
                   <span className="w-32 shrink-0 truncate font-medium">
                     {feed.name}
@@ -220,181 +339,23 @@ export default function SettingsScreen() {
                     {feed.url}
                   </code>
                   <ExternalLink className="size-3 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
-                  </a>
-                  <RemoveFeed id={feed.id} name={feed.name} />
-                </div>
-              ))}
-            </div>
-          ) : (
-            <Skeleton className="h-40 rounded-lg" />
-          )}
-        </Card>
+                </a>
+                <RemoveFeed id={feed.id} name={feed.name} />
+              </div>
+            ))}
+          </div>
 
-        <Card
-          title="Publishing times"
-          hint={
-            <>
-              The slots &ldquo;Schedule next available&rdquo; walks through. The
-              same times every day, in this Page&rsquo;s zone (GMT+7).
-            </>
-          }
-        >
-          <TimeSlots pageId={pageId} />
-        </Card>
-
-        <Card
-          title="How this Page writes"
-          hint={
-            <>
-              Leave a box empty to use the house number. These are the lengths
-              the writer is told to hit <em>and</em> the ones a draft is checked
-              against &mdash; they cannot disagree.
-            </>
-          }
-        >
-          <WritingLimits page={page} />
-        </Card>
-
-        {/* Full width: three prompts of a few thousand characters each. */}
-        <Card
-          className="xl:col-span-2"
-          title="Prompts"
-          hint={
-            <>
-              What this Page tells the model. Empty means it inherits the
-              reviewed default in <code>api/prompts/</code> &mdash; saving text
-              here overrides it for this Page only.
-            </>
-          }
-        >
-          <PromptEditors pageId={pageId} />
-        </Card>
-
-        {/* Full width: at 26 rows this is the longest thing on the screen, and
-            in a half-width column it sets the page's height on its own. */}
-        <Card
-          className="xl:col-span-2"
-          title="Competitors this Page reads"
-          hint={
-            <>
-              Which of the pool this Page reads. Tick to assign; the same source
-              can feed several Pages. The pool itself is on Global.
-            </>
-          }
-          meta={
-            competitors ? (
-              <Counts>
-                {competitors.length} configured
-                {(() => {
-                  const silent = competitors.filter(
-                    (one) => one.posts_stored === 0,
-                  ).length;
-                  return silent ? (
-                    <span className="text-destructive"> · {silent} silent</span>
-                  ) : null;
-                })()}
-              </Counts>
-            ) : null
-          }
-        >
-          {competitorsError ? (
-            // This section fails alone. Everything else on the screen is a
-            // local file and cannot.
-            <p className="rounded-lg border border-dashed p-4 text-xs text-destructive">
-              {competitorsError}
-            </p>
-          ) : competitorsLoading || !competitors ? (
-            <Skeleton className="h-40 rounded-lg" />
-          ) : (
-            // A grid, not one long list: twenty-six full-width rows is a
-            // scroll, and the row has three short fields in it. Silent ones
-            // come first from the server, so reading order still puts the
-            // finding at the top left.
-            <div className="grid gap-2 sm:grid-cols-2 2xl:grid-cols-3">
-              {competitors.map((competitor) => (
-                // `provider_id` is the Facebook page id, which is all
-                // facebook.com needs — no screen name to go stale. A silent
-                // competitor is the row you most want to open: it answers
-                // whether the page died or merely went quiet.
-                <div
-                  key={competitor.provider_id}
-                  className={cn(
-                    "group flex items-center gap-2.5 rounded-lg border px-3 py-2 text-xs transition-colors hover:bg-muted/50",
-                    competitor.posts_stored === 0 && "border-destructive/40",
-                  )}
-                >
-                  {/* The row used to be one big <a>. It cannot be now: a toggle
-                      nested in a link navigates on click, and the assignment is
-                      the thing this row is here to change. The name keeps the
-                      link — opening a silent competitor is how you tell a dead
-                      page from a quiet one. */}
-                  <a
-                    href={`https://www.facebook.com/${competitor.provider_id}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex min-w-0 flex-1 items-center gap-2.5"
-                  >
-                  <CompetitorMark
-                    name={competitor.name}
-                    picture={competitor.picture}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <p className="flex items-center gap-1.5 truncate font-medium">
-                      <span className="truncate">{competitor.name}</span>
-                      <ExternalLink className="size-3 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
-                    </p>
-                    <p className="tabular-nums text-muted-foreground">
-                      {(competitor.followers ?? 0).toLocaleString()} followers
-                    </p>
-                  </div>
-                  <span
-                    className={cn(
-                      "shrink-0 text-right tabular-nums",
-                      competitor.posts_stored === 0
-                        ? "text-destructive"
-                        : "text-muted-foreground",
-                    )}
-                  >
-                    {competitor.posts_stored === 0
-                      ? "no posts"
-                      : `${competitor.posts_stored} post${competitor.posts_stored === 1 ? "" : "s"}`}
-                    </span>
-                  </a>
-
-                  <AssignToggle
-                    assigned={
-                      pageId !== null &&
-                      competitor.assigned_page_ids.includes(pageId)
-                    }
-                    pageName={page.name}
-                    otherPages={competitor.assigned_page_ids.length}
-                    onToggle={() => toggleAssignment(competitor.provider_id)}
-                  />
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
-      </div>
-    </div>
+          {sources.feeds.length === 0 ? (
+            <Gap title="No feeds, so the RSS tab on Sources is empty for this Page.">
+              Nothing is wrong with the fetch — there is nothing configured to
+              fetch. Add a publisher above; it is probed before it is saved.
+            </Gap>
+          ) : null}
+        </div>
+      )}
+    </Pane>
   );
 }
-
-/**
- * One titled block. Was a `<div>` plus a `<Separator>` repeated five times down
- * a single column; as cards in a grid the screen uses the width the shell
- * gives it, and a section can be moved without dragging a separator with it.
- */
-
-
-/** The numbers that describe a section, beside its title rather than under it. */
-
-
-
-
-
-
-
 
 /**
  * Whether this Page reads this competitor.
@@ -427,7 +388,7 @@ function AssignToggle({
           : `Let ${pageName} read this competitor.`
       }
       className={cn(
-        "flex shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-[11px] transition-colors",
+        "flex shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-xs transition-colors",
         assigned
           ? "border-primary/40 bg-primary/10 text-primary"
           : "text-muted-foreground hover:bg-muted",
@@ -442,6 +403,137 @@ function AssignToggle({
   );
 }
 
+function Competitors({
+  page,
+  pageId,
+  rows,
+  error,
+  loading,
+  onToggle,
+}: {
+  page: Page;
+  pageId: number | null;
+  rows: Awaited<ReturnType<typeof getCompetitorPages>> | null;
+  error: string | null;
+  loading: boolean;
+  onToggle: (providerId: string) => void;
+}) {
+  const assigned =
+    pageId === null || !rows
+      ? 0
+      : rows.filter((one) => one.assigned_page_ids.includes(pageId)).length;
+  const silent = (rows ?? []).filter((one) => one.posts_stored === 0).length;
+
+  return (
+    <Pane
+      title="Competitors this Page reads"
+      hint={
+        <>
+          Which of the pool this Page reads. Tick to assign; the same source can
+          feed several Pages. The pool itself is on Global.
+        </>
+      }
+      meta={
+        rows ? (
+          <>
+            {assigned} of {rows.length} assigned
+            {silent ? (
+              <span className="text-destructive"> · {silent} silent</span>
+            ) : null}
+          </>
+        ) : undefined
+      }
+    >
+      {error ? (
+        // This section fails alone. Everything else on the screen is a local
+        // file or our own database and cannot.
+        <p className="rounded-lg border border-dashed p-4 text-[13px] text-destructive">
+          {error}
+        </p>
+      ) : loading || !rows ? (
+        <Skeleton className="h-40 rounded-lg" />
+      ) : (
+        <div className="space-y-3">
+          {assigned === 0 ? (
+            <Gap title="Nothing assigned, so this Page falls back to its own Metricool set.">
+              That is not the same list — it is whatever competitors happen to
+              sit under this brand in Metricool, which is a decision nobody made
+              on purpose. Assign the ones it should read.
+            </Gap>
+          ) : null}
+
+          {/* A grid, not one long list: twenty-six full-width rows is a scroll,
+              and the row has three short fields in it. Silent ones come first
+              from the server, so reading order still puts the finding at the
+              top left. */}
+          <div className="grid gap-2 sm:grid-cols-2 2xl:grid-cols-3">
+            {rows.map((competitor) => (
+              // `provider_id` is the Facebook page id, which is all
+              // facebook.com needs — no screen name to go stale. A silent
+              // competitor is the row you most want to open: it answers whether
+              // the page died or merely went quiet.
+              <div
+                key={competitor.provider_id}
+                className={cn(
+                  "group flex items-center gap-2.5 rounded-lg border px-3 py-2 text-[13px] transition-colors hover:bg-muted/50",
+                  competitor.posts_stored === 0 && "border-destructive/40",
+                )}
+              >
+                {/* The row used to be one big <a>. It cannot be now: a toggle
+                    nested in a link navigates on click, and the assignment is
+                    the thing this row is here to change. The name keeps the
+                    link — opening a silent competitor is how you tell a dead
+                    page from a quiet one. */}
+                <a
+                  href={`https://www.facebook.com/${competitor.provider_id}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex min-w-0 flex-1 items-center gap-2.5"
+                >
+                  <CompetitorMark
+                    name={competitor.name}
+                    picture={competitor.picture}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="flex items-center gap-1.5 truncate font-medium">
+                      <span className="truncate">{competitor.name}</span>
+                      <ExternalLink className="size-3 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                    </p>
+                    <p className="tabular-nums text-muted-foreground">
+                      {(competitor.followers ?? 0).toLocaleString()} followers
+                    </p>
+                  </div>
+                  <span
+                    className={cn(
+                      "shrink-0 text-right tabular-nums",
+                      competitor.posts_stored === 0
+                        ? "text-destructive"
+                        : "text-muted-foreground",
+                    )}
+                  >
+                    {competitor.posts_stored === 0
+                      ? "no posts"
+                      : `${competitor.posts_stored} post${competitor.posts_stored === 1 ? "" : "s"}`}
+                  </span>
+                </a>
+
+                <AssignToggle
+                  assigned={
+                    pageId !== null &&
+                    competitor.assigned_page_ids.includes(pageId)
+                  }
+                  pageName={page.name}
+                  otherPages={competitor.assigned_page_ids.length}
+                  onToggle={() => onToggle(competitor.provider_id)}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </Pane>
+  );
+}
 
 /**
  * Add a feed. The server probes it before it will write the row.
@@ -494,14 +586,14 @@ function AddFeed({ pageId }: { pageId: number | null }) {
         onChange={(event) => setName(event.target.value)}
         placeholder="Publisher"
         aria-label="Publisher name"
-        className="h-7 w-32 shrink-0 text-xs"
+        className="h-7 w-32 shrink-0 text-[13px]"
       />
       <Input
         value={url}
         onChange={(event) => setUrl(event.target.value)}
         placeholder="https://example.com/feed"
         aria-label="Feed URL"
-        className="h-7 min-w-0 flex-1 text-xs"
+        className="h-7 min-w-0 flex-1 text-[13px]"
       />
       <Button
         type="submit"
@@ -548,10 +640,6 @@ function RemoveFeed({ id, name }: { id: number; name: string }) {
   );
 }
 
-
-
-
-
 /**
  * When this Page publishes.
  *
@@ -564,10 +652,15 @@ function RemoveFeed({ id, name }: { id: number; name: string }) {
  * No weekday dimension. The operator chose the same times every day; adding one
  * later is an additive migration rather than a rewrite.
  */
-function TimeSlots({ pageId }: { pageId: number | null }) {
-  const { data: slots, refresh } = useQuery(() => listSlots(pageId!), [pageId], {
-    enabled: pageId !== null,
-  });
+function TimeSlots({
+  pageId,
+  slots,
+  refresh,
+}: {
+  pageId: number | null;
+  slots: Awaited<ReturnType<typeof listSlots>> | null;
+  refresh: () => Promise<void> | void;
+}) {
   const [time, setTime] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -601,58 +694,71 @@ function TimeSlots({ pageId }: { pageId: number | null }) {
     }
   }
 
-  if (!slots) return <Skeleton className="h-24 rounded-lg" />;
-
   return (
-    <div className="space-y-3">
-      <form onSubmit={add} className="flex items-center gap-2">
-        <Clock className="size-3.5 shrink-0 text-muted-foreground" />
-        <Input
-          type="time"
-          value={time}
-          onChange={(event) => setTime(event.target.value)}
-          aria-label="Publishing time"
-          className="h-8 w-32 text-xs"
-        />
-        <Button
-          type="submit"
-          size="sm"
-          variant="outline"
-          className="h-8"
-          disabled={saving || !time || pageId === null}
-        >
-          {saving ? <Loader2 className="size-3 animate-spin" /> : "Add time"}
-        </Button>
-      </form>
-
-      {slots.length === 0 ? (
-        // Not decoration: with no slots, "Schedule next available" has nothing
-        // to offer and the server answers 409 rather than guessing a time.
-        <p className="rounded-lg border border-dashed p-4 text-center text-xs text-muted-foreground">
-          No publishing times yet. Until one is added, &ldquo;Schedule next
-          available&rdquo; has nothing to choose from.
-        </p>
+    <Pane
+      title="Publishing times"
+      hint={
+        <>
+          The slots &ldquo;Schedule next available&rdquo; walks through. The same
+          times every day, in this Page&rsquo;s zone (GMT+7).
+        </>
+      }
+      meta={slots ? `${slots.length} a day` : undefined}
+    >
+      {!slots ? (
+        <Skeleton className="h-24 rounded-lg" />
       ) : (
-        <div className="flex flex-wrap gap-1.5">
-          {slots.map((slot) => (
-            <span
-              key={slot.id}
-              className="group flex items-center gap-1 rounded-full border py-1 pr-1 pl-2.5 text-xs tabular-nums"
+        <div className="space-y-4">
+          <form onSubmit={add} className="flex items-center gap-2">
+            <Clock className="size-3.5 shrink-0 text-muted-foreground" />
+            <Input
+              type="time"
+              value={time}
+              onChange={(event) => setTime(event.target.value)}
+              aria-label="Publishing time"
+              className="h-8 w-32 text-[13px]"
+            />
+            <Button
+              type="submit"
+              size="sm"
+              variant="outline"
+              className="h-8"
+              disabled={saving || !time || pageId === null}
             >
-              {slot.label}
-              <button
-                type="button"
-                onClick={() => void drop(slot.id, slot.label)}
-                aria-label={`Remove ${slot.label}`}
-                className="rounded-full p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-              >
-                <Trash2 className="size-3" />
-              </button>
-            </span>
-          ))}
+              {saving ? <Loader2 className="size-3 animate-spin" /> : "Add time"}
+            </Button>
+          </form>
+
+          {slots.length === 0 ? (
+            // Not decoration: with no slots, "Schedule next available" has
+            // nothing to offer and the server answers 409 rather than guessing.
+            <Gap title="No publishing times, so “Schedule next available” cannot run.">
+              It answers 409 rather than inventing a time. Publish now and
+              Publish at a time both still work.
+            </Gap>
+          ) : (
+            <div className="flex flex-wrap gap-1.5">
+              {slots.map((slot) => (
+                <span
+                  key={slot.id}
+                  className="group flex items-center gap-1 rounded-full border py-1 pr-1 pl-2.5 text-[13px] tabular-nums"
+                >
+                  {slot.label}
+                  <button
+                    type="button"
+                    onClick={() => void drop(slot.id, slot.label)}
+                    aria-label={`Remove ${slot.label}`}
+                    className="rounded-full p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                  >
+                    <Trash2 className="size-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       )}
-    </div>
+    </Pane>
   );
 }
 
@@ -668,13 +774,51 @@ const HOUSE = {
 
 type LimitField = keyof typeof HOUSE;
 
-const LIMIT_ROWS: { field: LimitField; label: string }[] = [
-  { field: "hook_max_words", label: "Hook, max words" },
-  { field: "first_comment_min_chars", label: "First comment, min chars" },
-  { field: "first_comment_max_chars", label: "First comment, max chars" },
-  { field: "first_comment_min_paragraphs", label: "First comment, min paragraphs" },
-  { field: "first_comment_max_paragraphs", label: "First comment, max paragraphs" },
+const LIMIT_ROWS: { field: LimitField; label: string; group: string }[] = [
+  { field: "hook_max_words", label: "Max words", group: "Hook" },
+  { field: "first_comment_min_chars", label: "Min chars", group: "First comment" },
+  { field: "first_comment_max_chars", label: "Max chars", group: "First comment" },
+  { field: "first_comment_min_paragraphs", label: "Min ¶", group: "First comment" },
+  { field: "first_comment_max_paragraphs", label: "Max ¶", group: "First comment" },
 ];
+
+function Writing({
+  page,
+  ownPrompts,
+  unenforced,
+}: {
+  page: Page;
+  ownPrompts: number;
+  unenforced: boolean;
+}) {
+  return (
+    <Pane
+      title="How this Page writes"
+      hint={
+        <>
+          Leave a box empty to use the house number. These are the lengths the
+          writer is told to hit <em>and</em> the ones a draft is checked against
+          &mdash; they cannot disagree.
+        </>
+      }
+    >
+      <div className="space-y-5">
+        {unenforced ? (
+          <Gap
+            title={`This Page has ${ownPrompts === 1 ? "its own prompt" : `${ownPrompts} prompts of its own`} but house lengths.`}
+          >
+            A prompt asking for a shorter hook is a request; the validator is
+            what enforces it. While every box below is empty, a draft is checked
+            against {HOUSE.hook_max_words} words and {HOUSE.first_comment_min_chars}–
+            {HOUSE.first_comment_max_chars} characters whatever the prompt says.
+          </Gap>
+        ) : null}
+
+        <WritingLimits page={page} />
+      </div>
+    </Pane>
+  );
+}
 
 /**
  * The five numbers, per Page (C6, C7).
@@ -723,25 +867,49 @@ function WritingLimits({ page }: { page: Page }) {
     }
   }
 
+  // Grouped by the thing being measured, so "Hook" is one box and "First
+  // comment" is four — five identical full-width rows read as five unrelated
+  // settings and took 250px to carry five numbers.
+  const groups = [...new Set(LIMIT_ROWS.map((row) => row.group))];
+
   return (
-    <div className="space-y-3">
-      {LIMIT_ROWS.map(({ field, label }) => (
-        <div key={field} className="flex items-center gap-3">
-          <Label className="flex-1 text-xs font-normal">{label}</Label>
-          <Input
-            type="number"
-            inputMode="numeric"
-            className="w-28"
-            placeholder={String(HOUSE[field])}
-            value={form[field]}
-            onChange={(event) =>
-              setForm({ ...form, [field]: event.target.value })
-            }
-          />
-        </div>
+    <div className="space-y-5">
+      {groups.map((group) => (
+        <Block key={group} label={group}>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {LIMIT_ROWS.filter((row) => row.group === group).map(
+              ({ field, label }) => (
+                <div
+                  key={field}
+                  className="flex items-center justify-between gap-3 rounded-md border px-3 py-2"
+                >
+                  <Label className="text-[13px] font-normal text-muted-foreground">
+                    {label}
+                  </Label>
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    aria-label={`${group} — ${label}`}
+                    className={cn(
+                      "h-7 w-20 border-0 bg-transparent px-1 text-right tabular-nums shadow-none focus-visible:ring-0",
+                      // An inherited value is the placeholder, so the box must
+                      // not look like it holds a number of its own.
+                      form[field] === "" ? "text-muted-foreground" : "font-medium",
+                    )}
+                    placeholder={String(HOUSE[field])}
+                    value={form[field]}
+                    onChange={(event) =>
+                      setForm({ ...form, [field]: event.target.value })
+                    }
+                  />
+                </div>
+              ),
+            )}
+          </div>
+        </Block>
       ))}
 
-      <div className="flex items-center gap-3 pt-1">
+      <div className="flex items-center gap-3">
         <Button size="sm" disabled={!dirty || busy} onClick={() => void save()}>
           {busy ? <Loader2 className="size-4 animate-spin" /> : null}
           Save lengths
@@ -756,6 +924,9 @@ function WritingLimits({ page }: { page: Page }) {
             Revert
           </Button>
         ) : null}
+        <p className="text-[13px] text-muted-foreground">
+          Empty inherits the house number, shown greyed.
+        </p>
       </div>
     </div>
   );
@@ -776,20 +947,75 @@ const SOURCE_LABEL: Record<PromptFile["source"], string> = {
  * that reads "inherited" and saving creates an override of the whole thing. The
  * label above each box says which of the three it is, and Save is disabled
  * until the text actually differs, so inheriting is never ended by accident.
+ *
+ * One prompt at a time since 2026-08-17. Three 10-row textareas stacked made a
+ * 1,400px section in which the one being edited was usually off screen.
  */
-function PromptEditors({ pageId }: { pageId: number | null }) {
-  const { data: files } = useQuery(() => listPromptFiles(pageId!), [pageId], {
-    enabled: pageId !== null,
-  });
-
-  if (files === null) return <Skeleton className="h-64" />;
+function Prompts({
+  pageId,
+  files,
+}: {
+  pageId: number | null;
+  files: PromptFile[] | null;
+}) {
+  // Not seeded from `files` — it arrives a render after this component
+  // mounts, and a value chosen at mount cannot know the real filenames yet.
+  // `active` falls back to the first file whenever `open` names none of them,
+  // which covers that gap with no effect needed to correct it later.
+  const [open, setOpen] = useState<string>("");
+  const active = files?.find((file) => file.filename === open) ?? files?.[0];
 
   return (
-    <div className="space-y-6">
-      {files.map((file) => (
-        <PromptEditor key={file.filename} pageId={pageId!} file={file} />
-      ))}
-    </div>
+    <Pane
+      title="Prompts"
+      hint={
+        <>
+          What this Page tells the model. Empty means it inherits the reviewed
+          default in <code>api/prompts/</code> &mdash; saving text here overrides
+          it for this Page only.
+        </>
+      }
+      meta={files ? `${files.filter((one) => one.source !== "global").length} overridden` : undefined}
+    >
+      {files === null ? (
+        <Skeleton className="h-64" />
+      ) : (
+        <div className="space-y-4">
+          {/* The shared pill shell (`ui/tabs.tsx`) rather than a second
+              hand-rolled one: the three are alternatives, not a list, and
+              which one you are editing has to stay visible while the textarea
+              is 400px tall. */}
+          <Tabs value={active?.filename ?? ""} onValueChange={setOpen}>
+            <TabsList className="w-fit">
+              {files.map((file) => (
+                <TabsTrigger
+                  key={file.filename}
+                  value={file.filename}
+                  className="font-mono"
+                >
+                  {file.filename}
+                  {file.source !== "global" ? (
+                    <span
+                      aria-label="overridden"
+                      className={cn(
+                        "size-1.5 rounded-full",
+                        active?.filename === file.filename
+                          ? "bg-background"
+                          : "bg-foreground",
+                      )}
+                    />
+                  ) : null}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+
+          {active ? (
+            <PromptEditor key={active.filename} pageId={pageId!} file={active} />
+          ) : null}
+        </div>
+      )}
+    </Pane>
   );
 }
 
@@ -816,12 +1042,10 @@ function PromptEditor({ pageId, file }: { pageId: number; file: PromptFile }) {
   }
 
   return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <Label className="font-mono text-xs">{file.filename}</Label>
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px]">
         <span
           className={cn(
-            "text-xs",
             file.source === "page"
               ? "font-medium text-foreground"
               : "text-muted-foreground",
@@ -829,7 +1053,7 @@ function PromptEditor({ pageId, file }: { pageId: number; file: PromptFile }) {
         >
           {SOURCE_LABEL[file.source]}
         </span>
-        <span className="text-xs text-muted-foreground">
+        <span className="text-muted-foreground">
           {file.chars.toLocaleString()} chars
         </span>
       </div>
@@ -837,8 +1061,8 @@ function PromptEditor({ pageId, file }: { pageId: number; file: PromptFile }) {
       {file.editable ? (
         <>
           <Textarea
-            rows={10}
-            className="font-mono text-xs"
+            rows={18}
+            className="font-mono text-[13px]"
             value={text}
             onChange={(event) => setText(event.target.value)}
           />
@@ -877,10 +1101,10 @@ function PromptEditor({ pageId, file }: { pageId: number; file: PromptFile }) {
         </>
       ) : (
         <>
-          <pre className="max-h-48 overflow-auto rounded-lg border bg-muted/40 p-3 font-mono text-xs whitespace-pre-wrap">
+          <pre className="max-h-96 overflow-auto rounded-lg border bg-muted/40 p-3 font-mono text-[13px] whitespace-pre-wrap">
             {file.body}
           </pre>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-[13px] text-muted-foreground">
             No per-Page column behind this one, so it is a file only.
           </p>
         </>

@@ -6,13 +6,12 @@ import { CalendarDays, List } from "lucide-react";
 import { ScheduleList } from "@/components/schedule-list";
 import { ScheduleWeek, startOfWeek } from "@/components/schedule-week";
 import { Empty } from "@/components/screen";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getSchedule } from "@/lib/api/schedule";
 import { pageNoon } from "@/lib/format";
 import { usePageScope } from "@/lib/page-scope";
 import { useQuery } from "@/lib/use-query";
-import { cn } from "@/lib/utils";
 
 /**
  * Week or list, over one fetch.
@@ -61,24 +60,21 @@ export function ScheduleView() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
-      <div className="flex w-fit shrink-0 gap-1 rounded-lg border p-1">
-        {(["week", "list"] as const).map((value) => (
-          <Button
-            key={value}
-            variant="ghost"
-            size="sm"
-            onClick={() => setMode(value)}
-            className={cn("gap-1.5", mode === value && "bg-muted")}
-          >
-            {value === "week" ? (
-              <CalendarDays className="size-3.5" />
-            ) : (
-              <List className="size-3.5" />
-            )}
-            {value === "week" ? "Week" : "List"}
-          </Button>
-        ))}
-      </div>
+      {/* The shared pill (`ui/tabs.tsx`) rather than the bordered ghost-button
+          pair this was — a custom-built lookalike that missed the pass over
+          every other tab control in the app. */}
+      <Tabs value={mode} onValueChange={(next) => setMode(next as "week" | "list")}>
+        <TabsList className="w-fit shrink-0">
+          <TabsTrigger value="week" className="gap-1.5">
+            <CalendarDays className="size-3.5" />
+            Week
+          </TabsTrigger>
+          <TabsTrigger value="list" className="gap-1.5">
+            <List className="size-3.5" />
+            List
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
 
       {/*
         The two views want opposite things from the space they are given.

@@ -1,4 +1,5 @@
 import { del, get, post } from "@/lib/api/client";
+import type { Draft } from "@/lib/types";
 
 /**
  * Post performance, and the posts kept from it.
@@ -79,6 +80,19 @@ export async function savePost(pageId: number, post_: PostStats): Promise<SavedP
  */
 export async function reuseSaved(savedId: number): Promise<number[]> {
   return post<number[]>(`/overview/saved/${savedId}/reuse`, {});
+}
+
+/**
+ * Put the original back in the queue — same caption, same picture.
+ *
+ * Distinct from `reuseSaved`, which writes the story again from scratch. This
+ * answers 201 with the Draft it made rather than 202 with ids to poll: nothing
+ * generates, so there is nothing to wait for. It can fail with 409 when the
+ * original image has expired off Facebook's CDN, and that message is written to
+ * be shown verbatim.
+ */
+export async function repostSaved(savedId: number): Promise<Draft> {
+  return post<Draft>(`/overview/saved/${savedId}/repost`, {});
 }
 
 export async function unsavePost(savedId: number): Promise<void> {

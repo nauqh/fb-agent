@@ -66,6 +66,20 @@
   }
 }
 
+/*
+ * White and black, not a warm ramp — reverted 2026-08-18. A beige-tinted paper
+ * ground was tried the same day and read as dull rather than "expensive";
+ * white against black chrome reads as clean instead. `--gold` stays the one
+ * accent: it is `layout.yml`'s `highlight.color`, the same yellow painted into
+ * every published image, so a gold control means "this acts on the post
+ * itself" and nothing else should compete with it for that meaning.
+ *
+ * The one thing kept from the warm attempt is `--muted-foreground`'s
+ * lightness. Stock shadcn's 0.556 read faint once this token carried hint
+ * text, rail labels, meta counts and inactive tab labels everywhere rather
+ * than being used sparingly — deepened to 0.46 for legibility, but achromatic
+ * (`0 0`) rather than warm, so it reads as a clear grey and not a tint.
+ */
 :root {
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
@@ -78,19 +92,23 @@
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
+  --muted-foreground: oklch(0.46 0 0);
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
+  --border: oklch(0.9 0 0);
+  --input: oklch(0.9 0 0);
   --ring: oklch(0.708 0 0);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --radius: 0.5rem;
+  /* 0.5rem read as a consumer app. Everything derives from this — the scale in
+     `@theme inline` multiplies it — so a card at `rounded-xl` is now 0.35rem
+     rather than 0.7rem, and the pill chips stay pills because they ask for
+     `rounded-full` explicitly. */
+  --radius: 0.25rem;
   /* layout.yml highlight.color — the one accent, used for the primary action
      and for Highlight Phrases on the Composed Image. Nothing else. */
   --gold: #f5c542;
@@ -103,7 +121,7 @@
   --sidebar-primary-foreground: oklch(0.985 0 0);
   --sidebar-accent: oklch(0.97 0 0);
   --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-border: oklch(0.9 0 0);
   --sidebar-ring: oklch(0.708 0 0);
 }
 
@@ -119,7 +137,9 @@
   --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
+  /* Brightened to match the light-mode deepening — the same token needs to
+     move the opposite direction on a dark ground to keep the same contrast. */
+  --muted-foreground: oklch(0.76 0 0);
   --accent: oklch(0.269 0 0);
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.704 0.191 22.216);

@@ -7,6 +7,7 @@ import {
   BookmarkCheck,
   ExternalLink,
   Loader2,
+  Repeat2,
   Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -20,17 +21,17 @@ import {
   getPerformance,
   listSaved,
   savePost,
+  repostSaved,
   reuseSaved,
   unsavePost,
   type PostStats,
   type SavedPost,
 } from "@/lib/api/overview";
-import { fullDate, metric } from "@/lib/format";
+import { fullDate, metric, timeAgo } from "@/lib/format";
 import { useRouter } from "next/navigation";
 
 import { usePageScope } from "@/lib/page-scope";
 import { useQuery } from "@/lib/use-query";
-import { cn } from "@/lib/utils";
 
 /**
  * How the Page's published posts did, and the ones worth keeping.
@@ -117,24 +118,21 @@ function Performance() {
             dead Page — measured against History Retraced, that is false: even
             over 7 days only 1 post of 28 has no reactions yet, and over 30 it
             is 1 of 219. 90 days is 657 rows, which is a scroll rather than an
-            overview. */}
-        <div className="flex shrink-0 gap-1">
-          {[7, 30, 60].map((option) => (
-            <button
-              key={option}
-              type="button"
-              onClick={() => setDays(option)}
-              className={cn(
-                "rounded-md border px-2 py-1 text-xs transition-colors",
-                option === days
-                  ? "border-primary bg-primary/10 text-primary"
-                  : "text-muted-foreground hover:bg-muted",
-              )}
-            >
-              {option}d
-            </button>
-          ))}
-        </div>
+            overview.
+
+            The shared pill, like every other choice-between-alternatives in the
+            app. It was a row of bordered boxes with a `bg-primary/10` active
+            state — a near-white tint barely distinguishable from the inactive
+            ones. */}
+        <Tabs value={String(days)} onValueChange={(next) => setDays(Number(next))}>
+          <TabsList className="w-fit shrink-0">
+            {[7, 30, 60].map((option) => (
+              <TabsTrigger key={option} value={String(option)}>
+                {option}d
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
       </div>
 
       {loading || !data ? (
@@ -151,16 +149,12 @@ function Performance() {
       ) : (
         <>
           <Totals posts={data} days={days} />
-          <div className="space-y-2">
+          <div className="rounded-lg border bg-card px-2">
             {data.map((post, index) => (
               <PostRow
                 key={post.post_id}
                 post={post}
                 rank={index + 1}
-                // The best post in the window sets the bar's full width, so the
-                // scale is "against the best of these" rather than an absolute
-                // nobody has a feel for.
-                best={data[0].engagement}
                 busy={busy === post.post_id}
                 onSave={() => void keep(post)}
               />
@@ -189,22 +183,50 @@ function Totals({ posts, days }: { posts: PostStats[]; days: number }) {
   const engagement = posts.reduce((sum, post) => sum + post.engagement, 0);
 
   return (
-    <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border bg-border sm:grid-cols-4">
-      <Tile label="Posts" value={metric(posts.length)} note={`last ${days} days`} />
-      <Tile label="Total reach" value={metric(reach)} note="impressions" />
-      <Tile label="Total engagement" value={metric(engagement)} note="reactions + comments + shares" />
-      <Tile label="Best post" value={metric(posts[0].engagement)} note="engagement" />
+    <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border bg-border sm:grid-cols-4">
+      <Tile index="01" label="Posts" value={metric(posts.length)} note={`last ${days} days`} />
+      <Tile index="02" label="Total reach" value={metric(reach)} note="impressions" />
+      <Tile index="03" label="Engagement" value={metric(engagement)} note="reactions + comments + shares" />
+      <Tile index="04" label="Best post" value={metric(posts[0].engagement)} note="engagement" />
     </div>
   );
 }
 
-/** One stat tile: label in sentence case, value semibold and auto-compacted. */
-function Tile({ label, value, note }: { label: string; value: string; note: string }) {
+/**
+ * One stat tile.
+ *
+ * Label and index in mono uppercase at the top, value large at the bottom —
+ * the shape the reference designs use for a panel, and the reason it works
+ * here is that four tiles then read as one instrument rather than four boxes.
+ * Mono is doing real work: it marks everything that is *metadata* (the label,
+ * the index, the note) so the only thing set in the body face is the number.
+ */
+function Tile({
+  index,
+  label,
+  value,
+  note,
+}: {
+  index: string;
+  label: string;
+  value: string;
+  note: string;
+}) {
   return (
-    <div className="bg-card px-4 py-3">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="pt-0.5 text-2xl font-semibold tracking-tight">{value}</p>
-      <p className="text-[11px] text-muted-foreground">{note}</p>
+    <div className="flex min-h-28 flex-col justify-between bg-card px-4 py-3">
+      <div className="flex items-baseline justify-between gap-2">
+        <p className="font-mono text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
+          {label}
+        </p>
+        <p className="font-mono text-[11px] text-muted-foreground/70">{index}</p>
+      </div>
+      <div>
+        {/* Proportional figures, not `tabular-nums`: tabular gives every digit
+            the width of a `0`, which reads loose at display sizes. It is for
+            columns that must align vertically, which is what the rows are. */}
+        <p className="text-2xl font-semibold tracking-tight">{value}</p>
+        <p className="pt-0.5 font-mono text-[11px] text-muted-foreground">{note}</p>
+      </div>
     </div>
   );
 }
@@ -212,92 +234,97 @@ function Tile({ label, value, note }: { label: string; value: string; note: stri
 /**
  * One published post and its numbers.
  *
- * The engagement bar is the only mark on the screen and it encodes magnitude,
- * so it is a single hue at one step, recessive, against the best post in the
- * window. Its job is to make "how far behind is row 40" answerable without
- * reading four figures — the numbers are still there for the exact answer.
+ * **Rebuilt 2026-08-18 because the screen was unreadable.** Every row was a
+ * bordered card carrying two lines of caption, five labelled metrics, a
+ * progress bar, a date, a rank and a bookmark — about eighteen elements, six
+ * rows deep, and the caption is the loudest thing on a screen nobody comes to
+ * for captions. Measured against the reference designs, the fix is subtraction:
+ *
+ * - the caption is an **identifier**, so it gets one line and stops
+ * - the four secondary metrics drop to one mono line, which is how a spec sheet
+ *   carries numbers you scan rather than compare
+ * - **engagement stays large and right-aligned** — it is what the list is
+ *   sorted by, so it is the one figure that earns size
+ * - the bar is gone. It encoded the same thing the sorted order already says,
+ *   and it was the element that made a list of forty rows feel like a chart
+ * - cards become **rows on hairlines**: forty bordered boxes is forty frames
+ *   competing with the content inside them
  */
 function PostRow({
   post,
   rank,
-  best,
   busy,
   onSave,
 }: {
   post: PostStats;
   rank: number;
-  best: number;
   busy: boolean;
   onSave: () => void;
 }) {
-  const share = best > 0 ? Math.max(0.01, post.engagement / best) : 0;
-
   return (
-    <div className="group flex items-stretch gap-4 rounded-xl border bg-card p-4 transition-colors hover:bg-muted/30">
-      {/* Rank, not a bullet: the list is sorted, so its position is information.
-          Muted — it names the row, it is not a measure. */}
-      <span className="w-6 shrink-0 pt-1 text-right text-xs tabular-nums text-muted-foreground">
+    <div className="group flex items-center gap-4 border-b px-2 py-3 transition-colors last:border-0 hover:bg-muted/40">
+      {/* Rank, not a bullet: the list is sorted, so its position is
+          information. Mono and muted — it names the row, it is not a measure. */}
+      <span className="w-6 shrink-0 text-right font-mono text-[11px] text-muted-foreground">
         {rank}
       </span>
 
       <Thumbnail src={post.picture_url} />
 
-      <div className="flex min-w-0 flex-1 flex-col justify-between gap-2">
-        <div className="min-w-0">
-          <p className="line-clamp-2 text-sm leading-relaxed">
-            {post.text || "(no text)"}
-          </p>
-          <p className="pt-1.5 text-[11px] text-muted-foreground">
-            {fullDate(post.published_at)}
-            {post.permalink_url ? (
-              <a
-                href={post.permalink_url}
-                target="_blank"
-                rel="noreferrer"
-                className="ml-2 inline-flex items-center gap-1 hover:underline"
-              >
-                open <ExternalLink className="size-3" />
-              </a>
-            ) : null}
-          </p>
-        </div>
-
-        {/* 4px rounded end, anchored at the left. Sized against the best post
-            in the window rather than an absolute nobody has a feel for. */}
-        <div className="h-1 w-full max-w-md overflow-hidden rounded-full bg-muted">
-          <div
-            className="h-full rounded-full bg-foreground/30"
-            style={{ width: `${share * 100}%` }}
-          />
-        </div>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium">{post.text || "(no text)"}</p>
+        <p className="flex flex-wrap items-center gap-x-2 pt-1 font-mono text-[11px] text-muted-foreground">
+          <span>{metric(post.reactions)} reactions</span>
+          <span aria-hidden>·</span>
+          <span>{metric(post.comments)} comments</span>
+          <span aria-hidden>·</span>
+          <span>{metric(post.shares)} shares</span>
+          <span aria-hidden>·</span>
+          <span>{metric(post.impressions)} reach</span>
+        </p>
       </div>
 
-      {/* A column of numbers that must line up down the list, which is exactly
-          what `tabular-nums` is for. */}
-      <div className="flex shrink-0 items-start gap-5 tabular-nums">
-        <Metric label="engagement" value={post.engagement} strong />
-        <Metric label="reactions" value={post.reactions} />
-        <Metric label="comments" value={post.comments} />
-        <Metric label="shares" value={post.shares} />
-        <Metric label="reach" value={post.impressions} />
+      {/* The figure the list is ordered by, and the date. `tabular-nums` here
+          and not on the tiles: this is a column that has to align down forty
+          rows, which is the one thing tabular figures are for. */}
+      <div className="shrink-0 text-right">
+        <p className="text-base font-semibold tabular-nums">
+          {metric(post.engagement)}
+        </p>
+        <p className="font-mono text-[11px] text-muted-foreground">
+          {timeAgo(post.published_at)}
+        </p>
       </div>
 
-      <button
-        type="button"
-        onClick={onSave}
-        disabled={busy || post.saved}
-        aria-label={post.saved ? "Already saved" : "Save this post"}
-        title={post.saved ? "Already saved" : "Keep this post for reference"}
-        className="h-fit shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-60"
-      >
-        {busy ? (
-          <Loader2 className="size-4 animate-spin" />
-        ) : post.saved ? (
-          <BookmarkCheck className="size-4 text-primary" />
-        ) : (
-          <Bookmark className="size-4" />
-        )}
-      </button>
+      <div className="flex w-16 shrink-0 items-center justify-end gap-0.5">
+        {post.permalink_url ? (
+          <a
+            href={post.permalink_url}
+            target="_blank"
+            rel="noreferrer"
+            title="Open on Facebook"
+            className="rounded p-1.5 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100"
+          >
+            <ExternalLink className="size-3.5" />
+          </a>
+        ) : null}
+        <button
+          type="button"
+          onClick={onSave}
+          disabled={busy || post.saved}
+          aria-label={post.saved ? "Already saved" : "Save this post"}
+          title={post.saved ? "Already saved" : "Keep this post for reference"}
+          className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-60"
+        >
+          {busy ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : post.saved ? (
+            <BookmarkCheck className="size-4 text-foreground" />
+          ) : (
+            <Bookmark className="size-4" />
+          )}
+        </button>
+      </div>
     </div>
   );
 }
@@ -330,35 +357,14 @@ function Thumbnail({ src }: { src: string | null }) {
 }
 
 /**
- * One number in the row's column.
+ * `Metric` used to live here: one labelled figure, repeated five times per row.
  *
- * `strong` marks engagement, which is the value the list is sorted by — the
- * others are its parts. Weight rather than colour: colour here would be
- * identity, and there is only one series.
+ * It is gone with the row rebuild above. Five stacked label/value pairs per row
+ * meant ten text elements carrying five numbers, and at forty rows that was the
+ * bulk of what made the screen unreadable. The four secondary figures are now
+ * one mono line, and engagement — the only one the sort depends on — is the
+ * figure that gets size.
  */
-function Metric({
-  label,
-  value,
-  strong,
-}: {
-  label: string;
-  value: number;
-  strong?: boolean;
-}) {
-  return (
-    <span className="w-14 text-right">
-      <span
-        className={cn(
-          "block text-sm",
-          strong ? "font-semibold" : "font-medium text-muted-foreground",
-        )}
-      >
-        {metric(value)}
-      </span>
-      <span className="block pt-0.5 text-[10px] text-muted-foreground">{label}</span>
-    </span>
-  );
-}
 
 /** The kept posts. Their numbers are a snapshot, not a live figure. */
 function Saved() {
@@ -391,6 +397,32 @@ function Saved() {
     }
   }
 
+  /**
+   * Put the original back in the queue — same caption, same picture.
+   *
+   * It lands at `review` rather than going straight out, which is the whole
+   * shape of the feature: publishing is its own decision everywhere else in
+   * this app, and a repost is the one case where the picture may have expired
+   * off Facebook's CDN since it was saved. The API copies the image into our
+   * bucket first and refuses with a readable sentence when it cannot.
+   */
+  async function repost(saved: SavedPost) {
+    setBusy(saved.id);
+    try {
+      const draft = await repostSaved(saved.id);
+      toast.success("Queued the original.", {
+        description: "Publish it from Review — nothing has gone out yet.",
+        action: { label: "Review", onClick: () => router.push(`/review?draft=${draft.id}`) },
+      });
+    } catch (cause) {
+      // The 409 for an expired image names what happened and what to do
+      // instead, so it is shown as written rather than replaced.
+      toast.error(cause instanceof Error ? cause.message : "Could not repost that");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function drop(saved: SavedPost) {
     try {
       await unsavePost(saved.id);
@@ -414,61 +446,100 @@ function Saved() {
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       <p className="text-xs text-muted-foreground">
         The numbers below are what each post had scored when it was saved, not a
-        live figure.
+        live figure. <strong className="font-medium text-foreground">Repost</strong>{" "}
+        queues the original caption and picture; <strong className="font-medium text-foreground">Write again</strong>{" "}
+        sends the story back through the writer for a fresh one.
       </p>
-      {data.map((saved) => (
-        <div
-          key={saved.id}
-          className="group flex items-start gap-3 rounded-lg border p-3 transition-colors hover:bg-muted/40"
-        >
-          <Thumbnail src={saved.picture_url} />
-          <div className="min-w-0 flex-1">
-            <p className="line-clamp-2 text-sm">{saved.text || "(no text)"}</p>
-            <p className="pt-1 text-[11px] tabular-nums text-muted-foreground">
-              {metric(saved.reactions)} reactions · {metric(saved.comments)} comments
-              · {metric(saved.shares)} shares
+
+      <div className="rounded-lg border bg-card px-2">
+        {data.map((saved) => (
+          <div
+            key={saved.id}
+            className="group flex items-center gap-4 border-b px-2 py-3 transition-colors last:border-0 hover:bg-muted/40"
+          >
+            <Thumbnail src={saved.picture_url} />
+
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium">
+                {saved.text || "(no text)"}
+              </p>
+              <p className="flex flex-wrap items-center gap-x-2 pt-1 font-mono text-[11px] text-muted-foreground">
+                <span>{metric(saved.reactions)} reactions</span>
+                <span aria-hidden>·</span>
+                <span>{metric(saved.comments)} comments</span>
+                <span aria-hidden>·</span>
+                <span>{metric(saved.shares)} shares</span>
+              </p>
+            </div>
+
+            {/* The client's ask: "there needs to be a visible date showing how
+                many days ago it was posted last." Relative, because that is the
+                question — whether it is far enough back to run again — and the
+                exact stamp is a hover away rather than a second line nobody
+                reads. */}
+            <div className="hidden shrink-0 text-right sm:block">
+              <p className="text-sm font-medium" title={fullDate(saved.published_at)}>
+                {timeAgo(saved.published_at)}
+              </p>
+              <p className="font-mono text-[11px] text-muted-foreground">
+                last posted
+              </p>
+            </div>
+
+            <div className="flex shrink-0 items-center gap-1">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7"
+                disabled={busy === saved.id}
+                onClick={() => void repost(saved)}
+                title="Queue the original again — same caption, same picture. It lands in Review to publish."
+              >
+                {busy === saved.id ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <Repeat2 className="size-3.5" />
+                )}
+                Repost
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7"
+                disabled={busy === saved.id}
+                onClick={() => void reuse(saved)}
+                title="Write this story again — a fresh hook, caption, first comment and image."
+              >
+                <Sparkles className="size-3.5" />
+                Write again
+              </Button>
               {saved.permalink_url ? (
                 <a
                   href={saved.permalink_url}
                   target="_blank"
                   rel="noreferrer"
-                  className="ml-2 inline-flex items-center gap-1 hover:underline"
+                  title="Open on Facebook"
+                  className="rounded p-1.5 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100"
                 >
-                  open <ExternalLink className="size-3" />
+                  <ExternalLink className="size-3.5" />
                 </a>
               ) : null}
-            </p>
+              <button
+                type="button"
+                onClick={() => void drop(saved)}
+                aria-label="Remove from saved"
+                title="Stop keeping this post"
+                className="rounded p-1.5 text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100 focus-visible:opacity-100"
+              >
+                <BookmarkCheck className="size-4" />
+              </button>
+            </div>
           </div>
-          <div className="flex shrink-0 items-start gap-1">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={busy === saved.id}
-              onClick={() => void reuse(saved)}
-              title="Write this story again — a fresh hook, caption, first comment and image."
-            >
-              {busy === saved.id ? (
-                <Loader2 className="size-3.5 animate-spin" />
-              ) : (
-                <Sparkles className="size-3.5" />
-              )}
-              Write again
-            </Button>
-            <button
-              type="button"
-              onClick={() => void drop(saved)}
-              aria-label="Remove from saved"
-              title="Stop keeping this post"
-              className="rounded p-1.5 text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100 focus-visible:opacity-100"
-            >
-              <BookmarkCheck className="size-4" />
-            </button>
-          </div>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }
