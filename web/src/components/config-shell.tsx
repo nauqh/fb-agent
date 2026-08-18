@@ -87,13 +87,33 @@ export function ConfigShell({
   const shown = local.find((section) => section.id === active) ?? local[0];
 
   return (
-    <div className="flex w-full flex-col pb-16 lg:min-h-0 lg:flex-1 lg:overflow-hidden">
+    // **One scroller, and it is the row — not the rail and not the screen.**
+    //
+    // Three arrangements have been tried here and each failed differently:
+    //
+    // - rail and pane each with their own `overflow-y-auto` inside an
+    //   `overflow-hidden` shell. Two scrollers side by side, so reaching the
+    //   bottom of Prompts depended on which column the pointer was over;
+    // - the whole screen scrolling. The bottom was reachable, but the rail —
+    //   which is the status column, and the only place a gap in an unopened
+    //   section is visible — scrolled away with it;
+    // - this one. The header is outside the scroller so it never moves, the row
+    //   below owns the scroll, and the rail is `sticky` within it. The rail
+    //   holds still, the pane scrolls under it, and a pane is as tall as it
+    //   needs to be.
+    <div className="flex w-full flex-col pb-16 lg:min-h-0 lg:flex-1 lg:overflow-hidden lg:pb-0">
       {header}
 
       {/* Below `lg` the rail is a horizontal strip: a 200px column beside a form
           on a phone leaves neither enough room. */}
-      <div className="flex min-h-0 flex-1 flex-col gap-5 lg:flex-row lg:gap-6">
-        <nav data-config-rail className="shrink-0 lg:w-52 lg:overflow-y-auto lg:pb-10">
+      <div className="flex flex-col gap-5 lg:min-h-0 lg:flex-1 lg:flex-row lg:gap-6 lg:overflow-y-auto lg:pr-3">
+        {/* `self-start` is what makes `sticky` work: a stretched flex item is
+            already as tall as the row it is in, so it has nothing to stick
+            within and would scroll away with the pane. */}
+        <nav
+          data-config-rail
+          className="shrink-0 lg:sticky lg:top-0 lg:w-52 lg:self-start lg:pb-10"
+        >
           <div className="flex gap-1 overflow-x-auto lg:block lg:space-y-6 lg:overflow-visible">
             {groups.map((group) => (
               <div key={group.label} className="flex shrink-0 gap-1 lg:block lg:space-y-0.5">
@@ -121,10 +141,9 @@ export function ConfigShell({
           </div>
         </nav>
 
-        {/* The pane scrolls, not the screen. The shell is `overflow-hidden` at
-            `lg`, so a pane without its own scroller is clipped rather than
-            short — the trap `CLAUDE.md` records for every screen here. */}
-        <div className="min-w-0 flex-1 lg:overflow-y-auto lg:pr-3 lg:pb-16">
+        {/* No scroller of its own: the pane is as tall as its section, and the
+            row around it does the scrolling. */}
+        <div className="min-w-0 flex-1 lg:pb-16">
           {shown?.body}
         </div>
       </div>
