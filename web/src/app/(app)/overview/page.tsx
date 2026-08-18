@@ -497,7 +497,11 @@ function Saved() {
       const draft = await repostSaved(saved.id);
       toast.success("Queued the original.", {
         description: "Publish it from Review — nothing has gone out yet.",
-        action: { label: "Review", onClick: () => router.push(`/review?draft=${draft.id}`) },
+        // `/review/{id}`, not `/review?draft={id}`. The drawer is a *route* —
+        // being on `/review/12` is what open means (`draft-sheet.tsx`) — so the
+        // query string matched nothing, opened nothing, and dropped the
+        // operator on the bare queue wondering where their repost went.
+        action: { label: "Review", onClick: () => router.push(`/review/${draft.id}`) },
       });
     } catch (cause) {
       // The 409 for an expired image names what happened and what to do

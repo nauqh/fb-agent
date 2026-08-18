@@ -398,6 +398,22 @@ export function DraftDetail({
   const failed = draft.status === "failed";
 
   /**
+   * A repost has a finished picture and nothing to draw it from.
+   *
+   * `POST /overview/saved/{id}/repost` copies the published image straight into
+   * `composed_image_path` and sets no hook and no hero, because the hook was
+   * baked into that picture when it first went out. The live preview below
+   * needs both, so it drew a placeholder gradient and the words "No overlay
+   * text" over a draft whose picture was sitting in the bucket the whole time —
+   * and the Repost toast links here, so that was the first thing anyone saw.
+   * The queue thumbnail and publish were always right.
+   *
+   * Keyed off the state rather than the topic string: any draft with a
+   * composite and no hero has nothing to preview, whatever made it.
+   */
+  const published = draft.composed_image_url !== null && draft.hero_image_path === null;
+
+  /**
    * The hero with the panel drawn over it, never the baked PNG.
    *
    * Showing the composited file is what made an edit require a round trip: the
@@ -410,7 +426,19 @@ export function DraftDetail({
    * Held as a value because both views draw it: on its own under Edit, and
    * inside the feed card under Preview.
    */
-  const picture = (
+  const picture = published ? (
+    <div
+      className="relative overflow-hidden rounded-md border bg-black"
+      style={{ aspectRatio: `${layout.image.width} / ${layout.image.height}` }}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={draft.composed_image_url ?? ""}
+        alt=""
+        className="size-full object-contain"
+      />
+    </div>
+  ) : (
     <ComposedImage
       layout={
         // The draft's own form laid over the Page's, so the toggle moves the
@@ -461,11 +489,18 @@ export function DraftDetail({
         </div>
       ) : null}
 
+      {/* A repost puts one line in `warnings` explaining that its picture is
+          the published one — see `routes/overview.repost_saved`. That is a note
+          about what the draft *is*, and reading it under "rules still failing"
+          made a working repost look like a broken draft. Same strip, honest
+          heading: nothing about a repost has failed. */}
       {draft.warnings.length > 0 ? (
         <div className="space-y-1.5 rounded-md border border-gold/40 bg-gold/[0.07] p-3">
           <p className="flex items-center gap-1.5 text-sm font-medium">
             <AlertTriangle className="size-4" />
-            {draft.warnings.length} rules still failing
+            {published
+              ? "About this repost"
+              : `${draft.warnings.length} rules still failing`}
           </p>
           <ul className="space-y-1 text-xs text-muted-foreground">
             {draft.warnings.map((warning) => (
@@ -519,15 +554,28 @@ export function DraftDetail({
               <div className="flex items-center justify-between text-[11px] text-muted-foreground">
                 <span className="font-mono">896 × 1120</span>
                 <span>
-                  {draft.hero_image_path ? "hero" : "no hero"}
+                  {published
+                    ? "the published image"
+                    : draft.hero_image_path
+                      ? "hero"
+                      : "no hero"}
                   <span className="mx-1">·</span>
                   {draft.composed_image_path ? "composed" : "not composed"}
                 </span>
               </div>
               {/* The picture above is always current, so nothing here is about
                   what you are looking at — only about whether the *file* on
-                  disk matches it yet. */}
-              {!draft.hero_image_path ? (
+                  disk matches it yet. Except on a repost, where the file *is*
+                  what you are looking at and none of the editing below reaches
+                  it — said here rather than left to be discovered by typing a
+                  hook and watching nothing happen. */}
+              {published ? (
+                <p className="text-[11px] text-muted-foreground">
+                  This is the picture that was published, reused as it is.
+                  Editing the hook will not change it — write the story again
+                  from Overview if you want a new card.
+                </p>
+              ) : !draft.hero_image_path ? (
                 <p className="text-[11px] text-muted-foreground">
                   No hero yet — the background is a placeholder.
                 </p>
@@ -539,7 +587,13 @@ export function DraftDetail({
           {/* Recomposite used to sit here. Saving now redraws the panel
               server-side, so the button only ever repeated what Save had
               already done — and left the PNG stale for anyone who did not
-              know to press it. */}
+              know to press it.
+
+              Gone entirely on a repost. `build_image` bails on a draft with no
+              hook, so the press spent nothing and did nothing — but it is the
+              one button that *can* spend money, and offering it beside a
+              picture it cannot touch is the wrong thing to leave clickable. */}
+          {published ? null : (
           <Button
             variant="outline"
             size="sm"
@@ -557,6 +611,7 @@ export function DraftDetail({
             )}
             Regenerate hero
           </Button>
+          )}
           {/* Which of the two forms this card is drawn in. Under the picture
               because that is the only place the difference is visible: the
               choice depends on the photograph, not on the brand — a busy shot
@@ -716,6 +771,20 @@ export function DraftDetail({
             <div className="min-w-0 space-y-6">
               {form ? (
                 <>
+                {/* A repost has no hook and cannot be given one: the hook it
+                    was published with is part of the picture being reused, and
+                    this field only ever reaches the panel the compositor draws.
+                    Left editable it was an empty box with a Rewrite button, a
+                    word count and a 65-word limit, all of which do nothing —
+                    reported as "the image and hook are blank". */}
+                {published ? (
+                  <Field label="Hook" hint="part of the picture">
+                    <p className="text-sm text-muted-foreground">
+                      This post’s hook was drawn into the picture when it first
+                      went out, so there is nothing to edit here.
+                    </p>
+                  </Field>
+                ) : (
                 <Field
                   label="Hook"
                   regenerate={
@@ -742,6 +811,7 @@ export function DraftDetail({
                     }
                   />
                 </Field>
+                )}
 
                 <Field
                   label="Caption"

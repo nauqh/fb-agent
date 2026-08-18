@@ -229,7 +229,14 @@ def cdn(monkeypatch):
     """Facebook's image host, answering however the test wants it to."""
     import httpx
 
-    state = {"status": 200, "content": b"\xff\xd8\xff jpeg bytes", "type": "image/jpeg"}
+    state = {
+        "status": 200,
+        "content": b"\xff\xd8\xff jpeg bytes",
+        "type": "image/jpeg",
+        # Which URL was actually fetched. The whole point of the planner lookup
+        # is that this is not the saved post's thumbnail.
+        "fetched": None,
+    }
 
     class FakeClient:
         def __init__(self, *args, **kwargs):
@@ -242,6 +249,7 @@ def cdn(monkeypatch):
             return False
 
         def get(self, url):
+            state["fetched"] = url
             if state["status"] == "boom":
                 raise httpx.ConnectError("no route to host")
             return httpx.Response(
@@ -255,6 +263,41 @@ def cdn(monkeypatch):
     return state
 
 
+PUBLISHED_AT = "2026-06-01T09:00:00"
+
+
+@pytest.fixture
+def planner(monkeypatch):
+    """Metricool's planner, holding the post a repost is actually copied from.
+
+    Stubbed here for the same reason the stats call is: it is somebody else's
+    service. What matters is that the route reads `media` and `firstCommentText`
+    from *this* row rather than from the saved post — the saved post's
+    `picture_url` is a 130-pixel thumbnail and has no first comment at all.
+    """
+    from app.routes import overview
+
+    state = {
+        "rows": [
+            {
+                "text": "The 1925 serum run to Nome.",
+                "firstCommentText": "The dogs ran 674 miles in 127 hours.",
+                "media": ["https://static.metricool.com/full-size.jpg"],
+                "publicationDate": {"dateTime": PUBLISHED_AT},
+            }
+        ],
+        "error": None,
+    }
+
+    def fake_list_scheduled(blog_id, start, end, client=None):
+        if state["error"]:
+            raise state["error"]
+        return state["rows"]
+
+    monkeypatch.setattr(overview.publisher, "list_scheduled", fake_list_scheduled)
+    return state
+
+
 def _saved_with_picture(client, text="The 1925 serum run to Nome."):
     return client.post(
         "/overview/saved",
@@ -262,12 +305,15 @@ def _saved_with_picture(client, text="The 1925 serum run to Nome."):
             "page_id": 1,
             "post_id": "a",
             "text": text,
+            # The thumbnail, which is all the stats call ever returns. Nothing
+            # should reach for it now that the planner carries the real file.
             "picture_url": "https://scontent.xx.fbcdn.net/signed.jpg",
+            "published_at": PUBLISHED_AT,
         },
     ).json()
 
 
-def test_reposting_copies_the_image_into_our_own_bucket(client, page, cdn):
+def test_reposting_copies_the_image_into_our_own_bucket(client, page, cdn, planner):
     """The point of the whole feature. Handing Metricool the CDN URL would
     publish whatever it resolves to days later, which is increasingly nothing."""
     saved = _saved_with_picture(client)
@@ -285,9 +331,63 @@ def test_reposting_copies_the_image_into_our_own_bucket(client, page, cdn):
     )
 
 
-def test_an_expired_image_is_refused_with_a_reason(client, page, cdn):
-    """The expected end state, not a bug. 403 is what a signed URL does once it
-    ages out, and the message has to say what to do instead."""
+def test_a_repost_carries_the_first_comment(client, page, cdn, planner):
+    """The stats row has no first comment on it and no column here ever held
+    one, so a repost published the caption alone and dropped the body of the
+    post it was repeating. The planner has it."""
+    saved = _saved_with_picture(client)
+
+    draft = client.post(f"/overview/saved/{saved['id']}/repost").json()
+
+    assert draft["first_comment"] == "The dogs ran 674 miles in 127 hours."
+
+
+def test_the_picture_comes_from_the_planner_not_the_saved_thumbnail(
+    client, page, cdn, planner
+):
+    """`SavedPost.picture_url` is Facebook's 130×163 thumbnail — the URL carries
+    `stp=dst-jpg_p130x130`, and the full-size sibling is empty on all 633 posts
+    measured. Publishing it puts a pixelated image on the page. The planner
+    carries the 896×1120 file we handed Metricool at publish time."""
+    saved = _saved_with_picture(client)
+
+    client.post(f"/overview/saved/{saved['id']}/repost")
+
+    assert cdn["fetched"] == "https://static.metricool.com/full-size.jpg", (
+        "the thumbnail must not be what gets copied"
+    )
+
+
+def test_a_post_whose_original_is_gone_is_refused_rather_than_pixelated(
+    client, page, cdn, planner
+):
+    """382 of this account's 2,197 posts are the old tool's, and their image
+    links have lapsed. The thumbnail would publish without complaint and look
+    wrong, so this refuses instead."""
+    saved = _saved_with_picture(client)
+    planner["rows"] = []
+
+    response = client.post(f"/overview/saved/{saved['id']}/repost")
+
+    assert response.status_code == 409
+    assert "thumbnail" in response.json()["detail"]
+    assert client.get("/drafts").json() == [], "and no draft is left behind"
+
+
+def test_the_planner_being_unreachable_reads_as_no_original(client, page, cdn, planner):
+    """Not a 502. The operator's next move is the same either way — “Write
+    again” — and a repost that cannot find its picture cannot proceed."""
+    from app.publish.metricool import PublishError
+
+    saved = _saved_with_picture(client)
+    planner["error"] = PublishError("planner down")
+
+    assert client.post(f"/overview/saved/{saved['id']}/repost").status_code == 409
+
+
+def test_an_expired_image_is_refused_with_a_reason(client, page, cdn, planner):
+    """The expected end state, not a bug. 403 is what the old app's signed URLs
+    do once they age out, and the message has to say what to do instead."""
     saved = _saved_with_picture(client)
     cdn["status"] = 403
 
@@ -297,7 +397,7 @@ def test_an_expired_image_is_refused_with_a_reason(client, page, cdn):
     assert "expired" in response.json()["detail"]
 
 
-def test_a_failed_copy_leaves_no_half_built_draft(client, page, cdn):
+def test_a_failed_copy_leaves_no_half_built_draft(client, page, cdn, planner):
     """A draft with a caption and no picture looks publishable and is not."""
     saved = _saved_with_picture(client)
     cdn["status"] = 403
@@ -307,14 +407,14 @@ def test_a_failed_copy_leaves_no_half_built_draft(client, page, cdn):
     assert client.get("/drafts").json() == [], "the row is rolled back, not left behind"
 
 
-def test_the_image_host_being_unreachable_is_a_502(client, page, cdn):
+def test_the_image_host_being_unreachable_is_a_502(client, page, cdn, planner):
     saved = _saved_with_picture(client)
     cdn["status"] = "boom"
 
     assert client.post(f"/overview/saved/{saved['id']}/repost").status_code == 502
 
 
-def test_something_that_is_not_an_image_is_refused(client, page, cdn):
+def test_something_that_is_not_an_image_is_refused(client, page, cdn, planner):
     """An HTML error page served with 200 is the classic way this fails."""
     saved = _saved_with_picture(client)
     cdn["type"] = "text/html"
@@ -322,8 +422,12 @@ def test_something_that_is_not_an_image_is_refused(client, page, cdn):
     assert client.post(f"/overview/saved/{saved['id']}/repost").status_code == 409
 
 
-def test_a_saved_post_with_no_picture_cannot_be_reposted(client, page):
-    """Nothing to repost. `Write again` is the answer, and the message says so."""
+def test_a_saved_post_with_no_picture_cannot_be_reposted(client, page, planner):
+    """Nothing to repost. `Write again` is the answer, and the message says so.
+
+    The saved row carries no `published_at` here either, so the planner cannot
+    even be asked — which is the same outcome by a different road.
+    """
     saved = client.post(
         "/overview/saved", json={"page_id": 1, "post_id": "a", "text": "A story."}
     ).json()
@@ -334,7 +438,7 @@ def test_a_saved_post_with_no_picture_cannot_be_reposted(client, page):
     assert "Write again" in response.json()["detail"]
 
 
-def test_reposting_leaves_the_saved_post_alone(client, page, cdn):
+def test_reposting_leaves_the_saved_post_alone(client, page, cdn, planner):
     saved = _saved_with_picture(client)
 
     client.post(f"/overview/saved/{saved['id']}/repost")
