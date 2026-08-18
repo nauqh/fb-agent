@@ -235,6 +235,9 @@ Three things that were not obvious:
   on every generate run — would have raised `AttributeError` in production. The
   suite missed it because tests *construct* rows rather than reload them. Fixed
   with `SAEnum(native_enum=False, length=32)`; the regression test reloads.
+  (`is_factual` is gone as of 2026-08-18. The column still has to load back as
+  the enum: `build_image` asks it `is not SourceKind.RSS`, which a bare string
+  fails silently rather than loudly.)
 - **RLS was already on** all three tables with zero policies, so `anon` is
   denied everything despite Supabase's default grants. The app is unaffected: it
   connects as `postgres`, which owns the tables and has `BYPASSRLS`. Left as-is

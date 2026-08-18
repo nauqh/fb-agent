@@ -67,10 +67,10 @@ interface SourceCardProps {
 /**
  * One browsable Source Item.
  *
- * How a kind binds the writer — a competitor post is borrowed for tone, an RSS
- * item or tweet binds the story — is no longer stated here. It is still true,
- * and `SourceKind.is_factual` still decides it server-side; the card said so in
- * two words that raised more questions than they answered.
+ * How a kind binds the writer is not stated here, and as of 2026-08-18 there is
+ * nothing left to state: every kind binds its story, competitor posts included.
+ * The card used to say otherwise in two words that raised more questions than
+ * they answered.
  *
  * Clicking the card ticks it, as it always has — the grid is a bulk picker and
  * ticking is the frequent action, so it keeps the whole surface. Reading the

@@ -203,20 +203,31 @@ def test_retries_are_capped(page):
 # --- the instruction that must not be reversed -------------------------------
 
 
-def test_a_competitor_post_is_a_style_sample_not_a_subject():
-    instruction = writer.source_instruction(SourceKind.COMPETITOR_POST)
+@pytest.mark.parametrize("kind", list(SourceKind))
+def test_every_kind_binds_the_subject(kind):
+    """Reversing this produces confident output about the wrong story.
 
-    assert "STYLE" in instruction
-    assert "own subject" in instruction
-
-
-@pytest.mark.parametrize("kind", [SourceKind.RSS, SourceKind.TWEET])
-def test_an_rss_item_or_tweet_binds_the_subject(kind):
-    """Reversing this produces confident output about the wrong story."""
+    The competitor-post branch used to say the opposite — "a STYLE sample,
+    choose your own subject" — and the client reported it on 2026-08-18 as posts
+    that were not generated from the competitor posts they ticked. They were;
+    the prompt told the model to write about something else.
+    """
     instruction = writer.source_instruction(kind)
 
-    assert "FACTUAL" in instruction
-    assert "same story" in instruction
+    assert "SAME story" in instruction or "same story" in instruction
+    assert "Do not invent a different subject" in instruction
+    assert "own subject" not in instruction
+
+
+def test_a_competitor_post_binds_the_subject_without_lending_its_words():
+    """Same story, our writing. The one rule that is only about competitors.
+
+    Their post is a finished artefact, so "write about this" and "do not copy
+    this" have to arrive together. An RSS item needs no such warning.
+    """
+    instruction = writer.source_instruction(SourceKind.COMPETITOR_POST)
+
+    assert "Do not reuse their wording" in instruction
 
 
 def test_the_prompt_carries_the_source_text_and_its_instruction():

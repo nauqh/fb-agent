@@ -143,8 +143,8 @@ than hypothetical:
   raises rather than showing an empty grid.
 
 They converge on one `SourceItem`, and generation never learns which adapter
-produced one. It asks `is_factual`, which is a pure function of `kind`
-(see [data-model.md](data-model.md#is_factual-is-derived-never-stored)).
+produced one. It passes `kind` to `source_instruction`, and every kind binds the
+subject (see [data-model.md](data-model.md#every-kind-binds-the-subject)).
 
 The ingest rule — **browsing does not write** — lives here. Tweets and RSS items
 are fetched live and become rows only when ticked into the Cart, so the table

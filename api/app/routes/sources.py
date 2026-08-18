@@ -40,9 +40,9 @@ router = APIRouter(prefix="/sources", tags=["sources"])
 class StoredSourceItem(SourceItemBase):
     """A stored Source Item, plus whether a Draft has already used it.
 
-    `used` is derived per request rather than stored, for the same reason
-    `SourceKind.is_factual` is: a stored copy is a second truth, and when it
-    drifts the grid quietly offers the operator a post they already published.
+    `used` is derived per request rather than stored: a stored copy is a second
+    truth, and when it drifts the grid quietly offers the operator a post they
+    already published.
     """
 
     id: int

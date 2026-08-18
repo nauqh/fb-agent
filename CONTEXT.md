@@ -33,15 +33,18 @@ A Source Item from one of a Page's curated feeds. The feeds are configured in
 `api/config/sources.yml`, per Page, because the beats do not overlap.
 _Avoid_: Article, news item, feed item
 
-**Style Source**:
-A Source Item whose *subject is not binding* — it is borrowed for tone and
-structure only. Competitor posts are Style Sources.
+**Binding subject**:
+Every Source Item's subject binds: the generated post is about that same story,
+those same people, those same events. There is no kind that is borrowed for tone
+alone.
 
-**Factual Source**:
-A Source Item whose *subject is binding* — the generated post must be about the
-same story, people, and events. Tweets and RSS items are Factual Sources.
-Confusing the two tells the model to treat a Smithsonian piece as a writing
-sample.
+There was, until 2026-08-18 — competitor posts were "Style Sources", and the
+writer was told to pick its own story. The client read that as the tool ignoring
+the posts they had chosen, which is what it looks like from the outside. Both
+terms are retired; only the sentence handed to the model differs by kind now
+(`writer.agent.source_instruction`), and a competitor's differs only in also
+saying not to borrow their words.
+_Avoid_: Style Source, Factual Source, inspiration
 
 **Cart**:
 The set of Source Items currently ticked for the next generation run.

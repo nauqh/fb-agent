@@ -64,10 +64,11 @@ class DraftContent(BaseModel):
 def _instructions(page: Page, layout: Layout) -> str:
     """System prompt, panel rules, and how to treat the source.
 
-    The last part is the one that cannot be got wrong. `is_factual` decides
-    whether the Source Item's *subject* binds; reversing it tells the model to
-    treat a Smithsonian piece as a writing sample, and the result is confident,
-    well-formed output about the wrong story that nothing downstream catches.
+    The last part is the one that cannot be got wrong. `source_instruction`
+    decides how the Source Item is read, and every kind now binds the subject:
+    telling the model otherwise produces confident, well-formed output about the
+    wrong story that nothing downstream catches — which is exactly what the
+    competitor-post branch used to do.
 
     The sentence naming the page used to be the *whole* per-Page dimension of
     this prompt. It is now the fallback: `page.name` also selects
@@ -100,15 +101,40 @@ def _instructions(page: Page, layout: Layout) -> str:
 
 
 def source_instruction(kind: SourceKind) -> str:
-    """How to read the Source Item. Derived from `kind`, never stored."""
-    if kind.is_factual:
+    """How to read the Source Item. Derived from `kind`, never stored.
+
+    **Every kind binds the subject.** A competitor post used to be the exception
+    — "a STYLE sample, choose your own subject" — and that is the flow the client
+    reported as broken on 2026-08-18: they ticked competitor posts, the run
+    reported success, and the drafts were about something else entirely. Nothing
+    had failed. The prompt said to do that.
+
+    The exception was inherited from the old app's *comment*
+    (`facebookGenerateGraph.ts:389`) rather than its prompt. The prompt one line
+    below that comment says "Write ONE original Facebook post **inspired by** this
+    competitor post" and then pastes the post — vague enough that the model
+    stayed on the subject, which is the behaviour the client has been using for
+    months and the one they expect.
+
+    Competitor posts keep a sentence of their own because the risk is real and
+    different: their post is the whole finished artefact, so "same story" has to
+    be said alongside "not their words". An RSS item has no such pull — nobody
+    republishes a Smithsonian article verbatim by accident.
+
+    Their *picture* is still off-limits, and that rule did not move: see
+    `generate.build_image`, where `hero_from_source` stays RSS-only. Retelling a
+    story is sourcing; reusing the image a rival page shot is lifting.
+    """
+    if kind is SourceKind.COMPETITOR_POST:
         return (
-            "The source below is FACTUAL. Write about this same story, the same "
-            "people and the same events. Do not invent a different subject."
+            "The source below is a competitor's post about a real story. Write "
+            "about that SAME story — the same subject, people and events. Do not "
+            "invent a different subject. Do not reuse their wording, their "
+            "opening or their structure: the story is shared, the writing is ours."
         )
     return (
-        "The source below is a STYLE sample. Borrow its tone, rhythm and "
-        "structure only. Choose your own subject — do not write about its story."
+        "The source below is FACTUAL. Write about this same story, the same "
+        "people and the same events. Do not invent a different subject."
     )
 
 

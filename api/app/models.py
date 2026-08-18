@@ -43,11 +43,14 @@ def _stored_enum(enum: type) -> SAEnum:
       `create_constraint` is left off for the same reason: a `CHECK` listing the
       values would need altering too.
     - **It must load back as the enum, not as `str`.** `sa_type=String` gets the
-      first two and silently loses this one: `SourceKind.is_factual` is a
-      property, `sources/__init__.py` asks for it on a value read from the
-      database, and a bare string raises `AttributeError` mid-run. The tests did
-      not catch it — they construct their rows rather than reloading them — so
-      it would have shipped.
+      first two and silently loses this one: `generate.build_image` asks
+      `source.kind is not SourceKind.RSS` of a row read from the database, and
+      `is not` against a bare string is *always* true — so the feed-image branch
+      would refuse every draft with "only an RSS item's picture can be reused",
+      including the RSS ones. It used to be an `AttributeError` from
+      `is_factual`, which at least announced itself; this failure is quiet. The
+      tests do not catch either — they construct their rows rather than
+      reloading them — so it would ship.
 
     `length` is fixed rather than derived. SQLAlchemy sizes the column to the
     longest *current* value, so a longer member added later would need an
@@ -58,21 +61,21 @@ def _stored_enum(enum: type) -> SAEnum:
 
 
 class SourceKind(StrEnum):
+    """The three kinds of external material. **All three bind the subject.**
+
+    There used to be an `is_factual` property here saying a competitor post did
+    not — it was borrowed for tone, and the writer was told to pick its own
+    story. That shipped, and the client's 2026-08-18 report is what it looks like
+    from outside: posts generated from ticked competitor posts, about something
+    else. Removed rather than inverted, because a property every member answers
+    the same way is not a distinction. The one sentence that still differs by
+    kind lives in `writer.agent.source_instruction`, which is where the model is
+    actually told anything.
+    """
+
     COMPETITOR_POST = "competitor_post"
     TWEET = "tweet"
     RSS = "rss"
-
-    @property
-    def is_factual(self) -> bool:
-        """Whether the *subject* binds the writer.
-
-        A competitor post is borrowed for tone only; a tweet or an RSS item must
-        produce a post about that same story. Reversing this tells the model to
-        treat a Smithsonian piece as a writing sample. Derived, never stored — a
-        stored copy is a second truth, and when it drifts the model still
-        returns confident, well-formed output about the wrong story.
-        """
-        return self is not SourceKind.COMPETITOR_POST
 
 
 class DraftStatus(StrEnum):
@@ -621,10 +624,10 @@ class SourceItemBase(SQLModel):
     kind: SourceKind = Field(index=True, sa_type=_stored_enum(SourceKind))
     """Stored as `VARCHAR`, loaded back as `SourceKind` — see `_stored_enum`.
 
-    Loading it back as the enum is load-bearing rather than tidy: `is_factual`
-    is a property on this class, and `sources/__init__.py` asks for it to decide
-    whether a Source Item's subject binds. A plain string there is an
-    `AttributeError` in the middle of a generate run.
+    Loading it back as the enum is load-bearing rather than tidy: `build_image`
+    compares this against `SourceKind.RSS` with `is not` to decide whether a
+    draft may reuse its source's picture, and a plain string fails that
+    comparison silently for every kind.
     """
 
     external_id: str

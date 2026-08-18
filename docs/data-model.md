@@ -385,16 +385,31 @@ rows. Production already tried the blob alternative — `competitor_posts.metric
 is how the UI shows a run in flight: background task fills the row in, client
 polls.
 
-## `is_factual` is derived, never stored
+## Every kind binds the subject
 
 | `kind` | Subject | Instruction to the writer |
 |---|---|---|
-| `competitor_post` | not binding | borrow tone and structure, pick your own story |
+| `competitor_post` | **binding** | same story — and not their wording |
 | `tweet`, `rss` | **binding** | write about this *same* story, people, events |
 
-The old code branches on this at `facebookGenerateGraph.ts:395`, with a comment
-noting that reversing it "tells the model to treat a Smithsonian article as a
-writing sample."
+`competitor_post` was "not binding" until 2026-08-18: borrow the tone, pick your
+own story. The client reported it as the tool not generating from the competitor
+posts they had chosen. It had; the prompt told the model to write about
+something else, and a run that does that still reports success, because nothing
+about it failed.
+
+The exception came from the old app's *comment* at
+`facebookGenerateGraph.ts:389` — "a competitor post is a style reference, where
+the subject is deliberately loose" — rather than from its prompt. Twenty lines
+down, the prompt it actually sends is "Write ONE original Facebook post
+**inspired by** this competitor post", which is loose enough that the model
+stayed on the story. So the behaviour the client has used for months was never
+the behaviour the comment described, and this rewrite matches the prompt.
+
+What survives of the distinction is one extra sentence for competitor posts: the
+story is shared, the writing is ours. Their *picture* is a separate rule and did
+not move — `hero_from_source` is RSS-only in `generate.build_image`, because
+retelling a story is sourcing and reusing a rival's photograph is not.
 
 It is a pure function of `kind`, so it is computed. A stored copy is a second
 truth to keep in sync, and when it drifts the model still returns confident,

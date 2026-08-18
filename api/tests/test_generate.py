@@ -1382,13 +1382,15 @@ def test_a_bigger_size_draws_a_bigger_disc():
 
 
 def test_source_kind_survives_a_database_round_trip(session):
-    """`is_factual` is a property on the enum, and the writer asks a *stored*
-    row for it — see sources/__init__.py. Stored as a bare string it comes back
-    as `str` and that call is an AttributeError mid-run.
+    """`build_image` asks a *stored* row `kind is not SourceKind.RSS`, and `is
+    not` against a bare string is always true — so the feed-image branch would
+    refuse every draft, RSS ones included.
 
     Regression: pinning these columns with `sa_type=String` did exactly that,
     and every existing test passed, because they all construct their rows
-    rather than reloading them.
+    rather than reloading them. It used to raise `AttributeError` from
+    `is_factual`; that property is gone and the identity comparison is what is
+    left, so this asserts identity rather than `isinstance` alone.
     """
     session.add(SourceItem(kind=SourceKind.RSS, external_id="round-trip", text="t"))
     session.commit()
@@ -1399,7 +1401,7 @@ def test_source_kind_survives_a_database_round_trip(session):
     ).one()
 
     assert isinstance(stored.kind, SourceKind)
-    assert stored.kind.is_factual is True
+    assert stored.kind is SourceKind.RSS
 
 
 # --- the card form, and a post with no picture --------------------------------

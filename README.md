@@ -37,8 +37,7 @@ One meaning each, in the code and on screen.
 | **Page** | An owned Facebook Page. Owns its watermark, feeds, competitor assignments, and any layout overrides. Adding one is an insert | brand, blog, `hr`/`tff` |
 | **Source Item** | A piece of outside material chosen as input. Exactly three kinds | inspiration post, article |
 | **Competitor** | A Page not ours, synced from Metricool. Metricool owns the list; we store their *posts*. The word is Metricool's own — its endpoint is `/analytics/competitors` | rival |
-| **Style Source** | A Source Item whose subject is **not** binding — borrowed for tone only. Competitor posts | |
-| **Factual Source** | A Source Item whose subject **is** binding. Tweets and RSS items | |
+| **Binding subject** | Every Source Item's subject binds — the post is about that same story. Competitor posts were the exception until 2026-08-18 and no longer are | Style Source, Factual Source |
 | **Cart** | Source Items ticked for the next run | selection, basket |
 | **Draft** | A generated post awaiting review: hook, caption, first comment, highlighted phrases, image. One Source Item yields one Draft per Page | post, candidate |
 | **Approve** | A legacy status nothing new writes — kept only for rows that already carry it. Publishing is its own decision | schedule, publish |
