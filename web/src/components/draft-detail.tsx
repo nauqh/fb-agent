@@ -28,7 +28,7 @@ import { Dialog, DialogContent, DialogFooter, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Loading } from "@/components/loading";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -278,7 +278,7 @@ export function DraftDetail({
   if (error) {
     return <Panel>Could not load draft {draftId}: {error}</Panel>;
   }
-  if (!draft) return <DetailSkeleton />;
+  if (!draft) return <DetailLoading />;
 
   if (generating) return <Generating draft={draft} />;
 
@@ -286,7 +286,7 @@ export function DraftDetail({
   // safe stand-in: a default layout is a second copy of `layout.yml`, and a
   // missing Page means no watermark decision. Both are one fast read that
   // starts as soon as the draft lands, so this is a flicker, not a wait.
-  if (!layout || !page) return <DetailSkeleton />;
+  if (!layout || !page) return <DetailLoading />;
 
   async function save() {
     if (!form) return;
@@ -1417,7 +1417,7 @@ function SourceLine({ draft }: { draft: Draft }) {
       </p>
     );
   }
-  if (source === null) return <Skeleton className="h-16" />;
+  if (source === null) return <Loading className="h-16" />;
 
   const Glyph = KIND_GLYPH[source.kind];
   return (
@@ -1450,17 +1450,10 @@ function SourceLine({ draft }: { draft: Draft }) {
   );
 }
 
-/** The shape of the screen before the draft, its Page or its layout arrive. */
-function DetailSkeleton() {
+/** Before the draft, its Page or its layout arrive. */
+function DetailLoading() {
   return (
-    <div className="grid gap-6 lg:grid-cols-[340px_minmax(0,1fr)]">
-      <Skeleton className="aspect-896/1120 rounded-md" />
-      <div className="space-y-4">
-        <Skeleton className="h-8" />
-        <Skeleton className="h-28" />
-        <Skeleton className="h-40" />
-      </div>
-    </div>
+    <Loading label="Loading draft" className="h-[60vh]" />
   );
 }
 

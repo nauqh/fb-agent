@@ -12,10 +12,14 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { Loading } from "@/components/loading";
 import { QueryError } from "@/components/query-error";
+import {
+  QUEUE_PAGE_SIZE,
+  QueuePagination,
+} from "@/components/queue-pagination";
 import { Button } from "@/components/ui/button";
 import { ScreenHeader } from "@/components/screen";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   getPerformance,
@@ -83,12 +87,31 @@ function Performance() {
   const { pageId } = usePageScope();
   const [days, setDays] = useState(30);
   const [busy, setBusy] = useState<string | null>(null);
+  // The *pagination* page. The Page is `pageId` — the same collision of names
+  // the Review queue has, and named the same way.
+  const [page, setPage] = useState(1);
 
   const { data, error, loading, refresh } = useQuery(
     () => getPerformance(pageId!, days),
     [pageId, days],
     { enabled: pageId !== null },
   );
+
+  // Paged, like the queue, and for a sharper version of the queue's reason: 30
+  // days is 219 posts on History Retraced and 60 is over 400. The tab is its own
+  // scroller, so the whole list rendered — four hundred rows of thumbnail below
+  // a totals strip that scrolls away in the first flick.
+  const total = data?.length ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / QUEUE_PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const shown = data?.slice(
+    (safePage - 1) * QUEUE_PAGE_SIZE,
+    safePage * QUEUE_PAGE_SIZE,
+  );
+
+  // Clamped during render rather than in an effect — `review-list.tsx` sets out
+  // why. Here it also covers the window shrinking under the stored page.
+  if (page > totalPages) setPage(totalPages);
 
   async function keep(post: PostStats) {
     if (pageId === null) return;
@@ -124,7 +147,16 @@ function Performance() {
             app. It was a row of bordered boxes with a `bg-primary/10` active
             state — a near-white tint barely distinguishable from the inactive
             ones. */}
-        <Tabs value={String(days)} onValueChange={(next) => setDays(Number(next))}>
+        <Tabs
+          value={String(days)}
+          onValueChange={(next) => {
+            setDays(Number(next));
+            // Back to page 1: page 12 of a 60-day window is nowhere in a 7-day
+            // one, and the clamp on its own would land on that window's last
+            // page rather than its best posts.
+            setPage(1);
+          }}
+        >
           <TabsList className="w-fit shrink-0">
             {[7, 30, 60].map((option) => (
               <TabsTrigger key={option} value={String(option)}>
@@ -136,12 +168,7 @@ function Performance() {
       </div>
 
       {loading || !data ? (
-        <div className="space-y-4">
-          <Skeleton className="h-24 rounded-xl" />
-          {Array.from({ length: 5 }).map((_, index) => (
-            <Skeleton key={index} className="h-28 rounded-xl" />
-          ))}
-        </div>
+        <Loading label="Reading Metricool" className="h-64 rounded-lg border" />
       ) : data.length === 0 ? (
         <p className="rounded-lg border border-dashed p-10 text-center text-sm text-muted-foreground">
           Nothing published in this window.
@@ -149,16 +176,29 @@ function Performance() {
       ) : (
         <>
           <Totals posts={data} days={days} />
-          <div className="rounded-lg border bg-card px-2">
-            {data.map((post, index) => (
-              <PostRow
-                key={post.post_id}
-                post={post}
-                rank={index + 1}
-                busy={busy === post.post_id}
-                onSave={() => void keep(post)}
-              />
-            ))}
+          <div className="overflow-hidden rounded-lg border bg-card">
+            {/* The rows keep their own box so `last:border-0` still finds a
+                last row. Hung directly off the outer element, the pager became
+                the last child and every row kept a rule that then doubled up
+                against the pager's own. */}
+            <div className="px-2">
+              {shown?.map((post, index) => (
+                <PostRow
+                  key={post.post_id}
+                  post={post}
+                  // Ranked across the whole window, not within the page: the
+                  // sort is global, so the first row of page two is 11.
+                  rank={(safePage - 1) * QUEUE_PAGE_SIZE + index + 1}
+                  busy={busy === post.post_id}
+                  onSave={() => void keep(post)}
+                />
+              ))}
+            </div>
+            <QueuePagination
+              totalItems={total}
+              page={safePage}
+              onPageChange={setPage}
+            />
           </div>
         </>
       )}
@@ -377,6 +417,8 @@ function Saved() {
 
   const router = useRouter();
   const [busy, setBusy] = useState<number | null>(null);
+  // The pagination page, as in Performance and the Review queue.
+  const [page, setPage] = useState(1);
 
   /**
    * Write this one again. The saved post stays — reuse is not a move, and the
@@ -434,7 +476,8 @@ function Saved() {
   }
 
   if (error) return <QueryError error={error} onRetry={refresh} />;
-  if (loading || !data) return <Skeleton className="h-40 rounded-lg" />;
+  if (loading || !data)
+    return <Loading label="Loading saved posts" className="h-64 rounded-lg border" />;
 
   if (data.length === 0) {
     return (
@@ -445,6 +488,18 @@ function Saved() {
     );
   }
 
+  const totalPages = Math.max(1, Math.ceil(data.length / QUEUE_PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const shown = data.slice(
+    (safePage - 1) * QUEUE_PAGE_SIZE,
+    safePage * QUEUE_PAGE_SIZE,
+  );
+
+  // Removing the last saved post on the last page would otherwise strand the
+  // list on a page that no longer exists. Clamped during render, not in an
+  // effect — `review-list.tsx` sets out why.
+  if (page > totalPages) setPage(totalPages);
+
   return (
     <div className="space-y-3">
       <p className="text-xs text-muted-foreground">
@@ -454,91 +509,100 @@ function Saved() {
         sends the story back through the writer for a fresh one.
       </p>
 
-      <div className="rounded-lg border bg-card px-2">
-        {data.map((saved) => (
-          <div
-            key={saved.id}
-            className="group flex items-center gap-4 border-b px-2 py-3 transition-colors last:border-0 hover:bg-muted/40"
-          >
-            <Thumbnail src={saved.picture_url} />
+      <div className="overflow-hidden rounded-lg border bg-card">
+        {/* The rows keep their own box so `last:border-0` still finds a last
+            row — see the same note in Performance. */}
+        <div className="px-2">
+          {shown.map((saved) => (
+            <div
+              key={saved.id}
+              className="group flex items-center gap-4 border-b px-2 py-3 transition-colors last:border-0 hover:bg-muted/40"
+            >
+              <Thumbnail src={saved.picture_url} />
 
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium">
-                {saved.text || "(no text)"}
-              </p>
-              <p className="flex flex-wrap items-center gap-x-2 pt-1 font-mono text-[11px] text-muted-foreground">
-                <span>{metric(saved.reactions)} reactions</span>
-                <span aria-hidden>·</span>
-                <span>{metric(saved.comments)} comments</span>
-                <span aria-hidden>·</span>
-                <span>{metric(saved.shares)} shares</span>
-              </p>
-            </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium">
+                  {saved.text || "(no text)"}
+                </p>
+                <p className="flex flex-wrap items-center gap-x-2 pt-1 font-mono text-[11px] text-muted-foreground">
+                  <span>{metric(saved.reactions)} reactions</span>
+                  <span aria-hidden>·</span>
+                  <span>{metric(saved.comments)} comments</span>
+                  <span aria-hidden>·</span>
+                  <span>{metric(saved.shares)} shares</span>
+                </p>
+              </div>
 
-            {/* The client's ask: "there needs to be a visible date showing how
-                many days ago it was posted last." Relative, because that is the
-                question — whether it is far enough back to run again — and the
-                exact stamp is a hover away rather than a second line nobody
-                reads. */}
-            <div className="hidden shrink-0 text-right sm:block">
-              <p className="text-sm font-medium" title={fullDate(saved.published_at)}>
-                {timeAgo(saved.published_at)}
-              </p>
-              <p className="font-mono text-[11px] text-muted-foreground">
-                last posted
-              </p>
-            </div>
+              {/* The client's ask: "there needs to be a visible date showing how
+                  many days ago it was posted last." Relative, because that is the
+                  question — whether it is far enough back to run again — and the
+                  exact stamp is a hover away rather than a second line nobody
+                  reads. */}
+              <div className="hidden shrink-0 text-right sm:block">
+                <p className="text-sm font-medium" title={fullDate(saved.published_at)}>
+                  {timeAgo(saved.published_at)}
+                </p>
+                <p className="font-mono text-[11px] text-muted-foreground">
+                  last posted
+                </p>
+              </div>
 
-            <div className="flex shrink-0 items-center gap-1">
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7"
-                disabled={busy === saved.id}
-                onClick={() => void repost(saved)}
-                title="Queue the original again — same caption, same picture. It lands in Review to publish."
-              >
-                {busy === saved.id ? (
-                  <Loader2 className="size-3.5 animate-spin" />
-                ) : (
-                  <Repeat2 className="size-3.5" />
-                )}
-                Repost
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7"
-                disabled={busy === saved.id}
-                onClick={() => void reuse(saved)}
-                title="Write this story again — a fresh hook, caption, first comment and image."
-              >
-                <Sparkles className="size-3.5" />
-                Write again
-              </Button>
-              {saved.permalink_url ? (
-                <a
-                  href={saved.permalink_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  title="Open on Facebook"
-                  className="rounded p-1.5 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100"
+              <div className="flex shrink-0 items-center gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7"
+                  disabled={busy === saved.id}
+                  onClick={() => void repost(saved)}
+                  title="Queue the original again — same caption, same picture. It lands in Review to publish."
                 >
-                  <ExternalLink className="size-3.5" />
-                </a>
-              ) : null}
-              <button
-                type="button"
-                onClick={() => void drop(saved)}
-                aria-label="Remove from saved"
-                title="Stop keeping this post"
-                className="rounded p-1.5 text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100 focus-visible:opacity-100"
-              >
-                <BookmarkCheck className="size-4" />
-              </button>
+                  {busy === saved.id ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <Repeat2 className="size-3.5" />
+                  )}
+                  Repost
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7"
+                  disabled={busy === saved.id}
+                  onClick={() => void reuse(saved)}
+                  title="Write this story again — a fresh hook, caption, first comment and image."
+                >
+                  <Sparkles className="size-3.5" />
+                  Write again
+                </Button>
+                {saved.permalink_url ? (
+                  <a
+                    href={saved.permalink_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    title="Open on Facebook"
+                    className="rounded p-1.5 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100"
+                  >
+                    <ExternalLink className="size-3.5" />
+                  </a>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => void drop(saved)}
+                  aria-label="Remove from saved"
+                  title="Stop keeping this post"
+                  className="rounded p-1.5 text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100 focus-visible:opacity-100"
+                >
+                  <BookmarkCheck className="size-4" />
+                </button>
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
+        <QueuePagination
+          totalItems={data.length}
+          page={safePage}
+          onPageChange={setPage}
+        />
       </div>
     </div>
   );

@@ -6,9 +6,9 @@ import { toast } from "sonner";
 
 import { splitOnHighlights } from "@/components/composed-image";
 import { HookField } from "@/components/hook-field";
+import { Loading } from "@/components/loading";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
   getPageLayout,
   resetPageLayout,
@@ -74,7 +74,7 @@ export function LayoutEditor() {
   const [draft, setDraft] = useState<LayoutPatch>({});
   const [saving, setSaving] = useState(false);
 
-  if (!data || !page) return <Skeleton className="h-96 rounded-xl" />;
+  if (!data || !page) return <Loading label="Loading layout" className="h-96" />;
 
   const shown = preview(data.layout, draft);
   const dirty = Object.keys(draft).length > 0;

@@ -14,11 +14,11 @@ import { toast } from "sonner";
 
 import { CompetitorMark } from "@/components/competitor-mark";
 import { Block, ConfigShell, Gap, Pane } from "@/components/config-shell";
+import { Loading } from "@/components/loading";
 import { ScreenHeader } from "@/components/screen";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { getCompetitorPages, getSourcesConfig } from "@/lib/api/sources";
@@ -122,12 +122,7 @@ export default function SettingsScreen() {
   }
 
   if (!page) {
-    return (
-      <div className="w-full space-y-4">
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-40" />
-      </div>
-    );
+    return <Loading label="Loading this Page" className="h-96" />;
   }
 
   const assigned =
@@ -308,7 +303,7 @@ function Feeds({
       }
     >
       {!sources ? (
-        <Skeleton className="h-40 rounded-lg" />
+        <Loading label="Loading feeds" className="h-40" />
       ) : (
         <div className="space-y-3">
           <div className="divide-y rounded-lg border">
@@ -451,7 +446,7 @@ function Competitors({
           {error}
         </p>
       ) : loading || !rows ? (
-        <Skeleton className="h-40 rounded-lg" />
+        <Loading label="Reading Metricool" className="h-40" />
       ) : (
         <div className="space-y-3">
           {assigned === 0 ? (
@@ -706,7 +701,7 @@ function TimeSlots({
       meta={slots ? `${slots.length} a day` : undefined}
     >
       {!slots ? (
-        <Skeleton className="h-24 rounded-lg" />
+        <Loading label="Loading times" className="h-24" />
       ) : (
         <div className="space-y-4">
           <form onSubmit={add} className="flex items-center gap-2">
@@ -978,7 +973,7 @@ function Prompts({
       meta={files ? `${files.filter((one) => one.source !== "global").length} overridden` : undefined}
     >
       {files === null ? (
-        <Skeleton className="h-64" />
+        <Loading label="Loading prompts" className="h-64" />
       ) : (
         <div className="space-y-4">
           {/* The shared pill shell (`ui/tabs.tsx`) rather than a second

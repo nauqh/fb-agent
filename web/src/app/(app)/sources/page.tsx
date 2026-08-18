@@ -12,7 +12,7 @@ import { SourceCard } from "@/components/source-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Loading } from "@/components/loading";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   getCompetitorReach,
@@ -224,9 +224,11 @@ function CompetitorsTab() {
 
       {error ? (
         <QueryError error={error} onRetry={refresh} />
-      ) : loading ? (
-        <CardGridSkeleton />
-      ) : data?.length === 0 ? (
+      ) : loading || !data ? (
+        // `!data` too — `loading` alone showed an empty grid while the Page
+        // scope resolved. See `loading` in `use-query.ts` for the root of it.
+        <CardGridLoading />
+      ) : data.length === 0 ? (
         <EmptyGrid reach={reach} error={reachError} />
       ) : (
         <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(360px,1fr))]">
@@ -401,11 +403,12 @@ function RssTab() {
 
       {error ? (
         <QueryError error={error} onRetry={refresh} />
-      ) : loading ? (
-        <CardGridSkeleton />
+      ) : loading || !data ? (
+        // `!data` for the same reason as the Competitors tab above.
+        <CardGridLoading />
       ) : (
         <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(360px,1fr))]">
-          {data?.items.map((item) => (
+          {data.items.map((item) => (
             <SourceCard
               key={item.external_id}
               {...item}
@@ -512,12 +515,7 @@ function useElapsedSeconds() {
   return seconds;
 }
 
-function CardGridSkeleton() {
-  return (
-    <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(360px,1fr))]">
-      {Array.from({ length: 6 }).map((_, index) => (
-        <Skeleton key={index} className="h-44 rounded-lg" />
-      ))}
-    </div>
-  );
+/** Was a grid of six grey cards; a spinner says the same thing once. */
+function CardGridLoading() {
+  return <Loading label="Loading sources" className="h-64" />;
 }

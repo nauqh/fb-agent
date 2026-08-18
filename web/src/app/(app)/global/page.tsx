@@ -16,6 +16,7 @@ import { LayoutEditor } from "@/components/layout-editor";
 import { PageSwitcher } from "@/components/page-switcher";
 import { QueuePagination } from "@/components/queue-pagination";
 import { ScreenHeader } from "@/components/screen";
+import { Loading } from "@/components/loading";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -232,6 +233,9 @@ function CompetitorPool({
           {allowance ? (
             <Meter data={allowance} selected={selectedBlogId} tight={tight} />
           ) : (
+            // The one skeleton left in the app, and the one place it is still
+            // right: the meter is an 8px bar, a spinner does not fit in it, and
+            // a grey bar really is the shape of what is coming.
             <Skeleton className="h-2 rounded-full" />
           )}
         </div>
@@ -285,7 +289,7 @@ function CompetitorPool({
             {error}
           </p>
         ) : loading || !rows ? (
-          <Skeleton className="h-64 rounded-lg" />
+          <Loading label="Reading Metricool" className="h-64" />
         ) : shown.length === 0 ? (
           <p className="rounded-lg border border-dashed p-6 text-center text-[13px] text-muted-foreground">
             Nothing matches that filter.

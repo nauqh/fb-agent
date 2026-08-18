@@ -7,9 +7,9 @@ import { toast } from "sonner";
 
 import { ComposedImage } from "@/components/composed-image";
 import { ScreenHeader } from "@/components/screen";
+import { Loading } from "@/components/loading";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { createManualDraft, generate } from "@/lib/api/drafts";
@@ -151,7 +151,7 @@ function WriteItYourself() {
             heroSrc={preview}
           />
         ) : (
-          <Skeleton className="aspect-896/1120 rounded-md" />
+          <Loading className="aspect-896/1120 rounded-md border" />
         )}
 
         <input

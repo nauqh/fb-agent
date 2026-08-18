@@ -6,7 +6,7 @@ import { CalendarDays, List } from "lucide-react";
 import { ScheduleList } from "@/components/schedule-list";
 import { ScheduleWeek, startOfWeek } from "@/components/schedule-week";
 import { Empty } from "@/components/screen";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Loading } from "@/components/loading";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getSchedule } from "@/lib/api/schedule";
 import { pageNoon } from "@/lib/format";
@@ -27,7 +27,7 @@ export function ScheduleView() {
 
   const { pageId } = usePageScope();
 
-  const { data: posts, error, loading } = useQuery(
+  const { data: posts, error } = useQuery(
     () => getSchedule(pageId!, 30, 30),
     [pageId],
     {
@@ -48,13 +48,12 @@ export function ScheduleView() {
     );
   }
 
-  if (loading && !posts) {
+  // `!posts`, not `loading && !posts` — that test rendered the week grid with
+  // nothing in it while the Page scope resolved. Fixed at the source too; see
+  // `loading` in `use-query.ts`.
+  if (!posts) {
     return (
-      <div className="space-y-2">
-        {Array.from({ length: 6 }).map((_, index) => (
-          <Skeleton key={index} className="h-16 rounded-lg" />
-        ))}
-      </div>
+      <Loading label="Reading the planner" className="h-72" />
     );
   }
 

@@ -27,6 +27,26 @@ interface QueryOptions<T> {
 interface QueryResult<T> {
   data: T | null;
   error: string | null;
+  /**
+   * No answer yet — **including while the query is disabled**.
+   *
+   * It used to start as `enabled`, so a query waiting on its Page id reported
+   * `loading: false` with `data: null`, and every screen testing
+   * `loading && !data` fell straight through to its "draw the list" branch: the
+   * Review queue painted a table header over no rows, Sources painted an empty
+   * grid. Locally that beat is ~100ms and it went unseen for months; it was
+   * found by holding every API response for nine seconds to photograph the
+   * loading states.
+   *
+   * Now it means what a caller assumes it means, so `loading` alone is a
+   * sufficient test. It goes false only once an attempt has *finished* —
+   * settled with rows or settled with an error — which is also why a refetch
+   * does not flip it back on and flash the screen it already drew.
+   *
+   * A query disabled forever would therefore read as loading forever. Every
+   * `enabled` in this codebase is a `pageId !== null` that resolves in one
+   * fetch; a genuinely permanent one would need its own answer.
+   */
   loading: boolean;
   refresh: () => Promise<void>;
 }
@@ -40,7 +60,9 @@ export function useQuery<T>(
 
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(enabled);
+  // Whether an attempt has finished, rather than whether one is in flight. See
+  // `loading` on `QueryResult` for what that distinction cost.
+  const [settled, setSettled] = useState(false);
 
   /**
    * The loader closes over props and so is a new function every render.
@@ -61,7 +83,7 @@ export function useQuery<T>(
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
-      setLoading(false);
+      setSettled(true);
     }
   }, []);
 
@@ -76,7 +98,7 @@ export function useQuery<T>(
     setRenderedKey(key);
     setData(null);
     setError(null);
-    setLoading(enabled);
+    setSettled(false);
   }
 
   useEffect(() => {
@@ -94,5 +116,5 @@ export function useQuery<T>(
     return () => clearInterval(timer);
   }, [enabled, intervalMs, polling, run]);
 
-  return { data, error, loading, refresh: run };
+  return { data, error, loading: !settled, refresh: run };
 }

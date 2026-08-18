@@ -2,7 +2,7 @@ import { Suspense } from "react";
 
 import { LoginForm } from "@/components/auth/login-form";
 import { WelcomeShell } from "@/components/auth/welcome-shell";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Loading } from "@/components/loading";
 
 export const metadata = { title: "Sign in · fb-agent" };
 
@@ -15,7 +15,7 @@ export const metadata = { title: "Sign in · fb-agent" };
 export default function LoginPage() {
   return (
     <WelcomeShell>
-      <Suspense fallback={<Skeleton className="h-72 w-full rounded-xl" />}>
+      <Suspense fallback={<Loading className="h-72" />}>
         <LoginForm />
       </Suspense>
     </WelcomeShell>

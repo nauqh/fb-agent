@@ -29,6 +29,7 @@ import { cn } from "@/lib/utils";
 import { ViewFullButton } from "@/components/image-lightbox";
 import { PageBadge } from "@/components/page-badge";
 import { PublishAt } from "@/components/publish-at";
+import { Loading } from "@/components/loading";
 import { PublishDialog } from "@/components/publish-dialog";
 import { StatusPill, type StatusTone } from "@/components/status-pill";
 import {
@@ -50,7 +51,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Skeleton } from "@/components/ui/skeleton";
 
 /**
  * The queue: one table, one row per draft, click a row to open it.
@@ -77,11 +77,7 @@ export function ReviewList() {
    * A run in flight is not "needs review" yet, but hiding it means pressing
    * Generate appears to do nothing — the queue has to show the work arriving.
    */
-  const {
-    data: drafts,
-    loading,
-    refresh,
-  } = useQuery(() => listDrafts({ page_id: pageId! }), [pageId], {
+  const { data: drafts, refresh } = useQuery(() => listDrafts({ page_id: pageId! }), [pageId], {
     enabled: pageId !== null,
     intervalMs: 2_000,
     // Only while something is in flight. With a settled queue the store
@@ -137,13 +133,13 @@ export function ReviewList() {
       {/* Hugs its rows. A `flex-1` container left a tall empty bordered box
           under a two-draft queue, which read as something failing to load. */}
       <div className="overflow-hidden rounded-lg border">
-        {loading && !drafts ? (
-          <div className="space-y-2 p-4">
-            {Array.from({ length: 5 }).map((_, index) => (
-              <Skeleton key={index} className="h-20 rounded-lg" />
-            ))}
-          </div>
-        ) : drafts?.length === 0 ? (
+        {!drafts ? (
+          // `!drafts`, not `loading && !drafts` — that test drew a header row
+          // over nothing while the Page scope resolved. `use-query.ts` reports
+          // `loading` honestly now and would do here too; this stays because
+          // "no rows to draw" is the condition this branch is actually about.
+          <Loading label="Loading the queue" className="h-72" />
+        ) : drafts.length === 0 ? (
           <p className="py-20 text-center text-sm text-muted-foreground">
             Queue is empty.
           </p>
