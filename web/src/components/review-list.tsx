@@ -20,7 +20,13 @@ import {
   publishMode,
   rejectDraft,
 } from "@/lib/api/drafts";
-import { dayHeading, dayKey, pageLocalSoon, timeOfDay } from "@/lib/format";
+import {
+  dayHeading,
+  dayKey,
+  headline,
+  pageLocalSoon,
+  timeOfDay,
+} from "@/lib/format";
 import { usePageScope } from "@/lib/page-scope";
 import type { Draft, Page } from "@/lib/types";
 import { useQuery } from "@/lib/use-query";
@@ -567,8 +573,5 @@ function StatusBadge({ draft }: { draft: Draft }) {
 
 /** The hook is a paragraph; a row wants its first sentence. */
 function title(draft: Draft): string {
-  const source = draft.hook ?? draft.topic ?? "";
-  if (!source) return "Untitled";
-  const [first] = source.split(/(?<=[.!?])\s/);
-  return (first ?? source).trim();
+  return headline(draft.hook ?? draft.topic) || "Untitled";
 }

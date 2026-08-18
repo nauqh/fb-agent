@@ -113,6 +113,52 @@ export function words(value: string | null | undefined): number {
   return value?.trim() ? value.trim().split(/\s+/).length : 0;
 }
 
+/**
+ * A title for a row, out of text that has no title field.
+ *
+ * **The first line, and only failing that the first sentence.** Nothing we
+ * write carries a title: the writer produces a hook, and a published caption is
+ * a hook and a recap run together. A row given the whole thing shows a long
+ * grey line truncated mid-word, which names nothing.
+ *
+ * The line comes first because a published caption really does have one —
+ * measured on History Retraced's five best posts of the last 30 days, the first
+ * line is 30 to 60 characters and is exactly the title ("The Battle of Athens:
+ * When WWII Veterans Fought for the Vote"). Splitting on sentences instead ran
+ * straight past it: the title line ends with an emoji rather than a full stop,
+ * so the "first sentence" swallowed the opening of the recap too.
+ *
+ * The sentence split stays as the fallback, for a hook straight out of the
+ * writer — 0 of 47 stored hooks contain a newline, so that is the path Review
+ * takes. Its lookbehind keeps the terminator attached and splits on the space
+ * after it, so "St. Louis" survives.
+ *
+ * Lived in `review-list.tsx` as `title()` first; Overview's rows needed the
+ * same thing, which is what moved it here.
+ */
+export function headline(value: string | null | undefined): string {
+  const source = value?.trim() ?? "";
+  if (!source) return "";
+  const [line] = source.split("\n");
+  if (line && line.trim() !== source) return line.trim();
+  const [sentence] = source.split(/(?<=[.!?])\s/);
+  return (sentence ?? source).trim();
+}
+
+/**
+ * Everything after the headline, as one paragraph.
+ *
+ * The other half of `headline`, for a row that shows both. Line breaks are
+ * collapsed to single spaces deliberately: a caption is written for Facebook's
+ * feed and carries blank lines between its points, which inside a two-line
+ * clamp would spend one of those lines on nothing.
+ */
+export function body(value: string | null | undefined): string {
+  const source = value?.trim() ?? "";
+  const rest = source.slice(headline(source).length);
+  return rest.replace(/\s+/g, " ").trim();
+}
+
 const dayKeyStamp = new Intl.DateTimeFormat("en-CA", {
   timeZone: PAGE_TIMEZONE,
   year: "numeric",

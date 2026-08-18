@@ -31,7 +31,7 @@ import {
   type PostStats,
   type SavedPost,
 } from "@/lib/api/overview";
-import { fullDate, metric, timeAgo } from "@/lib/format";
+import { body, fullDate, headline, metric, timeAgo } from "@/lib/format";
 import { useRouter } from "next/navigation";
 
 import { usePageScope } from "@/lib/page-scope";
@@ -302,18 +302,37 @@ function PostRow({
   onSave: () => void;
 }) {
   return (
-    <div className="group flex items-center gap-4 border-b px-2 py-3 transition-colors last:border-0 hover:bg-muted/40">
+    // `items-stretch`, not `items-center`. The poster is 140px and the text was
+    // two short lines floating in the middle of it — the row was as tall as its
+    // image and filled by nothing. Stretched, the middle column can put its
+    // title at the top and its figures at the bottom, so the height the picture
+    // costs is height the row uses.
+    <div className="group flex items-stretch gap-4 border-b px-2 py-3 transition-colors last:border-0 hover:bg-muted/40">
       {/* Rank, not a bullet: the list is sorted, so its position is
           information. Mono and muted — it names the row, it is not a measure. */}
-      <span className="w-6 shrink-0 text-right font-mono text-[11px] text-muted-foreground">
+      <span className="w-6 shrink-0 pt-0.5 text-right font-mono text-[11px] text-muted-foreground">
         {rank}
       </span>
 
       <Thumbnail src={post.picture_url} />
 
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium">{post.text || "(no text)"}</p>
-        <p className="flex flex-wrap items-center gap-x-2 pt-1 font-mono text-[11px] text-muted-foreground">
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* The headline, not the whole caption — the caption is the headline and
+            the recap run together, and truncating that names nothing. Same
+            treatment the Review queue gives a draft, same helper. */}
+        <p className="truncate text-sm font-medium">
+          {headline(post.text) || "(no text)"}
+        </p>
+
+        {/* And the recap under it, which is what the row's spare height is for.
+            Two lines: enough to tell two posts on the same subject apart, and
+            `line-clamp` rather than `truncate` because this is prose being
+            sampled rather than a label being shortened. */}
+        <p className="line-clamp-2 pt-1.5 text-[13px] leading-relaxed text-muted-foreground">
+          {body(post.text)}
+        </p>
+
+        <p className="mt-auto flex flex-wrap items-center gap-x-2 pt-2 font-mono text-[11px] text-muted-foreground">
           <span>{metric(post.reactions)} reactions</span>
           <span aria-hidden>·</span>
           <span>{metric(post.comments)} comments</span>
@@ -324,46 +343,54 @@ function PostRow({
         </p>
       </div>
 
-      {/* The figure the list is ordered by, and the date. `tabular-nums` here
-          and not on the tiles: this is a column that has to align down forty
-          rows, which is the one thing tabular figures are for. */}
-      <div className="shrink-0 text-right">
+      {/* One right-hand column, not two: the figure the list is ordered by, the
+          date, and then the two things you can do to the row, stacked under
+          them. The actions used to be a column of their own, which put them at
+          a different x on every row width and left the corner they now occupy
+          empty. `tabular-nums` here and not on the tiles — this is a column
+          that has to align down forty rows, which is what tabular is for. */}
+      <div className="flex shrink-0 flex-col items-end text-right">
         <p className="text-base font-semibold tabular-nums">
           {metric(post.engagement)}
         </p>
         <p className="font-mono text-[11px] text-muted-foreground">
           {timeAgo(post.published_at)}
         </p>
-      </div>
 
-      <div className="flex w-16 shrink-0 items-center justify-end gap-0.5">
-        {post.permalink_url ? (
-          <a
-            href={post.permalink_url}
-            target="_blank"
-            rel="noreferrer"
-            title="Open on Facebook"
-            className="rounded p-1.5 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100"
+        {/* `mt-auto` drops these to the foot of the column, opposite the
+            metrics line on the left, rather than tucking them under the date —
+            the figures belong to the top line, the actions to the bottom one.
+            `-mr-1.5` pulls the icon buttons' own padding back off the edge so
+            the glyphs line up with the digits above. */}
+        <div className="-mr-1.5 mt-auto flex items-center gap-0.5 pt-2">
+          {post.permalink_url ? (
+            <a
+              href={post.permalink_url}
+              target="_blank"
+              rel="noreferrer"
+              title="Open on Facebook"
+              className="rounded p-1.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:text-foreground focus-visible:opacity-100"
+            >
+              <ExternalLink className="size-3.5" />
+            </a>
+          ) : null}
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={busy || post.saved}
+            aria-label={post.saved ? "Already saved" : "Save this post"}
+            title={post.saved ? "Already saved" : "Keep this post for reference"}
+            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-60"
           >
-            <ExternalLink className="size-3.5" />
-          </a>
-        ) : null}
-        <button
-          type="button"
-          onClick={onSave}
-          disabled={busy || post.saved}
-          aria-label={post.saved ? "Already saved" : "Save this post"}
-          title={post.saved ? "Already saved" : "Keep this post for reference"}
-          className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-60"
-        >
-          {busy ? (
-            <Loader2 className="size-4 animate-spin" />
-          ) : post.saved ? (
-            <BookmarkCheck className="size-4 text-foreground" />
-          ) : (
-            <Bookmark className="size-4" />
-          )}
-        </button>
+            {busy ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : post.saved ? (
+              <BookmarkCheck className="size-4 text-foreground" />
+            ) : (
+              <Bookmark className="size-4" />
+            )}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -375,11 +402,27 @@ function PostRow({
  * Facebook's CDN URLs are signed and expire — the same trap the competitor
  * pictures document — so a missing thumbnail is the expected end state rather
  * than a fault. The row carries its numbers either way.
+ *
+ * **4:5 and 112px, both measured rather than chosen.** Measured 2026-08-18 on
+ * History Retraced's 30-day window:
+ *
+ * - the file the CDN serves is **130 x 163**, and that is the only file there
+ *   is. Metricool's `fullPicture` is null on every row, and the URL is signed
+ *   (`oh`/`oe`), so editing its `stp=dst-jpg_p130x130` size directive to
+ *   `p720x720`, or dropping `stp` altogether, both answer 403. Our own bucket
+ *   holds full-resolution copies of what *we* published, and they are no help
+ *   here either: of 20 drafts carrying a Metricool post id, 0 appear among the
+ *   213 stats rows. So 112px is the widest this can be drawn and stay sharp;
+ * - it was `aspect-square`, and the composite is 4:5. `object-cover` was
+ *   therefore cutting the top and bottom off every thumbnail — which is exactly
+ *   where the hook text is painted. The middle band of a poster is the part
+ *   that identifies it least. `aspect-[4/5]` is also what the Review queue's
+ *   thumbnail already uses.
  */
 function Thumbnail({ src }: { src: string | null }) {
   if (!src) {
     return (
-      <div className="flex aspect-square w-20 shrink-0 items-center justify-center rounded-lg border bg-muted">
+      <div className="flex aspect-4/5 w-28 shrink-0 items-center justify-center rounded-lg border bg-muted">
         <BarChart3 className="size-5 text-muted-foreground/50" />
       </div>
     );
@@ -391,7 +434,7 @@ function Thumbnail({ src }: { src: string | null }) {
     <img
       src={src}
       alt=""
-      className="aspect-square w-20 shrink-0 rounded-lg border object-cover"
+      className="aspect-4/5 w-28 shrink-0 rounded-lg border object-cover"
     />
   );
 }
@@ -516,15 +559,22 @@ function Saved() {
           {shown.map((saved) => (
             <div
               key={saved.id}
-              className="group flex items-center gap-4 border-b px-2 py-3 transition-colors last:border-0 hover:bg-muted/40"
+              className="group flex items-stretch gap-4 border-b px-2 py-3 transition-colors last:border-0 hover:bg-muted/40"
             >
               <Thumbnail src={saved.picture_url} />
 
-              <div className="min-w-0 flex-1">
+              {/* Headline, recap, figures — the Performance row's shape, and it
+                  earns its place here twice over: this is the tab where you
+                  decide whether to run a story again, and the recap is what
+                  that decision is about. */}
+              <div className="flex min-w-0 flex-1 flex-col">
                 <p className="truncate text-sm font-medium">
-                  {saved.text || "(no text)"}
+                  {headline(saved.text) || "(no text)"}
                 </p>
-                <p className="flex flex-wrap items-center gap-x-2 pt-1 font-mono text-[11px] text-muted-foreground">
+                <p className="line-clamp-2 pt-1.5 text-[13px] leading-relaxed text-muted-foreground">
+                  {body(saved.text)}
+                </p>
+                <p className="mt-auto flex flex-wrap items-center gap-x-2 pt-2 font-mono text-[11px] text-muted-foreground">
                   <span>{metric(saved.reactions)} reactions</span>
                   <span aria-hidden>·</span>
                   <span>{metric(saved.comments)} comments</span>
@@ -538,62 +588,66 @@ function Saved() {
                   question — whether it is far enough back to run again — and the
                   exact stamp is a hover away rather than a second line nobody
                   reads. */}
-              <div className="hidden shrink-0 text-right sm:block">
-                <p className="text-sm font-medium" title={fullDate(saved.published_at)}>
-                  {timeAgo(saved.published_at)}
-                </p>
-                <p className="font-mono text-[11px] text-muted-foreground">
-                  last posted
-                </p>
-              </div>
+              <div className="flex shrink-0 flex-col items-end text-right">
+                <div className="hidden sm:block">
+                  <p className="text-sm font-medium" title={fullDate(saved.published_at)}>
+                    {timeAgo(saved.published_at)}
+                  </p>
+                  <p className="font-mono text-[11px] text-muted-foreground">
+                    last posted
+                  </p>
+                </div>
 
-              <div className="flex shrink-0 items-center gap-1">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-7"
-                  disabled={busy === saved.id}
-                  onClick={() => void repost(saved)}
-                  title="Queue the original again — same caption, same picture. It lands in Review to publish."
-                >
-                  {busy === saved.id ? (
-                    <Loader2 className="size-3.5 animate-spin" />
-                  ) : (
-                    <Repeat2 className="size-3.5" />
-                  )}
-                  Repost
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7"
-                  disabled={busy === saved.id}
-                  onClick={() => void reuse(saved)}
-                  title="Write this story again — a fresh hook, caption, first comment and image."
-                >
-                  <Sparkles className="size-3.5" />
-                  Write again
-                </Button>
-                {saved.permalink_url ? (
-                  <a
-                    href={saved.permalink_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    title="Open on Facebook"
-                    className="rounded p-1.5 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100"
+                {/* At the foot of the column, as on Performance: date at the
+                    top, what you can do about it at the bottom. */}
+                <div className="-mr-1.5 mt-auto flex items-center gap-1 pt-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7"
+                    disabled={busy === saved.id}
+                    onClick={() => void repost(saved)}
+                    title="Queue the original again — same caption, same picture. It lands in Review to publish."
                   >
-                    <ExternalLink className="size-3.5" />
-                  </a>
-                ) : null}
-                <button
-                  type="button"
-                  onClick={() => void drop(saved)}
-                  aria-label="Remove from saved"
-                  title="Stop keeping this post"
-                  className="rounded p-1.5 text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100 focus-visible:opacity-100"
-                >
-                  <BookmarkCheck className="size-4" />
-                </button>
+                    {busy === saved.id ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : (
+                      <Repeat2 className="size-3.5" />
+                    )}
+                    Repost
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7"
+                    disabled={busy === saved.id}
+                    onClick={() => void reuse(saved)}
+                    title="Write this story again — a fresh hook, caption, first comment and image."
+                  >
+                    <Sparkles className="size-3.5" />
+                    Write again
+                  </Button>
+                  {saved.permalink_url ? (
+                    <a
+                      href={saved.permalink_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      title="Open on Facebook"
+                      className="rounded p-1.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:text-foreground focus-visible:opacity-100"
+                    >
+                      <ExternalLink className="size-3.5" />
+                    </a>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => void drop(saved)}
+                    aria-label="Remove from saved"
+                    title="Stop keeping this post"
+                    className="rounded p-1.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100"
+                  >
+                    <BookmarkCheck className="size-4" />
+                  </button>
+                </div>
               </div>
             </div>
           ))}
