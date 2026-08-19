@@ -991,7 +991,12 @@ def unschedule_draft(draft_id: int, session: Session = Depends(get_session)) -> 
         raise HTTPException(status_code=502, detail=str(error)) from error
 
     draft.metricool_post_id = None
-    draft.status = DraftStatus.APPROVED
+    # Back to the queue, not to APPROVED. Nothing writes APPROVED any more —
+    # see design.md — and a row that just came back from the planner is work
+    # awaiting the operator's next decision, which is exactly what `review`
+    # means. APPROVED here put a green "Approved." pill and a stray Return-to-
+    # queue step in front of a draft that had just been pulled back to edit.
+    draft.status = DraftStatus.REVIEW
     return _save(session, draft)
 
 

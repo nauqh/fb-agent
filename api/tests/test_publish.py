@@ -688,7 +688,7 @@ def test_unscheduling_takes_the_post_out_and_gives_the_draft_back(
     assert response.status_code == 200
     assert resyncs["deleted"] == ["8891"]
     assert response.json()["metricool_post_id"] is None
-    assert response.json()["status"] == DraftStatus.APPROVED
+    assert response.json()["status"] == DraftStatus.REVIEW
 
 
 def test_unscheduling_lets_the_picture_be_redrawn_again(
