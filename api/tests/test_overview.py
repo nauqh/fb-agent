@@ -7,7 +7,6 @@ are ours, so they are asserted against the database.
 """
 
 import pytest
-
 from sqlmodel import select
 
 from app.models import SavedPost
@@ -275,7 +274,7 @@ def planner(monkeypatch):
     from *this* row rather than from the saved post — the saved post's
     `picture_url` is a 130-pixel thumbnail and has no first comment at all.
     """
-    from app.routes import overview
+    from app.publish import repost
 
     state = {
         "rows": [
@@ -294,7 +293,7 @@ def planner(monkeypatch):
             raise state["error"]
         return state["rows"]
 
-    monkeypatch.setattr(overview.publisher, "list_scheduled", fake_list_scheduled)
+    monkeypatch.setattr(repost.publisher, "list_scheduled", fake_list_scheduled)
     return state
 
 

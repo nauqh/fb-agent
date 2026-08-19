@@ -80,3 +80,11 @@ _Avoid_: Overlay, composite, thumbnail, card, layout
 An exact substring of the panel text, copied verbatim by the writer, rendered in
 gold on the Composed Image.
 
+**Repost**:
+A Draft that reproduces a post that already went out — the caption, first
+comment and picture as they were published, copied from Metricool's planner at
+repost time. Distinct from Write again, which sends the story back through the
+writer for fresh copy and a fresh picture. A Repost has no hook and no hero:
+the hook was drawn into the picture that is being reused.
+_Avoid_: Copy, duplicate, clone
+
