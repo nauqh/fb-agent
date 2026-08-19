@@ -1,69 +1,94 @@
-# Competitor post image as Gemini vision input — note
+# Competitor post image as Gemini vision input — decision note
 
-**Status:** note for later work. Findings from the old app
-(`D:\Laboratory\social-agent`, branch `feature/migrate-to-new-deployment`,
-read-only), plus plan.
+**Status:** decision settled under grilling (2026-08-19). Not implemented.
 
-## Question asked
+## Question
 
-Did the old app use the image from a competitor post as input?
+Did the old app use the image from a competitor post as input? Plan: follow the
+old mechanics in the new app (`fb-agent`) — the agent should read the image too.
 
-## Answer
+## Old app (`D:\Laboratory\social-agent`, branch `feature/migrate-to-new-deployment`)
 
 Yes — but only as **vision input to Gemini**, never as the output image.
 
-- `src/services/facebookGenerateGraph.ts:464-467` (`writeThreeDraftsNode`)
-  fetches the competitor post's `picture_url` and attaches it to the Gemini
-  call as an `inlineData` image Part, alongside the caption text:
+- `src/services/facebookGenerateGraph.ts:464-467` (`writeThreeDraftsNode`):
+  fetches the competitor post's `picture_url`, attaches it as an `inlineData`
+  image Part in the same user message as the caption text. Gated to competitor
+  posts only ("Only competitor posts (not saved-viral) send their image to
+  Gemini"); a missing/expired image silently falls back to text-only.
+- `src/lib/gemini/fetch-image-part.ts`: plain `fetch(url)` with a browser-ish
+  `User-Agent` (publisher CDNs 403 anonymous requests), `<= 4MB`, mime
+  `png|jpeg|jpg|webp|gif`, any failure → `null`.
+- Same pattern in `src/services/facebookTopicSuggestService.ts:56`.
+- Output image stayed separate: `buildFacebookImageUserPrompt` → Gemini hero →
+  compositor (text panel + logo watermark) → `attachDraftImageAsync`. The
+  competitor image was **never reused as the output**.
 
-  ```ts
-  // Only competitor posts (not saved-viral) send their image to Gemini.
-  const isCompetitorSource =
-    post != null && state.competitorPostIds.includes(post.id);
-  const imagePart =
-    isCompetitorSource && post?.picture_url
-      ? await fetchGeminiImagePart(post.picture_url)
-      : null;
-  ```
+## New app state that shapes the plan
 
-- `src/services/facebookGenerateGraph.ts:144-145` sends it in the same user
-  message as the text prompt:
+- `SourceItem` carries `image_url` for all three kinds (COMPETITOR_POST, TWEET,
+  RSS); competitor rows get it from Metricool's `picture` field
+  (`sources/metricool.py:107`).
+- The writer is text-only today: `writer.user_prompt()` builds one string,
+  `agent.run_sync(prompt)` (`writer/agent.py:206-265`). Feasibility proven:
+  pydantic-ai 2.22 `run_sync` takes `str | Sequence[UserContent]`, and
+  `ImageUrl`/`BinaryContent` are valid parts — `output_type=DraftContent`
+  survives an image part. `usage_limits` exists for cost control.
+- **Existing rule**: a competitor picture may not be *reused* — `hero_from_source`
+  is RSS-only (`generate.py:283`), `source_instruction` says "reusing the image a
+  rival page shot is lifting". The rule governs the **output** (hero); it never
+  governs writer **input**. Reading ≠ reusing.
+- Browse does not write (ADR-0001 logic): competitor posts are read live,
+  `SourceItem` rows are created only when a run uses them. There is no library
+  or viral path through the writer: `reuse_saved` runs as a **topic** with no
+  image (`routes/overview.py:193`).
 
-  ```ts
-  contents = [{ role: "user", parts: [{ text: prompt }, ...options.imageParts] }]
-  ```
+## Decisions (settled)
 
-- Same pattern in `src/services/facebookTopicSuggestService.ts:56`
-  (`suggestTopicFromPosts`) — source-post images fed to Gemini vision for topic
-  suggestion, capped at `MAX_IMAGES`.
-
-## Image-fetch mechanics (old app)
-
-`src/lib/gemini/fetch-image-part.ts`:
-
-- Plain `fetch(url)` with a browser-ish `User-Agent` header — publisher CDNs
-  behind RSS articles routinely 403 anonymous requests. Omitting the UA
-  silently loses the image for exactly the sources that need it.
-- Constraints: image `<= 4MB` (`MAX_IMAGE_BYTES`), mime in
-  `png|jpeg|jpg|webp|gif`. Empty body or any fetch failure → `null`.
-- Callers treat `null` as "fall back to text-only", never as an error.
+1. **The writer reads the competitor image as vision input**, alongside the
+   caption, exactly as the old app did. Input only.
+2. **Visual facts, not style.** The model may extract subject matter the caption
+   alone misses (people, setting, products). It must not describe or imitate the
+   rival's composition, colors, or card layout — and **`image_prompt` is guarded
+   too**: the model's preferred hero prompt must not ask the hero model to
+   reproduce what the competitor image looks like. That is the existing
+   off-limits rule, entering through the hero channel.
+3. **Gating: competitor posts only.** TWEET and RSS items also carry images;
+   they stay text-only — matching both the old app's draft path and the plan.
+   Broadening after measurement, not by default.
+4. **Image bytes are copied at first use, not at sync.** `resolve_sources` is
+   where a browsed item becomes a row; that is the moment to fetch and hold the
+   bytes (repost's `copy_original_image` is nearly the same code). Browsing
+   stays live-only — no mirror, no storing 100s of competitor images nobody
+   ticks. If the copy fails, the run continues text-only **with a warning on
+   the draft**, never silent, never a refusal. The old app's silent fallback is
+   exactly the failure mode the repost work measured (0/382 links alive).
+5. **Fetch mechanics** follow the old app: browser UA for CDN 403s, mime
+   whitelist `png|jpeg|jpg|webp|gif`, keep 4MB cap (Gemini input ceiling;
+   old code used it), any failure → warning + text-only.
+6. **No fallback-model special-casing.** All models in `text_fallback_chain`
+   are Gemini text models and multimodal; image parts ride the existing chain
+   with no model-drop wiring.
 
 ## What the image is NOT used for
 
-- Not reused as the draft's final image. Output image is generated separately:
-  `buildFacebookImageUserPrompt` → Gemini hero image → compositor
-  (text panel + logo watermark) → `attachDraftImageAsync`.
-- Not sent for saved-viral / library sources — gated to competitor posts only.
+- Not the draft's output image. Hero stays generated (or RSS-source reuse, the
+  existing rule) — the competitor image is input to the text writer only.
 
-## Plan
+## Implementation sketch
 
-Follow the old mechanics in the new app (`fb-agent`):
+- `writer.user_prompt` gains an optional image part slot:
+  `BinaryContentDataUrl(data=..., media_type=...)` or `ImageUrl` fetched first.
+- `resolve_sources` fetches + holds bytes for COMPETITOR_POST items (or
+  `generate` fetches at first-use); failure → draft warning, not failure.
+- One `source_instruction` addition for COMPETITOR_POST: the image is subject
+  matter, the rival's layout is not to be described or reused.
+- Test with the existing fake model (tests pass `model=`); assert the image part
+  lands in the content and that a failed fetch still writes a draft.
 
-1. Agent must read the competitor post image (vision input) alongside the
-   caption text when writing drafts.
-2. Same gating intent: image input for competitor posts; library/viral posts
-   text-only unless a reason appears.
-3. Keep the graceful fallback: any fetch/mime/size failure → text-only path,
-   no error surfaced to the user.
-4. Output image stays a separate generated asset; competitor image is input
-   only.
+## Follow-ups
+
+- Cut an ADR from this note if the feature moves forward (docs/adr/0004?).
+- Refreshing model-check: `gemini-3.5-flash` is a pinned id that may already rot
+  (CLAUDE.md's pinned-model warning). Verify with a real vision call before
+  shipping the writer change.
