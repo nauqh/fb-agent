@@ -20,8 +20,7 @@ import {
   getCompetitorPosts,
   getTweet,
 } from "@/lib/api/sources";
-import type { CompetitorReach, SourceSort } from "@/lib/api/sources";
-import type { LiveSourceItem } from "@/lib/fixtures/sources";
+import type { CompetitorReach, LiveSourceItem, SourceSort } from "@/lib/api/sources";
 import { useCart } from "@/lib/cart";
 import { usePageScope } from "@/lib/page-scope";
 import { emit } from "@/lib/store";
