@@ -10,8 +10,10 @@ the Cart carries items, and they become rows here, when something actually uses
 them. See docs/plan.md, "Ticking stops writing".
 """
 
+import httpx
 from datetime import datetime, timezone
 
+from pydantic_ai.messages import BinaryImage
 from sqlmodel import Session, select
 
 from app import layout_for, media
@@ -25,8 +27,54 @@ from app.writer import agent as writer
 from app.writer import validators
 
 
+IMAGE_INPUT_TIMEOUT = 20.0
+IMAGE_INPUT_MAX_BYTES = 4 * 1024 * 1024
+IMAGE_INPUT_MIME = {
+    "image/jpeg": "image/jpeg",
+    "image/png": "image/png",
+    "image/webp": "image/webp",
+    "image/gif": "image/gif",
+}
+IMAGE_INPUT_UA = "Mozilla/5.0 (compatible; fb-agent/1.0)"
+IMAGE_INPUT_WARNING = "Image: "
+
+
 class GenerateError(ValueError):
     """A request that cannot be run. Raised before anything is written."""
+
+
+def competitor_image(source: SourceItem | None) -> BinaryImage | None:
+    """The competitor post's own picture as a Gemini content part, or None.
+
+    **Vision input, and only for a competitor post.** The old app sent these to
+    Gemini alongside the caption; the note `docs/competitor-image-input.md`
+    records the shape. Gated by `kind` so a tweet's or an RSS image never rides
+    in — they stay text-only. A fetch that fails returns None rather than
+    raising: `_run_one` turns that into a warning and the draft proceeds on
+    text alone, never a refusal and never a silent loss.
+
+    Mime and size bounds mirror the old app's `fetch-image-part.ts`: a UA for
+    CDNs that 403 anonymous requests, and a 4MB cap. The image is input only -
+    it is never reused as the hero.
+    """
+    if source is None or source.kind is not SourceKind.COMPETITOR_POST:
+        return None
+    url = (source.image_url or "").strip()
+    if not url:
+        return None
+    try:
+        with httpx.Client(
+            timeout=IMAGE_INPUT_TIMEOUT, follow_redirects=True
+        ) as client:
+            response = client.get(url, headers={"User-Agent": IMAGE_INPUT_UA})
+            response.raise_for_status()
+    except httpx.HTTPError:
+        return None
+    kind = (response.headers.get("content-type") or "").split(";")[0].strip()
+    media_type = IMAGE_INPUT_MIME.get(kind)
+    if media_type is None or len(response.content) > IMAGE_INPUT_MAX_BYTES:
+        return None
+    return BinaryImage(data=response.content, media_type=media_type)
 
 
 def resolve_sources(
@@ -163,7 +211,25 @@ def _run_one(session: Session, draft_id: int) -> None:
         )
 
         _progress(session, draft, "writing the post", 20)
-        result = writer.write(page, source, draft.topic)
+        # Vision input is competitor-only, and the seam must gate here — not
+        # inside `competitor_image` — or a stub that always returns an image
+        # would leak tweets and RSS items in. A competitor with an picture that
+        # cannot be read becomes a warning and a text-only run, never a refusal.
+        image = (
+            competitor_image(source)
+            if source is not None and source.kind is SourceKind.COMPETITOR_POST
+            else None
+        )
+        image_warning = (
+            IMAGE_INPUT_WARNING + "the competitor's picture could not be read; "
+            "the draft was written from text alone."
+            if image is None
+            and source is not None
+            and source.kind is SourceKind.COMPETITOR_POST
+            and (source.image_url or "").strip()
+            else ""
+        )
+        result = writer.write(page, source, draft.topic, image=image)
         content = result.output
 
         draft.hook = content.hook
@@ -182,6 +248,8 @@ def _run_one(session: Session, draft_id: int) -> None:
             content.first_comment,
             validators.Limits.for_page(page),
         )
+        if image_warning:
+            draft.warnings = draft.warnings + [image_warning]
         draft.warnings += validators.advise(content.first_comment)
         draft.warnings += _highlight_warnings(content)
 

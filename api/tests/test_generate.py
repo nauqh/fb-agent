@@ -8,6 +8,7 @@ from app.models import Draft, DraftStatus, SourceItem, SourceItemBase, SourceKin
 from app.settings import settings
 from app.writer import agent as writer
 from app.writer.agent import DraftContent
+from pydantic_ai.messages import BinaryImage
 
 CURATED = "https://www.smithsonianmag.com/history/a-story-180987410/"
 
@@ -922,6 +923,8 @@ def test_a_competitors_picture_is_never_reused_as_our_hero(
     story we are retelling, a competitor's is the thing they made.
     """
     _feed_png(monkeypatch)
+    # The vision-input fetch is its own seam; keep the suite hermetic.
+    monkeypatch.setattr(generate, "competitor_image", lambda *a, **k: None)
     session.add(
         SourceItem(
             kind=SourceKind.COMPETITOR_POST,
@@ -962,6 +965,111 @@ def test_a_topic_only_run_never_carries_the_flag(client, written, illustrated):
     )
 
     assert client.get("/drafts/1").json()["hero_from_source"] is False
+
+
+def _seed_competitor(session) -> SourceItem:
+    row = SourceItem(
+        kind=SourceKind.COMPETITOR_POST,
+        external_id="rival-1",
+        text="the rival's post about the flood",
+        image_url="https://example.com/rival.jpg",
+    )
+    session.add(row)
+    session.commit()
+    return row
+
+
+def test_a_competitors_image_is_fetched_for_the_writer(client, written, session, monkeypatch):
+    """Vision input: the post rides in the same user turn as the caption."""
+    seen = {}
+    _seed_competitor(session)
+
+    def fake_write(page, source, topic, model=None, image=None, **k):
+        seen["image"] = image
+
+        class Result:
+            output = GOOD
+
+        return Result()
+
+    monkeypatch.setattr(generate.writer, "write", fake_write)
+    monkeypatch.setattr(
+        generate,
+        "competitor_image",
+        lambda source: BinaryImage(data=b"x", media_type="image/jpeg"),
+    )
+
+    client.post(
+        "/generate",
+        json={
+            "page_ids": [1],
+            "sources": [
+                {
+                    "kind": "competitor_post",
+                    "external_id": "rival-1",
+                    "image_url": "https://example.com/rival.jpg",
+                }
+            ],
+        },
+    )
+
+    assert seen["image"] is not None
+    assert seen["image"].kind == "binary"
+
+
+def test_an_anreadable_competitor_image_writes_the_draft(client, written, session, monkeypatch):
+    """A failed fetch is a warning, not a refusal."""
+    _seed_competitor(session)
+
+    def fake_write(page, source, topic, *, image=None, **k):
+        class Result:
+            output = GOOD
+
+        return Result()
+
+    monkeypatch.setattr(generate.writer, "write", fake_write)
+    monkeypatch.setattr(generate, "competitor_image", lambda source: None)
+
+    client.post(
+        "/generate",
+        json={
+            "page_ids": [1],
+            "sources": [{"kind": "competitor_post", "external_id": "rival-1"}],
+        },
+    )
+    draft = client.get("/drafts/1").json()
+
+    assert draft["status"] == "review"
+    assert any("picture could not be read" in w for w in draft["warnings"])
+
+
+def test_only_competitor_images_ride_into_the_writer(client, written, session, monkeypatch):
+    """Tweets and RSS items stay text-only; the image gate is by kind."""
+    seen = []
+    _seed_competitor(session)
+
+    def fake_write(page, source, topic, *, image=None, **k):
+        seen.append(image)
+
+        class Result:
+            output = GOOD
+
+        return Result()
+
+    monkeypatch.setattr(generate.writer, "write", fake_write)
+    monkeypatch.setattr(
+        generate,
+        "competitor_image",
+        lambda *a, **k: BinaryImage(data=b"x", media_type="image/jpeg"),
+    )
+
+    for by in [
+        {"kind": "tweet", "external_id": "t1", "text": "a tweet", "image_url": "https://x/t.jpg"},
+        {"kind": "rss", "external_id": CURATED, "text": "a story", "image_url": "https://x/r.jpg"},
+    ]:
+        client.post("/generate", json={"page_ids": [1], "sources": [by]})
+
+    assert all(image is None for image in seen), "tweets and RSS items may not carry an image"
 
 
 def test_a_feed_serving_html_fails_at_the_fetch(client):

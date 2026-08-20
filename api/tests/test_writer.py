@@ -8,6 +8,7 @@ from pydantic_ai.messages import ModelMessage, ModelResponse, ToolCallPart
 from app.models import Page, SourceItem, SourceKind
 from app.writer import agent as writer
 from app.writer import validators
+from pydantic_ai.messages import BinaryImage
 
 # A draft that breaks nothing, used as the baseline every test mutates.
 GOOD = {
@@ -250,6 +251,17 @@ def test_the_prompt_carries_the_source_text_and_its_instruction():
 def test_a_run_with_neither_a_source_nor_a_topic_is_refused():
     with pytest.raises(ValueError, match="source item or a topic"):
         writer.user_prompt(None, None)
+
+
+def test_user_contents_text_only_is_a_bare_string():
+    assert writer.user_contents("just prose", None) == "just prose"
+
+
+def test_user_contents_sends_the_picture_in_the_same_turn():
+    img = BinaryImage(data=b"abc", media_type="image/jpeg")
+    contents = writer.user_contents("the caption", img)
+    assert contents == ["the caption", img]
+    assert contents[1].kind == "binary"
 
 
 # --- the model being unavailable, which is not about the draft ---------------

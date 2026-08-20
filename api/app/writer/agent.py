@@ -10,6 +10,7 @@ from functools import lru_cache
 
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent, ModelRetry, RunContext
+from pydantic_ai.messages import BinaryImage
 from pydantic_ai.models.google import GoogleModel, GoogleModelSettings
 from pydantic_ai.providers.google import GoogleProvider
 
@@ -130,7 +131,12 @@ def source_instruction(kind: SourceKind) -> str:
             "The source below is a competitor's post about a real story. Write "
             "about that SAME story — the same subject, people and events. Do not "
             "invent a different subject. Do not reuse their wording, their "
-            "opening or their structure: the story is shared, the writing is ours."
+            "opening or their structure: the story is shared, the writing is ours. "
+            "An image of the post may accompany it; read it only for the subject "
+            "and its details. Never describe or imitate the image's own style, "
+            "composition, colours, layout or card design, and never ask the hero "
+            "model to reproduce anything the image looks like — a reused picture "
+            "would be lifting what the rival shot."
         )
     return (
         "The source below is FACTUAL. Write about this same story, the same "
@@ -219,8 +225,29 @@ def user_prompt(source: SourceItem | None, topic: str | None) -> str:
     return "\n".join(parts)
 
 
-def write(page: Page, source: SourceItem | None, topic: str | None = None, model=None):
+def user_contents(prompt: str, image: BinaryImage | None) -> list:
+    """The run's content: the text prompt, and the source picture if there is one.
+
+    A text-only run is a bare string (not a one-string list) so existing copy
+    and callers read unchanged. With an image, the model gets it in the same
+    user turn as the caption, exactly as the old app sent competitor pictures
+    to Gemini. Kept here rather than inside `write` so the image can be
+    threaded by callers that own the fetch.
+    """
+    return prompt if image is None else [prompt, image]
+
+
+def write(
+    page: Page,
+    source: SourceItem | None,
+    topic: str | None = None,
+    model=None,
+    image: BinaryImage | None = None,
+):
     """A brand-compliant draft, or an explanation. Never a retry.
+
+    `image` is the competitor post's own picture, fetched by `generate` and
+    sent alongside the text so the model can read it — never a style sample.
 
     Two different retries live here and they are not the same thing.
     `ModelRetry` corrects a draft that broke a brand rule — that is the writer
@@ -233,13 +260,13 @@ def write(page: Page, source: SourceItem | None, topic: str | None = None, model
     """
     return _run(
         page,
-        user_prompt(source, topic),
+        user_contents(user_prompt(source, topic), image),
         _validator_for(validators.Limits.for_page(page)),
         model,
     )
 
 
-def _run(page: Page, prompt: str, validator, model=None):
+def _run(page: Page, prompt, validator, model=None):
     """Ask the model, stepping down the fallback chain while it is unavailable.
 
     Extracted so `rewrite` cannot grow a second copy of the ladder — the two
