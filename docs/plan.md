@@ -309,9 +309,14 @@ Three more traps, found by running it rather than reasoning about it:
 
 - **`gemini-2.0-flash` answers 404 "no longer available"**, and was the last
   link of the fallback chain. It is still returned by `models.list()`, so the
-  listing is not evidence — each link is now verified by generating from it. The
-  last link is `gemini-flash-latest`, an alias, so it cannot rot the same way.
+  listing is not evidence — each link is now verified by generating from it.
   Same rot the old repo hit on the image side (`376afdc`).
+
+  The conclusion drawn here at the time — end the chain on the
+  `gemini-flash-latest` alias, which cannot rot — was retired by measurement in
+  `b971556`: the alias points at a busy model and answers 503 on a real call, so
+  it cannot serve the failure a fallback is for. Both links are pinned now. See
+  [decisions.md](decisions.md) for the table.
 - **`is_transient` matched `"500"` inside `"1500"`.** With `BODY_MIN_CHARS`
   at 1,500, our own validator message read as an overloaded server, which would
   have moved a run onto a different model for a reason that had nothing to do

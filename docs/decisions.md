@@ -96,12 +96,31 @@ value, so it becomes env (`GEMINI_TEXT_MODEL`, `GEMINI_IMAGE_MODEL`) — note
 these did already override the *code* defaults, so the code default is the value
 that must not be trusted.
 
-The hero has since moved up to `gemini-3.1-flash-image`, and the model carried
-over is now where it falls back to (`GEMINI_IMAGE_FALLBACK_MODELS`) — chosen as
-the backup precisely because it is the one the old system actually drew heroes
-on, so its output is known acceptable for this brand rather than merely
-available. See [design.md](design.md#configuration) on why every link in that
-chain is a pinned version that will eventually rot.
+The hero moved up to `gemini-3.1-flash-image` for about an hour on 2026-08-07
+(`d0ec7d0`), with the carried-over model as its fallback, and `2c23250` put both
+back the same afternoon: `gemini-2.5-flash-image` with **an empty chain**, on the
+reasoning that `image/hero.py`'s retry ladder already gives one model three
+attempts, and a chain only earns its rot risk when a model is down for good
+rather than busy. That is still what runs. This paragraph described the hour, not
+the state, until 2026-08-21.
+
+The text chain did later get a link, and it is the one place a measurement
+overturned a rule this repo had written down twice. `b971556` tried every
+candidate on the live key while the configured model was returning 503:
+
+| model | answered |
+| --- | --- |
+| `gemini-3.6-flash` | a full structured rewrite |
+| `gemini-3.5-flash` | 503 — the configured model |
+| `gemini-3.7-flash` | 503 |
+| `gemini-2.5-flash`, `-pro` | 404 "no longer available to new users" |
+| `gemini-flash-latest` | pinged fine, then 503 on a real rewrite a minute later |
+
+So the chain is `gemini-3.5-flash` then `gemini-3.6-flash`, both pinned. The old
+rule — *a fallback must be an alias, because Google repoints an alias while a
+pinned version expires silently* — is true about rot and useless about load: an
+alias onto a busy model cannot answer the one failure a fallback exists for.
+See [design.md](design.md#configuration) on why every image link is pinned.
 
 ## Cut, with the evidence
 

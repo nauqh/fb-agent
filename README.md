@@ -329,10 +329,56 @@ it dies before the app loads.
 | `DATABASE_URL` | Supabase Postgres, on the session pooler |
 | `SUPABASE_URL` · `SUPABASE_SERVICE_KEY` · `SUPABASE_BUCKET` | Where pictures are written and served from |
 | `GEMINI_API_KEY` | The writer and the image maker |
-| `GEMINI_TEXT_MODEL` · `GEMINI_IMAGE_MODEL` · `GEMINI_IMAGE_FALLBACK_MODELS` | Which models, as configuration not code — pinned ids rot, and a retired one 404s on use while still being listed |
+| `GEMINI_TEXT_MODEL` · `GEMINI_TEXT_FALLBACK_MODELS` · `GEMINI_IMAGE_MODEL` · `GEMINI_IMAGE_FALLBACK_MODELS` | Which models — see [Choosing models](#choosing-models) |
 | `METRICOOL_API_TOKEN` · `METRICOOL_USER_ID` | Competitor posts, the planner, publishing |
 | `METRICOOL_PUBLISH_AS_DRAFT` | Rehearsal mode. `true` keeps posts off Facebook |
 | `X_BEARER_TOKEN` | Reading a pasted tweet |
+
+### Choosing models
+
+Four variables, all in `.env`, none in code — a model retires upstream without
+notice and that should be an env change, not a release.
+
+| | Now | Chain |
+|---|---|---|
+| Writer | `GEMINI_TEXT_MODEL` = `gemini-3.5-flash` | `GEMINI_TEXT_FALLBACK_MODELS` = `gemini-3.6-flash` |
+| Hero | `GEMINI_IMAGE_MODEL` = `gemini-2.5-flash-image` | `GEMINI_IMAGE_FALLBACK_MODELS` = *empty* |
+
+A chain is tried in order when the one before it answers 503 or 429. It is not a
+retry: `image/hero.py` already gives a single model three attempts, which is what
+recovers a busy minute. A chain earns its keep only when a model is down for
+good, which is why the image side is deliberately empty.
+
+**Three rules, each of which cost a session to learn.**
+
+1. **`models.list()` is not evidence.** `gemini-2.5-flash` was listed and
+   answered 404 *"no longer available to new users"* — alive on the project the
+   key belonged to, dead on one created that afternoon. Verify a candidate by
+   generating from it before it goes in here.
+2. **An alias does not solve load.** `gemini-flash-latest` cannot rot, and it
+   still fails as a fallback: it pings fine and answers 503 on a real call a
+   minute later, being an alias onto a busy model. There is no `-latest` for any
+   image model in any case, so every image id is pinned and every image id will
+   eventually rot.
+3. **A 404 is not a 503.** Only 503/429 walk the chain. A retired id surfaces as
+   an error instead of being quietly spent as three attempts and a step sideways
+   — which is what you want, because the fix is to change this file.
+
+Checking what an account can actually reach:
+
+```bash
+api/  uv run python -c "
+from google import genai
+from app.settings import settings
+for m in genai.Client(api_key=settings.gemini_api_key).models.list():
+    print(m.name)"
+```
+
+Image models available at the time of writing, cheapest first:
+`gemini-2.5-flash-image`, `gemini-3.1-flash-image`, `gemini-3-pro-image`. Moving
+up is a quality lever for subjects the current one gets wrong — anatomy in
+exercise photographs being the reported case — and costs one line here. `--reload`
+watches `.py`, not `.env`, so restart the API after changing any of this.
 
 ### Frontend
 

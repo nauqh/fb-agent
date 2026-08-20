@@ -440,13 +440,15 @@ either from drifting:
   tier can contradict the compositor.
 - **env** — secrets and model ids. Model ids belong here because they get retired
   upstream without notice; the old repo shipped
-  `fix(gemini): replace retired image fallback model`. That applies twice over to
-  `GEMINI_IMAGE_FALLBACK_MODELS`: the text chain can end on `gemini-flash-latest`,
-  an alias Google repoints, but **there is no `-latest` alias for any image
-  model** — only pinned versions (`gemini-3.1-flash-image`, `gemini-3-pro-image`,
-  `gemini-2.5-flash-image`). Every image link therefore expires on someone else's
-  schedule, and a rotted one answers 404, which is not transient and so surfaces
-  instead of being spent as three attempts and a silent step sideways.
+  `fix(gemini): replace retired image fallback model`. **Every link in both
+  chains is a pinned version and will eventually rot.** There is no `-latest`
+  alias for any image model — only pinned ids (`gemini-3.1-flash-image`,
+  `gemini-3-pro-image`, `gemini-2.5-flash-image`) — and the text chain does not
+  use the alias it could: `gemini-flash-latest` pings fine and then answers 503
+  on a real call, being an alias onto a busy model, which is the one failure a
+  fallback exists for (`b971556`, measured). A rotted link answers 404, which is
+  not transient and so surfaces instead of being spent as three attempts and a
+  silent step sideways.
 - **`page` rows** — identity and per-Page policy: name, the two external ids, the
   watermark and badge, the five writing lengths, the three prompt overrides.
 
