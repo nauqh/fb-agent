@@ -42,7 +42,7 @@ export default function SourcesScreen() {
       <Tabs defaultValue="competitors" className="flex min-h-0 flex-1 flex-col gap-4">
         {/* `*:` reaches the triggers, so the width and padding live in one
             place instead of being repeated on each of the three. */}
-        <TabsList className="shrink-0 gap-1.5 p-1 *:min-w-28 *:px-4">
+        <TabsList className="shrink-0 *:min-w-28 *:px-4">
           <TabsTrigger value="competitors">Competitors</TabsTrigger>
           <TabsTrigger value="tweets">Tweets</TabsTrigger>
           <TabsTrigger value="rss">RSS</TabsTrigger>

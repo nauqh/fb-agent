@@ -45,7 +45,7 @@ export default function ManualScreen() {
       <Tabs defaultValue="write" className="flex min-h-0 flex-1 flex-col gap-6">
         {/* Same trigger sizing as the Sources tabs, so the two screens read as
             the same control rather than two takes on it. */}
-        <TabsList className="shrink-0 gap-1.5 p-1 *:min-w-36 *:px-4">
+        <TabsList className="shrink-0 *:min-w-36 *:px-4">
           <TabsTrigger value="write">Write it yourself</TabsTrigger>
           <TabsTrigger value="topic">From a topic</TabsTrigger>
         </TabsList>

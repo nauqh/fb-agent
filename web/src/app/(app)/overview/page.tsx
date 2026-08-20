@@ -59,7 +59,7 @@ export default function OverviewScreen() {
       />
 
       <Tabs defaultValue="performance" className="flex min-h-0 flex-1 flex-col gap-4">
-        <TabsList className="shrink-0 gap-1.5 p-1 *:min-w-32 *:px-4">
+        <TabsList className="shrink-0 *:min-w-32 *:px-4">
           <TabsTrigger value="performance">Performance</TabsTrigger>
           <TabsTrigger value="saved">Saved</TabsTrigger>
         </TabsList>

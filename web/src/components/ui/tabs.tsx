@@ -34,19 +34,18 @@ function Tabs({
 // same look is worse than widening this one, so the bespoke version was
 // retired in favour of this.
 //
-// **No container: no border, no fill.** The triggers sit on the page and the
-// only chrome is the pill under the active one. The bordered `bg-muted/40`
-// tray drew a second box around a control that already reads as a group, and
-// with the pill now sliding it was a box around a moving object. Callers still
-// pass their own `p-1`, which is invisible without a fill and only insets the
-// pill — harmless, so it was left rather than chased through six screens.
+// **The container is back, and it has no padding.** The tray bounds the group;
+// the selected trigger fills its cell edge to edge and corner to corner, so the
+// pill is a segment of the control rather than a chip floating inside it. That
+// is the whole reason `p-0` and `gap-0` are not negotiable here: any padding or
+// gap is tray showing through around the thing that is meant to fill it.
 const tabsListVariants = cva(
-  "group/tabs-list inline-flex w-fit items-center justify-center gap-0.5 rounded-lg text-muted-foreground group-data-horizontal/tabs:h-auto group-data-vertical/tabs:h-fit group-data-vertical/tabs:flex-col data-[variant=line]:rounded-none",
+  "group/tabs-list inline-flex w-fit items-center justify-center gap-0 rounded-lg border bg-muted/40 p-0 text-muted-foreground group-data-horizontal/tabs:h-auto group-data-vertical/tabs:h-fit group-data-vertical/tabs:flex-col data-[variant=line]:rounded-none",
   {
     variants: {
       variant: {
         default: "",
-        line: "gap-1 rounded-none p-0",
+        line: "gap-1 rounded-none border-none bg-transparent p-0",
       },
     },
     defaultVariants: {
@@ -55,7 +54,13 @@ const tabsListVariants = cva(
   }
 )
 
-type PillRect = { x: number; y: number; width: number; height: number }
+type PillRect = {
+  x: number
+  y: number
+  width: number
+  height: number
+  radius: string
+}
 
 const same = (a: PillRect | null, b: PillRect | null) =>
   a === b ||
@@ -64,7 +69,33 @@ const same = (a: PillRect | null, b: PillRect | null) =>
     a.x === b.x &&
     a.y === b.y &&
     a.width === b.width &&
-    a.height === b.height)
+    a.height === b.height &&
+    a.radius === b.radius)
+
+// The pill's own corners, rather than clipping it with `overflow-hidden` on the
+// list. **The obvious way does not work.** A rounded clip is not something the
+// compositor supports, so a transformed child escapes it or renders jagged
+// corners precisely while it animates — WebKit #98538 and the Chromium
+// graphics-dev thread on the same. The advice is either `contain: paint` or
+// giving the child matching radii; the second needs no clip at all, and it also
+// leaves the focus ring unclipped, which `overflow-hidden` would have eaten.
+//
+// Only the ends are round, and only on the outside: the pill at the left of a
+// horizontal bar is round on the left and square where it meets its neighbour.
+// The radius is read off the list rather than hardcoded, minus its border,
+// which is the geometry of one box nested inside another — a caller that
+// changes `rounded-lg` gets a pill that still fits.
+function pillRadius(list: HTMLElement, first: boolean, last: boolean) {
+  const style = getComputedStyle(list)
+  const inner = Math.max(
+    0,
+    parseFloat(style.borderTopLeftRadius) - parseFloat(style.borderTopWidth)
+  )
+  const [start, end] = [first ? inner : 0, last ? inner : 0]
+  return style.flexDirection === "column"
+    ? `${start}px ${start}px ${end}px ${end}px`
+    : `${start}px ${end}px ${end}px ${start}px`
+}
 
 // The active pill slides between triggers instead of blinking out of one and
 // into the next. One element measured against the active trigger, moved with a
@@ -89,12 +120,17 @@ function TabsList({
   const measure = React.useCallback(() => {
     const list = listRef.current
     if (!list) return
-    const active = list.querySelector<HTMLElement>(
-      '[data-slot="tabs-trigger"][data-state="active"]'
-    )
+    // The whole row, not just the active one: which end it sits at decides
+    // which of its corners are round. `:first-child` cannot answer that — the
+    // indicator itself is the list's first child.
+    const triggers = [
+      ...list.querySelectorAll<HTMLElement>('[data-slot="tabs-trigger"]'),
+    ]
+    const index = triggers.findIndex((t) => t.dataset.state === "active")
     // No active trigger is a real state — a Tabs whose value matches nothing —
     // and the indicator has to leave rather than sit on the last place it saw.
-    if (!active) return setPill(null)
+    if (index === -1) return setPill(null)
+    const active = triggers[index]
     const box = list.getBoundingClientRect()
     const target = active.getBoundingClientRect()
     // The list's border, subtracted. `absolute` is resolved against the padding
@@ -107,6 +143,7 @@ function TabsList({
       y: target.top - box.top - parseFloat(edge.borderTopWidth),
       width: target.width,
       height: target.height,
+      radius: pillRadius(list, index === 0, index === triggers.length - 1),
     }
     setPill((current) => (same(current, next) ? current : next))
   }, [])
@@ -153,11 +190,12 @@ function TabsList({
         <span
           aria-hidden
           data-slot="tabs-indicator"
-          className="absolute top-0 left-0 z-0 rounded-lg bg-foreground transition-[translate,width,height] duration-200 ease-out motion-reduce:transition-none"
+          className="absolute top-0 left-0 z-0 bg-foreground transition-[translate,width,height,border-radius] duration-200 ease-out motion-reduce:transition-none"
           style={{
             translate: `${pill.x}px ${pill.y}px`,
             width: pill.width,
             height: pill.height,
+            borderRadius: pill.radius,
           }}
         />
       ) : null}
@@ -177,7 +215,16 @@ function TabsTrigger({
         // `text-xs` rather than shadcn's stock `text-sm`: every other small
         // control in this app — buttons, chips, meta counts — is 12px, and at
         // 14px plus the wider pill padding this read oversized next to them.
-        "relative z-10 inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium whitespace-nowrap text-muted-foreground transition-colors group-data-vertical/tabs:w-full group-data-vertical/tabs:justify-start hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50 has-data-[icon=inline-end]:pr-1 has-data-[icon=inline-start]:pl-1 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",
+        // Square, except at the ends of the bar, where the fill has to follow
+        // the tray's corners. `first:`/`last:` read as the first and last child
+        // of the list, which is only correct while the indicator is absent —
+        // and that is exactly when these matter, because the indicator brings
+        // its own computed corners and blanks this fill out.
+        //
+        // Off the same token as the tray, less its border, which is what
+        // `pillRadius` computes at runtime. Hardcoding it was wrong within the
+        // hour: `--radius` is 4px here, not the 8px `rounded-lg` looks like.
+        "relative z-10 inline-flex flex-1 items-center justify-center gap-1.5 rounded-none first:rounded-l-[calc(var(--radius-lg)-1px)] last:rounded-r-[calc(var(--radius-lg)-1px)] px-2.5 py-1 text-xs font-medium whitespace-nowrap text-muted-foreground transition-colors group-data-vertical/tabs:w-full group-data-vertical/tabs:justify-start hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50 has-data-[icon=inline-end]:pr-1 has-data-[icon=inline-start]:pl-1 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",
         "group-data-[variant=default]/tabs-list:data-active:bg-foreground group-data-[variant=default]/tabs-list:data-active:text-background",
         // Handed over to the sliding indicator once it has measured itself.
         // Important, and it has to be: this and the `bg-foreground` above are

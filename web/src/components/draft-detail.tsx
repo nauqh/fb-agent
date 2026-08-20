@@ -516,7 +516,7 @@ export function DraftDetail({
           column; given the full width it can put the feed post and the
           first comment side by side, which is how they are read. */}
       <Tabs value={view} onValueChange={(next) => setView(next as View)}>
-        <TabsList className="gap-1.5 p-1 *:min-w-28 *:px-4">
+        <TabsList className="*:min-w-28 *:px-4">
           <TabsTrigger value="edit">Edit</TabsTrigger>
           <TabsTrigger value="preview">Preview</TabsTrigger>
         </TabsList>
