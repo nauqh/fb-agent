@@ -1,6 +1,8 @@
 # Competitor post image as Gemini vision input — decision note
 
-**Status:** decision settled under grilling (2026-08-19). Not implemented.
+**Status:** shipped 2026-08-20 (`6e654d0`), corrected the same day — see
+"What shipped, and where it differed" at the foot. The live vision call is still
+unverified: Gemini answers 429 RESOURCE_EXHAUSTED until AI Studio is topped up.
 
 ## Question
 
@@ -85,6 +87,38 @@ Yes — but only as **vision input to Gemini**, never as the output image.
   matter, the rival's layout is not to be described or reused.
 - Test with the existing fake model (tests pass `model=`); assert the image part
   lands in the content and that a failed fetch still writes a draft.
+
+## What shipped, and where it differed
+
+Decisions 1, 2, 3 and 6 shipped as written. The rest:
+
+- **Decision 4, first half — bytes are fetched in `_run_one`, not copied in
+  `resolve_sources`, and nothing is persisted.** `resolve_sources` runs at
+  `POST /generate` and `_run_one` seconds later on the background task, so the
+  fetch is no staler; and nothing downstream needs the bytes a second time,
+  because the hero never uses them. Persisting them would have been a column
+  and a cleanup path for data with one reader.
+- **Decision 4, second half — "never silent" was broken on arrival and is now
+  fixed.** The warning was given the prefix `"Image: "`, which is
+  `IMAGE_WARNING`, which every hero-rebuild path in `routes/drafts.py` strips
+  before re-deriving from `build_image` (three call sites). One redraw, crop
+  nudge or inset upload deleted the record that the writer never saw the
+  rival's picture, and nothing re-derived it. Its own prefix now
+  (`"Source image: "`), pinned by
+  `test_the_unread_picture_warning_survives_a_redraw`.
+- **Decision 5 shipped untested and is now tested.** Every run-level test
+  stubs `competitor_image` wholesale, so no test touched the mime whitelist,
+  the 4MB cap, the UA or the error path. `competitor_image` took a `client`
+  seam (same shape as `hero.from_url`) and those bounds are driven over a
+  `MockTransport`. Two gaps surfaced doing it: `image/jpg` and any
+  mixed-case content-type were rejected where the old app's `/i` regex
+  accepted them, and a 200 with an **empty body** became
+  `BinaryImage(data=b"")` — which the model rejects, and a model error fails
+  the whole draft, the one outcome decision 4 rules out. The old app checked
+  for zero bytes; this now does too.
+- **Not decided, still open: `rewrite` is text-only.** `write` takes the image;
+  `writer.rewrite` does not, so "write again" on a competitor draft loses the
+  vision input with no warning. The note never covered the rewrite path.
 
 ## Follow-ups
 

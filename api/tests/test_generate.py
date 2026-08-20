@@ -1,5 +1,6 @@
 """The run. Generate is the only thing that writes a Source Item."""
 
+import httpx
 import pytest
 from sqlmodel import Session, func, select
 
@@ -1017,7 +1018,7 @@ def test_a_competitors_image_is_fetched_for_the_writer(client, written, session,
     assert seen["image"].kind == "binary"
 
 
-def test_an_anreadable_competitor_image_writes_the_draft(client, written, session, monkeypatch):
+def test_an_unreadable_competitor_image_writes_the_draft(client, written, session, monkeypatch):
     """A failed fetch is a warning, not a refusal."""
     _seed_competitor(session)
 
@@ -1041,6 +1042,41 @@ def test_an_anreadable_competitor_image_writes_the_draft(client, written, sessio
 
     assert draft["status"] == "review"
     assert any("picture could not be read" in w for w in draft["warnings"])
+
+
+def test_the_unread_picture_warning_survives_a_redraw(
+    client, written, illustrated, session, monkeypatch
+):
+    """It shared `IMAGE_WARNING`'s prefix once, and every rebuild path drops
+    warnings carrying that prefix before re-deriving them from `build_image`.
+
+    So one press of "draw it again" — or a crop nudge, or an inset upload —
+    deleted the only record that this draft never saw the rival's picture, and
+    nothing re-derived it. A draft written blind then looked like one that
+    wasn't.
+    """
+    _seed_competitor(session)
+    monkeypatch.setattr(generate, "competitor_image", lambda source: None)
+
+    client.post(
+        "/generate",
+        json={
+            "page_ids": [1],
+            "sources": [{"kind": "competitor_post", "external_id": "rival-1"}],
+        },
+    )
+    assert any(
+        "picture could not be read" in w
+        for w in client.get("/drafts/1").json()["warnings"]
+    )
+
+    client.post("/drafts/1/image", json={})
+
+    assert any(
+        "picture could not be read" in w
+        for w in client.get("/drafts/1").json()["warnings"]
+    ), "the redraw swept away the record of what the writer never saw"
+    assert not generate.IMAGE_INPUT_WARNING.startswith(generate.IMAGE_WARNING)
 
 
 def test_only_competitor_images_ride_into_the_writer(client, written, session, monkeypatch):
@@ -1070,6 +1106,145 @@ def test_only_competitor_images_ride_into_the_writer(client, written, session, m
         client.post("/generate", json={"page_ids": [1], "sources": [by]})
 
     assert all(image is None for image in seen), "tweets and RSS items may not carry an image"
+
+
+# --- the fetch itself, which the three tests above stub out ------------------
+#
+# Every test that exercises the run replaces `competitor_image` wholesale, so
+# none of them touch its bounds. These drive the real function over a
+# `MockTransport`, the same way `hero.from_url` is tested.
+
+
+def _answering(handler) -> httpx.Client:
+    return httpx.Client(transport=httpx.MockTransport(handler))
+
+
+def _rival(image_url: str | None = "https://example.com/rival.jpg") -> SourceItem:
+    return SourceItem(
+        kind=SourceKind.COMPETITOR_POST, external_id="rival-1", image_url=image_url
+    )
+
+
+def test_the_fetch_returns_the_bytes_it_was_given():
+    with _answering(
+        lambda request: httpx.Response(200, content=b"jpeg-bytes", headers={"content-type": "image/jpeg"})
+    ) as http:
+        part = generate.competitor_image(_rival(), client=http)
+
+    assert part is not None
+    assert part.data == b"jpeg-bytes"
+    assert part.media_type == "image/jpeg"
+
+
+def test_the_fetch_sends_a_browser_user_agent():
+    """Publisher CDNs 403 an anonymous request — the old app's reason for this."""
+    seen = {}
+
+    def handler(request):
+        seen["ua"] = request.headers.get("User-Agent")
+        return httpx.Response(200, content=b"x", headers={"content-type": "image/png"})
+
+    with _answering(handler) as http:
+        generate.competitor_image(_rival(), client=http)
+
+    assert seen["ua"] == generate.IMAGE_INPUT_UA
+    assert seen["ua"].startswith("Mozilla/")
+
+
+@pytest.mark.parametrize("status", [403, 404, 500])
+def test_an_image_that_answers_an_error_is_no_image(status):
+    with _answering(lambda request: httpx.Response(status)) as http:
+        assert generate.competitor_image(_rival(), client=http) is None
+
+
+def test_a_host_that_does_not_answer_is_no_image():
+    """Never raises: `_run_one` would turn an exception into a failed draft."""
+
+    def handler(request):
+        raise httpx.ConnectError("no route", request=request)
+
+    with _answering(handler) as http:
+        assert generate.competitor_image(_rival(), client=http) is None
+
+
+@pytest.mark.parametrize("kind", ["text/html", "application/pdf", "image/svg+xml", ""])
+def test_only_the_whitelisted_image_types_ride_in(kind):
+    """An HTML error page served as 200 is the common shape of this."""
+    with _answering(
+        lambda request: httpx.Response(200, content=b"<html>gone</html>", headers={"content-type": kind} if kind else {})
+    ) as http:
+        assert generate.competitor_image(_rival(), client=http) is None
+
+
+@pytest.mark.parametrize(
+    "header,expected",
+    [
+        ("image/jpg", "image/jpeg"),  # not a real mime type; CDNs send it anyway
+        ("IMAGE/JPEG", "image/jpeg"),
+        ("image/png; charset=binary", "image/png"),
+        ("image/webp", "image/webp"),
+        ("image/gif", "image/gif"),
+    ],
+)
+def test_the_mime_whitelist_matches_the_old_apps(header, expected):
+    with _answering(
+        lambda request: httpx.Response(200, content=b"bytes", headers={"content-type": header})
+    ) as http:
+        part = generate.competitor_image(_rival(), client=http)
+
+    assert part is not None, header
+    assert part.media_type == expected
+
+
+def test_an_image_over_the_cap_is_no_image():
+    """4MB is Gemini's input ceiling, and the old app's cap."""
+    body = b"x" * (generate.IMAGE_INPUT_MAX_BYTES + 1)
+    with _answering(
+        lambda request: httpx.Response(200, content=body, headers={"content-type": "image/jpeg"})
+    ) as http:
+        assert generate.competitor_image(_rival(), client=http) is None
+
+
+def test_an_empty_body_is_no_image():
+    """A 200 with nothing in it built `BinaryImage(data=b"")`, which the model
+    rejects — and a model error fails the whole draft, the one outcome the
+    warning path exists to avoid."""
+    with _answering(
+        lambda request: httpx.Response(200, content=b"", headers={"content-type": "image/jpeg"})
+    ) as http:
+        assert generate.competitor_image(_rival(), client=http) is None
+
+
+@pytest.mark.parametrize("url", [None, "", "   "])
+def test_a_competitor_without_a_picture_is_not_fetched(url):
+    called = []
+
+    def handler(request):
+        called.append(request.url)
+        return httpx.Response(200, content=b"x", headers={"content-type": "image/jpeg"})
+
+    with _answering(handler) as http:
+        assert generate.competitor_image(_rival(image_url=url), client=http) is None
+    assert called == [], "there was no url to fetch"
+
+
+@pytest.mark.parametrize("kind", [SourceKind.TWEET, SourceKind.RSS])
+def test_the_fetch_refuses_a_non_competitor_outright(kind):
+    """Belt to `_run_one`'s braces: the gate exists in both places on purpose."""
+    called = []
+
+    def handler(request):
+        called.append(request.url)
+        return httpx.Response(200, content=b"x", headers={"content-type": "image/jpeg"})
+
+    row = SourceItem(kind=kind, external_id="x", image_url="https://example.com/p.jpg")
+    with _answering(handler) as http:
+        assert generate.competitor_image(row, client=http) is None
+    assert called == [], "a tweet's or an RSS picture may not be fetched at all"
+
+
+def test_no_source_at_all_is_no_image():
+    assert generate.competitor_image(None) is None
 
 
 def test_a_feed_serving_html_fails_at_the_fetch(client):

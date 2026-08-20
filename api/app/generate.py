@@ -31,19 +31,32 @@ IMAGE_INPUT_TIMEOUT = 20.0
 IMAGE_INPUT_MAX_BYTES = 4 * 1024 * 1024
 IMAGE_INPUT_MIME = {
     "image/jpeg": "image/jpeg",
+    "image/jpg": "image/jpeg",  # not a real mime type; CDNs send it anyway
     "image/png": "image/png",
     "image/webp": "image/webp",
     "image/gif": "image/gif",
 }
 IMAGE_INPUT_UA = "Mozilla/5.0 (compatible; fb-agent/1.0)"
-IMAGE_INPUT_WARNING = "Image: "
+
+IMAGE_INPUT_WARNING = "Source image: "
+"""Its own prefix, deliberately **not** `IMAGE_WARNING`.
+
+Both say "Image" to a reader, and the first version of this shared the string.
+`IMAGE_WARNING` is a contract: every rebuild path drops warnings carrying it and
+re-derives them from `build_image` (`routes/drafts.py`, three call sites). This
+warning is about the *input* the writer had, which no rebuild re-derives, so
+sharing the prefix meant one redraw, crop nudge or inset upload silently swept
+away the only record that the draft was written without the rival's picture.
+"""
 
 
 class GenerateError(ValueError):
     """A request that cannot be run. Raised before anything is written."""
 
 
-def competitor_image(source: SourceItem | None) -> BinaryImage | None:
+def competitor_image(
+    source: SourceItem | None, client: httpx.Client | None = None
+) -> BinaryImage | None:
     """The competitor post's own picture as a Gemini content part, or None.
 
     **Vision input, and only for a competitor post.** The old app sent these to
@@ -56,23 +69,38 @@ def competitor_image(source: SourceItem | None) -> BinaryImage | None:
     Mime and size bounds mirror the old app's `fetch-image-part.ts`: a UA for
     CDNs that 403 anonymous requests, and a 4MB cap. The image is input only -
     it is never reused as the hero.
+
+    **An empty body is a failure, not an image.** A CDN that answers 200 with
+    zero bytes and an image content-type used to become `BinaryImage(data=b"")`,
+    which the model rejects — and a model error here fails the whole draft,
+    which is the one outcome the note rules out. The old app checked this too.
+
+    `client` is the test seam, same shape as `hero.from_url`: without one the
+    bounds below are only ever exercised through a stub of this whole function,
+    which proves nothing about them.
     """
     if source is None or source.kind is not SourceKind.COMPETITOR_POST:
         return None
     url = (source.image_url or "").strip()
     if not url:
         return None
+    owned = client is None
+    client = client or httpx.Client(
+        timeout=IMAGE_INPUT_TIMEOUT, follow_redirects=True
+    )
     try:
-        with httpx.Client(
-            timeout=IMAGE_INPUT_TIMEOUT, follow_redirects=True
-        ) as client:
-            response = client.get(url, headers={"User-Agent": IMAGE_INPUT_UA})
-            response.raise_for_status()
+        response = client.get(url, headers={"User-Agent": IMAGE_INPUT_UA})
+        response.raise_for_status()
     except httpx.HTTPError:
         return None
-    kind = (response.headers.get("content-type") or "").split(";")[0].strip()
+    finally:
+        if owned:
+            client.close()
+    kind = (response.headers.get("content-type") or "").split(";")[0].strip().lower()
     media_type = IMAGE_INPUT_MIME.get(kind)
-    if media_type is None or len(response.content) > IMAGE_INPUT_MAX_BYTES:
+    if media_type is None:
+        return None
+    if not response.content or len(response.content) > IMAGE_INPUT_MAX_BYTES:
         return None
     return BinaryImage(data=response.content, media_type=media_type)
 
@@ -213,7 +241,7 @@ def _run_one(session: Session, draft_id: int) -> None:
         _progress(session, draft, "writing the post", 20)
         # Vision input is competitor-only, and the seam must gate here — not
         # inside `competitor_image` — or a stub that always returns an image
-        # would leak tweets and RSS items in. A competitor with an picture that
+        # would leak tweets and RSS items in. A competitor with a picture that
         # cannot be read becomes a warning and a text-only run, never a refusal.
         image = (
             competitor_image(source)
