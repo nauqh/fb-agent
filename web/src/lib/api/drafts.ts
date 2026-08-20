@@ -164,6 +164,21 @@ export async function uploadInset(id: number, file: File): Promise<Draft> {
   return upload<Draft>(`/drafts/${id}/inset`, file);
 }
 
+/**
+ * Use the operator's own picture as the hero.
+ *
+ * The way out of a subject the model will not draw correctly — exercise
+ * photographs being the case that prompted it, where re-rolling buys another
+ * impossible pose rather than a better one. Free, like the inset: this is a
+ * file, not a generation.
+ *
+ * The card is still drawn on top. This replaces the picture behind it and
+ * nothing else, so the response is the finished row, same as an inset upload.
+ */
+export async function uploadHero(id: number, file: File): Promise<Draft> {
+  return upload<Draft>(`/drafts/${id}/hero`, file);
+}
+
 /** The three fields the writer can be asked for again, one at a time. */
 export type RegeneratableField = "hook" | "caption" | "first_comment";
 

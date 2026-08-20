@@ -43,6 +43,7 @@ import {
   returnToReview,
   unscheduleDraft,
   updateDraft,
+  uploadHero,
   uploadInset,
 } from "@/lib/api/drafts";
 import { getPageLayout, type ResolvedLayout } from "@/lib/api/layout";
@@ -106,9 +107,12 @@ export function DraftDetail({
   });
   const [saving, setSaving] = useState(false);
   const [deciding, setDeciding] = useState(false);
-  const [imageWork, setImageWork] = useState<"hero" | "inset" | null>(null);
+  const [imageWork, setImageWork] = useState<"hero" | "hero-upload" | "inset" | null>(
+    null,
+  );
   const [view, setView] = useState<View>("edit");
   const filePicker = useRef<HTMLInputElement>(null);
+  const heroPicker = useRef<HTMLInputElement>(null);
 
   const { data: pages } = useQuery(() => listPages(), []);
 
@@ -350,6 +354,13 @@ export function DraftDetail({
   async function redoImage(kind: "hero") {
     setImageWork(kind);
     try {
+      // Saves first, and that is what makes the prompt box above it work: the
+      // server draws from `draft.image_prompt` on the **row**, so an edited
+      // prompt that is still only in the form buys another picture of the old
+      // one — at full price, with nothing on screen explaining why the wording
+      // had no effect.
+      if (dirty && form) await updateDraft(draftId, form);
+
       await regenerateHero(draftId);
       toast.success("New hero generated and composited.", {
         description: "That was a paid image generation.",
@@ -388,6 +399,34 @@ export function DraftDetail({
       toast.success(file ? "Inset added." : "Inset removed.");
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : "Inset failed");
+    } finally {
+      setImageWork(null);
+    }
+  }
+
+  /**
+   * Use the operator's own photograph instead of a generated one.
+   *
+   * The escape hatch for a subject the model will not draw — the client's case
+   * was exercise photographs, where each re-roll costs a generation and returns
+   * another impossible pose. Free, and the card is still drawn on top, so this
+   * changes the picture and nothing else about the post.
+   *
+   * Saves first for the same reason `changeInset` does: the server redraws the
+   * card from the row, so an unsaved hook would be baked into the PNG while the
+   * preview kept showing the new one.
+   */
+  async function changeHero(file: File) {
+    setImageWork("hero-upload");
+    try {
+      if (dirty && form) await updateDraft(draftId, form);
+      await uploadHero(draftId, file);
+      await refresh();
+      toast.success("Your picture is the hero now.", {
+        description: "The card was redrawn on it. Nothing was generated.",
+      });
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Upload failed");
     } finally {
       setImageWork(null);
     }
@@ -612,6 +651,75 @@ export function DraftDetail({
             Regenerate hero
           </Button>
           )}
+          {/* The two ways out of a picture that is wrong, side by side with the
+              button that buys another one.
+
+              **Say it differently, or stop asking.** Re-rolling an unchanged
+              prompt is the same request at full price, and for some subjects it
+              never converges — the client's report was exercise photographs
+              coming back with twisted bodies and the wrong movement however
+              many times they pressed. The prompt is the lever on the next
+              attempt; the upload is the way to stop attempting.
+
+              Editable here rather than in Settings because this is one draft's
+              picture. The Page's `image_prompt` — the systematic fix, and the
+              right place for "this Page is about exercise form" — is on the
+              Settings screen and applies to every draft after it. */}
+          {form && !published ? (
+            <div className="space-y-2 rounded-md border p-3">
+              <div className="flex items-baseline justify-between">
+                <Label htmlFor="image-prompt" className="text-xs">
+                  Hero prompt
+                </Label>
+                <span className="text-[11px] text-muted-foreground">
+                  {form.image_prompt.trim() ? `${words(form.image_prompt)} words` : "empty"}
+                </span>
+              </div>
+              <Textarea
+                id="image-prompt"
+                value={form.image_prompt}
+                onChange={(event) =>
+                  setForm({ ...form, image_prompt: event.target.value })
+                }
+                rows={4}
+                className="text-xs leading-relaxed"
+                placeholder="What the picture should show."
+              />
+              <p className="text-[11px] leading-relaxed text-muted-foreground">
+                What the image model is asked for. Regenerate saves this first,
+                so an edit here is what the next picture is drawn from.
+              </p>
+
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                disabled={imageWork !== null}
+                onClick={() => heroPicker.current?.click()}
+                title="Uses your own picture. Nothing is generated."
+              >
+                {imageWork === "hero-upload" ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <ImagePlus className="size-3.5" />
+                )}
+                Upload your own
+              </Button>
+
+              <input
+                ref={heroPicker}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  // Cleared so picking the same file twice still fires a change.
+                  event.target.value = "";
+                  if (file) void changeHero(file);
+                }}
+              />
+            </div>
+          ) : null}
           {/* Which of the two forms this card is drawn in. Under the picture
               because that is the only place the difference is visible: the
               choice depends on the photograph, not on the brand — a busy shot

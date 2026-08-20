@@ -367,6 +367,17 @@ def test_a_page_with_no_blog_id_cannot_publish(client, session, page, ready, pub
 # only the picture is held.
 
 
+def _a_png() -> bytes:
+    """A real image, so a refusal here is the freeze and not a decode failure."""
+    import io
+
+    from PIL import Image
+
+    buffer = io.BytesIO()
+    Image.new("RGB", (800, 600), (30, 90, 160)).save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
 @pytest.mark.parametrize(
     "method, path, kwargs",
     [
@@ -374,8 +385,9 @@ def test_a_page_with_no_blog_id_cannot_publish(client, session, page, ready, pub
         ("post", "/image", {}),
         ("post", "/image?new_hero=true", {}),
         ("delete", "/inset", {}),
+        ("post", "/hero", {"files": {"file": ("photo.png", _a_png(), "image/png")}}),
     ],
-    ids=["drawn-field", "rebuild", "new-hero", "remove-inset"],
+    ids=["drawn-field", "rebuild", "new-hero", "remove-inset", "upload-hero"],
 )
 def test_a_scheduled_draft_cannot_be_redrawn(
     client, ready, published, method, path, kwargs

@@ -1379,6 +1379,110 @@ def test_replacing_the_picture_keeps_where_it_was(
     assert replaced["inset_y_ratio"] == 0.4
 
 
+# --- the operator's own hero --------------------------------------------------
+#
+# The way out of a picture the model will not get right. Everything here is the
+# inset's shape one layer down: same bound, same re-encode, same refusal — but
+# it replaces the generated hero rather than adding a circle on top of it.
+
+
+def _upload_hero(client, data: bytes, name: str = "photo.png", kind: str = "image/png"):
+    return client.post("/drafts/1/hero", files={"file": (name, data, kind)})
+
+
+def test_an_uploaded_hero_replaces_the_generated_one(
+    client, written, illustrated, a_photograph
+):
+    before = _generate(client)
+
+    draft = _upload_hero(client, a_photograph).json()
+
+    assert draft["hero_image_path"] != before["hero_image_path"], "the hero was kept"
+    assert draft["composed_image_path"], "the card did not compose over it"
+
+
+def test_an_uploaded_hero_still_gets_the_card_drawn_on_it(
+    client, written, illustrated, a_photograph
+):
+    """An upload that skipped the composite would bypass the whole app."""
+    before = _generate(client)
+
+    draft = _upload_hero(client, a_photograph).json()
+
+    assert draft["composed_image_path"] != before["composed_image_path"]
+    assert draft["composed_image_path"] != draft["hero_image_path"], (
+        "the composite is the hero itself, so no card was drawn"
+    )
+
+
+def test_an_uploaded_hero_is_no_longer_the_feeds_photograph(
+    client, written, illustrated, a_photograph, monkeypatch
+):
+    """`hero_from_source` is a claim about provenance, and it stops being true."""
+    _feed_png(monkeypatch)
+    session_draft = client.post(
+        "/generate",
+        json={
+            "page_ids": [1],
+            "sources": [{**_rss().model_dump(mode="json"), "image_url": "https://e.com/p.jpg"}],
+            "hero_from_source": True,
+        },
+    )
+    assert session_draft.status_code == 202
+    assert client.get("/drafts/1").json()["hero_from_source"] is True
+
+    draft = _upload_hero(client, a_photograph).json()
+
+    assert draft["hero_from_source"] is False
+
+
+def test_the_uploaded_hero_is_re_encoded_rather_than_stored_as_sent(
+    client, written, illustrated, a_photograph
+):
+    """A JPEG in, a PNG on disk — the camera's container decides nothing."""
+    import io
+
+    from PIL import Image
+
+    from app import media
+
+    jpeg = io.BytesIO()
+    Image.open(io.BytesIO(a_photograph)).convert("RGB").save(jpeg, format="JPEG")
+    _generate(client)
+
+    draft = _upload_hero(client, jpeg.getvalue(), "photo.jpg", "image/jpeg").json()
+
+    stored = media.store.path(draft["hero_image_path"])
+    assert stored.suffix == ".png"
+    assert Image.open(stored).format == "PNG"
+
+
+def test_a_file_that_is_not_an_image_is_refused_as_a_hero(client, written, illustrated):
+    """Rather than at the composite, as a warning on a draft that looks fine."""
+    before = _generate(client)
+
+    response = _upload_hero(client, b"this is not a picture", "notes.txt", "text/plain")
+
+    assert response.status_code == 422
+    assert client.get("/drafts/1").json()["hero_image_path"] == before["hero_image_path"]
+
+
+def test_an_uploaded_hero_survives_a_later_recomposite(
+    client, written, illustrated, a_photograph
+):
+    """`POST /image` without `new_hero` reuses the picture — including this one.
+
+    The operator uploaded it precisely because generation was not working; a
+    redraw that quietly bought a fresh hero would undo the fix and bill for it.
+    """
+    _generate(client)
+    uploaded = _upload_hero(client, a_photograph).json()
+
+    after = client.post("/drafts/1/image", json={}).json()
+
+    assert after["hero_image_path"] == uploaded["hero_image_path"]
+
+
 # --- the inset's ring --------------------------------------------------------
 #
 # Per draft, over the Page's `page_layout.portrait_*`. Null means "whatever the

@@ -503,6 +503,67 @@ def rebuild_image(
     return _save(session, draft)
 
 
+MAX_HERO_BYTES = 8 * 1024 * 1024
+"""Same bound as the inset, for the same reason: the body is read into memory."""
+
+
+@router.post("/drafts/{draft_id}/hero")
+async def upload_hero(
+    draft_id: int,
+    file: UploadFile = File(description="The picture behind the card."),
+    session: Session = Depends(get_session),
+) -> Draft:
+    """Use the operator's own picture as the hero, and redraw the card on it.
+
+    **The way out of a hero the model cannot get right.** Re-rolling costs a
+    generation every time and, for some subjects, converges on nothing usable —
+    the client's case was exercise photographs, where the model returns a
+    plausible body in an impossible pose however the prompt is worded. A prompt
+    box makes the next attempt better; this makes the attempts stop.
+
+    The card is still drawn on top. An upload that skipped the composite would
+    bypass the panel, the highlight and the watermark — the thing the app is
+    for — so this replaces the picture and nothing else, exactly as if the
+    generator had returned that image.
+
+    Re-encoded to PNG like the inset, and for the same reasons: a file Pillow
+    cannot read is a 422 here rather than a broken composite later, and the
+    camera's metadata does not travel to a public bucket.
+
+    `hero_from_source` is cleared because it is a claim about where the picture
+    came from, and it no longer holds. The path would win over it either way —
+    this stops the row saying "the feed's photograph" about an upload.
+    """
+    draft = _editable(session, draft_id)
+    page = session.get(Page, draft.page_id)
+    if page is None:
+        raise HTTPException(status_code=404, detail=f"No page {draft.page_id}")
+
+    data = await file.read(MAX_HERO_BYTES + 1)
+    if len(data) > MAX_HERO_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"That image is over {MAX_HERO_BYTES // (1024 * 1024)}MB.",
+        )
+
+    try:
+        picture = Image.open(io.BytesIO(data))
+        picture.load()
+    except Exception as error:  # noqa: BLE001 — any decode failure is the same answer
+        raise HTTPException(
+            status_code=422,
+            detail=f"That file is not an image Pillow can read ({error}).",
+        ) from error
+
+    buffer = io.BytesIO()
+    picture.convert("RGB").save(buffer, format="PNG")
+    draft.hero_image_path = media.store.save(
+        buffer.getvalue(), media.filename(draft_id, "hero", "png")
+    )
+    draft.hero_from_source = False
+    return _redrawn(session, draft, page)
+
+
 TEMPLATES = ("card", "full_overlay")
 """The card forms the compositor knows. Checked on write as well as at draw time,
 because a bad one does not fail in resvg — it renders the wrong card and returns
