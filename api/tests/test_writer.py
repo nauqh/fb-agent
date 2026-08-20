@@ -264,6 +264,71 @@ def test_user_contents_sends_the_picture_in_the_same_turn():
     assert contents[1].kind == "binary"
 
 
+def _pictures(messages: list[ModelMessage]) -> list[BinaryImage]:
+    """Every image part the model was actually handed."""
+    found = []
+    for message in messages:
+        for part in message.parts:
+            content = getattr(part, "content", None)
+            if isinstance(content, list):
+                found += [item for item in content if isinstance(item, BinaryImage)]
+    return found
+
+
+def _rival() -> SourceItem:
+    return SourceItem(
+        kind=SourceKind.COMPETITOR_POST,
+        external_id="rival-1",
+        text="the rival's post about the flood",
+        image_url="https://example.com/rival.jpg",
+    )
+
+
+def test_the_picture_reaches_the_model_not_just_the_content_list(page):
+    """`user_contents` is one hop; this is the whole way down to the request."""
+    seen: list[list[BinaryImage]] = []
+
+    def respond(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+        seen.append(_pictures(messages))
+        return ModelResponse(parts=[ToolCallPart(info.output_tools[0].name, GOOD)])
+
+    writer.write(
+        page,
+        _rival(),
+        model=FunctionModel(respond),
+        image=BinaryImage(data=b"abc", media_type="image/jpeg"),
+    )
+
+    assert seen[0], "the model was handed no image part"
+    assert seen[0][0].data == b"abc"
+
+
+def test_a_rewrite_never_carries_the_picture(page):
+    """Decided, not overlooked — the old app's regenerate was text-only too.
+
+    The fields being kept are in the prompt verbatim and were written while the
+    model could see the picture, so its contribution is already there as prose.
+    A rewrite is synchronous and pressed repeatedly; sending the image again
+    would buy a fetch and vision tokens per press for detail already in hand.
+    """
+    seen: list[list[BinaryImage]] = []
+
+    def respond(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+        seen.append(_pictures(messages))
+        return ModelResponse(parts=[ToolCallPart(info.output_tools[0].name, GOOD)])
+
+    writer.rewrite(
+        page,
+        _rival(),
+        None,
+        "hook",
+        {"caption": GOOD["caption"], "first_comment": GOOD["first_comment"]},
+        model=FunctionModel(respond),
+    )
+
+    assert seen[0] == [], "a rewrite must not send the competitor's picture"
+
+
 # --- the model being unavailable, which is not about the draft ---------------
 
 

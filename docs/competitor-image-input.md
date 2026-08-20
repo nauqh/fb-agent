@@ -116,9 +116,21 @@ Decisions 1, 2, 3 and 6 shipped as written. The rest:
   `BinaryImage(data=b"")` — which the model rejects, and a model error fails
   the whole draft, the one outcome decision 4 rules out. The old app checked
   for zero bytes; this now does too.
-- **Not decided, still open: `rewrite` is text-only.** `write` takes the image;
-  `writer.rewrite` does not, so "write again" on a competitor draft loses the
-  vision input with no warning. The note never covered the rewrite path.
+- **`rewrite` stays text-only — decided 2026-08-20, not overlooked.** `write`
+  takes the image and `writer.rewrite` does not, which looked like a gap until
+  the old app was checked: its regenerate sends `buildDraftContext(draft)` and
+  has never sent an image (`facebookDraftRegenerateService.ts:60-111`). Only
+  the initial three-draft write got vision there, so this already matches
+  decision 1's "exactly as the old app did".
+
+  The picture is not lost by leaving it out. `keeping` puts the two fields the
+  operator is not replacing into the prompt verbatim, and those were written
+  while the model could see the image — so its contribution to the subject is
+  already in front of the call as prose. Against that, a rewrite is
+  synchronous and pressed repeatedly, so sending the image would buy a CDN
+  fetch and vision tokens per press, and a fetch that failed mid-session would
+  need a warning channel on `RewriteProposal` that does not exist (the route
+  writes nothing to the row by design — *Rewrite proposes, Save writes*).
 
 ## Follow-ups
 

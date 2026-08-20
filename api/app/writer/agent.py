@@ -452,6 +452,16 @@ def rewrite(
     **not** turned into a validator: it describes an action, not the post, and a
     brand rule belongs to the Page in `validators.py` where every future draft
     sees it. A stored one would be silently reused by the next press.
+
+    **No image part, and that is deliberate.** `write` sends the competitor
+    post's own picture to the model as vision input; this does not, matching the
+    old app, whose regenerate sent `buildDraftContext(draft)` and never an image
+    (`facebookDraftRegenerateService.ts`). The picture is not lost by leaving it
+    out: `keeping` puts the other two fields in the prompt verbatim, and those
+    were written while the model could see it, so whatever the image contributed
+    to the subject is already in front of this call as prose. Sending it again
+    would buy a CDN fetch and vision tokens on every press of a button the
+    operator presses repeatedly, for detail the prompt already carries.
     """
     if field not in REGENERATABLE:
         raise ValueError(f"{field!r} is not a field that can be regenerated")
