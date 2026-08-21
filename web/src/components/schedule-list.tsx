@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ExternalLink, MessageSquareText } from "lucide-react";
 
 import { Empty } from "@/components/screen";
+import { MetaChip } from "@/components/meta-chip";
 import { StatusPill, type StatusTone } from "@/components/status-pill";
 import { pageToday } from "@/lib/format";
 import type { ScheduledPost } from "@/lib/types";
@@ -46,9 +47,9 @@ export function ScheduleList({ posts }: { posts: ScheduledPost[] }) {
               {rows.length} post{rows.length === 1 ? "" : "s"}
             </span>
             {rows.length < typical ? (
-              <span className="font-mono text-[11px] text-amber-600 dark:text-amber-500">
+              <MetaChip tone="warning">
                 {typical - rows.length} below the usual {typical}
-              </span>
+              </MetaChip>
             ) : null}
           </h2>
 

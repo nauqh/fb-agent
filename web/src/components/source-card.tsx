@@ -24,6 +24,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { MetaChip } from "@/components/meta-chip";
 import type { SourceKind } from "@/lib/types";
 import { chars, fullDate, metric, timeAgo } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -105,15 +106,14 @@ export function SourceCard({ selected, pending, onToggle, ...item }: SourceCardP
             <p className="flex items-center gap-1.5 truncate text-sm font-medium">
               {author ?? "Unknown"}
               {used ? (
-                <span className="shrink-0 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-normal text-muted-foreground">
-                  used
-                </span>
+                <MetaChip className="ml-0.5">used</MetaChip>
               ) : null}
             </p>
-            <p className="text-xs text-muted-foreground">
-              {KIND_LABEL[item.kind]}
-              <span className="mx-1.5">·</span>
-              {timeAgo(published_at)}
+            <p className="flex items-center gap-1.5">
+              <MetaChip>{KIND_LABEL[item.kind]}</MetaChip>
+              <span className="truncate text-xs text-muted-foreground">
+                {timeAgo(published_at)}
+              </span>
             </p>
           </div>
 
@@ -158,7 +158,9 @@ export function SourceCard({ selected, pending, onToggle, ...item }: SourceCardP
               </span>
             </span>
           ) : (
-            <span className="truncate">{hostname(url)}</span>
+            <MetaChip className="min-w-0 shrink">
+              <span className="truncate">{hostname(url)}</span>
+            </MetaChip>
           )}
         </div>
       </button>
