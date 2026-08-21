@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
 import { ThemeProvider } from "next-themes";
@@ -9,7 +9,15 @@ import { Toaster } from "@/components/ui/sonner";
 // `--font-sans` is the name globals.css maps `--font-sans` onto; naming it
 // `--font-geist-sans` here leaves that mapping pointing at nothing.
 const geistSans = Geist({ variable: "--font-sans", subsets: ["latin"] });
-const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
+
+// JetBrains Mono for the data voice: the 11px uppercase section labels, table
+// columns, ids, metrics and `tabular-nums` values — the same face polylane.com
+// sets data and code in. Every place that says `font-mono` or `tabular-nums`
+// picks this up; the UI roman stays Geist.
+const jetbrainsMono = JetBrains_Mono({
+  variable: "--font-jetbrains-mono",
+  subsets: ["latin"],
+});
 
 export const metadata: Metadata = {
   title: "fb-agent",
@@ -32,7 +40,7 @@ export default function RootLayout({
       // precisely the mismatch React would otherwise shout about. Scoped to
       // this element only; it does not silence anything below it.
       suppressHydrationWarning
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
       {/*
         Desktop is a fixed viewport: the page itself never scrolls, and each
