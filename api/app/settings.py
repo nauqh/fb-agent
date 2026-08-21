@@ -285,6 +285,8 @@ class Settings(BaseSettings):
 
     sql_echo: bool = False
     timezone: str = "Asia/Ho_Chi_Minh"
+    log_level: str = "INFO"
+    """Loguru verbosity. DEBUG turns on SQL echo and module trace spans."""
 
     @property
     def database_summary(self) -> str:

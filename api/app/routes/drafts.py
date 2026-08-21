@@ -24,6 +24,7 @@ from sqlmodel import Session, select
 
 from app import generate, media
 from app.db import get_session
+from app.log import logger
 from app.models import Draft, DraftStatus, Page, SourceItem, SourceItemBase
 from app.publish import metricool as publisher
 from app.settings import layout, settings
@@ -826,6 +827,13 @@ def publish_draft(
         raise HTTPException(status_code=502, detail=str(error)) from error
 
     draft.metricool_post_id = post_id or "queued"
+    logger.info(
+        "draft {} published → Metricool post {} (page={}, rehearsal={})",
+        draft_id,
+        draft.metricool_post_id,
+        page.name,
+        settings.metricool_publish_as_draft,
+    )
     return _save(session, draft)
 
 

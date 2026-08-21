@@ -27,6 +27,7 @@ dependencies = [
     # Metricool. Harmless on Linux, where zoneinfo prefers the system copy.
     "tzdata>=2026.1",
     "alembic>=1.19.1",
+    "loguru>=0.7",
 ]
 
 [dependency-groups]

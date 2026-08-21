@@ -8,11 +8,19 @@ is a transaction. What is left is this file.
 **This is the only thing that writes a Source Item.** Browsing does not write —
 the Cart carries items, and they become rows here, when something actually uses
 them. See docs/plan.md, "Ticking stops writing".
+
+Logging lives at the two boundaries of a run — queued and finished — never per
+step. That is the loggingsucks.com rule: a line for what changed and what it
+cost, not ten narrating the attempt. The cost that matters here is wall time,
+the writer is billed by the request, and a run's own row already records the
+outcome.
 """
 
-import httpx
+import time
 from datetime import datetime, timezone
 
+import httpx
+from loguru import logger
 from pydantic_ai.messages import BinaryImage
 from sqlmodel import Session, select
 
@@ -25,7 +33,6 @@ from app.settings import settings
 from app.sources import rss
 from app.writer import agent as writer
 from app.writer import validators
-
 
 IMAGE_INPUT_TIMEOUT = 20.0
 IMAGE_INPUT_MAX_BYTES = 4 * 1024 * 1024
@@ -85,9 +92,7 @@ def competitor_image(
     if not url:
         return None
     owned = client is None
-    client = client or httpx.Client(
-        timeout=IMAGE_INPUT_TIMEOUT, follow_redirects=True
-    )
+    client = client or httpx.Client(timeout=IMAGE_INPUT_TIMEOUT, follow_redirects=True)
     try:
         response = client.get(url, headers={"User-Agent": IMAGE_INPUT_UA})
         response.raise_for_status()
@@ -105,9 +110,7 @@ def competitor_image(
     return BinaryImage(data=response.content, media_type=media_type)
 
 
-def resolve_sources(
-    session: Session, items: list[SourceItemBase]
-) -> list[SourceItem]:
+def resolve_sources(session: Session, items: list[SourceItemBase]) -> list[SourceItem]:
     """Turn what the client sent into rows, creating only what it may create.
 
     A body is accepted only for a kind the client is allowed to author:
@@ -206,6 +209,12 @@ def start_run(
         session.add(draft)
     session.commit()
 
+    logger.info(
+        "run queued {} draft(s) across {} page(s)",
+        len(drafts),
+        len(set(page_ids)),
+    )
+
     return [draft.id for draft in drafts if draft.id is not None]
 
 
@@ -232,6 +241,7 @@ def _run_one(session: Session, draft_id: int) -> None:
     try:
         page = session.get(Page, draft.page_id)
         assert page is not None
+        started = time.perf_counter()
         source = (
             session.get(SourceItem, draft.source_item_id)
             if draft.source_item_id
@@ -300,8 +310,17 @@ def _run_one(session: Session, draft_id: int) -> None:
         draft.error = None
         draft.status = DraftStatus.REVIEW
         _progress(session, draft, "done", 100)
+        logger.info(
+            "draft {} → review in {:.1f}s (page={})",
+            draft_id,
+            time.perf_counter() - started,
+            page.name if page else draft_id,
+        )
 
     except Exception as error:  # noqa: BLE001 — the row is where a failure goes
+        logger.error(
+            "draft {} failed: {}", draft_id, f"{type(error).__name__}: {error}"
+        )
         draft.error = f"{type(error).__name__}: {error}"[:500]
         draft.status = DraftStatus.FAILED
         draft.progress_step = "failed"

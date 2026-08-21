@@ -14,6 +14,7 @@ from sqlmodel import Session
 
 from app import generate
 from app.db import get_engine, init_db
+from app.log import logger, setup_logging
 from app.routes import (
     competitors,
     config,
@@ -30,13 +31,14 @@ from app.settings import API_DIR, layout, settings
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    setup_logging()
     init_db()
     # A restart mid-run leaves rows at `generating` with nothing filling them.
     # Safe to sweep only because there is exactly one writer process.
     with Session(get_engine()) as session:
         stranded = generate.sweep_stranded(session)
     if stranded:
-        print(f"swept {stranded} draft(s) stranded by a restart")
+        logger.info("swept {} draft(s) stranded by a restart", stranded)
     yield
 
 
