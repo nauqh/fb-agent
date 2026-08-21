@@ -138,7 +138,7 @@ export function ReviewList() {
     <div className="flex flex-col gap-3">
       {/* Hugs its rows. A `flex-1` container left a tall empty bordered box
           under a two-draft queue, which read as something failing to load. */}
-      <div className="overflow-hidden rounded-lg border">
+      <div className="overflow-hidden rounded-2xl border">
         {!drafts ? (
           // `!drafts`, not `loading && !drafts` — that test drew a header row
           // over nothing while the Page scope resolved. `use-query.ts` reports
@@ -259,7 +259,7 @@ function Row({
             button opens it full size when the composite itself is the question.
             4:5 whether or not one has been drawn, so rows keep their height as
             pictures arrive. */}
-        <div className="group/thumb relative aspect-[4/5] w-[72px] overflow-hidden rounded-lg border bg-muted shadow-sm">
+        <div className="group/thumb relative aspect-[4/5] w-[72px] overflow-hidden rounded-2xl border bg-muted shadow-sm">
           {draft.composed_image_url ? (
             <>
               {/* eslint-disable-next-line @next/next/no-img-element */}

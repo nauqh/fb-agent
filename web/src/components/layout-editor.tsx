@@ -421,7 +421,7 @@ function Preview({ layout, page }: { layout: ResolvedLayout; page: Page }) {
           against — it fell back to the viewport and rendered the hook at about
           five times its real size, overflowing the card entirely. */}
       <div
-        className="relative w-full overflow-hidden rounded-lg border bg-muted [container-type:inline-size]"
+        className="relative w-full overflow-hidden rounded-2xl border bg-muted [container-type:inline-size]"
         style={{ aspectRatio: `${layout.image.width} / ${layout.image.height}` }}
       >
         {/* Stands in for the hero, and fills the *whole* card rather than only

@@ -90,7 +90,7 @@ export function SourceCard({ selected, pending, onToggle, ...item }: SourceCardP
         onClick={onToggle}
         disabled={pending}
         className={cn(
-          "group flex h-full w-full flex-col gap-3 rounded-lg border p-4 text-left transition-colors",
+          "group flex h-full w-full flex-col gap-3 rounded-2xl border p-4 text-left transition-colors",
           "hover:border-foreground/25 disabled:opacity-60",
           selected && "border-gold bg-gold/[0.06] hover:border-gold",
           // Dimmed, not hidden or disabled. A post worth writing twice exists —
@@ -140,7 +140,7 @@ export function SourceCard({ selected, pending, onToggle, ...item }: SourceCardP
         </div>
 
         <div className="flex flex-1 gap-3">
-          <SourceThumbnail kind={item.kind} src={image_url} />
+          <SourceThumbnail src={image_url} />
           <p className="line-clamp-5 flex-1 text-sm leading-relaxed text-foreground/85">{text}</p>
         </div>
 
@@ -204,8 +204,8 @@ export function SourceCard({ selected, pending, onToggle, ...item }: SourceCardP
                 width: the source is a 130px thumbnail (see `SourceThumbnail`)
                 and upscaling it four times only makes the blur bigger. */}
             {image_url ? (
-              <div className="flex justify-center rounded-md bg-muted p-3">
-                <SourceThumbnail kind={item.kind} src={image_url} className="size-32 rounded" />
+              <div className="flex justify-center rounded-2xl bg-muted p-3">
+                <SourceThumbnail src={image_url} className="size-32 rounded-2xl" />
               </div>
             ) : null}
 
@@ -250,8 +250,8 @@ export function SourceCard({ selected, pending, onToggle, ...item }: SourceCardP
 }
 
 /**
- * The post's picture, or a placeholder. One size, every kind, image or not —
- * that is what keeps a row of cards from going ragged.
+ * The post's picture, or a broken-image mark when one was expected and failed.
+ * Nothing is drawn when the post never had an image — the text row takes the width.
  *
  * **Small, but no longer tiny.** Metricool serves a 130×130 thumbnail and
  * nothing larger — `stp=dst-jpg_s130x130_tt6`, and the URL signature covers that
@@ -266,10 +266,8 @@ export function SourceCard({ selected, pending, onToggle, ...item }: SourceCardP
  * turning. RSS and tweet images are full size and cropped square, so they only
  * get sharper.
  *
- * The placeholder is the kind's glyph rather than a broken-image mark: most
- * imageless items are RSS entries that simply never had a picture, and marking
- * those as damaged is both wrong and, at four per screen, loud. A picture that
- * loaded and *failed* still gets `ImageOff`, because that one is damage.
+ * A picture that loaded and *failed* still gets `ImageOff`, because that one is
+ * damage — as opposed to a post that never had a picture, which shows nothing.
  *
  * A bigger image does exist — the post's own `og:image` is 600×750 and is
  * readable without auth — but that is one extra request against facebook.com
@@ -288,11 +286,9 @@ export function SourceCard({ selected, pending, onToggle, ...item }: SourceCardP
  * in `remotePatterns`, and it would cache a URL built to expire.
  */
 function SourceThumbnail({
-  kind,
   src,
   className,
 }: {
-  kind: SourceKind;
   src?: string | null;
   className?: string;
 }) {
@@ -308,16 +304,21 @@ function SourceThumbnail({
     setFailed(false);
   }
 
-  // An inset ring, not a border: the tile then measures exactly 88px whether or
-  // not it holds a photo, and a pale photo on a pale card still gets an edge.
-  const tile = "size-22 shrink-0 rounded-md inset-ring inset-ring-foreground/10";
+  // No picture at all — nothing to show, so no tile. A placeholder here made
+  // a post that never had an image look like one whose image had broken, and at
+  // four imageless items per screen that is a row of silent damage. Omitting
+  // the tile entirely lets the text take the width instead.
+  const tile = "size-22 shrink-0 rounded-2xl inset-ring inset-ring-foreground/10";
 
-  if (!src || failed) {
-    const Glyph = failed ? ImageOff : KIND_GLYPH[kind];
+  if (!src) return null;
+
+  if (failed) {
+    // A picture that loaded and failed is a broken tile, not an absent one —
+    // `ImageOff` marks real damage rather than a post that simply had no image.
     return (
       <div className={cn(tile, "flex items-center justify-center bg-muted", className)}>
-        <Glyph className="size-5.5 text-muted-foreground/45" aria-hidden />
-        <span className="sr-only">{failed ? "Image unavailable" : "No image"}</span>
+        <ImageOff className="size-5.5 text-muted-foreground/45" aria-hidden />
+        <span className="sr-only">Image unavailable</span>
       </div>
     );
   }

@@ -168,15 +168,15 @@ function Performance() {
       </div>
 
       {loading || !data ? (
-        <Loading label="Reading Metricool" className="h-64 rounded-lg border" />
+        <Loading label="Reading Metricool" className="h-64 rounded-2xl border" />
       ) : data.length === 0 ? (
-        <p className="rounded-lg border border-dashed p-10 text-center text-sm text-muted-foreground">
+        <p className="rounded-2xl border border-dashed p-10 text-center text-sm text-muted-foreground">
           Nothing published in this window.
         </p>
       ) : (
         <>
           <Totals posts={data} days={days} />
-          <div className="overflow-hidden rounded-lg border bg-card">
+          <div className="overflow-hidden rounded-2xl border bg-card">
             {/* The rows keep their own box so `last:border-0` still finds a
                 last row. Hung directly off the outer element, the pager became
                 the last child and every row kept a rule that then doubled up
@@ -223,7 +223,7 @@ function Totals({ posts, days }: { posts: PostStats[]; days: number }) {
   const engagement = posts.reduce((sum, post) => sum + post.engagement, 0);
 
   return (
-    <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border bg-border sm:grid-cols-4">
+    <div className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border bg-border sm:grid-cols-4">
       <Tile index="01" label="Posts" value={metric(posts.length)} note={`last ${days} days`} />
       <Tile index="02" label="Total reach" value={metric(reach)} note="impressions" />
       <Tile index="03" label="Engagement" value={metric(engagement)} note="reactions + comments + shares" />
@@ -422,7 +422,7 @@ function PostRow({
 function Thumbnail({ src }: { src: string | null }) {
   if (!src) {
     return (
-      <div className="flex aspect-4/5 w-28 shrink-0 items-center justify-center rounded-lg border bg-muted">
+      <div className="flex aspect-4/5 w-28 shrink-0 items-center justify-center rounded-2xl border bg-muted">
         <BarChart3 className="size-5 text-muted-foreground/50" />
       </div>
     );
@@ -434,7 +434,7 @@ function Thumbnail({ src }: { src: string | null }) {
     <img
       src={src}
       alt=""
-      className="aspect-4/5 w-28 shrink-0 rounded-lg border object-cover"
+      className="aspect-4/5 w-28 shrink-0 rounded-2xl border object-cover"
     />
   );
 }
@@ -524,11 +524,11 @@ function Saved() {
 
   if (error) return <QueryError error={error} onRetry={refresh} />;
   if (loading || !data)
-    return <Loading label="Loading saved posts" className="h-64 rounded-lg border" />;
+    return <Loading label="Loading saved posts" className="h-64 rounded-2xl border" />;
 
   if (data.length === 0) {
     return (
-      <p className="rounded-lg border border-dashed p-10 text-center text-sm text-muted-foreground">
+      <p className="rounded-2xl border border-dashed p-10 text-center text-sm text-muted-foreground">
         Nothing saved yet. Keep a post from the Performance tab and it stays
         here — including after it drops out of the reporting window.
       </p>
@@ -556,7 +556,7 @@ function Saved() {
         sends the story back through the writer for a fresh one.
       </p>
 
-      <div className="overflow-hidden rounded-lg border bg-card">
+      <div className="overflow-hidden rounded-2xl border bg-card">
         {/* The rows keep their own box so `last:border-0` still finds a last
             row — see the same note in Performance. */}
         <div className="px-2">

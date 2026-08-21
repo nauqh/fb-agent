@@ -52,7 +52,7 @@ export function ScheduleList({ posts }: { posts: ScheduledPost[] }) {
             ) : null}
           </h2>
 
-          <div className="divide-y overflow-hidden rounded-lg border">
+          <div className="divide-y overflow-hidden rounded-2xl border">
             {rows.map((post) => (
               <Row key={post.id} post={post} />
             ))}
@@ -182,7 +182,7 @@ function Thumb({ src }: { src: string | null }) {
   if (!src || broken) return null;
 
   return (
-    <div className="aspect-square w-12 shrink-0 overflow-hidden rounded-md border bg-muted">
+    <div className="aspect-square w-12 shrink-0 overflow-hidden rounded-2xl border bg-muted">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={src}

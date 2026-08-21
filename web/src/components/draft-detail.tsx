@@ -467,7 +467,7 @@ export function DraftDetail({
    */
   const picture = published ? (
     <div
-      className="relative overflow-hidden rounded-md border bg-black"
+      className="relative overflow-hidden rounded-2xl border bg-black"
       style={{ aspectRatio: `${layout.image.width} / ${layout.image.height}` }}
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -519,7 +519,7 @@ export function DraftDetail({
       <SourceLine draft={draft} />
 
       {draft.error ? (
-        <div className="space-y-2 rounded-md border border-destructive/40 bg-destructive/5 p-3">
+        <div className="space-y-2 rounded-2xl border border-destructive/40 bg-destructive/5 p-3">
           <p className="flex items-center gap-1.5 text-sm font-medium text-destructive">
             <TriangleAlert className="size-4" />
             Generation stopped
@@ -534,7 +534,7 @@ export function DraftDetail({
           made a working repost look like a broken draft. Same strip, honest
           heading: nothing about a repost has failed. */}
       {draft.warnings.length > 0 ? (
-        <div className="space-y-1.5 rounded-md border border-gold/40 bg-gold/[0.07] p-3">
+        <div className="space-y-1.5 rounded-2xl border border-gold/40 bg-gold/[0.07] p-3">
           <p className="flex items-center gap-1.5 text-sm font-medium">
             <AlertTriangle className="size-4" />
             {published
@@ -666,7 +666,7 @@ export function DraftDetail({
               right place for "this Page is about exercise form" — is on the
               Settings screen and applies to every draft after it. */}
           {form && !published ? (
-            <div className="space-y-2 rounded-md border p-3">
+            <div className="space-y-2 rounded-2xl border p-3">
               <div className="flex items-baseline justify-between">
                 <Label htmlFor="image-prompt" className="text-xs">
                   Hero prompt
@@ -729,7 +729,7 @@ export function DraftDetail({
               Null follows the Page, so a draft nobody has touched still moves
               when the Page's form changes. Once set it is this draft's. */}
           {form ? (
-            <div className="space-y-2 rounded-md border p-3">
+            <div className="space-y-2 rounded-2xl border p-3">
               <div className="flex items-baseline justify-between">
                 <Label className="text-xs">Card form</Label>
                 <span className="text-[11px] text-muted-foreground">
@@ -772,7 +772,7 @@ export function DraftDetail({
           {/* The inset sits under the picture rather than in the copy column:
               it is the one control whose whole feedback is the image, and the
               slider is useless without it in view. */}
-          <div className="space-y-2 rounded-md border p-3">
+          <div className="space-y-2 rounded-2xl border p-3">
             <div className="flex items-baseline justify-between">
               <Label className="text-xs">Circular inset</Label>
               <span className="text-[11px] tabular-nums text-muted-foreground">
@@ -1599,7 +1599,7 @@ function SourceLine({ draft }: { draft: Draft }) {
 
   const Glyph = KIND_GLYPH[source.kind];
   return (
-    <div className="space-y-1.5 rounded-md border bg-muted/40 p-3">
+    <div className="space-y-1.5 rounded-2xl border bg-muted/40 p-3">
       <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
         <Glyph className="size-3.5 shrink-0" />
         {KIND_LABEL[source.kind]}
@@ -1637,7 +1637,7 @@ function DetailLoading() {
 
 function Generating({ draft }: { draft: Draft }) {
   return (
-    <div className="flex min-h-72 items-center justify-center rounded-lg border border-dashed p-10">
+    <div className="flex min-h-72 items-center justify-center rounded-2xl border border-dashed p-10">
       <div className="w-full max-w-sm space-y-3">
         <div className="flex items-center justify-end text-sm">
           <span className="tabular-nums text-muted-foreground">{draft.progress_pct}%</span>
@@ -1703,7 +1703,7 @@ function clamp01(value: number): number {
 
 function Panel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="rounded-lg border border-dashed p-10 text-center text-sm text-muted-foreground">
+    <div className="rounded-2xl border border-dashed p-10 text-center text-sm text-muted-foreground">
       {children}
     </div>
   );

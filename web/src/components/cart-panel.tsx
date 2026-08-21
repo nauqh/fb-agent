@@ -118,7 +118,7 @@ export function CartPanel() {
   // No fetch for the items: the Cart holds them, so there is nothing to
   // resolve. This used to call GET /sources?ids= to turn ids back into rows.
   return (
-    <aside className="flex shrink-0 items-center gap-3 rounded-lg border p-2">
+    <aside className="flex shrink-0 items-center gap-3 rounded-2xl border p-2">
       {cart.count === 0 ? (
         // The topic box lived here and is on `/manual` now — a move at the
         // client's request, not a copy, so there is one place to type a topic.

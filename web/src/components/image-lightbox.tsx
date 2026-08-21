@@ -59,7 +59,7 @@ export function ViewFullButton({ src, alt }: { src: string; alt: string }) {
           <img
             src={src}
             alt={alt}
-            className="max-h-[94vh] w-auto rounded-lg shadow-2xl"
+            className="max-h-[94vh] w-auto rounded-2xl shadow-2xl"
           />
         </DialogContent>
       </Dialog>

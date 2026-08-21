@@ -196,7 +196,7 @@ function CompetitorPool({
     // subject, and ringing all of it in red says "everything here is wrong"
     // rather than "you have eight slots left" — the warning belongs on the
     // figure and on the empty end of the bar, which is where it is.
-    <section className="overflow-hidden rounded-xl border bg-card">
+    <section className="overflow-hidden rounded-2xl border bg-card">
       <div className="p-5 pb-4">
         <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2">
           <div className="min-w-0">
@@ -285,13 +285,13 @@ function CompetitorPool({
         <AddToPool />
 
         {error ? (
-          <p className="rounded-lg border border-dashed p-4 text-[13px] text-destructive">
+          <p className="rounded-2xl border border-dashed p-4 text-[13px] text-destructive">
             {error}
           </p>
         ) : loading || !rows ? (
           <Loading label="Reading Metricool" className="h-64" />
         ) : shown.length === 0 ? (
-          <p className="rounded-lg border border-dashed p-6 text-center text-[13px] text-muted-foreground">
+          <p className="rounded-2xl border border-dashed p-6 text-center text-[13px] text-muted-foreground">
             Nothing matches that filter.
           </p>
         ) : (

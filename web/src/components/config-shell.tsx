@@ -187,7 +187,7 @@ export function Pane({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-lg border bg-card">
+    <section className="rounded-2xl border bg-card">
       <div className="flex items-start justify-between gap-6 border-b px-5 py-4">
         <div className="min-w-0">
           <h2 className="text-base font-semibold tracking-tight">{title}</h2>

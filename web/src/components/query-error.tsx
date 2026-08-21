@@ -34,7 +34,7 @@ export function QueryError({
   return (
     <div
       role="alert"
-      className={`flex items-start gap-3 rounded-lg border border-destructive/40 bg-destructive/[0.06] p-4 ${className ?? ""}`}
+      className={`flex items-start gap-3 rounded-2xl border border-destructive/40 bg-destructive/[0.06] p-4 ${className ?? ""}`}
     >
       <AlertCircle className="mt-0.5 size-4 shrink-0 text-destructive" />
       <div className="min-w-0 flex-1 space-y-1">

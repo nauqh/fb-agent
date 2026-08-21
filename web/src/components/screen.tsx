@@ -43,7 +43,7 @@ export function ScreenHeader({
 
 export function Empty({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-72 items-center justify-center rounded-lg border border-dashed p-10 text-center text-sm text-muted-foreground">
+    <div className="flex min-h-72 items-center justify-center rounded-2xl border border-dashed p-10 text-center text-sm text-muted-foreground">
       {children}
     </div>
   );

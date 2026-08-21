@@ -306,7 +306,7 @@ function Feeds({
         <Loading label="Loading feeds" className="h-40" />
       ) : (
         <div className="space-y-3">
-          <div className="divide-y rounded-lg border">
+          <div className="divide-y rounded-2xl border">
             <AddFeed pageId={pageId} />
             {sources.feeds.map((feed) => (
               // The row opens the feed itself. Checking a feed means looking at
@@ -442,7 +442,7 @@ function Competitors({
       {error ? (
         // This section fails alone. Everything else on the screen is a local
         // file or our own database and cannot.
-        <p className="rounded-lg border border-dashed p-4 text-[13px] text-destructive">
+        <p className="rounded-2xl border border-dashed p-4 text-[13px] text-destructive">
           {error}
         </p>
       ) : loading || !rows ? (
@@ -876,7 +876,7 @@ function WritingLimits({ page }: { page: Page }) {
               ({ field, label }) => (
                 <div
                   key={field}
-                  className="flex items-center justify-between gap-3 rounded-md border px-3 py-2"
+                  className="flex items-center justify-between gap-3 rounded-2xl border px-3 py-2"
                 >
                   <Label className="text-[13px] font-normal text-muted-foreground">
                     {label}
@@ -1096,7 +1096,7 @@ function PromptEditor({ pageId, file }: { pageId: number; file: PromptFile }) {
         </>
       ) : (
         <>
-          <pre className="max-h-96 overflow-auto rounded-lg border bg-muted/40 p-3 font-mono text-[13px] whitespace-pre-wrap">
+          <pre className="max-h-96 overflow-auto rounded-2xl border bg-muted/40 p-3 font-mono text-[13px] whitespace-pre-wrap">
             {file.body}
           </pre>
           <p className="text-[13px] text-muted-foreground">

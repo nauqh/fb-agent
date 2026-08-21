@@ -28,7 +28,7 @@ export function Card({
   children: React.ReactNode;
 }) {
   return (
-    <section className={cn("rounded-xl border bg-card p-5", className)}>
+    <section className={cn("rounded-2xl border bg-card p-5", className)}>
       <div className="flex items-start justify-between gap-4 pb-4">
         <div className="min-w-0">
           {/* Full-strength text, never muted. A card's title is the one thing on

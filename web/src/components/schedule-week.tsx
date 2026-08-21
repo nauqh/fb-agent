@@ -65,7 +65,7 @@ export function ScheduleWeek({
           left, so there is never anything below the fold. Horizontal stays
           scrollable because seven columns have a floor a narrow window cannot
           honour, and squeezing them further makes the chips unreadable. */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-x-auto overflow-y-hidden rounded-xl border">
+      <div className="flex min-h-0 flex-1 flex-col overflow-x-auto overflow-y-hidden rounded-2xl border">
         <div className="flex min-h-0 min-w-[860px] flex-1 flex-col">
           {/* Day headers */}
           <div className="grid shrink-0 grid-cols-[4rem_repeat(7,minmax(0,1fr))] border-b bg-muted/30">

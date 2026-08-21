@@ -151,7 +151,7 @@ function WriteItYourself() {
             heroSrc={preview}
           />
         ) : (
-          <Loading className="aspect-896/1120 rounded-md border" />
+          <Loading className="aspect-896/1120 rounded-2xl border" />
         )}
 
         <input

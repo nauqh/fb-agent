@@ -188,7 +188,7 @@ export function ComposedImage({
         // Container query unit `cqw` is what keeps the type scaling with the
         // card instead of the viewport — the panel must look the same in the
         // 180px list thumbnail and the 380px detail view.
-        "@container relative flex flex-col overflow-hidden rounded-md border bg-black",
+        "@container relative flex flex-col overflow-hidden rounded-2xl border bg-black",
         className,
       )}
       style={{ aspectRatio: `${layout.image.width} / ${layout.image.height}` }}

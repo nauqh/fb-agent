@@ -278,7 +278,7 @@ function EmptyGrid({
   // against a stale server and the screen went blank again.
   if (error !== null) {
     return (
-      <div className="rounded-lg border border-dashed p-8 text-center">
+      <div className="rounded-2xl border border-dashed p-8 text-center">
         <p className="text-sm font-medium">No competitor posts to show</p>
       </div>
     );
@@ -296,7 +296,7 @@ function EmptyGrid({
   const hiddenByAssignment = reach.assigned > 0 && reach.own_set_posts > 0;
 
   return (
-    <div className="rounded-lg border border-dashed p-8 text-center">
+    <div className="rounded-2xl border border-dashed p-8 text-center">
       <p className="text-sm font-medium">
         {nothingReaches
           ? "No competitors reach this Page yet"
@@ -387,7 +387,7 @@ function RssTab() {
 
       {/* A feed that rots goes unnoticed unless its failure is on screen. */}
       {data?.failures.length ? (
-        <div className="mb-3 flex flex-col gap-1 rounded-md border border-gold/40 bg-gold/[0.07] px-3 py-2 text-xs">
+        <div className="mb-3 flex flex-col gap-1 rounded-2xl border border-gold/40 bg-gold/[0.07] px-3 py-2 text-xs">
           <span className="flex items-center gap-1.5 font-medium">
             <AlertTriangle className="size-3.5" />
             {data.failures.length} feed did not answer
@@ -462,7 +462,7 @@ function TweetsTab() {
       </form>
 
       {found.length === 0 ? (
-        <p className="rounded-lg border border-dashed p-10 text-center text-sm text-muted-foreground">
+        <p className="rounded-2xl border border-dashed p-10 text-center text-sm text-muted-foreground">
           Paste a tweet URL. There is no feed to browse — a tweet is one lookup at a time.
         </p>
       ) : (
