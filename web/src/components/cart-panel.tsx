@@ -43,6 +43,12 @@ export function CartPanel() {
   const router = useRouter();
   const [running, setRunning] = useState(false);
 
+  // How many chips the floating dock shows before folding the rest into a
+  // count. The dock is pinned to the corner and must stay one row; a long
+  // scroll inside it is invisible - a chip grows in place, and anything past
+  // this number is displaced rather than scrolled off-screen.
+  const MAX_CHIPS = 4;
+
   // The switcher's Page, not `pages[0]`. Generate writes `draft.page_id`, so
   // this is the one place where reading the wrong Page produces a row that
   // looks right and is not.
@@ -115,10 +121,13 @@ export function CartPanel() {
     }
   }
 
-  // No fetch for the items: the Cart holds them, so there is nothing to
-  // resolve. This used to call GET /sources?ids= to turn ids back into rows.
+  // The dock mounts below the source grids and pins itself to the bottom
+  // corner rather than stretching the grid's full width. A full-width bar read
+  // as part of the grid and competed with it; a compact card under your cursor
+  // is the e-commerce pattern - always in view, never spanning the content it
+  // sits over. Muted when empty, dark when there is a run to start.
   return (
-    <aside className="flex shrink-0 items-center gap-3 rounded-2xl border p-2">
+    <aside className="fixed bottom-4 right-4 z-40 flex items-center gap-2.5 rounded-2xl border bg-card px-2.5 py-1.5 shadow-md">
       {cart.count === 0 ? (
         // The topic box lived here and is on `/manual` now — a move at the
         // client's request, not a copy, so there is one place to type a topic.
@@ -134,22 +143,18 @@ export function CartPanel() {
         </p>
       ) : (
         <>
-          <span className="shrink-0 pl-1 text-sm font-medium">
-            Cart <span className="text-muted-foreground">· {cart.count}</span>
-          </span>
-
           {/* The ticked items, as chips. A row rather than the column's stacked
               list: the dock is one row tall, and the author is what identifies
               a Source Item at a glance — the body text needed two lines to say
               less. Scrolls sideways rather than wrapping, so the dock's height
               cannot depend on how many are ticked. */}
-          <ul className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto">
-            {cart.items.map((item) => (
+          <ul className="flex min-w-0 flex-1 items-center gap-1.5">
+            {cart.items.slice(0, MAX_CHIPS).map((item) => (
               <li
                 key={sourceKey(item)}
                 className="flex shrink-0 items-center gap-1 rounded-full border bg-muted/40 py-1 pr-1 pl-2.5"
               >
-                <span className="max-w-40 truncate text-xs" title={item.text}>
+                <span className="max-w-28 truncate text-xs" title={item.text}>
                   {item.author}
                 </span>
                 <button
@@ -162,6 +167,14 @@ export function CartPanel() {
                 </button>
               </li>
             ))}
+            {cart.count > MAX_CHIPS ? (
+              <li
+                title={`${cart.items.slice(MAX_CHIPS).map((i) => i.author).join(", ")}`}
+                className="flex shrink-0 items-center gap-1 rounded-full border border-dashed bg-card py-1 px-2"
+              >
+                <span className="text-xs tabular-nums">+{cart.count - MAX_CHIPS}</span>
+              </li>
+            ) : null}
           </ul>
 
           {/* Beside Generate, not in a settings screen: it changes what the
@@ -227,9 +240,7 @@ export function CartPanel() {
         ) : (
           <Sparkles className="size-4" />
         )}
-        {draftCount === 0
-          ? "Generate"
-          : `Generate ${draftCount} draft${draftCount === 1 ? "" : "s"}`}
+        Generate
       </Button>
     </aside>
   );
