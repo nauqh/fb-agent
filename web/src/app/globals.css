@@ -126,42 +126,57 @@
 }
 
 .dark {
-  /* Charcoal black ground, light-gray text, gray hairlines — the client's
-     palette. Achromatic gateways keep the gold accent sole. */
-  --background: #121212;
-  --foreground: #e0e0e0;
-  --card: #1a1a1a;
-  --card-foreground: #e0e0e0;
-  --popover: #1a1a1a;
-  --popover-foreground: #e0e0e0;
-  --primary: #e0e0e0;
-  --primary-foreground: #121212;
-  --secondary: #1a1a1a;
-  --secondary-foreground: #e0e0e0;
-  --muted: #1a1a1a;
-  --muted-foreground: #b0b0b0;
-  --accent: #888888;
-  --accent-foreground: #e0e0e0;
-  --destructive: #ff7070;
-  --border: #444444;
-  --input: #444444;
-  --ring: #444444;
+  /* A charcoal grey ramp, rebuilt on the layering the reference dark themes
+     share (shadcn's shipped dark, Linear, Radix): the ground darkest, each
+     surface one step up so panels read as elevated rather than invisible, and
+     hairlines as translucent white instead of solid grey. The client's identity
+     is kept — achromatic, gold the only warm accent — but the flat mid-grey
+     of the first pass (card #1a1a1a on background #121212, #444 borders) read
+     as murky: no depth and a grey line on every frame.
+
+     The primary is raised toward light with a dark label, the way Linear and
+     shadcn make a default button — it is the field the eye lands on, so it
+     should be the lightest thing, not the same grey as everything else. 
+     Muted sits one notch down for hint text and metadata. */
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.95 0 0);
+  --card: oklch(0.21 0 0);
+  --card-foreground: oklch(0.95 0 0);
+  --popover: oklch(0.235 0 0);
+  --popover-foreground: oklch(0.95 0 0);
+  /* The field: light fill, dark label — shadcn dark’s default button. */
+  --primary: oklch(0.92 0 0);
+  --primary-foreground: oklch(0.21 0 0);
+  --secondary: oklch(0.25 0 0);
+  --secondary-foreground: oklch(0.95 0 0);
+  --muted: oklch(0.25 0 0);
+  --muted-foreground: oklch(0.72 0 0);
+  /* The single accent, kept gray for the brand; lightened so it stands off
+     the background rather than washing into it, with a dark label on top. */
+  --accent: oklch(0.74 0 0);
+  --accent-foreground: oklch(0.2 0 0);
+  --destructive: oklch(0.71 0.2 22);
+  /* Hairlines: white at low alpha, not a solid grey — the one change that
+      makes a dark theme read clean instead of dusty. */
+  --border: oklch(1 0 0 / 14%);
+  --input: oklch(1 0 0 / 16%);
+  --ring: oklch(1 0 0 / 26%);
   --gold: #f5c542;
-  --gold-foreground: #121212;
+  --gold-foreground: oklch(0.2 0 0);
   --panel: #000000;
-  --chart-1: #e0e0e0;
-  --chart-2: #b0b0b0;
-  --chart-3: #888888;
-  --chart-4: #666666;
-  --chart-5: #444444;
-  --sidebar: #1a1a1a;
-  --sidebar-foreground: #e0e0e0;
-  --sidebar-primary: #888888;
-  --sidebar-primary-foreground: #121212;
-  --sidebar-accent: #888888;
-  --sidebar-accent-foreground: #e0e0e0;
-  --sidebar-border: #444444;
-  --sidebar-ring: #444444;
+  --chart-1: oklch(0.95 0 0);
+  --chart-2: oklch(0.8 0 0);
+  --chart-3: oklch(0.65 0 0);
+  --chart-4: oklch(0.5 0 0);
+  --chart-5: oklch(0.35 0 0);
+  --sidebar: oklch(0.18 0 0);
+  --sidebar-foreground: oklch(0.95 0 0);
+  --sidebar-primary: oklch(0.86 0 0);
+  --sidebar-primary-foreground: oklch(0.18 0 0);
+  --sidebar-accent: oklch(0.26 0 0);
+  --sidebar-accent-foreground: oklch(0.95 0 0);
+  --sidebar-border: oklch(1 0 0 / 12%);
+  --sidebar-ring: oklch(1 0 0 / 24%);
 }
 
 @layer base {
