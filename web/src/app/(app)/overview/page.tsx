@@ -65,14 +65,24 @@ export default function OverviewScreen() {
     { enabled: pageId !== null },
   );
 
+  // Which tab is open, held here rather than left to `defaultValue`, because
+  // the summary strip beside the switcher belongs to Performance alone: its
+  // totals and its 7/30/60 window say nothing about the saved list, and left
+  // on screen over the Saved tab they read as that tab's numbers.
+  const [tab, setTab] = useState("performance");
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <ScreenHeader
-        title="Overview"
-        hint="How this Page's posts did, and the ones worth keeping."
-      />
+      {/* No hint line. "How this Page's posts did, and the ones worth keeping"
+          is what the two tabs directly below already say, and no other screen
+          carries one. */}
+      <ScreenHeader title="Overview" />
 
-      <Tabs defaultValue="performance" className="flex min-h-0 flex-1 flex-col gap-4">
+      <Tabs
+        value={tab}
+        onValueChange={setTab}
+        className="flex min-h-0 flex-1 flex-col gap-4"
+      >
         {/* The one pinned row: tab switcher, summary strip, then the window
             pill. Together they are the header; nothing above the post list is
             worth a second line. `-mr-3 pr-3` extends the band across the
@@ -85,7 +95,7 @@ export default function OverviewScreen() {
               <TabsTrigger value="saved">Saved</TabsTrigger>
             </TabsList>
 
-            {!data || data.length === 0 ? null : (
+            {tab !== "performance" || !data || data.length === 0 ? null : (
               <>
                 {/* The totals, on the same line as the tabs rather than below
                     them — both are context over the list, neither needs its own
@@ -93,7 +103,6 @@ export default function OverviewScreen() {
                     its own. */}
                 <Totals
                   posts={data}
-                  days={days}
                   hint="Read live from Metricool, best first. The newest posts can still be catching up — their figures lag Facebook by about a day."
                 />
                 {/* 7 / 30 / 60, and 30 by default. An earlier version defaulted
@@ -220,8 +229,6 @@ function Performance({
   // clicked. The stored `selectedId` survives a refresh so a save (which re-runs
   // the query) does not jump the pane to row one mid-read.
   const selected = shown?.find((post) => post.post_id === selectedId) ?? shown?.[0] ?? null;
-  const selectedRank =
-    selected === null ? 0 : (safePage - 1) * QUEUE_PAGE_SIZE + shown!.indexOf(selected) + 1;
 
   async function keep(post: PostStats) {
     if (pageId === null) return;
@@ -281,7 +288,6 @@ function Performance({
 
           <DetailPane
             post={selected}
-            rank={selectedRank}
             busy={selected !== null && busy === selected.post_id}
             onSave={selected === null ? undefined : () => void keep(selected)}
           />
@@ -298,10 +304,14 @@ function Performance({
  * band of them — which pushed the first post a long scroll below the fold and
  * made the permanent header read as the actual content. An Overview is opened
  * for the posts; the totals are the context, not the feature. So they are now a
- * single mono strip: the same four numbers, at the height of one line, pinned
+ * single mono strip: the same numbers, at the height of one line, pinned
  * beside the pill so the post list starts almost immediately.
+ *
+ * Three now, not four. "11.7K best" was the first row of the list it sits on
+ * top of, and "228 posts · 30d" repeated the window off the pill two controls
+ * to its right — both were the same figure said twice on one line.
  */
-function Totals({ posts, days, hint }: { posts: PostStats[]; days: number; hint?: string }) {
+function Totals({ posts, hint }: { posts: PostStats[]; hint?: string }) {
   const reach = posts.reduce((sum, post) => sum + post.impressions, 0);
   const engagement = posts.reduce((sum, post) => sum + post.engagement, 0);
 
@@ -312,7 +322,7 @@ function Totals({ posts, days, hint }: { posts: PostStats[]; days: number; hint?
     >
       <span>
         <strong className="font-medium text-foreground">{metric(posts.length)}</strong>{" "}
-        posts · {days}d
+        posts
       </span>
       <span>
         <strong className="font-medium text-foreground">{metric(reach)}</strong> reach
@@ -320,12 +330,6 @@ function Totals({ posts, days, hint }: { posts: PostStats[]; days: number; hint?
       <span>
         <strong className="font-medium text-foreground">{metric(engagement)}</strong>{" "}
         engagement
-      </span>
-      <span>
-        <strong className="font-medium text-foreground">
-          {metric(posts[0]?.engagement ?? 0)}
-        </strong>{" "}
-        best
       </span>
     </div>
   );
@@ -413,26 +417,19 @@ function PostRow({
  */
 function DetailPane({
   post,
-  rank,
   busy,
   onSave,
 }: {
   post: PostStats | null;
-  rank: number;
   busy: boolean;
   onSave?: () => void;
 }) {
   return (
+    // No "POST DETAIL" header bar. It labelled a pane whose content — a
+    // picture, a headline and four metrics — is not mistakable for anything
+    // else, and the `#3` beside it was the rank already printed on the row that
+    // is highlighted directly to its left.
     <div className="flex flex-col overflow-hidden rounded-2xl border bg-card">
-      <div className="flex items-center justify-between gap-3 border-b px-4 py-3">
-        <p className="font-mono text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
-          Post detail
-        </p>
-        <span className="font-mono text-[11px] text-muted-foreground/70">
-          {post ? `#${rank}` : ""}
-        </span>
-      </div>
-
       {post ? (
         <>
         <div className="flex gap-4 p-4">
@@ -463,7 +460,8 @@ function DetailPane({
             <DetailStat label="Reactions" value={metric(post.reactions)} />
             <DetailStat label="Comments" value={metric(post.comments)} />
             <DetailStat label="Shares" value={metric(post.shares)} />
-            <DetailStat label="Reach" value={metric(post.impressions)} sub="impressions" />
+            {/* "impressions" under Reach said the same word twice. */}
+            <DetailStat label="Reach" value={metric(post.impressions)} />
           </div>
 
           <p className="pt-2.5 text-[11px] text-muted-foreground">
@@ -473,11 +471,14 @@ function DetailPane({
           </p>
 
           <div className="mt-3 flex items-center gap-2 border-t pt-3">
+            {/* One word each, with the sentence in the tooltip: the icons carry
+                the rest, and "Open on Facebook" / "Save for reference" made a
+                row of two buttons read as a paragraph. */}
             {post.permalink_url ? (
-              <Button variant="outline" size="sm" asChild>
+              <Button variant="outline" size="sm" asChild title="Open this post on Facebook">
                 <a href={post.permalink_url} target="_blank" rel="noreferrer">
                   <ExternalLink className="size-3.5" />
-                  Open on Facebook
+                  Open
                 </a>
               </Button>
             ) : null}
@@ -495,37 +496,26 @@ function DetailPane({
               ) : (
                 <Bookmark className="size-3.5" />
               )}
-              {post.saved ? "Saved" : "Save for reference"}
+              {post.saved ? "Saved" : "Save"}
             </Button>
           </div>
         </div>
         </>
       ) : (
-        <p className="p-4 text-sm text-muted-foreground">Select a post to read it here.</p>
+        <p className="p-4 text-sm text-muted-foreground">Select a post.</p>
       )}
     </div>
   );
 }
 
-/** One cell of the detail pane's breakdown. */
-function DetailStat({
-  label,
-  value,
-  sub,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-}) {
+/** One cell of the detail pane's breakdown: a label and a number, nothing else. */
+function DetailStat({ label, value }: { label: string; value: string }) {
   return (
     <div className="bg-card px-3 py-2.5">
       <p className="font-mono text-[10px] tracking-[0.12em] text-muted-foreground uppercase">
         {label}
       </p>
       <p className="pt-0.5 text-xl font-semibold tabular-nums">{value}</p>
-      {sub ? (
-        <p className="font-mono text-[10px] text-muted-foreground/70">{sub}</p>
-      ) : null}
     </div>
   );
 }
@@ -657,8 +647,7 @@ function Saved() {
   if (data.length === 0) {
     return (
       <p className="rounded-2xl border border-dashed p-10 text-center text-sm text-muted-foreground">
-        Nothing saved yet. Keep a post from the Performance tab and it stays
-        here — including after it drops out of the reporting window.
+        Nothing saved yet. Keep a post from Performance and it stays here.
       </p>
     );
   }
@@ -681,14 +670,11 @@ function Saved() {
   const selected = shown.find((saved) => saved.id === selectedId) ?? shown[0] ?? null;
 
   return (
+    // No standing paragraph above the list. It explained Repost and Write
+    // again, which are two labelled buttons carrying that same sentence as
+    // their tooltip, and warned that the stats are a snapshot — now the
+    // tooltip on the stat row that the warning is about.
     <div className="flex flex-col gap-3">
-      <p className="text-xs text-muted-foreground">
-        The numbers below are what each post had scored when it was saved, not a
-        live figure. <strong className="font-medium text-foreground">Repost</strong>{" "}
-        queues the original caption and picture; <strong className="font-medium text-foreground">Write again</strong>{" "}
-        sends the story back through the writer for a fresh one.
-      </p>
-
       <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,5fr)_minmax(0,4fr)]">
         <div className="overflow-hidden rounded-2xl border bg-card">
           {/* The rows keep their own box so `last:border-0` still finds a last
@@ -782,13 +768,8 @@ function SavedDetailPane({
   onRemove?: () => void;
 }) {
   return (
+    // No header bar, as on the Performance pane.
     <div className="flex flex-col overflow-hidden rounded-2xl border bg-card">
-      <div className="flex items-center justify-between gap-3 border-b px-4 py-3">
-        <p className="font-mono text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
-          Saved post
-        </p>
-      </div>
-
       {saved ? (
         <>
         <div className="flex gap-4 p-4">
@@ -807,11 +788,23 @@ function SavedDetailPane({
           </div>
         </div>
 
-        <div className="grid grid-cols-4 gap-px overflow-hidden rounded-xl border bg-border p-4">
+        {/* The pane's lower half, padded as one block — as on the Performance
+            pane. The `p-4` used to be on the stat grid itself, which put the
+            padding *inside* a box whose background is `bg-border`: a 16px grey
+            frame around the numbers, with the date line and the buttons below
+            it then running flush to the card's edge with no padding at all. */}
+        <div className="p-4">
+          {/* The snapshot warning is this row's tooltip rather than a line of
+              prose above the whole tab — it is only ever about these four
+              numbers. */}
+          <div
+            title="What the post had scored when it was saved, not a live figure."
+            className="grid grid-cols-4 gap-px overflow-hidden rounded-xl border bg-border"
+          >
             <DetailStat label="Reactions" value={metric(saved.reactions)} />
             <DetailStat label="Comments" value={metric(saved.comments)} />
             <DetailStat label="Shares" value={metric(saved.shares)} />
-            <DetailStat label="Reach" value={metric(saved.impressions)} sub="impressions" />
+            <DetailStat label="Reach" value={metric(saved.impressions)} />
           </div>
 
           <p className="pt-2.5 text-[11px] text-muted-foreground">
@@ -860,9 +853,10 @@ function SavedDetailPane({
               Remove
             </Button>
           </div>
+        </div>
         </>
       ) : (
-        <p className="p-4 text-sm text-muted-foreground">Select a post to read it here.</p>
+        <p className="p-4 text-sm text-muted-foreground">Select a post.</p>
       )}
     </div>
   );
