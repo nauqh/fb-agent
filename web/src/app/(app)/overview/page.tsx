@@ -52,6 +52,19 @@ import { cn } from "@/lib/utils";
  * range: an old post appears in no read at all.
  */
 export default function OverviewScreen() {
+  const { pageId } = usePageScope();
+  // The window lives beside the tab switcher because the two share the one
+  // pinned summary row — 7/30/60, the totals, and the Performance|Saved tabs
+  // all on a single line. That is the whole trick to the header being one row
+  // tall instead of two: the query is hoisted to this level so the strip can
+  // render before any tab is open.
+  const [days, setDays] = useState(30);
+  const { data, error, loading, refresh } = useQuery(
+    () => getPerformance(pageId!, days),
+    [pageId, days],
+    { enabled: pageId !== null },
+  );
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <ScreenHeader
@@ -60,16 +73,62 @@ export default function OverviewScreen() {
       />
 
       <Tabs defaultValue="performance" className="flex min-h-0 flex-1 flex-col gap-4">
-        <TabsList className="shrink-0 *:min-w-32 *:px-4">
-          <TabsTrigger value="performance">Performance</TabsTrigger>
-          <TabsTrigger value="saved">Saved</TabsTrigger>
-        </TabsList>
+        {/* The one pinned row: tab switcher, summary strip, then the window
+            pill. Together they are the header; nothing above the post list is
+            worth a second line. `-mr-3 pr-3` extends the band across the
+            scroller's right gutter so nothing bleeds through the gap while it
+            is stuck. */}
+        <div className="sticky top-0 z-20 -mr-3 bg-background pr-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <TabsList className="shrink-0">
+              <TabsTrigger value="performance">Performance</TabsTrigger>
+              <TabsTrigger value="saved">Saved</TabsTrigger>
+            </TabsList>
+
+            {!data || data.length === 0 ? null : (
+              <>
+                {/* The totals, on the same line as the tabs rather than below
+                    them — both are context over the list, neither needs its own
+                    row. The hint is the strip's tooltip instead of a line of
+                    its own. */}
+                <Totals
+                  posts={data}
+                  days={days}
+                  hint="Read live from Metricool, best first. The newest posts can still be catching up — their figures lag Facebook by about a day."
+                />
+                {/* 7 / 30 / 60, and 30 by default. An earlier version defaulted
+                    to 90 on the theory that Metricool's lag made shorter
+                    windows read as a dead Page — measured against History
+                    Retraced, that is false: even over 7 days only 1 post of 28
+                    has no reactions yet, and over 30 it is 1 of 219. 90 days is
+                    657 rows, which is a scroll rather than an overview.
+
+                    The shared pill, like every other choice-between-alternatives
+                    in the app. It was a row of bordered boxes with a
+                    `bg-primary/10` active state — a near-white tint barely
+                    distinguishable from the inactive ones. */}
+                <Tabs
+                  value={String(days)}
+                  onValueChange={(next) => setDays(Number(next))}
+                >
+                  <TabsList className="w-fit shrink-0">
+                    {[7, 30, 60].map((option) => (
+                      <TabsTrigger key={option} value={String(option)}>
+                        {option}d
+                      </TabsTrigger>
+                    ))}
+                  </TabsList>
+                </Tabs>
+              </>
+            )}
+          </div>
+        </div>
 
         <TabsContent
           value="performance"
           className="min-h-0 flex-1 overflow-y-auto pr-3"
         >
-          <Performance />
+          <Performance days={days} data={data} error={error} loading={loading} refresh={refresh} />
         </TabsContent>
         <TabsContent value="saved" className="min-h-0 flex-1 overflow-y-auto pr-3">
           <Saved />
@@ -107,9 +166,20 @@ export default function OverviewScreen() {
  * image at its native size on a muted backing instead — which is exactly how the
  * Sources screen already handles a 130px source image it must not upscale.
  */
-function Performance() {
+function Performance({
+  days,
+  data,
+  error,
+  loading,
+  refresh,
+}: {
+  days: number;
+  data: PostStats[] | null;
+  error: string | null;
+  loading: boolean;
+  refresh: () => void;
+}) {
   const { pageId } = usePageScope();
-  const [days, setDays] = useState(30);
   const [busy, setBusy] = useState<string | null>(null);
   // The *pagination* page. The Page is `pageId` — the same collision of names
   // the Review queue has, and named the same way.
@@ -118,12 +188,16 @@ function Performance() {
   // while you read; it falls back to the page's top row the moment the stored
   // id is not on the page (a page flip, a window change, a save).
   const [selectedId, setSelectedId] = useState<string | null>(null);
-
-  const { data, error, loading, refresh } = useQuery(
-    () => getPerformance(pageId!, days),
-    [pageId, days],
-    { enabled: pageId !== null },
-  );
+  // Reset the pager and the pane when the window changes: page 12 of a 60-day
+  // window is nowhere in a 7-day one, and the clamp on its own would land on
+  // that window's last page rather than its best posts. Done during render,
+  // not in an effect — same reasoning as the page clamp below.
+  const [lastDays, setLastDays] = useState(days);
+  if (lastDays !== days) {
+    setLastDays(days);
+    setPage(1);
+    setSelectedId(null);
+  }
 
   // Paged, like the queue, and for a sharper version of the queue's reason: 30
   // days is 219 posts on History Retraced and 60 is over 400. The tab is its own
@@ -167,58 +241,6 @@ function Performance() {
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Everything above the list is pinned while the rows under it turn
-          over. One line now: the totals strip and the window pill share it —
-          the separate hint row and four tall instrument tiles went away because
-          they pushed the first post most of a screen below the fold and made
-          the header read as the content. `-mr-3 pr-3` extends the band across
-          the scroller's right gutter so nothing bleeds through the gap while it
-          is stuck. The hint text is the strip's tooltip rather than a line of
-          its own. */}
-      <div className="sticky top-0 z-20 -mr-3 bg-background pr-3">
-        {!data || data.length === 0 ? null : (
-          <div className="flex items-center gap-3">
-            {/* The totals, sharing the row with the pill: both are loaded, both
-                are context above the list, and neither is worth its own line. */}
-            <Totals
-              posts={data}
-              days={days}
-              hint="Read live from Metricool, best first. The newest posts can still be catching up — their figures lag Facebook by about a day."
-            />
-            {/* 7 / 30 / 60, and 30 by default. An earlier version defaulted to
-                90 on the theory that Metricool's lag made shorter windows read
-                as a dead Page — measured against History Retraced, that is
-                false: even over 7 days only 1 post of 28 has no reactions yet,
-                and over 30 it is 1 of 219. 90 days is 657 rows, which is a
-                scroll rather than an overview.
-
-                The shared pill, like every other choice-between-alternatives
-                in the app. It was a row of bordered boxes with a `bg-primary/10`
-                active state — a near-white tint barely distinguishable from
-                the inactive ones. */}
-            <Tabs
-              value={String(days)}
-              onValueChange={(next) => {
-                setDays(Number(next));
-                // Back to page 1: page 12 of a 60-day window is nowhere in a
-                // 7-day one, and the clamp on its own would land on that
-                // window's last page rather than its best posts.
-                setPage(1);
-                setSelectedId(null);
-              }}
-            >
-              <TabsList className="w-fit shrink-0">
-                {[7, 30, 60].map((option) => (
-                  <TabsTrigger key={option} value={String(option)}>
-                    {option}d
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-            </Tabs>
-          </div>
-        )}
-      </div>
-
     {loading || !data ? (
       <Loading label="Reading Metricool" className="h-64 rounded-2xl border" />
     ) : data.length === 0 ? (
@@ -233,10 +255,11 @@ function Performance() {
         <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,5fr)_minmax(0,4fr)]">
           <div className="overflow-hidden rounded-2xl border bg-card">
             {/* The rows keep their own box so `last:border-0` still finds a
-                last row. Hung directly off the outer element, the pager became
-                the last child and every row kept a rule that then doubled up
-                against the pager's own. */}
-            <div className="px-2">
+                last row. Hung directly off the outer element, the pager may
+                become the last child and every row keeps a rule that then
+                doubles up against the pager's own. No wrapper padding: the
+                rows run edge to edge like a real table. */}
+            <div className="flex flex-col">
               {shown?.map((post, index) => (
                 <PostRow
                   key={post.post_id}
@@ -670,7 +693,7 @@ function Saved() {
         <div className="overflow-hidden rounded-2xl border bg-card">
           {/* The rows keep their own box so `last:border-0` still finds a last
               row — see the same note in Performance. */}
-          <div className="px-2">
+          <div className="flex flex-col">
             {shown.map((saved) => (
               <SavedRow
                 key={saved.id}
