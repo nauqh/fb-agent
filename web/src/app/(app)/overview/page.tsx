@@ -36,6 +36,7 @@ import { useRouter } from "next/navigation";
 
 import { usePageScope } from "@/lib/page-scope";
 import { useQuery } from "@/lib/use-query";
+import { cn } from "@/lib/utils";
 
 /**
  * How the Page's published posts did, and the ones worth keeping.
@@ -64,7 +65,10 @@ export default function OverviewScreen() {
           <TabsTrigger value="saved">Saved</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="performance" className="min-h-0 flex-1 overflow-y-auto pr-3">
+        <TabsContent
+          value="performance"
+          className="min-h-0 flex-1 overflow-y-auto pr-3"
+        >
           <Performance />
         </TabsContent>
         <TabsContent value="saved" className="min-h-0 flex-1 overflow-y-auto pr-3">
@@ -82,6 +86,26 @@ export default function OverviewScreen() {
  * honour it — asking for reactions returned a zero-reaction post first while
  * the same window held one with 160,282 — so ordering by their response would
  * be arbitrary.
+ *
+ * **Master-detail, rebuilt 2026-08.** The page used to be one column of
+ * fat rows — a 112px thumbnail, a headline, a two-line recap, a line of four
+ * metrics, engagement, a date and a bookmark, all carrying one row's worth of
+ * information. At ten rows a page that read as a crowded ledger with the detail
+ * repeated eleven times. The rebuild splits the job onto two columns:
+ *
+ * - the **list** is now a picker. Each row has only what it takes to choose a
+ *   post — rank, a small thumbnail, the headline, the engagement and how long
+ *   ago it ran — so ten rows fit on screen and you scan them like a menu;
+ * - the **detail** pane on the right holds everything that repeated: the recap,
+ *   the full metric breakdown, the exact date, and the actions. It is where you
+ *   actually read a post, and it is the same shape whether the list is showing
+ *   page one or page six.
+ *
+ * Why a grid of hero cards was *not* the answer is measured below in
+ * `Thumbnail`: the only image Metricool hands back is 130×163, so a card grid
+ * would smear it 2.8x across each tile. The detail pane gets to show that tiny
+ * image at its native size on a muted backing instead — which is exactly how the
+ * Sources screen already handles a 130px source image it must not upscale.
  */
 function Performance() {
   const { pageId } = usePageScope();
@@ -90,6 +114,10 @@ function Performance() {
   // The *pagination* page. The Page is `pageId` — the same collision of names
   // the Review queue has, and named the same way.
   const [page, setPage] = useState(1);
+  // Which post the detail pane is showing. A stored id keeps the pane still
+  // while you read; it falls back to the page's top row the moment the stored
+  // id is not on the page (a page flip, a window change, a save).
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const { data, error, loading, refresh } = useQuery(
     () => getPerformance(pageId!, days),
@@ -113,6 +141,14 @@ function Performance() {
   // why. Here it also covers the window shrinking under the stored page.
   if (page > totalPages) setPage(totalPages);
 
+  // The pane's post. `?? shown?.[0]` makes the top of the current page the
+  // default, so selection is never an empty corner even before anyone has
+  // clicked. The stored `selectedId` survives a refresh so a save (which re-runs
+  // the query) does not jump the pane to row one mid-read.
+  const selected = shown?.find((post) => post.post_id === selectedId) ?? shown?.[0] ?? null;
+  const selectedRank =
+    selected === null ? 0 : (safePage - 1) * QUEUE_PAGE_SIZE + shown!.indexOf(selected) + 1;
+
   async function keep(post: PostStats) {
     if (pageId === null) return;
     setBusy(post.post_id);
@@ -130,52 +166,71 @@ function Performance() {
   if (error) return <QueryError error={error} onRetry={refresh} />;
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-xs text-muted-foreground">
-          Read live from Metricool, best first. The newest posts can still be
-          catching up — their figures lag Facebook by about a day.
-        </p>
-        {/* 7 / 30 / 60, and 30 by default. An earlier version defaulted to 90
-            on the theory that Metricool's lag made shorter windows read as a
-            dead Page — measured against History Retraced, that is false: even
-            over 7 days only 1 post of 28 has no reactions yet, and over 30 it
-            is 1 of 219. 90 days is 657 rows, which is a scroll rather than an
-            overview.
+    <div className="flex flex-col gap-3">
+      {/* Everything above the list is pinned while the rows under it turn
+          over. One line now: the totals strip and the window pill share it —
+          the separate hint row and four tall instrument tiles went away because
+          they pushed the first post most of a screen below the fold and made
+          the header read as the content. `-mr-3 pr-3` extends the band across
+          the scroller's right gutter so nothing bleeds through the gap while it
+          is stuck. The hint text is the strip's tooltip rather than a line of
+          its own. */}
+      <div className="sticky top-0 z-20 -mr-3 bg-background pr-3">
+        {!data || data.length === 0 ? null : (
+          <div className="flex items-center gap-3">
+            {/* The totals, sharing the row with the pill: both are loaded, both
+                are context above the list, and neither is worth its own line. */}
+            <Totals
+              posts={data}
+              days={days}
+              hint="Read live from Metricool, best first. The newest posts can still be catching up — their figures lag Facebook by about a day."
+            />
+            {/* 7 / 30 / 60, and 30 by default. An earlier version defaulted to
+                90 on the theory that Metricool's lag made shorter windows read
+                as a dead Page — measured against History Retraced, that is
+                false: even over 7 days only 1 post of 28 has no reactions yet,
+                and over 30 it is 1 of 219. 90 days is 657 rows, which is a
+                scroll rather than an overview.
 
-            The shared pill, like every other choice-between-alternatives in the
-            app. It was a row of bordered boxes with a `bg-primary/10` active
-            state — a near-white tint barely distinguishable from the inactive
-            ones. */}
-        <Tabs
-          value={String(days)}
-          onValueChange={(next) => {
-            setDays(Number(next));
-            // Back to page 1: page 12 of a 60-day window is nowhere in a 7-day
-            // one, and the clamp on its own would land on that window's last
-            // page rather than its best posts.
-            setPage(1);
-          }}
-        >
-          <TabsList className="w-fit shrink-0">
-            {[7, 30, 60].map((option) => (
-              <TabsTrigger key={option} value={String(option)}>
-                {option}d
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
+                The shared pill, like every other choice-between-alternatives
+                in the app. It was a row of bordered boxes with a `bg-primary/10`
+                active state — a near-white tint barely distinguishable from
+                the inactive ones. */}
+            <Tabs
+              value={String(days)}
+              onValueChange={(next) => {
+                setDays(Number(next));
+                // Back to page 1: page 12 of a 60-day window is nowhere in a
+                // 7-day one, and the clamp on its own would land on that
+                // window's last page rather than its best posts.
+                setPage(1);
+                setSelectedId(null);
+              }}
+            >
+              <TabsList className="w-fit shrink-0">
+                {[7, 30, 60].map((option) => (
+                  <TabsTrigger key={option} value={String(option)}>
+                    {option}d
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
+          </div>
+        )}
       </div>
 
-      {loading || !data ? (
-        <Loading label="Reading Metricool" className="h-64 rounded-2xl border" />
-      ) : data.length === 0 ? (
+    {loading || !data ? (
+      <Loading label="Reading Metricool" className="h-64 rounded-2xl border" />
+    ) : data.length === 0 ? (
         <p className="rounded-2xl border border-dashed p-10 text-center text-sm text-muted-foreground">
           Nothing published in this window.
         </p>
       ) : (
-        <>
-          <Totals posts={data} days={days} />
+        /* Two columns, each sized to its own content (`items-start` — the two
+           half-columns are not the same height, and stretching them would pad
+           the shorter one with empty framed space). The list page on the left,
+           the post being read on the right. */
+        <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,5fr)_minmax(0,4fr)]">
           <div className="overflow-hidden rounded-2xl border bg-card">
             {/* The rows keep their own box so `last:border-0` still finds a
                 last row. Hung directly off the outer element, the pager became
@@ -189,8 +244,8 @@ function Performance() {
                   // Ranked across the whole window, not within the page: the
                   // sort is global, so the first row of page two is 11.
                   rank={(safePage - 1) * QUEUE_PAGE_SIZE + index + 1}
-                  busy={busy === post.post_id}
-                  onSave={() => void keep(post)}
+                  selected={selected?.post_id === post.post_id}
+                  onSelect={() => setSelectedId(post.post_id)}
                 />
               ))}
             </div>
@@ -200,198 +255,254 @@ function Performance() {
               onPageChange={setPage}
             />
           </div>
-        </>
+
+          <DetailPane
+            post={selected}
+            rank={selectedRank}
+            busy={selected !== null && busy === selected.post_id}
+            onSave={selected === null ? undefined : () => void keep(selected)}
+          />
+        </div>
       )}
     </div>
   );
 }
 
 /**
- * What the window adds up to, above the list.
+ * What the window adds up to, as one quiet line above the list.
  *
- * An Overview should open with the numbers rather than with row one of 657.
- * Four tiles and no hero figure: these are four measures of equal standing, and
- * a hero is the *one* number a view leads with — picking one here would be
- * arbitrary.
- *
- * Values use the font's proportional figures, not `tabular-nums`. Tabular gives
- * every digit the width of a `0`, which reads loose at display sizes; it is for
- * columns that must align vertically, which is what the rows below are.
+ * These used to be four tall instrument tiles — `min-h-28` each, a whole sticky
+ * band of them — which pushed the first post a long scroll below the fold and
+ * made the permanent header read as the actual content. An Overview is opened
+ * for the posts; the totals are the context, not the feature. So they are now a
+ * single mono strip: the same four numbers, at the height of one line, pinned
+ * beside the pill so the post list starts almost immediately.
  */
-function Totals({ posts, days }: { posts: PostStats[]; days: number }) {
+function Totals({ posts, days, hint }: { posts: PostStats[]; days: number; hint?: string }) {
   const reach = posts.reduce((sum, post) => sum + post.impressions, 0);
   const engagement = posts.reduce((sum, post) => sum + post.engagement, 0);
 
   return (
-    <div className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border bg-border sm:grid-cols-4">
-      <Tile index="01" label="Posts" value={metric(posts.length)} note={`last ${days} days`} />
-      <Tile index="02" label="Total reach" value={metric(reach)} note="impressions" />
-      <Tile index="03" label="Engagement" value={metric(engagement)} note="reactions + comments + shares" />
-      <Tile index="04" label="Best post" value={metric(posts[0].engagement)} note="engagement" />
+    <div
+      title={hint}
+      className="flex min-w-0 flex-1 flex-wrap items-center gap-x-5 gap-y-1 rounded-xl border bg-card px-3.5 py-1.5 font-mono text-[11px] text-muted-foreground"
+    >
+      <span>
+        <strong className="font-medium text-foreground">{metric(posts.length)}</strong>{" "}
+        posts · {days}d
+      </span>
+      <span>
+        <strong className="font-medium text-foreground">{metric(reach)}</strong> reach
+      </span>
+      <span>
+        <strong className="font-medium text-foreground">{metric(engagement)}</strong>{" "}
+        engagement
+      </span>
+      <span>
+        <strong className="font-medium text-foreground">
+          {metric(posts[0]?.engagement ?? 0)}
+        </strong>{" "}
+        best
+      </span>
     </div>
   );
 }
 
 /**
- * One stat tile.
+ * One row of the picker: just enough to choose a post.
  *
- * Label and index in mono uppercase at the top, value large at the bottom —
- * the shape the reference designs use for a panel, and the reason it works
- * here is that four tiles then read as one instrument rather than four boxes.
- * Mono is doing real work: it marks everything that is *metadata* (the label,
- * the index, the note) so the only thing set in the body face is the number.
- */
-function Tile({
-  index,
-  label,
-  value,
-  note,
-}: {
-  index: string;
-  label: string;
-  value: string;
-  note: string;
-}) {
-  return (
-    <div className="flex min-h-28 flex-col justify-between bg-card px-4 py-3">
-      <div className="flex items-baseline justify-between gap-2">
-        <p className="font-mono text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
-          {label}
-        </p>
-        <p className="font-mono text-[11px] text-muted-foreground/70">{index}</p>
-      </div>
-      <div>
-        {/* Proportional figures, not `tabular-nums`: tabular gives every digit
-            the width of a `0`, which reads loose at display sizes. It is for
-            columns that must align vertically, which is what the rows are. */}
-        <p className="text-2xl font-semibold tracking-tight">{value}</p>
-        <p className="pt-0.5 font-mono text-[11px] text-muted-foreground">{note}</p>
-      </div>
-    </div>
-  );
-}
-
-/**
- * One published post and its numbers.
- *
- * **Rebuilt 2026-08-18 because the screen was unreadable.** Every row was a
- * bordered card carrying two lines of caption, five labelled metrics, a
- * progress bar, a date, a rank and a bookmark — about eighteen elements, six
- * rows deep, and the caption is the loudest thing on a screen nobody comes to
- * for captions. Measured against the reference designs, the fix is subtraction:
- *
- * - the caption is an **identifier**, so it gets one line and stops
- * - the four secondary metrics drop to one mono line, which is how a spec sheet
- *   carries numbers you scan rather than compare
- * - **engagement stays large and right-aligned** — it is what the list is
- *   sorted by, so it is the one figure that earns size
- * - the bar is gone. It encoded the same thing the sorted order already says,
- *   and it was the element that made a list of forty rows feel like a chart
- * - cards become **rows on hairlines**: forty bordered boxes is forty frames
- *   competing with the content inside them
+ * The fat row this replaced carried the recap and all four metrics, which the
+ * detail pane now holds. What is left is the decision — rank, thumbnail,
+ * headline, engagement, age — so ten rows stack into a menu you move through
+ * rather than a ledger you read. It is a `<button>` because the row *is* the
+ * selection, and the selected row is marked the way SourceCard marks a ticked
+ * source: an accent where tiles show gold.
  */
 function PostRow({
+  post,
+  rank,
+  selected,
+  onSelect,
+}: {
+  post: PostStats;
+  rank: number;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={cn(
+        "flex w-full items-center gap-2.5 border-b px-2 py-1.5 text-left transition-colors last:border-0",
+        "hover:bg-muted/40",
+        // The selected row reads at a glance, without a ring that fights the
+        // row's own padding.
+        selected && "bg-gold/[0.08] hover:bg-gold/[0.08]",
+      )}
+    >
+      {/* Rank, not a bullet: the list is sorted, so its position is
+          information. Mono and muted — it names the row, it is not a measure. */}
+      <span
+        className={cn(
+          "w-5 shrink-0 text-right font-mono text-[11px]",
+          selected ? "font-semibold text-foreground" : "text-muted-foreground",
+        )}
+      >
+        {rank}
+      </span>
+
+      <Thumbnail src={post.picture_url} className="w-9" />
+
+      {/* The headline, not the whole caption — the caption is the headline and
+          the recap run together, and truncating that names nothing. Same
+          treatment the Review queue gives a draft, same helper. */}
+      <span className="min-w-0 flex-1 truncate text-sm font-medium">
+        {headline(post.text) || "(no text)"}
+      </span>
+
+      {/* The two numbers the list is ordered and timed by, right-aligned so they
+          read down the side of the column. `tabular-nums` for the one column
+          that has to line up across ten rows. */}
+      <span className="shrink-0 text-sm font-semibold tabular-nums">
+        {metric(post.engagement)}
+      </span>
+      <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
+        {timeAgo(post.published_at)}
+      </span>
+    </button>
+  );
+}
+
+/**
+ * The right-hand pane: the post the picker has landed on, read whole.
+ *
+ * This is where the recap, the metric breakdown, the exact date and the actions
+ * all live now — nothing a row of the list repeats any more. The layout leans on
+ * the one image constraint that shaped the whole rebuild:
+ *
+ * - the picture is centred at (near) native size on a muted backing, the same
+ *   treatment `source-card.tsx` gives a 130px source it must not upscale, rather
+ *   than stretched across a tile it would smear;
+ * - the headline is the big thing, as it should be for the one post being read;
+ * - the four metrics are a tile row in the same instrument language as the
+ *   totals above, so the screen reads as one system.
+ */
+function DetailPane({
   post,
   rank,
   busy,
   onSave,
 }: {
-  post: PostStats;
+  post: PostStats | null;
   rank: number;
   busy: boolean;
-  onSave: () => void;
+  onSave?: () => void;
 }) {
   return (
-    // `items-stretch`, not `items-center`. The poster is 140px and the text was
-    // two short lines floating in the middle of it — the row was as tall as its
-    // image and filled by nothing. Stretched, the middle column can put its
-    // title at the top and its figures at the bottom, so the height the picture
-    // costs is height the row uses.
-    <div className="group flex items-stretch gap-4 border-b px-2 py-3 transition-colors last:border-0 hover:bg-muted/40">
-      {/* Rank, not a bullet: the list is sorted, so its position is
-          information. Mono and muted — it names the row, it is not a measure. */}
-      <span className="w-6 shrink-0 pt-0.5 text-right font-mono text-[11px] text-muted-foreground">
-        {rank}
-      </span>
-
-      <Thumbnail src={post.picture_url} />
-
-      <div className="flex min-w-0 flex-1 flex-col">
-        {/* The headline, not the whole caption — the caption is the headline and
-            the recap run together, and truncating that names nothing. Same
-            treatment the Review queue gives a draft, same helper. */}
-        <p className="truncate text-sm font-medium">
-          {headline(post.text) || "(no text)"}
+    <div className="flex flex-col overflow-hidden rounded-2xl border bg-card">
+      <div className="flex items-center justify-between gap-3 border-b px-4 py-3">
+        <p className="font-mono text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
+          Post detail
         </p>
-
-        {/* And the recap under it, which is what the row's spare height is for.
-            Two lines: enough to tell two posts on the same subject apart, and
-            `line-clamp` rather than `truncate` because this is prose being
-            sampled rather than a label being shortened. */}
-        <p className="line-clamp-2 pt-1.5 text-[13px] leading-relaxed text-muted-foreground">
-          {body(post.text)}
-        </p>
-
-        <p className="mt-auto flex flex-wrap items-center gap-x-2 pt-2 font-mono text-[11px] text-muted-foreground">
-          <span>{metric(post.reactions)} reactions</span>
-          <span aria-hidden>·</span>
-          <span>{metric(post.comments)} comments</span>
-          <span aria-hidden>·</span>
-          <span>{metric(post.shares)} shares</span>
-          <span aria-hidden>·</span>
-          <span>{metric(post.impressions)} reach</span>
-        </p>
+        <span className="font-mono text-[11px] text-muted-foreground/70">
+          {post ? `#${rank}` : ""}
+        </span>
       </div>
 
-      {/* One right-hand column, not two: the figure the list is ordered by, the
-          date, and then the two things you can do to the row, stacked under
-          them. The actions used to be a column of their own, which put them at
-          a different x on every row width and left the corner they now occupy
-          empty. `tabular-nums` here and not on the tiles — this is a column
-          that has to align down forty rows, which is what tabular is for. */}
-      <div className="flex shrink-0 flex-col items-end text-right">
-        <p className="text-base font-semibold tabular-nums">
-          {metric(post.engagement)}
-        </p>
-        <p className="font-mono text-[11px] text-muted-foreground">
-          {timeAgo(post.published_at)}
-        </p>
+      {post ? (
+        <>
+        <div className="flex gap-4 p-4">
+          {/* A fixed-width column, not a full-width row: the image is 128px
+              and the pane is ~600px, so centring it on its own line left
+              most of that width unused. A column gives the caption and stats
+              the width, and the dressing that used to frame the image is now
+              the card edge instead of a hard box behind it. */}
+          <Thumbnail src={post.picture_url} className="w-28 shrink-0" />
 
-        {/* `mt-auto` drops these to the foot of the column, opposite the
-            metrics line on the left, rather than tucking them under the date —
-            the figures belong to the top line, the actions to the bottom one.
-            `-mr-1.5` pulls the icon buttons' own padding back off the edge so
-            the glyphs line up with the digits above. */}
-        <div className="-mr-1.5 mt-auto flex items-center gap-0.5 pt-2">
-          {post.permalink_url ? (
-            <a
-              href={post.permalink_url}
-              target="_blank"
-              rel="noreferrer"
-              title="Open on Facebook"
-              className="rounded p-1.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:text-foreground focus-visible:opacity-100"
-            >
-              <ExternalLink className="size-3.5" />
-            </a>
-          ) : null}
-          <button
-            type="button"
-            onClick={onSave}
-            disabled={busy || post.saved}
-            aria-label={post.saved ? "Already saved" : "Save this post"}
-            title={post.saved ? "Already saved" : "Keep this post for reference"}
-            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-60"
-          >
-            {busy ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : post.saved ? (
-              <BookmarkCheck className="size-4 text-foreground" />
-            ) : (
-              <Bookmark className="size-4" />
-            )}
-          </button>
+          <div className="min-w-0 flex-1">
+            <h2 className="text-base font-semibold tracking-tight leading-snug">
+              {headline(post.text) || "(no text)"}
+            </h2>
+            {/* The recap, compact. It is a *preview* here — the full caption is
+                a click on Open away — because the pane must fit next to the
+                picker without scroll. Five lines still tells two posts on the
+                same subject apart. */}
+            <p className="line-clamp-6 pt-1.5 text-[13px] leading-relaxed text-muted-foreground">
+              {body(post.text) || "No caption."}
+            </p>
+          </div>
         </div>
-      </div>
+
+        <div className="p-4">
+          {/* Breakdown in the same tile language as the totals above. */}
+          <div className="grid grid-cols-4 gap-px overflow-hidden rounded-xl border bg-border">
+            <DetailStat label="Reactions" value={metric(post.reactions)} />
+            <DetailStat label="Comments" value={metric(post.comments)} />
+            <DetailStat label="Shares" value={metric(post.shares)} />
+            <DetailStat label="Reach" value={metric(post.impressions)} sub="impressions" />
+          </div>
+
+          <p className="pt-2.5 text-[11px] text-muted-foreground">
+            Engagement <strong className="font-semibold text-foreground">{metric(post.engagement)}</strong>
+            {" · "}
+            <span title={fullDate(post.published_at)}>{timeAgo(post.published_at)}</span>
+          </p>
+
+          <div className="mt-3 flex items-center gap-2 border-t pt-3">
+            {post.permalink_url ? (
+              <Button variant="outline" size="sm" asChild>
+                <a href={post.permalink_url} target="_blank" rel="noreferrer">
+                  <ExternalLink className="size-3.5" />
+                  Open on Facebook
+                </a>
+              </Button>
+            ) : null}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onSave}
+              disabled={busy || post.saved || !onSave}
+              title={post.saved ? "Already saved" : "Keep this post for reference"}
+            >
+              {busy ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : post.saved ? (
+                <BookmarkCheck className="size-3.5" />
+              ) : (
+                <Bookmark className="size-3.5" />
+              )}
+              {post.saved ? "Saved" : "Save for reference"}
+            </Button>
+          </div>
+        </div>
+        </>
+      ) : (
+        <p className="p-4 text-sm text-muted-foreground">Select a post to read it here.</p>
+      )}
+    </div>
+  );
+}
+
+/** One cell of the detail pane's breakdown. */
+function DetailStat({
+  label,
+  value,
+  sub,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+}) {
+  return (
+    <div className="bg-card px-3 py-2.5">
+      <p className="font-mono text-[10px] tracking-[0.12em] text-muted-foreground uppercase">
+        {label}
+      </p>
+      <p className="pt-0.5 text-xl font-semibold tabular-nums">{value}</p>
+      {sub ? (
+        <p className="font-mono text-[10px] text-muted-foreground/70">{sub}</p>
+      ) : null}
     </div>
   );
 }
@@ -403,27 +514,26 @@ function PostRow({
  * pictures document — so a missing thumbnail is the expected end state rather
  * than a fault. The row carries its numbers either way.
  *
- * **4:5 and 112px, both measured rather than chosen.** Measured 2026-08-18 on
- * History Retraced's 30-day window:
- *
- * - the file the CDN serves is **130 x 163**, and that is the only file there
- *   is. Metricool's `fullPicture` is null on every row, and the URL is signed
- *   (`oh`/`oe`), so editing its `stp=dst-jpg_p130x130` size directive to
- *   `p720x720`, or dropping `stp` altogether, both answer 403. Our own bucket
- *   holds full-resolution copies of what *we* published, and they are no help
- *   here either: of 20 drafts carrying a Metricool post id, 0 appear among the
- *   213 stats rows. So 112px is the widest this can be drawn and stay sharp;
- * - it was `aspect-square`, and the composite is 4:5. `object-cover` was
- *   therefore cutting the top and bottom off every thumbnail — which is exactly
- *   where the hook text is painted. The middle band of a poster is the part
- *   that identifies it least. `aspect-[4/5]` is also what the Review queue's
- *   thumbnail already uses.
+ * **4:5 and the size are both measured rather than chosen.** Measured 2026-08-18
+ * on History Retraced's 30-day window: the file the CDN serves is **130 x 163**,
+ * and that is the only file there is — Metricool's `fullPicture` is null on
+ * every row, and the signed URL answers 403 to any edit of its `stp` size
+ * directive. The composite is 4:5, so that is the box shape (`object-cover`
+ * on a square cut the top and bottom off every thumbnail — exactly where the
+ * hook text is painted). The size stays the caller's: `w-12` for a picker row,
+ * `size-32` (128px, just under native) for the detail pane — never larger,
+ * because past ~130px the upscale starts to smear.
  */
-function Thumbnail({ src }: { src: string | null }) {
+function Thumbnail({ src, className }: { src: string | null; className?: string }) {
   if (!src) {
     return (
-      <div className="flex aspect-4/5 w-28 shrink-0 items-center justify-center rounded-2xl border bg-muted">
-        <BarChart3 className="size-5 text-muted-foreground/50" />
+      <div
+        className={cn(
+          "flex aspect-4/5 shrink-0 items-center justify-center rounded-xl border bg-muted",
+          className,
+        )}
+      >
+        <BarChart3 className="size-4 text-muted-foreground/50" />
       </div>
     );
   }
@@ -434,20 +544,13 @@ function Thumbnail({ src }: { src: string | null }) {
     <img
       src={src}
       alt=""
-      className="aspect-4/5 w-28 shrink-0 rounded-2xl border object-cover"
+      className={cn(
+        "aspect-4/5 shrink-0 rounded-xl border object-cover bg-muted",
+        className,
+      )}
     />
   );
 }
-
-/**
- * `Metric` used to live here: one labelled figure, repeated five times per row.
- *
- * It is gone with the row rebuild above. Five stacked label/value pairs per row
- * meant ten text elements carrying five numbers, and at forty rows that was the
- * bulk of what made the screen unreadable. The four secondary figures are now
- * one mono line, and engagement — the only one the sort depends on — is the
- * figure that gets size.
- */
 
 /** The kept posts. Their numbers are a snapshot, not a live figure. */
 function Saved() {
@@ -462,6 +565,8 @@ function Saved() {
   const [busy, setBusy] = useState<number | null>(null);
   // The pagination page, as in Performance and the Review queue.
   const [page, setPage] = useState(1);
+  // Which saved post the pane shows — the Performance selection's twin.
+  const [selectedId, setSelectedId] = useState<number | null>(null);
 
   /**
    * Write this one again. The saved post stays — reuse is not a move, and the
@@ -547,8 +652,13 @@ function Saved() {
   // effect — `review-list.tsx` sets out why.
   if (page > totalPages) setPage(totalPages);
 
+  // The pane's post, defaulting to the top of the page — same rule as
+  // Performance. A removed post falls out of `shown` and the next top row takes
+  // the pane.
+  const selected = shown.find((saved) => saved.id === selectedId) ?? shown[0] ?? null;
+
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col gap-3">
       <p className="text-xs text-muted-foreground">
         The numbers below are what each post had scored when it was saved, not a
         live figure. <strong className="font-medium text-foreground">Repost</strong>{" "}
@@ -556,112 +666,181 @@ function Saved() {
         sends the story back through the writer for a fresh one.
       </p>
 
-      <div className="overflow-hidden rounded-2xl border bg-card">
-        {/* The rows keep their own box so `last:border-0` still finds a last
-            row — see the same note in Performance. */}
-        <div className="px-2">
-          {shown.map((saved) => (
-            <div
-              key={saved.id}
-              className="group flex items-stretch gap-4 border-b px-2 py-3 transition-colors last:border-0 hover:bg-muted/40"
-            >
-              <Thumbnail src={saved.picture_url} />
-
-              {/* Headline, recap, figures — the Performance row's shape, and it
-                  earns its place here twice over: this is the tab where you
-                  decide whether to run a story again, and the recap is what
-                  that decision is about. */}
-              <div className="flex min-w-0 flex-1 flex-col">
-                <p className="truncate text-sm font-medium">
-                  {headline(saved.text) || "(no text)"}
-                </p>
-                <p className="line-clamp-2 pt-1.5 text-[13px] leading-relaxed text-muted-foreground">
-                  {body(saved.text)}
-                </p>
-                <p className="mt-auto flex flex-wrap items-center gap-x-2 pt-2 font-mono text-[11px] text-muted-foreground">
-                  <span>{metric(saved.reactions)} reactions</span>
-                  <span aria-hidden>·</span>
-                  <span>{metric(saved.comments)} comments</span>
-                  <span aria-hidden>·</span>
-                  <span>{metric(saved.shares)} shares</span>
-                </p>
-              </div>
-
-              {/* The client's ask: "there needs to be a visible date showing how
-                  many days ago it was posted last." Relative, because that is the
-                  question — whether it is far enough back to run again — and the
-                  exact stamp is a hover away rather than a second line nobody
-                  reads. */}
-              <div className="flex shrink-0 flex-col items-end text-right">
-                <div className="hidden sm:block">
-                  <p className="text-sm font-medium" title={fullDate(saved.published_at)}>
-                    {timeAgo(saved.published_at)}
-                  </p>
-                  <p className="font-mono text-[11px] text-muted-foreground">
-                    last posted
-                  </p>
-                </div>
-
-                {/* At the foot of the column, as on Performance: date at the
-                    top, what you can do about it at the bottom. */}
-                <div className="-mr-1.5 mt-auto flex items-center gap-1 pt-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-7"
-                    disabled={busy === saved.id}
-                    onClick={() => void repost(saved)}
-                    title="Queue the original again — same caption, same picture. It lands in Review to publish."
-                  >
-                    {busy === saved.id ? (
-                      <Loader2 className="size-3.5 animate-spin" />
-                    ) : (
-                      <Repeat2 className="size-3.5" />
-                    )}
-                    Repost
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7"
-                    disabled={busy === saved.id}
-                    onClick={() => void reuse(saved)}
-                    title="Write this story again — a fresh hook, caption, first comment and image."
-                  >
-                    <Sparkles className="size-3.5" />
-                    Write again
-                  </Button>
-                  {saved.permalink_url ? (
-                    <a
-                      href={saved.permalink_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      title="Open on Facebook"
-                      className="rounded p-1.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:text-foreground focus-visible:opacity-100"
-                    >
-                      <ExternalLink className="size-3.5" />
-                    </a>
-                  ) : null}
-                  <button
-                    type="button"
-                    onClick={() => void drop(saved)}
-                    aria-label="Remove from saved"
-                    title="Stop keeping this post"
-                    className="rounded p-1.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100"
-                  >
-                    <BookmarkCheck className="size-4" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
+      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,5fr)_minmax(0,4fr)]">
+        <div className="overflow-hidden rounded-2xl border bg-card">
+          {/* The rows keep their own box so `last:border-0` still finds a last
+              row — see the same note in Performance. */}
+          <div className="px-2">
+            {shown.map((saved) => (
+              <SavedRow
+                key={saved.id}
+                saved={saved}
+                selected={selected?.id === saved.id}
+                onSelect={() => setSelectedId(saved.id)}
+              />
+            ))}
+          </div>
+          <QueuePagination
+            totalItems={data.length}
+            page={safePage}
+            onPageChange={setPage}
+          />
         </div>
-        <QueuePagination
-          totalItems={data.length}
-          page={safePage}
-          onPageChange={setPage}
+
+        <SavedDetailPane
+          saved={selected}
+          busy={selected !== null && busy === selected.id}
+          onRepost={selected === null ? undefined : () => void repost(selected)}
+          onReuse={selected === null ? undefined : () => void reuse(selected)}
+          onRemove={selected === null ? undefined : () => void drop(selected)}
         />
       </div>
+    </div>
+  );
+}
+
+/** A picker row for a saved post — the Performance row's shape. */
+function SavedRow({
+  saved,
+  selected,
+  onSelect,
+}: {
+  saved: SavedPost;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={cn(
+        "flex w-full items-center gap-2.5 border-b px-2 py-1.5 text-left transition-colors last:border-0",
+        "hover:bg-muted/40",
+        selected && "bg-gold/[0.08] hover:bg-gold/[0.08]",
+      )}
+    >
+      <Thumbnail src={saved.picture_url} className="w-9" />
+      <span className="min-w-0 flex-1 truncate text-sm font-medium">
+        {headline(saved.text) || "(no text)"}
+      </span>
+      {/* The client's ask: "there needs to be a visible date showing how many
+          days ago it was posted last." Relative, because that is the question —
+          whether it is far enough back to run again — and the exact stamp is a
+          hover away rather than a second line nobody reads. */}
+      <span
+        className="shrink-0 text-xs text-muted-foreground"
+        title={fullDate(saved.published_at)}
+      >
+        {timeAgo(saved.published_at)}
+      </span>
+      <span className="shrink-0 text-sm font-semibold tabular-nums">
+        {metric(saved.reactions)}
+      </span>
+    </button>
+  );
+}
+
+/**
+ * The saved post being read — the Performance pane, with the actions that make
+ * a *saved* post different: Repost back to the queue, or send the story through
+ * the writer again.
+ */
+function SavedDetailPane({
+  saved,
+  busy,
+  onRepost,
+  onReuse,
+  onRemove,
+}: {
+  saved: SavedPost | null;
+  busy: boolean;
+  onRepost?: () => void;
+  onReuse?: () => void;
+  onRemove?: () => void;
+}) {
+  return (
+    <div className="flex flex-col overflow-hidden rounded-2xl border bg-card">
+      <div className="flex items-center justify-between gap-3 border-b px-4 py-3">
+        <p className="font-mono text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
+          Saved post
+        </p>
+      </div>
+
+      {saved ? (
+        <>
+        <div className="flex gap-4 p-4">
+          {/* Image as a fixed-width column, as on the Performance pane. */}
+          <Thumbnail src={saved.picture_url} className="w-28 shrink-0" />
+
+          <div className="min-w-0 flex-1">
+            <h2 className="text-base font-semibold tracking-tight leading-snug">
+              {headline(saved.text) || "(no text)"}
+            </h2>
+            {/* Same compact recap as the Performance pane: a preview, with the
+                full caption a click away on Open. */}
+            <p className="line-clamp-6 pt-1.5 text-[13px] leading-relaxed text-muted-foreground">
+              {body(saved.text) || "No caption."}
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-4 gap-px overflow-hidden rounded-xl border bg-border p-4">
+            <DetailStat label="Reactions" value={metric(saved.reactions)} />
+            <DetailStat label="Comments" value={metric(saved.comments)} />
+            <DetailStat label="Shares" value={metric(saved.shares)} />
+            <DetailStat label="Reach" value={metric(saved.impressions)} sub="impressions" />
+          </div>
+
+          <p className="pt-2.5 text-[11px] text-muted-foreground">
+            Saved <span title={fullDate(saved.created_at)}>{timeAgo(saved.created_at)}</span>
+            {" · "}
+            last posted <span title={fullDate(saved.published_at)}>{timeAgo(saved.published_at)}</span>
+          </p>
+
+          <div className="mt-3 flex flex-wrap items-center gap-2 border-t pt-3">
+            <Button
+              variant="default"
+              size="sm"
+              disabled={busy}
+              onClick={onRepost}
+              title="Queue the original again — same caption, same picture. It lands in Review to publish."
+            >
+              {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Repeat2 className="size-3.5" />}
+              Repost
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={busy}
+              onClick={onReuse}
+              title="Write this story again — a fresh hook, caption, first comment and image."
+            >
+              <Sparkles className="size-3.5" />
+              Write again
+            </Button>
+            {saved.permalink_url ? (
+              <Button variant="ghost" size="sm" asChild>
+                <a href={saved.permalink_url} target="_blank" rel="noreferrer">
+                  <ExternalLink className="size-3.5" />
+                  Open
+                </a>
+              </Button>
+            ) : null}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onRemove}
+              className="ml-auto text-destructive hover:bg-destructive/10 hover:text-destructive"
+              title="Stop keeping this post"
+            >
+              <BookmarkCheck className="size-3.5" />
+              Remove
+            </Button>
+          </div>
+        </>
+      ) : (
+        <p className="p-4 text-sm text-muted-foreground">Select a post to read it here.</p>
+      )}
     </div>
   );
 }
