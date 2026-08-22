@@ -13,17 +13,12 @@ import {
   Repeat2,
   ThumbsUp,
   Users,
+  XIcon,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Dialog as DialogPrimitive } from "radix-ui";
 import { MetaChip } from "@/components/meta-chip";
 import type { SourceKind } from "@/lib/types";
 import { chars, fullDate, metric, timeAgo } from "@/lib/format";
@@ -182,40 +177,55 @@ export function SourceCard({ selected, pending, onToggle, ...item }: SourceCardP
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        {/* One fixed size for every post, so opening a second card does not
-            resize the window under the cursor — a 40-character tweet and a
-            2,000-character article get the same box. The height is capped
-            against the viewport for short laptop screens, and the three rows
-            pin the header and footer while only the middle scrolls. */}
-        <DialogContent className="grid h-[min(38rem,85vh)] grid-rows-[auto_minmax(0,1fr)_auto] sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="truncate pr-8">{author ?? "Unknown"}</DialogTitle>
-            <DialogDescription>
-              {KIND_LABEL[item.kind]}
-              <span className="mx-1.5">·</span>
-              {fullDate(published_at)}
-            </DialogDescription>
-          </DialogHeader>
+      {/* Fit the copy. The dialog grows to the post's length (capped at 85vh so
+          a genuinely long one scrolls), and the image sits as a single corner
+          cell — Word's “squared” wrapping — rather than taking its own column.
+          That is the whole rework: one cell, image top-right beside the title,
+          story beneath it in the same column. */}
+      <DialogContent
+        showCloseButton={false}
+        className="flex max-h-[85vh] flex-col overflow-hidden rounded-2xl p-0 sm:max-w-[46rem]"
+      >
+        {/* One story column that flexes to the copy. `flex-1` is what pins the
+            actions: the story takes the leftover height and scrolls inside it,
+            so a long post never pushes the dock off the foot of the box. */}
+        <div className="relative min-w-0 min-h-0 flex-1 overflow-y-auto p-5">
+          <DialogPrimitive.Close data-slot="dialog-close" asChild>
+            <Button variant="ghost" size="icon-sm" className="absolute top-2 right-2">
+              <XIcon />
+              <span className="sr-only">Close</span>
+            </Button>
+          </DialogPrimitive.Close>
 
-          {/* The only scroller. `min-h-0` is load-bearing: a grid row's default
-              `auto` minimum refuses to shrink below its content, and without it
-              the row grows past the fixed height and the footer leaves the box
-              instead of the text scrolling. */}
-          <div className="min-h-0 space-y-4 overflow-y-auto pr-3">
-            {/* Centred on its own backdrop rather than stretched to the dialog
-                width: the source is a 130px thumbnail (see `SourceThumbnail`)
-                and upscaling it four times only makes the blur bigger. */}
+          <div className="space-y-3">
+            {/* The image floated right, squared: it takes its own rectangle and
+                the story flows around it instead of bending to its full height.
+                It must be a normal-flow sibling — not inside flex, where a float
+                would become its own full row and produce the white band under
+                the title. `clear-both` on the stats bar ends the wrap so the
+                rule spans full width. */}
             {image_url ? (
-              <div className="flex justify-center rounded-2xl bg-muted p-3">
-                <SourceThumbnail src={image_url} className="size-32 rounded-2xl" />
-              </div>
+              <SourceThumbnail
+                src={image_url}
+                className="float-left mr-3 my-1 w-28 rounded-xl"
+              />
             ) : null}
+
+            <div className="flex flex-wrap items-center gap-2">
+              <MetaChip>{KIND_LABEL[item.kind]}</MetaChip>
+              <span className="text-xs text-muted-foreground">
+                {fullDate(published_at)}
+                <span aria-hidden> · </span>
+                {timeAgo(published_at)}
+              </span>
+            </div>
+            <DialogTitle className="truncate">{author ?? "Unknown"}</DialogTitle>
 
             <p className="text-sm leading-relaxed whitespace-pre-wrap">
               {text || <span className="text-muted-foreground">No text.</span>}
             </p>
 
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-[11px] text-muted-foreground tabular-nums">
+            <div className="clear-both flex flex-wrap items-center gap-x-4 gap-y-1 border-t pt-3 font-mono text-[11px] text-muted-foreground tabular-nums">
               <span>{chars(text)}</span>
               {reactions !== null && reactions !== undefined ? (
                 <>
@@ -226,26 +236,28 @@ export function SourceCard({ selected, pending, onToggle, ...item }: SourceCardP
               ) : null}
             </div>
           </div>
+        </div>
 
-          <DialogFooter>
-            {url ? (
-              <Button variant="outline" asChild>
-                <a href={url} target="_blank" rel="noreferrer">
-                  <ExternalLink />
-                  Open original
-                </a>
-              </Button>
-            ) : null}
-            <Button
-              variant={selected ? "outline" : "default"}
-              disabled={pending}
-              onClick={onToggle}
-            >
-              {pending ? <Loader2 className="animate-spin" /> : selected ? <Check /> : null}
-              {selected ? "Remove from Cart" : "Add to Cart"}
+        {/* Actions dock at the foot, full width — the post's own row. */}
+        <div className="flex flex-wrap items-center justify-end gap-2 border-t bg-muted/40 px-4 py-3">
+          {url ? (
+            <Button variant="outline" asChild>
+              <a href={url} target="_blank" rel="noreferrer">
+                <ExternalLink />
+                Open original
+              </a>
             </Button>
-          </DialogFooter>
-        </DialogContent>
+          ) : null}
+          <Button
+            variant={selected ? "outline" : "default"}
+            disabled={pending}
+            onClick={onToggle}
+          >
+            {pending ? <Loader2 className="animate-spin" /> : selected ? <Check /> : null}
+            {selected ? "Remove from Cart" : "Add to Cart"}
+          </Button>
+        </div>
+      </DialogContent>
       </Dialog>
     </div>
   );
