@@ -27,6 +27,8 @@ from app.routes import (
     sources,
 )
 from app.settings import API_DIR, layout, settings
+from app.youtube import process as youtube_worker
+from app.youtube import routes as youtube_routes
 
 
 @asynccontextmanager
@@ -39,6 +41,15 @@ async def lifespan(_app: FastAPI):
         stranded = generate.sweep_stranded(session)
     if stranded:
         logger.info("swept {} draft(s) stranded by a restart", stranded)
+    # Same for processed videos: a restart mid-job leaves `youtube_job` rows at
+    # `processing`.
+    with Session(get_engine()) as session:
+        job_stranded = youtube_worker.sweep_stranded(session)
+    if job_stranded:
+        logger.info("swept {} youtube job(s) stranded by a restart", job_stranded)
+    # The one consumer of `youtube_job` rows. Five videos a day; a daemon thread
+    # in the API process replaces the old VPS pm2 worker + Redis queue.
+    youtube_worker.start()
     yield
 
 
@@ -112,6 +123,7 @@ app.include_router(pages.router)
 app.include_router(prompts.router)
 app.include_router(schedule.router)
 app.include_router(sources.router)
+app.include_router(youtube_routes.router)
 
 
 @app.get("/health")

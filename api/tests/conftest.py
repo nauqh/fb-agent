@@ -26,6 +26,33 @@ from app.settings import settings  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
+def youtube_worker_off(monkeypatch):
+    """The in-process youtube worker must not run against the test database.
+
+    The worker is a daemon thread started by the app lifespan; with this off,
+    `TestClient(app)` boots clean and no thread ever claims a test job row.
+    The worker's own loop is tested by driving `worker._one_pass` directly,
+    which needs no thread.
+    """
+    monkeypatch.setattr(settings, "youtube_worker_enabled", False)
+
+
+@pytest.fixture(autouse=True)
+def youtube_media_root(tmp_path, monkeypatch):
+    """Youtube store writes go to the test's own directory.
+
+    `DirectoryYoutubeStore` is the real module's own dev/test store — the suite
+    used to carry a duplicate of it, as did the Shorts dev server.
+    """
+    from app.youtube import storage as ytstore
+
+    monkeypatch.setattr(
+        ytstore, "store", ytstore.DirectoryYoutubeStore(str(tmp_path / "youtube"))
+    )
+    return tmp_path / "youtube"
+
+
+@pytest.fixture(autouse=True)
 def never_buy_an_image(monkeypatch):
     """No test may call the image model. Autouse, so opting in is deliberate.
 

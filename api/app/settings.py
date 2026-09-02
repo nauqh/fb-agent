@@ -386,6 +386,34 @@ class Settings(BaseSettings):
     their own documentation. Facebook fetches the URL when the post goes out, so
     it has to still resolve then.
     """
+    supabase_youtube_bucket: str = "youtube-media"
+    """Where processed videos and uploaded CTA clips go. Its own bucket, and
+    public for the same reason `supabase_bucket` is — Metricool stores the
+    *URL* and YouTube/Instagram fetch the file when the post is due, so a
+    signed URL would expire first (the old app's images died exactly that way).
+    Must accept `video/mp4`; see `supabase/buckets.sql`."""
+
+    youtube_api_key: str = ""
+    """Switches the channel Shorts picker from yt-dlp to the official Data API.
+    Unset, the picker lists via yt-dlp flat-playlist (no key, no quota, no
+    thumbnails). Set, it resolves handles and filters ≤180s properly."""
+    ytdlp_cookies_file: str = ""
+    """A Netscape browser export on disk. Obligatory on a server: datacenter
+    IPs hit YouTube's bot-check without it. The worker never writes this file
+    (the old tool's work-copy discipline becomes moot when you do not hand
+    yt-dlp a file to overwrite)."""
+    ytdlp_proxy_url: str = ""
+    """Residential egress, when the datacenter IP is blocked even with cookies.
+    An opt-in env var, exactly as the old VPS ran it."""
+    ffmpeg_path: str = ""
+    """Explicit ffmpeg binary location. Normally found on PATH; this exists so
+    a winget install that a fresh shell has not seen on PATH is available
+    without editing the environment."""
+    youtube_worker_enabled: bool = True
+    """Off in tests (conftest autouse fixture sets it false) so the worker
+    thread never runs against the throwaway database. On in production — a
+    single Railway replica is the deploy shape the single-writer code assumes."""
+
 
     x_bearer_token: str = ""
 

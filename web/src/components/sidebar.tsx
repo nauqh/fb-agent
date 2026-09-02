@@ -2,15 +2,18 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   BarChart3,
   CalendarDays,
+  Clapperboard,
   Globe,
+  History,
   Inbox,
   Layers,
   PanelLeft,
   PenLine,
+  Rocket,
   Settings2,
   type LucideIcon,
 } from "lucide-react";
@@ -73,9 +76,82 @@ const CONFIG: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/global", label: "Global", icon: Globe },
 ];
 
+/**
+ * The Shorts workspace's whole navigation.
+ *
+ * Deliberately small: the v1 tool is produce → history → settings and nothing
+ * else. The group renders in place of the Facebook `LINKS` when the workspace
+ * pill says Shorts — same rail, same active-state gold, same collapse rules,
+ * different destinations. Publishing, metrics and the channel picker are not
+ * here yet, and adding a route to this list is how they arrive.
+ */
+const SHORTS_LINKS: { href: string; label: string; icon: LucideIcon }[] = [
+  { href: "/shorts", label: "Produce", icon: Clapperboard },
+  { href: "/shorts/history", label: "History", icon: History },
+];
+
+const SHORTS_CONFIG: { href: string; label: string; icon: LucideIcon }[] = [
+  { href: "/shorts/settings", label: "Shorts Settings", icon: Rocket },
+];
+
+/** The two workspaces. Path-driven: `/shorts*` is Shorts, everything else is
+ *  the Facebook agent. This is the whole "switch between everything" — one
+ *  pill, and the nav group under it swaps. */
+type Workspace = "facebook" | "shorts";
+
+function workspaceOf(pathname: string): Workspace {
+  return pathname.startsWith("/shorts") ? "shorts" : "facebook";
+}
+
+/**
+ * Which nav href owns the current path. The longest match wins.
+ *
+ * Neither simpler rule works on its own. A bare `startsWith` lit two rows at
+ * once in the Shorts workspace — `/shorts` is a string prefix of
+ * `/shorts/history`, so Produce stayed gold on every screen in the group.
+ * Exact-match-only would fix that but unlights Review on `/review/[id]`, which
+ * is a real screen.
+ *
+ * Longest-match settles both, because it asks which link is the *most
+ * specific* one covering this path: on `/review/7` only `/review` matches; on
+ * `/shorts/history` both `/shorts` and `/shorts/history` match and the longer
+ * one takes it. The `/` in the prefix test keeps `/settings` from claiming a
+ * hypothetical `/settings-v2`.
+ *
+ * Pass every href in the rail — the winner can live in the other group
+ * (`/shorts` is in `SHORTS_LINKS`, `/shorts/settings` in `SHORTS_CONFIG`).
+ */
+function activeHref(pathname: string, hrefs: string[]): string | null {
+  const matches = hrefs.filter(
+    (href) => pathname === href || pathname.startsWith(`${href}/`),
+  );
+  if (matches.length === 0) return null;
+  return matches.reduce((best, href) => (href.length > best.length ? href : best));
+}
+
 /** The old app's rail: a plain ghost square, tinted only on hover. */
 const GHOST_ICON =
   "flex size-8 shrink-0 items-center justify-center rounded-md text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none";
+
+/** The Facebook mark — a workspace glyph drawn as the brand itself, not an
+ *  invented icon. `currentColor` so the rail's tinting applies like any other
+ *  icon. Simple-icons path. */
+function FacebookMark({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden>
+      <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+    </svg>
+  );
+}
+
+/** The YouTube mark — same role, opposite workspace. Simple-icons path. */
+function YoutubeMark({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden>
+      <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
+    </svg>
+  );
+}
 
 export function Sidebar({
   // Collapsed unless the layout's cookie says otherwise — matching the default
@@ -86,7 +162,24 @@ export function Sidebar({
   defaultCollapsed?: boolean;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const cart = useCart();
+
+  // The workspace split, computed once: path-driven, so a refresh lands in the
+  // same workspace and a link shared from the other one flips the whole nav.
+  const workspace = workspaceOf(pathname);
+  const links = workspace === "shorts" ? SHORTS_LINKS : LINKS;
+  const config = workspace === "shorts" ? SHORTS_CONFIG : CONFIG;
+
+  // One winner across both groups, so exactly one row can be gold.
+  const current = activeHref(pathname, [
+    ...links.map((link) => link.href),
+    ...config.map((link) => link.href),
+  ]);
+
+  function switchWorkspace(next: Workspace) {
+    router.push(next === "shorts" ? "/shorts" : "/sources");
+  }
 
   /**
    * Seeded from a cookie the server already read, rather than from
@@ -127,11 +220,16 @@ export function Sidebar({
   );
 
   // The Cart is in-memory and lives only on Sources, so without a count here a
-  // Cart filled and then navigated away from is invisible.
-  const counts: Record<string, number | null> = {
-    "/sources": cart.count || null,
-    "/review": queue?.review || null,
-  };
+  // Cart filled and then navigated away from is invisible. The Facebook queue
+  // badges mean nothing in the Shorts workspace, and the cart is a Sources
+  // thing — neither should paint a count onto a Shorts rail.
+  const counts: Record<string, number | null> =
+    workspace === "shorts"
+      ? {}
+      : {
+          "/sources": cart.count || null,
+          "/review": queue?.review || null,
+        };
 
   const toggleLabel = collapsed ? "Expand sidebar" : "Collapse sidebar";
 
@@ -227,6 +325,34 @@ export function Sidebar({
           </button>
         </div>
 
+        {/* The workspace switch: one pill, two destinations, path-driven. It
+            sits above the nav so the whole group under it reads as one
+            workspace — the same "two alternatives" pill the app uses for
+            sort, not a second nav. Collapsed, the labels have no room, so it
+            becomes a single icon. The icon is the workspace you would switch
+            **to** (on Facebook it shows Clapperboard: "go to Shorts"). */}
+        <div className="px-3 pb-1">
+          <div
+            className={cn(
+              "flex rounded-lg border bg-muted p-0.5",
+              collapsed && "lg:hidden",
+            )}
+          >
+            <WorkspaceButton
+              active={workspace === "facebook"}
+              onClick={() => switchWorkspace("facebook")}
+              label="Facebook"
+              mark="facebook"
+            />
+            <WorkspaceButton
+              active={workspace === "shorts"}
+              onClick={() => switchWorkspace("shorts")}
+              label="Shorts"
+              mark="youtube"
+            />
+          </div>
+        </div>
+
         <nav
           className={cn(
             // `px-3` is constant on purpose — see the width note above.
@@ -240,12 +366,55 @@ export function Sidebar({
             "lg:min-h-0 lg:flex-1 lg:flex-col lg:gap-0.5 lg:overflow-x-hidden lg:overflow-y-auto lg:pt-1 lg:pb-3",
           )}
         >
-          {LINKS.map((link) => (
+          {/* Collapsed, the workspace switch rides in the nav's own flow with
+              the **exact item geometry** — `px-3 py-2` and a `size-4` mark in
+              a relative span — so the brand glyph lands in the same pixel
+              column and row band as every nav icon. The separator below marks
+              it as the workspace header; the mark is the workspace you would
+              switch **to**: on the Facebook side it shows YouTube, and vice
+              versa. */}
+          {collapsed ? (
+            <div className="lg:mb-1 lg:border-b lg:border-border/60 lg:pb-1">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      switchWorkspace(workspace === "shorts" ? "facebook" : "shorts")
+                    }
+                    aria-label={
+                      workspace === "shorts"
+                        ? "Switch to Facebook Agent"
+                        : "Switch to Shorts Tool"
+                    }
+                    className={cn(
+                      "relative flex w-full shrink-0 items-center gap-2.5 rounded-md px-3 py-2 whitespace-nowrap transition-colors",
+                      "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                    )}
+                  >
+                    <span className="relative shrink-0">
+                      {workspace === "shorts" ? (
+                        <FacebookMark className="size-4" />
+                      ) : (
+                        <YoutubeMark className="size-4" />
+                      )}
+                    </span>
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right">
+                  {workspace === "shorts"
+                    ? "Switch to Facebook Agent"
+                    : "Switch to Shorts Tool"}
+                </TooltipContent>
+              </Tooltip>
+            </div>
+          ) : null}
+          {links.map((link) => (
             <Item
               key={link.href}
               {...link}
-              active={pathname.startsWith(link.href)}
-              count={counts[link.href]}
+              active={link.href === current}
+              count={counts[link.href] ?? null}
               collapsed={collapsed}
             />
           ))}
@@ -266,11 +435,11 @@ export function Sidebar({
                 <Generating count={queue.generating} />
               </div>
             ) : null}
-            {CONFIG.map((link) => (
+            {config.map((link) => (
               <Item
                 key={link.href}
                 {...link}
-                active={pathname.startsWith(link.href)}
+                active={link.href === current}
                 count={null}
                 collapsed={collapsed}
               />
@@ -285,6 +454,39 @@ export function Sidebar({
         </nav>
       </aside>
     </TooltipProvider>
+  );
+}
+
+function WorkspaceButton({
+  active,
+  onClick,
+  label,
+  mark,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  mark: "facebook" | "youtube";
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        "flex flex-1 items-center justify-center gap-1.5 rounded-[min(var(--radius-md),10px)] px-3 py-1 text-xs font-medium transition-colors",
+        active
+          ? "bg-background text-foreground shadow-sm"
+          : "text-muted-foreground hover:text-foreground",
+      )}
+    >
+      {mark === "facebook" ? (
+        <FacebookMark className="size-3.5" />
+      ) : (
+        <YoutubeMark className="size-3.5" />
+      )}
+      {label}
+    </button>
   );
 }
 

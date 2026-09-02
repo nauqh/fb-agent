@@ -887,3 +887,80 @@ class Draft(SQLModel, table=True):
         return (
             media.public_url(self.inset_image_path) if self.inset_image_path else None
         )
+
+
+# --- YouTube tool ------------------------------------------------------------
+#
+# The three tables the Shorts pipeline owns: one job, one schedule, one CTA
+# clip library. They sit in models.py with everything else so `create_all`
+# builds one schema and alembic diffs one model set — splitting them into their
+# own module would give the migration generator two sources of truth.
+#
+# No `user_id`, matching the rest of the app (ADR-0002): one operator, server-
+# side writes with the service key. The old tool's per-user columns existed
+# because it had Supabase Auth and multiple users; this app does not.
+
+
+
+class JobStatus(StrEnum):
+    QUEUED = "queued"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class CtaTemplate(SQLModel, table=True):
+    """The clip appended (at the end) to every processed Short.
+
+    A library, not a setting: the operator builds several clips — subscribe,
+    follow, shop — and picks one per job. `cta_video_url` is the public bucket
+    URL of the uploaded mp4; the worker fetches it *at job time*, so it must
+    still resolve when the job runs, which is the same live-URL rule the
+    images live by."""
+    __tablename__ = "cta_template"
+
+    id: int | None = Field(default=None, primary_key=True)
+    title: str
+    cta_video_url: str
+    created_at: datetime = Field(default_factory=_now)
+
+
+class YoutubeJob(SQLModel, table=True):
+    """One processed video. The row *is* the job record — no queue, no event
+    table — exactly as `Draft` is for generation.
+
+    `source_type` mirrors the old tool's enumeration: `direct` (one pasted
+    video), `channel_short` (one Short resolved from a channel's ranking), and
+    `upload` (a file the operator put in Storage). `youtube_url` is null for an
+    upload; `resolved_short_url` records the concrete Short a channel URL was
+    resolved to, so the row tells you what was actually downloaded even after
+    the channel's ranking shifts.
+    """
+
+    __tablename__ = "youtube_job"
+
+    id: int | None = Field(default=None, primary_key=True)
+    youtube_url: str | None = None
+    ingest_type: str = Field(default="youtube")
+    source_type: str | None = None
+    youtube_short_id: str | None = None
+    resolved_short_url: str | None = None
+    channel_shorts_url: str | None = None
+    shorts_rank: int | None = None
+    view_count_snapshot: int | None = None
+    like_count_snapshot: int | None = None
+    raw_title: str | None = None
+    trim_duration: int = Field(default=3)
+    cta_template_id: int = Field(default=None, foreign_key="cta_template.id", index=True)
+
+    status: JobStatus = Field(
+        default=JobStatus.QUEUED, index=True, sa_type=_stored_enum(JobStatus)
+    )
+    progress: int = Field(default=0)
+    processed_video_path: str | None = None
+    error_message: str | None = None
+
+    created_at: datetime = Field(default_factory=_now)
+    updated_at: datetime = Field(default_factory=_now)
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
