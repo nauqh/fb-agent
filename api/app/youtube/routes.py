@@ -46,7 +46,11 @@ from app.youtube import (
 
 router = APIRouter(tags=["youtube"])
 
-MAX_UPLOAD_BYTES = 200 * 1024 * 1024
+# 50MB, not 200MB: the Supabase project refuses a bucket `file_size_limit`
+# above 50MB (EntityTooLarge, measured 2026-09-04), and a clip that passes
+# this check would otherwise die behind the API as a Supabase error. Matches
+# the youtube-media row in supabase/buckets.sql.
+MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 
 
 class JobOut(BaseModel):

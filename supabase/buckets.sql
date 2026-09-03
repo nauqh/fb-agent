@@ -20,7 +20,18 @@ values
   -- project with separate databases, so they hand out the same draft ids. Two
   -- buckets keep test drafts out of the bucket Facebook fetches from.
   ('fb-agent-media-dev', 'fb-agent-media-dev', true, 10485760,
-   array['image/png', 'image/jpeg'])
+   array['image/png', 'image/jpeg']),
+  -- Shorts videos and CTA clips. `SUPABASE_YOUTUBE_BUCKET` defaults to this
+  -- name. Video is a different kind of file with a different size ceiling,
+  -- hence its own bucket (see `api/app/youtube/storage.py`).
+  --
+  -- 50MB, not the API's old 200MB: this Supabase project refuses a
+  -- `file_size_limit` above 50MB (EntityTooLarge on create/update — measured
+  -- 2026-09-04: 64MB rejected, 50MB accepted). The route's MAX_UPLOAD_BYTES
+  -- matches, so an oversized clip is refused with a readable 400 rather than
+  -- surfacing as a Supabase error behind the API.
+  ('youtube-media', 'youtube-media', true, 52428800,
+   array['video/mp4'])
 on conflict (id) do update
 set
   public = excluded.public,
