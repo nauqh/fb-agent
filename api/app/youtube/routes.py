@@ -26,13 +26,18 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
+import httpx
+from datetime import datetime, timedelta, timezone
+
 from app.db import get_session
 from app.models import (
     CtaTemplate,
     JobStatus,
     YoutubeJob,
 )
+from app.publish import metricool as publish_metricool
 from app.youtube import (
+    overview,
     sources,
 )
 from app.youtube import (
@@ -249,6 +254,137 @@ def delete_job(job_id: int, session: Session = Depends(get_session)):
     session.delete(job)
     session.commit()
     return {"success": True}
+
+
+# --- overview ---------------------------------------------------------------
+
+
+class VideoOut(BaseModel):
+    """One channel video, as the Overview table renders it."""
+
+    video_id: str
+    title: str
+    thumbnail_url: str | None
+    published_at: datetime | None
+    views: int
+    likes: int
+    comments: int
+    shares: int
+    avg_watch_s: float | None
+    watch_url: str | None
+    # short | video, when the planner knows it (some catalogs predate it).
+    kind: str | None
+
+
+@router.get("/youtube/brands")
+def list_youtube_brands():
+    """The brands an Overview can be about — the Metricool profiles with a
+    YouTube channel connected. Nothing else is a valid target, which is why this
+    exists as a read rather than leaving the picker to guess from a Page list.
+    """
+    try:
+        brands = overview.youtube_brands()
+    except overview.OverviewError as error:
+        raise HTTPException(status_code=502, detail=str(error)) from error
+    return {"brands": [brand.__dict__ for brand in brands]}
+
+
+@router.get("/youtube/overview")
+def youtube_overview(
+    brand_id: str = Query(...),
+    days: int = Query(0, ge=0, le=3650),
+):
+    """What the channel put out in the window, best first, plus the window before
+    it for the comparison line.
+
+    **`days=0` is the whole catalog** — the channel's videos are a bounded set
+    (80 on Bible Focus), so the overview's default is everything, and the window
+    pills narrow from there. A window needs a `previous` to compare against; the
+    whole catalog has none, so `days=0` returns an empty `previous` and the
+    screen shows no delta chip.
+
+    Two reads build it. The catalog (`stats/youtube/videos`) returns every video
+    the channel has — the date split happens here on `publishedAt`, since
+    Metricool ignores the window. The planner read is joined only to learn each
+    video's kind (short vs video), which the stats rows do not carry; kind is a
+    property of the post we scheduled, not of the video's analytics.
+
+    A video with no `publishedAt` is in neither window — it has no date for the
+    comparison to be about, and dropping it beats showing it in every window.
+    """
+    try:
+        rows = overview.youtube_videos(brand_id)
+    except overview.OverviewError as error:
+        raise HTTPException(status_code=502, detail=str(error)) from error
+
+    now = datetime.now(timezone.utc)
+    window_start = now - timedelta(days=days) if days > 0 else None
+    previous_start = now - timedelta(days=days * 2) if days > 0 else None
+
+    # Video id → kind, from the planner rows that mention this brand's youtube
+    # network. Only a youtube provider row has a video id under `providers[].id`.
+    kinds: dict[str, str] = {}
+    try:
+        planned = publish_metricool.list_scheduled(
+            brand_id, now - timedelta(days=730), now, client=httpx.Client(timeout=30.0)
+        )
+    except publish_metricool.PublishError:
+        planned = []  # kind is a nicety; the catalog is the table
+    for row in planned:
+        for provider in row.get("providers") or []:
+            if provider.get("network") == "youtube" and provider.get("id"):
+                kinds[str(provider["id"])] = (row.get("youtubeData") or {}).get("type") or "video"
+
+    current: list[VideoOut] = []
+    previous: list[VideoOut] = []
+    for row in rows:
+        published = _epoch_ms(row.get("publishedAt"))
+        video = VideoOut(
+            video_id=str(row.get("videoId") or ""),
+            title=str(row.get("title") or "(untitled)"),
+            thumbnail_url=row.get("thumbnailUrl") or None,
+            published_at=published,
+            views=_int(row, "views"),
+            likes=_int(row, "likes"),
+            comments=_int(row, "comments"),
+            shares=_int(row, "shares"),
+            avg_watch_s=_float(row, "averageViewDuration"),
+            watch_url=row.get("watchUrl") or None,
+            kind=kinds.get(str(row.get("videoId") or "")),
+        )
+        if published is None:
+            continue
+        if window_start is None:
+            current.append(video)
+        elif published >= window_start:
+            current.append(video)
+        elif previous_start is not None and published >= previous_start:
+            previous.append(video)
+
+    current.sort(key=lambda video: video.views, reverse=True)
+    previous.sort(key=lambda video: video.views, reverse=True)
+    return {"posts": current, "previous": previous}
+
+
+def _epoch_ms(value) -> datetime | None:
+    if not value:
+        return None
+    try:
+        # Metricool sends epoch milliseconds; a plain `datetime.fromtimestamp`
+        # would read it as 1970 and every window would be empty.
+        return datetime.fromtimestamp(int(value) / 1000, tz=timezone.utc)
+    except (TypeError, ValueError, OSError):
+        return None
+
+
+def _int(row: dict, key: str) -> int:
+    value = row.get(key)
+    return int(value) if value is not None else 0
+
+
+def _float(row: dict, key: str) -> float | None:
+    value = row.get(key)
+    return float(value) if value is not None else None
 
 
 # --- channel shorts ------------------------------------------------------

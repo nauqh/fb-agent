@@ -94,8 +94,7 @@ export async function deleteCtaTemplate(id: number): Promise<void> {
   await del(`/youtube/cta-templates/${id}`);
 }
 
-/** Presence-only readout of the tool's config — see `GET /youtube/config`. */
-export interface YoutubeConfig {
+/** Presence-only readout of the tool's config — see `GET /youtube/config`. */export interface YoutubeConfig {
   youtube_api_key_configured: boolean;
   cookies_configured: boolean;
   proxy_configured: boolean;
@@ -105,6 +104,55 @@ export interface YoutubeConfig {
 
 export async function getYoutubeConfig(): Promise<YoutubeConfig> {
   return get<YoutubeConfig>("/youtube/config");
+}
+
+/**
+ * The Shorts workspace's Overview — what a channel put out and how it landed.
+ *
+ * Reads live from Metricool, stored nowhere: their numbers move as YouTube's
+ * counts catch up, and a cached copy is a wrong copy. `days=0` is the whole
+ * catalog (a channel's videos are a bounded set) and has no `previous` to
+ * compare against — mirroring the route, `days=0` returns an empty previous.
+ */
+export interface YoutubeBrand {
+  id: string;
+  label: string;
+  channel_id: string;
+}
+
+export interface YoutubeVideo {
+  video_id: string;
+  title: string;
+  thumbnail_url: string | null;
+  published_at: string | null;
+  views: number;
+  likes: number;
+  comments: number;
+  shares: number;
+  avg_watch_s: number | null;
+  watch_url: string | null;
+  /** 'short' | 'video', when the planner knows it. */
+  kind: string | null;
+}
+
+export interface YoutubeOverview {
+  posts: YoutubeVideo[];
+  previous: YoutubeVideo[];
+}
+
+export async function listYoutubeBrands(): Promise<YoutubeBrand[]> {
+  const data = await get<{ brands: YoutubeBrand[] }>("/youtube/brands");
+  return data.brands;
+}
+
+export async function getYoutubeOverview(
+  brandId: string,
+  days: number,
+): Promise<YoutubeOverview> {
+  return get<YoutubeOverview>("/youtube/overview", {
+    brand_id: brandId,
+    days,
+  });
 }
 
 export { downloadHref };

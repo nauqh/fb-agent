@@ -87,6 +87,7 @@ const CONFIG: { href: string; label: string; icon: LucideIcon }[] = [
  */
 const SHORTS_LINKS: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/shorts", label: "Produce", icon: Clapperboard },
+  { href: "/shorts/overview", label: "Overview", icon: BarChart3 },
   { href: "/shorts/history", label: "History", icon: History },
 ];
 
