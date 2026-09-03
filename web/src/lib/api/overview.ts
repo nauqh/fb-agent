@@ -1,4 +1,5 @@
 import { del, get, post } from "@/lib/api/client";
+import { asUtc } from "@/lib/format";
 import type { Draft } from "@/lib/types";
 
 /**
@@ -43,8 +44,52 @@ export interface SavedPost {
   created_at: string;
 }
 
-export async function getPerformance(pageId: number, days = 90): Promise<PostStats[]> {
+/** The raw read. Not exported — `getPerformanceWindow` is the way in, and a
+ *  caller reaching past it would get a window with no baseline to compare. */
+async function getPerformance(pageId: number, days: number): Promise<PostStats[]> {
   return get<PostStats[]>("/overview/performance", { page_id: pageId, days });
+}
+
+/** A window of published posts, and the window immediately before it. */
+export interface PerformanceWindow {
+  /** Inside the window, best first — the server's sort, preserved. */
+  posts: PostStats[];
+  /** The `days` before that, for a comparison. Empty on a young Page. */
+  previous: PostStats[];
+}
+
+/**
+ * The window and its predecessor, from one read.
+ *
+ * The totals mean nothing without a baseline — "3.2M reach" is neither good nor
+ * bad on its own — and Metricool's stats call takes a *number of days back*
+ * rather than a range, so the previous window cannot be asked for separately:
+ * `days=60` already contains the last 30. Reading `days * 2` and cutting at the
+ * boundary is the only route to both halves, and it costs a doubled payload (a
+ * 60-day window becomes ~870 rows on History Retraced).
+ *
+ * **The boundary is fixed here, at fetch time, not wherever the result is
+ * rendered.** `Date.now()` during a render is impure — React's lint rule says
+ * so and it is right: an unrelated re-render would silently move the cutoff and
+ * a post could cross it between two paints.
+ *
+ * A post with no `published_at` counts as inside the window rather than being
+ * dropped. It is a post the Page published, and hiding it because Metricool
+ * sent no `created` would make the list disagree with the count above it.
+ */
+export async function getPerformanceWindow(
+  pageId: number,
+  days: number,
+): Promise<PerformanceWindow> {
+  const all = await getPerformance(pageId, days * 2);
+  const cutoff = Date.now() - days * 86_400_000;
+  const posts: PostStats[] = [];
+  const previous: PostStats[] = [];
+  for (const post of all) {
+    const at = post.published_at === null ? null : asUtc(post.published_at).getTime();
+    (at !== null && at < cutoff ? previous : posts).push(post);
+  }
+  return { posts, previous };
 }
 
 export async function listSaved(pageId: number): Promise<SavedPost[]> {
