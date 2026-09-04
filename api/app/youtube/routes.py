@@ -457,7 +457,10 @@ def upload_cta_template(
     data = file.file.read()
     file.file.close()
     if not data or len(data) > MAX_UPLOAD_BYTES:
-        raise HTTPException(status_code=400, detail="Clip is empty or larger than 200 MB")
+        raise HTTPException(
+            status_code=400,
+            detail="Clip is empty or larger than 50 MB (the bucket's ceiling).",
+        )
 
     stored = ytstore.store.save(data, f"cta-{uuid4().hex[:10]}.mp4")
     row = CtaTemplate(title=title or file.filename or "CTA clip", cta_video_url=ytstore.store.public_url(stored))
