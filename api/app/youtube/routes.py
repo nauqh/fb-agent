@@ -18,10 +18,11 @@ produce loop is the whole product for now.
 """
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlmodel import Session, select
@@ -45,12 +46,6 @@ from app.youtube import (
 )
 
 router = APIRouter(tags=["youtube"])
-
-# 50MB, not 200MB: the Supabase project refuses a bucket `file_size_limit`
-# above 50MB (EntityTooLarge, measured 2026-09-04), and a clip that passes
-# this check would otherwise die behind the API as a Supabase error. Matches
-# the youtube-media row in supabase/buckets.sql.
-MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 
 
 class JobOut(BaseModel):
@@ -445,27 +440,54 @@ def list_cta_templates(session: Session = Depends(get_session)):
     return {"templates": [row.model_dump() for row in rows]}
 
 
-@router.post("/youtube/cta-templates")
-def upload_cta_template(
-    file: UploadFile,
-    title: str | None = None,
-    session: Session = Depends(get_session),
-):
-    """A clip in, a library row out. The bytes are read into memory and written
-    to the bucket; the row stores the bucket *path* plus a public URL for the
-    worker to fetch at job time."""
-    data = file.file.read()
-    file.file.close()
-    if not data or len(data) > MAX_UPLOAD_BYTES:
-        raise HTTPException(
-            status_code=400,
-            detail="Clip is empty or larger than 50 MB (the bucket's ceiling).",
-        )
+class CtaUploadComplete(BaseModel):
+    """What the browser sends after it has PUT the bytes to Supabase itself.
 
-    stored = ytstore.store.save(data, f"cta-{uuid4().hex[:10]}.mp4")
-    row = CtaTemplate(title=title or file.filename or "CTA clip", cta_video_url=ytstore.store.public_url(stored))
+    `path` is the one the upload-url route minted, echoed back. The regex is
+    the guard: without it the endpoint would create a library row pointing at
+    any object in the bucket, including a processed video, and the worker
+    would concat that onto someone's Short.
+    """
+
+    path: str
+    title: str | None = None
+
+
+@router.post("/youtube/cta-templates/upload-url")
+def cta_upload_url():
+    """Mint a one-object upload URL for the browser to PUT the clip to.
+
+    The bytes never cross this API, and so never cross Vercel — production's
+    413 came from Vercel's serverless request-body ceiling, which no config
+    raises. The API's whole part is this small JSON call and the row that
+    follows in `complete`.
+    """
+    stored = f"{datetime.now(timezone.utc).strftime('%Y-%m')}/cta-{uuid4().hex[:10]}.mp4"
+    try:
+        upload_url = ytstore.store.signed_upload_url(stored)
+    except ytstore.YoutubeStoreError as error:
+        raise HTTPException(status_code=502, detail=str(error)) from error
+    return {"path": stored, "upload_url": upload_url}
+
+
+@router.post("/youtube/cta-templates/complete", status_code=201)
+def cta_upload_complete(body: CtaUploadComplete, session: Session = Depends(get_session)):
+    """A library row for bytes that already landed. Refuses a path the
+    upload-url route could not have minted, and a path with no object behind
+    it — the row is what the worker will fetch at job time, and a row over
+    nothing fails a Short days later, far from its cause.
+    """
+    if not re.fullmatch(r"\d{4}-\d{2}/cta-[0-9a-f]{10}\.mp4", body.path):
+        raise HTTPException(status_code=422, detail="Unknown upload path")
+    if not ytstore.store.exists(body.path):
+        raise HTTPException(status_code=409, detail="No clip was uploaded to that path")
+    row = CtaTemplate(
+        title=(body.title or "CTA clip").strip() or "CTA clip",
+        cta_video_url=ytstore.store.public_url(body.path),
+    )
     session.add(row)
     session.commit()
+    session.refresh(row)
     return {**row.model_dump(), "public_url": row.cta_video_url}
 
 

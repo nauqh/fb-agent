@@ -12,7 +12,7 @@
  *   one origin and the bucket never needs to be public to this screen.
  */
 
-import { del, get, post, postForm } from "@/lib/api/client";
+import { del, get, post } from "@/lib/api/client";
 
 export type JobStatus = "queued" | "processing" | "completed" | "failed";
 
@@ -82,12 +82,35 @@ export async function listCtaTemplates(): Promise<CtaTemplate[]> {
   return data.templates;
 }
 
-/** A clip in, a library row out. `title` rides as a form field. */
+/**
+ * A clip in, a library row out — without the bytes ever crossing this app.
+ *
+ * Three small calls. The API mints a path and a signed upload URL; the browser
+ * PUTs the file straight to Supabase with the token as its Bearer; the API
+ * then creates the row over the path it can prove received bytes. Production's
+ * 413 came from Vercel's serverless request-body ceiling on the old multipart
+ * route, which no config raises — this is why the file no longer goes through
+ * the proxy at all.
+ */
+const MAX_CTA_BYTES = 50 * 1024 * 1024;
+
 export async function uploadCtaTemplate(file: File, title: string): Promise<CtaTemplate> {
-  const body = new FormData();
-  body.append("file", file);
-  body.append("title", title);
-  return postForm<CtaTemplate>("/youtube/cta-templates", body);
+  if (file.size > MAX_CTA_BYTES) {
+    throw new Error("Clip is larger than 50 MB (the bucket's ceiling).");
+  }
+  const { path, upload_url } = await post<{ path: string; upload_url: string }>(
+    "/youtube/cta-templates/upload-url",
+    {},
+  );
+  const uploaded = await fetch(upload_url, {
+    method: "PUT",
+    body: file,
+    headers: { "Content-Type": "video/mp4", "x-upsert": "false" },
+  });
+  if (!uploaded.ok) {
+    throw new Error(`Supabase refused the clip (${uploaded.status}).`);
+  }
+  return post<CtaTemplate>("/youtube/cta-templates/complete", { path, title });
 }
 
 export async function deleteCtaTemplate(id: number): Promise<void> {

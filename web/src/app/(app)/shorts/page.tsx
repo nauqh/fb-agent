@@ -356,7 +356,7 @@ function CtaDialog({
             <p className="text-xs text-muted-foreground">
               {file
                 ? `${file.name} · ${(file.size / 1024 / 1024).toFixed(1)} MB`
-                : "mp4 up to 200 MB."}
+                : "mp4 up to 50 MB."}
             </p>
           </div>
         </div>

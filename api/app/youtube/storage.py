@@ -76,6 +76,71 @@ class SupabaseYoutubeStore:
     def delete(self, stored: str) -> None:
         self._call("DELETE", stored, missing_ok=True)
 
+    def exists(self, stored: str) -> bool:
+        """Whether the object is in the bucket. A HEAD, not a GET — the caller
+        only wants the answer, and a processed video is megabytes."""
+        try:
+            self._call("HEAD", stored)
+        except YoutubeStoreError:
+            return False
+        return True
+
+    def signed_upload_url(self, stored: str) -> str:
+        """A URL the **browser** can PUT this object to without any credential.
+
+        The reason this exists is Vercel: a CTA clip uploaded through the app
+        crosses Vercel's serverless request-body ceiling (about 4.5MB) and
+        comes back 413 in production long before the 50MB the bucket allows.
+        So the bytes go browser → Supabase directly, and the API's part is a
+        small JSON call: mint a token for a path it chose.
+
+        The mint is `POST /object/upload/sign/{bucket}/{path}` with the service
+        key; the browser consumes the returned relative URL — **resolved
+        against `/storage/v1`, not the project root** — with `PUT` and the
+        token as its Bearer. Both were found by experiment, not docs: the
+        storage server re-signs instead of storing if the request arrives as
+        POST, and every wrong shape answers 404 "Bucket not found" because
+        the upload token has no role claim and the handler's bucket lookup
+        runs as anon.
+
+        Running as anon is also why two RLS policies exist for this bucket
+        (see supabase/buckets.sql): objects INSERT and buckets SELECT. The
+        service key bypasses RLS; an upload token does not.
+        """
+        if not settings.supabase_url or not settings.supabase_service_key:
+            raise YoutubeStoreError(
+                "Supabase is not configured. Set SUPABASE_URL and "
+                "SUPABASE_SERVICE_KEY — there is nowhere else for videos to go."
+            )
+        root = settings.supabase_url.rstrip("/")
+        owned = self._client is None
+        client = self._client or httpx.Client(timeout=TIMEOUT)
+        try:
+            response = client.post(
+                f"{root}/storage/v1/object/upload/sign/"
+                f"{settings.supabase_youtube_bucket}/{stored}",
+                json={},
+                headers={
+                    "Authorization": f"Bearer {settings.supabase_service_key}",
+                },
+            )
+        except httpx.HTTPError as error:
+            raise YoutubeStoreError(
+                f"Supabase did not answer the upload sign: {type(error).__name__}"
+            ) from error
+        finally:
+            if owned:
+                client.close()
+        if response.is_error:
+            raise YoutubeStoreError(
+                f"Supabase refused the upload sign ({response.status_code}): "
+                f"{response.text[:200]}"
+            )
+        relative = response.json().get("url")
+        if not relative:
+            raise YoutubeStoreError("Supabase returned no upload url")
+        return f"{root}/storage/v1{relative}"
+
     def public_url(self, stored: str) -> str:
         root = settings.supabase_url.rstrip("/")
         return (
@@ -146,6 +211,15 @@ class DirectoryYoutubeStore:
 
     def public_url(self, stored: str) -> str:
         return f"{self.base_url}/{stored}"
+
+    def signed_upload_url(self, stored: str) -> str:
+        raise YoutubeStoreError(
+            "Signed browser uploads need Supabase; the directory store has no "
+            "token to hand out. Run against the real bucket to upload clips."
+        )
+
+    def exists(self, stored: str) -> bool:
+        return (self.root / stored).exists()
 
 
 def _attempt(
