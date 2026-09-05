@@ -9,6 +9,7 @@ import {
   Clock,
   Rss,
   Trash2,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -21,8 +22,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { getCompetitorPages, getSourcesConfig } from "@/lib/api/sources";
-import { setAssignments } from "@/lib/api/competitors";
+import {
+  getCompetitorPages,
+  getSourcesConfig,
+  type CompetitorPage,
+} from "@/lib/api/sources";
+import {
+  getAssignments,
+  setAssignments,
+  type Assignment,
+} from "@/lib/api/competitors";
 import { addFeed, removeFeed } from "@/lib/api/feeds";
 import {
   addSlot,
@@ -78,57 +87,30 @@ export default function SettingsScreen() {
   const { data: prompts } = useQuery(() => listPromptFiles(pageId!), [pageId], {
     enabled: pageId !== null,
   });
-  // Its own query, and its own error: this is the only thing on the screen that
-  // leaves the building, so a Metricool outage must degrade to one message in
-  // one section rather than an empty Settings screen.
+  // Two reads, and only one of them leaves the building. The assignments are
+  // local rows; the vendor call asks Metricool for **this Page's own brand
+  // set** — what a Sync from this Page would actually fill. The old query read
+  // the whole account pool on every Settings view, which stacked three
+  // different questions in one unlabelled wall of rows and paid one vendor
+  // call per Page to answer none of them. The pool is behind "Assign from the
+  // pool" now, fetched when the picker opens.
+  const { data: assignments } = useQuery(() => getAssignments(pageId!), [pageId], {
+    enabled: pageId !== null,
+  });
   const {
-    data: competitors,
+    data: ownSet,
     error: competitorsError,
     loading: competitorsLoading,
-  } = useQuery(() => getCompetitorPages(), []);
-
-  /**
-   * Assign or unassign this competitor for the Page in the switcher.
-   *
-   * Sends the whole set, because the endpoint replaces rather than merges — a
-   * tick list is a set, and sending it whole makes two fast clicks land on the
-   * state the second one described.
-   *
-   * The first assignment on a Page is a real change of behaviour: until then
-   * the Page reads whatever competitor set it owns in Metricool, and afterwards
-   * it reads only what is assigned. The hint under the pane says so, because
-   * nothing else on screen would.
-   */
-  async function toggleAssignment(providerId: string) {
-    if (pageId === null || !competitors) return;
-
-    const current = competitors
-      .filter((one) => one.assigned_page_ids.includes(pageId))
-      .map((one) => one.provider_id);
-    const next = current.includes(providerId)
-      ? current.filter((one) => one !== providerId)
-      : [...current, providerId];
-
-    try {
-      await setAssignments(
-        pageId,
-        next,
-        Object.fromEntries(competitors.map((one) => [one.provider_id, one.name])),
-      );
-      emit();
-    } catch (cause) {
-      toast.error(cause instanceof Error ? cause.message : "Could not save");
-    }
-  }
+  } = useQuery(() => getCompetitorPages([pageId!]), [pageId], {
+    enabled: pageId !== null,
+  });
 
   if (!page) {
     return <Loading label="Loading this Page" className="h-96" />;
   }
 
-  const assigned =
-    pageId === null || !competitors
-      ? 0
-      : competitors.filter((one) => one.assigned_page_ids.includes(pageId)).length;
+  const assigned = assignments?.length ?? 0;
+  const ownSetEmpty = ownSet !== null && ownSet.length === 0;
 
   const ownLengths = LIMIT_ROWS.filter(({ field }) => page[field] !== null).length;
   const ownPrompts = (prompts ?? []).filter((one) => one.source !== "global").length;
@@ -195,15 +177,20 @@ export default function SettingsScreen() {
             {
               id: "competitors",
               label: "Competitors",
-              meta: competitors ? assigned : "",
+              meta: assignments ? `${assigned} read` : "",
+              // Triangle when the Page reads nothing at all — no assignments
+              // and an empty brand set. That is the state behind "Sync changes
+              // nothing": the sync has no competitor set to fetch, and every
+              // other screen renders it as a quiet week.
+              gap: assigned === 0 && ownSetEmpty,
               body: (
                 <Competitors
                   page={page}
                   pageId={pageId}
-                  rows={competitors}
+                  assignments={assignments}
+                  ownSet={ownSet}
                   error={competitorsError}
                   loading={competitorsLoading}
-                  onToggle={toggleAssignment}
                 />
               ),
             },
@@ -398,46 +385,94 @@ function AssignToggle({
   );
 }
 
+/**
+ * What this Page reads, in the order the question is asked.
+ *
+ * Reworked 2026-09-04 after the tab sent an operator in circles: the grid was
+ * frozen four weeks back, Sync changed nothing, and this screen answered with
+ * the whole account pool and tick buttons. Three different questions were
+ * stacked in one unlabelled list — what does this Page read, what would a Sync
+ * from this Page fetch, and what else *could* it read — and the answer to the
+ * middle one (nothing; the brand's set in Metricool was empty) was invisible.
+ *
+ * Now it is three blocks, in that order:
+ *
+ * - **Reading** — the assigned list, ours, from `page_competitor`. This is the
+ *   decision, and the only thing that changes what the grid shows.
+ * - **This brand's set** — what sits under this Page in Metricool, read live
+ *   and scoped to this Page. This is what a Sync on this Page fills, and what
+ *   the fallback reads when nothing is assigned. Empty here with nothing
+ *   assigned is the "Sync does nothing" state, and the Gap names it instead of
+ *   leaving it to be rediscovered a month later.
+ * - **Rest of the pool** — everything else on the account, fetched only when
+ *   the picker opens. The old screen paid one vendor call per Page on every
+ *   view to show it always; as a picker it is a decision, not wallpaper.
+ *
+ * Assignment still replaces the set whole (`setAssignments`), and until there
+ * is one the Page is on the fallback. The banners name which state is in
+ * force, because the difference is invisible in the grid itself.
+ */
 function Competitors({
   page,
   pageId,
-  rows,
+  assignments,
+  ownSet,
   error,
   loading,
-  onToggle,
 }: {
   page: Page;
   pageId: number | null;
-  rows: Awaited<ReturnType<typeof getCompetitorPages>> | null;
+  assignments: Assignment[] | null;
+  ownSet: CompetitorPage[] | null;
   error: string | null;
   loading: boolean;
-  onToggle: (providerId: string) => void;
 }) {
-  const assigned =
-    pageId === null || !rows
-      ? 0
-      : rows.filter((one) => one.assigned_page_ids.includes(pageId)).length;
-  const silent = (rows ?? []).filter((one) => one.posts_stored === 0).length;
+  const assignedIds = (assignments ?? []).map((one) => one.competitor_page_id);
+  const fallback = assignedIds.length === 0;
+  const ownEmpty = ownSet !== null && ownSet.length === 0;
+
+  /**
+   * Assignment writes replace the set whole — a tick list is a set, and
+   * sending it whole makes two fast clicks land on the state the second one
+   * described. Only a new row's name travels, and only when known: kept rows
+   * keep their stored names, and a bare set must not wipe them.
+   */
+  async function assign(providerId: string, name: string | null) {
+    if (pageId === null) return;
+    try {
+      await setAssignments(
+        pageId,
+        [...assignedIds, providerId],
+        name ? { [providerId]: name } : {},
+      );
+      emit();
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Could not save");
+    }
+  }
+
+  async function unassign(providerId: string) {
+    if (pageId === null) return;
+    try {
+      await setAssignments(
+        pageId,
+        assignedIds.filter((id) => id !== providerId),
+      );
+      emit();
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Could not save");
+    }
+  }
 
   return (
     <Pane
       title="Competitors this Page reads"
       hint={
-        <>
-          Which of the pool this Page reads. Tick to assign; the same source can
-          feed several Pages. The pool itself is on Global.
-        </>
+        fallback
+          ? "With nothing assigned, this Page reads its own brand's set in Metricool — the second list below, which is also what Sync fills. Assigning any competitor switches it to the first list only."
+          : "The assigned list is what this Page reads; it replaces the brand set below. Sync still fills that brand set, and the pool is shared: one competitor can feed several Pages."
       }
-      meta={
-        rows ? (
-          <>
-            {assigned} of {rows.length} assigned
-            {silent ? (
-              <span className="text-destructive"> · {silent} silent</span>
-            ) : null}
-          </>
-        ) : undefined
-      }
+      meta={assignments ? `${assignments.length} read` : undefined}
     >
       {error ? (
         // This section fails alone. Everything else on the screen is a local
@@ -445,88 +480,276 @@ function Competitors({
         <p className="rounded-2xl border border-dashed p-4 text-[13px] text-destructive">
           {error}
         </p>
-      ) : loading || !rows ? (
+      ) : loading || ownSet === null || assignments === null ? (
         <Loading label="Reading Metricool" className="h-40" />
       ) : (
-        <div className="space-y-3">
-          {assigned === 0 ? (
-            <Gap title="Nothing assigned, so this Page falls back to its own Metricool set.">
-              That is not the same list — it is whatever competitors happen to
-              sit under this brand in Metricool, which is a decision nobody made
-              on purpose. Assign the ones it should read.
-            </Gap>
+        <div className="space-y-6">
+          {fallback ? (
+            ownEmpty ? (
+              <Gap title="This Page reads nothing, and Sync has nothing to fetch.">
+                Its own brand set in Metricool is empty and no competitor is
+                assigned. Add pages to the pool on Global — put them under this
+                brand so a Sync from here fills them — then assign them below.
+              </Gap>
+            ) : (
+              <Gap title="Nothing assigned, so this Page is on the fallback.">
+                It reads whatever sits under its own brand in Metricool, listed
+                below — a list configured for the brand, not a decision made for
+                this Page.
+              </Gap>
+            )
+          ) : ownEmpty ? (
+            <p className="text-[13px] text-muted-foreground">
+              This brand&rsquo;s own Metricool set is empty, so a Sync from this
+              Page fetches nothing — the assigned list is fed by whichever brand
+              hosts each competitor, and their Syncs.
+            </p>
           ) : null}
 
-          {/* A grid, not one long list: twenty-six full-width rows is a scroll,
-              and the row has three short fields in it. Silent ones come first
-              from the server, so reading order still puts the finding at the
-              top left. */}
-          <div className="grid gap-2 sm:grid-cols-2 2xl:grid-cols-3">
-            {rows.map((competitor) => (
-              // `provider_id` is the Facebook page id, which is all
-              // facebook.com needs — no screen name to go stale. A silent
-              // competitor is the row you most want to open: it answers whether
-              // the page died or merely went quiet.
-              <div
-                key={competitor.provider_id}
-                className={cn(
-                  "group flex items-center gap-2.5 rounded-lg border px-3 py-2 text-[13px] transition-colors hover:bg-muted/50",
-                  competitor.posts_stored === 0 && "border-destructive/40",
-                )}
-              >
-                {/* The row used to be one big <a>. It cannot be now: a toggle
-                    nested in a link navigates on click, and the assignment is
-                    the thing this row is here to change. The name keeps the
-                    link — opening a silent competitor is how you tell a dead
-                    page from a quiet one. */}
-                <a
-                  href={`https://www.facebook.com/${competitor.provider_id}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex min-w-0 flex-1 items-center gap-2.5"
-                >
-                  <CompetitorMark
-                    name={competitor.name}
-                    picture={competitor.picture}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <p className="flex items-center gap-1.5 truncate font-medium">
-                      <span className="truncate">{competitor.name}</span>
+          <Block
+            label={
+              fallback
+                ? "Reading — nothing assigned"
+                : `Reading — ${assignedIds.length} assigned`
+            }
+          >
+            {fallback ? (
+              <p className="text-[13px] text-muted-foreground">
+                Nothing assigned. The fallback below is what this Page reads.
+              </p>
+            ) : (
+              <div className="grid gap-2 sm:grid-cols-2 2xl:grid-cols-3">
+                {assignments.map((one) => (
+                  <div
+                    key={one.competitor_page_id}
+                    className="group flex items-center gap-2.5 rounded-lg border px-3 py-2 text-[13px] transition-colors hover:bg-muted/50"
+                  >
+                    {/* Assignments carry a name and a note but no picture —
+                        the mark falls back to initials, which is enough to
+                        recognise a row you assigned yourself. */}
+                    <a
+                      href={`https://www.facebook.com/${one.competitor_page_id}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex min-w-0 flex-1 items-center gap-2.5"
+                    >
+                      <CompetitorMark
+                        name={one.name ?? one.competitor_page_id}
+                        picture={null}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-medium">
+                          {one.name ?? one.competitor_page_id}
+                        </p>
+                        {one.note ? (
+                          <p className="truncate text-muted-foreground">
+                            {one.note}
+                          </p>
+                        ) : null}
+                      </div>
                       <ExternalLink className="size-3 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
-                    </p>
-                    <p className="tabular-nums text-muted-foreground">
-                      {(competitor.followers ?? 0).toLocaleString()} followers
-                    </p>
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => void unassign(one.competitor_page_id)}
+                      aria-label="Stop reading"
+                      title={`${page.name} reads this competitor. Click to stop.`}
+                      className="shrink-0 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100 focus-visible:opacity-100"
+                    >
+                      <X className="size-3.5" />
+                    </button>
                   </div>
-                  <span
+                ))}
+              </div>
+            )}
+          </Block>
+
+          <Block label="This brand's set — what Sync fills">
+            {ownEmpty ? (
+              <p className="text-[13px] text-muted-foreground">
+                Empty in Metricool. Nothing arrives here until pages are added
+                to this brand&rsquo;s set on Global.
+              </p>
+            ) : (
+              /* Silent ones come first from the server, so reading order puts
+                  the finding at the top left. */
+              <div className="grid gap-2 sm:grid-cols-2 2xl:grid-cols-3">
+                {ownSet.map((competitor) => (
+                  /* `provider_id` is the Facebook page id, which is all
+                      facebook.com needs — no screen name to go stale. A silent
+                      competitor is the row you most want to open: it answers
+                      whether the page died or merely went quiet. */
+                  <div
+                    key={competitor.provider_id}
                     className={cn(
-                      "shrink-0 text-right tabular-nums",
-                      competitor.posts_stored === 0
-                        ? "text-destructive"
-                        : "text-muted-foreground",
+                      "group flex items-center gap-2.5 rounded-lg border px-3 py-2 text-[13px] transition-colors hover:bg-muted/50",
+                      competitor.posts_stored === 0 && "border-destructive/40",
                     )}
                   >
-                    {competitor.posts_stored === 0
-                      ? "no posts"
-                      : `${competitor.posts_stored} post${competitor.posts_stored === 1 ? "" : "s"}`}
-                  </span>
-                </a>
+                    <a
+                      href={`https://www.facebook.com/${competitor.provider_id}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex min-w-0 flex-1 items-center gap-2.5"
+                    >
+                      <CompetitorMark
+                        name={competitor.name}
+                        picture={competitor.picture}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="flex items-center gap-1.5 truncate font-medium">
+                          <span className="truncate">{competitor.name}</span>
+                          <ExternalLink className="size-3 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                        </p>
+                        <p className="tabular-nums text-muted-foreground">
+                          {(competitor.followers ?? 0).toLocaleString()} followers
+                        </p>
+                      </div>
+                      <span
+                        className={cn(
+                          "shrink-0 text-right tabular-nums",
+                          competitor.posts_stored === 0
+                            ? "text-destructive"
+                            : "text-muted-foreground",
+                        )}
+                      >
+                        {competitor.posts_stored === 0
+                          ? "no posts"
+                          : `${competitor.posts_stored} post${competitor.posts_stored === 1 ? "" : "s"}`}
+                      </span>
+                    </a>
 
-                <AssignToggle
-                  assigned={
-                    pageId !== null &&
-                    competitor.assigned_page_ids.includes(pageId)
-                  }
-                  pageName={page.name}
-                  otherPages={competitor.assigned_page_ids.length}
-                  onToggle={() => onToggle(competitor.provider_id)}
-                />
+                    <AssignToggle
+                      assigned={assignedIds.includes(competitor.provider_id)}
+                      pageName={page.name}
+                      otherPages={competitor.assigned_page_ids.length}
+                      onToggle={() =>
+                        assignedIds.includes(competitor.provider_id)
+                          ? void unassign(competitor.provider_id)
+                          : void assign(competitor.provider_id, competitor.name)
+                      }
+                    />
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            )}
+          </Block>
+
+          <PoolPicker
+            pageName={page.name}
+            assignedIds={assignedIds}
+            ownProviderIds={ownSet.map((one) => one.provider_id)}
+            onAssign={assign}
+          />
         </div>
       )}
     </Pane>
+  );
+}
+
+/**
+ * The rest of the pool, on demand.
+ *
+ * The unscoped list costs one Metricool call per Page, which is why it sits
+ * behind a click rather than being paid on every Settings view. Candidates are
+ * rows neither assigned nor in this brand's set — those two are on screen
+ * above — deduplicated by Facebook page id, since one competitor can sit in
+ * several brands' sets and would otherwise appear once per host. Its host is
+ * shown, because where a competitor sits decides which Sync fills it — the
+ * exact fact the frozen grid hid.
+ */
+function PoolPicker({
+  pageName,
+  assignedIds,
+  ownProviderIds,
+  onAssign,
+}: {
+  pageName: string;
+  assignedIds: string[];
+  ownProviderIds: string[];
+  onAssign: (providerId: string, name: string | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const { data: pool, error, loading } = useQuery(() => getCompetitorPages(), [], {
+    enabled: open,
+  });
+
+  if (!open) {
+    return (
+      <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
+        <Plus className="size-3.5" />
+        Assign from the pool
+      </Button>
+    );
+  }
+
+  const seen = new Set([...ownProviderIds, ...assignedIds]);
+  const candidates = (pool ?? []).filter((row) => {
+    if (seen.has(row.provider_id)) return false;
+    seen.add(row.provider_id);
+    return true;
+  });
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <p className="font-mono text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
+          Rest of the pool
+        </p>
+        <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
+          Hide
+        </Button>
+      </div>
+
+      {error ? (
+        <p className="rounded-2xl border border-dashed p-4 text-[13px] text-destructive">
+          {error}
+        </p>
+      ) : loading || pool === null ? (
+        <Loading label="Reading the pool" className="h-24" />
+      ) : candidates.length === 0 ? (
+        <p className="text-[13px] text-muted-foreground">
+          Every competitor in the pool is already on screen above.
+        </p>
+      ) : (
+        <div className="grid gap-2 sm:grid-cols-2 2xl:grid-cols-3">
+          {candidates.map((row) => (
+            <div
+              key={`${row.page_id}-${row.provider_id}`}
+              className="group flex items-center gap-2.5 rounded-lg border px-3 py-2 text-[13px] transition-colors hover:bg-muted/50"
+            >
+              <a
+                href={`https://www.facebook.com/${row.provider_id}`}
+                target="_blank"
+                rel="noreferrer"
+                title={`Sits in ${row.page_name}'s Metricool set`}
+                className="flex min-w-0 flex-1 items-center gap-2.5"
+              >
+                <CompetitorMark name={row.name} picture={row.picture} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-medium">{row.name}</p>
+                  {/* Which brand hosts it is the fact this row exists to
+                      surface: it is where a Sync has to run for this
+                      competitor's posts to be stored at all. */}
+                  <p className="truncate text-muted-foreground">
+                    in {row.page_name}&rsquo;s set ·{" "}
+                    {row.posts_stored === 0
+                      ? "no posts stored"
+                      : `${row.posts_stored} post${row.posts_stored === 1 ? "" : "s"} stored`}
+                  </p>
+                </div>
+              </a>
+              <AssignToggle
+                assigned={false}
+                pageName={pageName}
+                otherPages={row.assigned_page_ids.length}
+                onToggle={() => onAssign(row.provider_id, row.name)}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
