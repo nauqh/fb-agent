@@ -254,13 +254,21 @@ function CompetitorsTab() {
  * looks exactly like a quiet week. Nothing on screen said there was nothing to
  * choose from, so the reasonable conclusion was that generation was broken.
  *
- * The three causes need three different next moves, which is why they are told
- * apart rather than sharing one "no results" line:
+ * The causes need different next moves, which is why they are told apart rather
+ * than sharing one "no results" line:
  *
  * - nothing reaches this Page at all — **Sync cannot help**, competitors have to
  *   be added in Metricool and assigned on Settings;
+ * - posts have arrived and none is ticked — Settings, and Sync cannot help
+ *   either;
  * - competitors are assigned but no post has arrived — Sync is exactly right;
  * - anything else, where saying less is better than guessing.
+ *
+ * The second case is new: a Page with no assignments used to read its own
+ * Metricool set and now reads nothing, so a screen that was full can be empty
+ * without a single post having been lost. Saying "nothing has been synced" there
+ * would be a lie about a pool that is sitting right behind it — see
+ * `_visible_to` for why the fallback went.
  *
  * The counts are local, so this cannot hang or 502 while explaining an outage.
  * See `get_competitor_reach`.
@@ -290,6 +298,11 @@ function EmptyGrid({
   // Nothing is assigned and nothing ever arrived under this Page's own name.
   const nothingReaches = reach.assigned === 0 && reach.own_set_posts === 0;
 
+  // Nothing is ticked, but this Page's own Metricool set holds posts. The state
+  // the removed provenance fallback used to hide: Fitness Girls, 2026-09-05,
+  // zero assignments and **484 posts** that a full grid was being drawn from.
+  const nothingTicked = reach.assigned === 0 && reach.own_set_posts > 0;
+
   // Assignments exist and are reading nothing, while this Page's own set holds
   // posts. Measured on Bible Focus, 2026-08-17: one assignment, zero visible
   // posts, **430 posts in its own set**. Not an empty week — a hidden pool.
@@ -300,9 +313,11 @@ function EmptyGrid({
       <p className="text-sm font-medium">
         {nothingReaches
           ? "No competitors reach this Page yet"
-          : hiddenByAssignment
-            ? "This Page's assignments are reading nothing"
-            : "Nothing has been synced for this Page"}
+          : nothingTicked
+            ? "No competitors are ticked for this Page"
+            : hiddenByAssignment
+              ? "This Page's assignments are reading nothing"
+              : "Nothing has been synced for this Page"}
       </p>
       <p className="mx-auto mt-2 max-w-lg text-xs leading-relaxed text-muted-foreground">
         {nothingReaches ? (
@@ -316,19 +331,29 @@ function EmptyGrid({
             . A competitor added under any Page can be read by all of them, which
             is what the 100-per-account ceiling forces.
           </>
+        ) : nothingTicked ? (
+          <>
+            <strong>{reach.own_set_posts.toLocaleString()} posts</strong>{" "}
+            have arrived through this Page&apos;s own Metricool set and none of
+            their competitors is ticked for it, so the grid reads nothing.{" "}
+            <strong>Sync will not help</strong> — the posts are already here. Tick
+            the ones this Page should read on{" "}
+            <Link href="/settings" className="underline underline-offset-2">
+              Settings
+            </Link>
+            . A Page shows exactly what is ticked for it, at every count.
+          </>
         ) : hiddenByAssignment ? (
           <>
             {reach.assigned} competitor{reach.assigned === 1 ? " is" : "s are"}{" "}
             assigned to this Page and none of them has a stored post — while{" "}
             <strong>{reach.own_set_posts.toLocaleString()} posts</strong> sit in its
-            own Metricool set, hidden. A Page reads its own set only until it has
-            its first assignment; after that it reads exactly what is ticked. Fix
-            it on{" "}
+            own Metricool set, from competitors it is not ticked to read. Fix it on{" "}
             <Link href="/settings" className="underline underline-offset-2">
               Settings
             </Link>{" "}
-            — tick competitors that are actually posting, or untick them all to go
-            back to reading the whole set.
+            — tick the competitors that are actually posting. Unticking
+            everything empties the grid rather than restoring the set.
           </>
         ) : (
           <>

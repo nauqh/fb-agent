@@ -1,13 +1,19 @@
 """Which Competitors feed which Pages.
 
 The rule these pin down is not obvious from either table: **assignment decides,
-provenance is the fallback**, and the fallback ends per Page the moment that
-Page has one assignment.
+and nothing else does**. `synced_for_page_id` is provenance — which Page's
+Metricool set a post arrived through — and it no longer grants any Page the
+right to read anything.
 
 It exists because of a limit outside this codebase. Metricool allows 100
 competitors per *account*, not per page, so five Pages that should each watch
 the same twenty sources cannot each be given them. A competitor is added once,
 under whichever Page has room, and assigned to every Page that should read it.
+
+There used to be a provenance fallback for a scope with zero assignments, and
+two tests here pinned it. It is gone: it made the first assignment a cliff, a
+full grid collapsing to one competitor, which is the bug that was reported
+against The Fact Feed. `_visible_to` carries the measurements.
 """
 
 from datetime import datetime, timezone
@@ -58,20 +64,19 @@ def _two_pages(session) -> Page:
     return other
 
 
-def test_without_assignments_a_page_sees_the_set_it_owns_in_metricool(
-    client, session, page
-):
-    """The fallback. Every Page is in this state before anything is assigned.
+def test_without_assignments_a_page_reads_nothing(client, session, page):
+    """No fallback. Owning the Metricool set a post arrived through is not a
+    claim on reading it.
 
-    Without it, adding the column would blank every grid in the app until
-    someone had ticked their way through Settings.
+    Post "a" was synced under this very Page and is still invisible to it. That
+    is the whole change: the grid answers "what is ticked", never "what turned
+    up", so an empty grid always has the same one-line explanation.
     """
     other = _two_pages(session)
     session.add_all([_post("a", WATCHED, page.id, 1), _post("b", OTHER, other.id, 2)])
     session.commit()
 
-    mine = client.get("/sources/competitors", params={"page_ids": page.id}).json()
-    assert {row["external_id"] for row in mine} == {"a"}
+    assert client.get("/sources/competitors", params={"page_ids": page.id}).json() == []
 
 
 def test_an_assignment_lets_a_page_read_another_pages_competitor(client, session, page):
@@ -87,19 +92,17 @@ def test_an_assignment_lets_a_page_read_another_pages_competitor(client, session
     assert {row["external_id"] for row in mine} == {"b"}
 
 
-def test_one_assignment_ends_the_fallback_for_that_page(client, session, page):
-    """Abrupt by design.
+def test_an_assignment_grants_only_what_it_names(client, session, page):
+    """The grid is the tick list, and only the tick list.
 
-    A Page showing its Metricool set *plus* its assignments is a grid nobody can
-    predict — the operator assigns one competitor and cannot tell which of the
-    twenty on screen is there because they chose it.
+    Post "a" is this Page's own by provenance and post "b" is the other Page's;
+    ticking the other Page's competitor makes "b" readable without making "a"
+    readable, so the two questions really are independent.
     """
     other = _two_pages(session)
     session.add_all([_post("a", WATCHED, page.id, 1), _post("b", OTHER, other.id, 2)])
     session.commit()
 
-    # Assign only the other Page's competitor: "a" was visible by provenance and
-    # stops being.
     client.put(
         "/competitors/assignments",
         params={"page_id": page.id},
@@ -110,8 +113,14 @@ def test_one_assignment_ends_the_fallback_for_that_page(client, session, page):
     assert {row["external_id"] for row in mine} == {"b"}
 
 
-def test_removing_the_last_assignment_restores_the_fallback(client, session, page):
-    """Not an error state — it is the state every Page starts in."""
+def test_removing_the_last_assignment_empties_the_grid(client, session, page):
+    """Unticking everything is not a way back to reading everything.
+
+    It was, and that was the trap: the count going 1 → 0 swapped the grid to a
+    different pool, and 0 → 1 swapped it back and collapsed it to one
+    competitor. Post "a" is this Page's own by provenance and stays invisible
+    throughout, so the count no longer changes which question is being asked.
+    """
     session.add(_post("a", WATCHED, page.id, 1))
     session.add(PageCompetitor(page_id=page.id, competitor_page_id=OTHER))
     session.commit()
@@ -124,8 +133,7 @@ def test_removing_the_last_assignment_restores_the_fallback(client, session, pag
         json={"competitor_page_ids": []},
     )
 
-    mine = client.get("/sources/competitors", params={"page_ids": page.id}).json()
-    assert {row["external_id"] for row in mine} == {"a"}
+    assert client.get("/sources/competitors", params={"page_ids": page.id}).json() == []
 
 
 def test_assignments_are_replaced_wholesale_not_merged(client, session, page):

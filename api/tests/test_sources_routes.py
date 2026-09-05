@@ -55,13 +55,39 @@ def test_browsing_rss_writes_nothing(client, engine, monkeypatch):
     assert _count(engine) == 0
 
 
-def _two_posts(monkeypatch, *, apart_days: int = 4):
+WATCHED = "101151834965447"
+"""A competitor providerId, ticked by `_assign` wherever a grid read is asserted."""
+
+
+def _assign(session, page_id: int, *competitor_page_ids: str) -> None:
+    """Tick these competitors for this Page.
+
+    Every grid read goes through the tick list and only the tick list —
+    `_visible_to` has no provenance fallback — so a fixture that writes posts
+    without assigning their competitors builds a pool no Page can see. Writing
+    the assignment is now part of arranging a competitor test, the same way
+    writing the post is.
+    """
+    session.add_all(
+        PageCompetitor(page_id=page_id, competitor_page_id=competitor)
+        for competitor in competitor_page_ids
+    )
+    session.commit()
+
+
+def _two_posts(monkeypatch, session, *, apart_days: int = 4):
     """One old-and-loud post, one new-and-quiet, `apart_days` apart.
 
     The pair the ordering tests need: whichever way the grid is sorted, the two
     answers are different, so an assertion cannot pass by accident.
+
+    Both sit under one competitor, which is what these tests are about — the
+    round-robin in the reactions sort ranks *within* a competitor before taking
+    a second from any, so a pair split across two competitors would come back
+    interleaved and test the interleaving rather than the order.
     """
     louder = datetime(2026, 8, 1, tzinfo=timezone.utc)
+    _assign(session, 1, WATCHED)
     monkeypatch.setattr(
         routes.metricool,
         "fetch_competitor_posts",
@@ -70,6 +96,7 @@ def _two_posts(monkeypatch, *, apart_days: int = 4):
                 kind=SourceKind.COMPETITOR_POST,
                 external_id="older-but-louder",
                 synced_for_page_id=page.id,
+                competitor_page_id=WATCHED,
                 reactions=9_000,
                 published_at=louder,
                 text="…",
@@ -78,6 +105,7 @@ def _two_posts(monkeypatch, *, apart_days: int = 4):
                 kind=SourceKind.COMPETITOR_POST,
                 external_id="newer-but-quieter",
                 synced_for_page_id=page.id,
+                competitor_page_id=WATCHED,
                 reactions=12,
                 published_at=louder + timedelta(days=apart_days),
                 text="…",
@@ -87,7 +115,7 @@ def _two_posts(monkeypatch, *, apart_days: int = 4):
 
 
 def test_competitor_posts_are_written_on_arrival_and_ranked_by_reactions(
-    client, engine, monkeypatch
+    client, engine, session, monkeypatch
 ):
     """The one kind that browsing *does* write — they arrive by sync.
 
@@ -97,7 +125,7 @@ def test_competitor_posts_are_written_on_arrival_and_ranked_by_reactions(
     surfacing the weakest posts: on the real pool the newest 60 topped out at
     2,031 reactions while the same week held one at 42,738.
     """
-    _two_posts(monkeypatch)
+    _two_posts(monkeypatch, session)
 
     rows = client.get("/sources/competitors", params={"page_ids": 1}).json()
 
@@ -108,9 +136,9 @@ def test_competitor_posts_are_written_on_arrival_and_ranked_by_reactions(
     assert _count(engine, SourceKind.COMPETITOR_POST) == 2
 
 
-def test_newest_is_still_available_and_really_reorders(client, monkeypatch):
+def test_newest_is_still_available_and_really_reorders(client, session, monkeypatch):
     """Both orders, because the client asked to keep the old one beside the new."""
-    _two_posts(monkeypatch)
+    _two_posts(monkeypatch, session)
 
     rows = client.get(
         "/sources/competitors", params={"page_ids": 1, "sort": "newest"}
@@ -122,7 +150,9 @@ def test_newest_is_still_available_and_really_reorders(client, monkeypatch):
     ]
 
 
-def test_a_reactions_sort_cannot_be_frozen_by_an_old_viral_post(client, monkeypatch):
+def test_a_reactions_sort_cannot_be_frozen_by_an_old_viral_post(
+    client, session, monkeypatch
+):
     """The reason the old order existed, and the reason the window has to stay.
 
     Nothing prunes `source_item`, so ranking the whole table by reactions and
@@ -134,7 +164,7 @@ def test_a_reactions_sort_cannot_be_frozen_by_an_old_viral_post(client, monkeypa
     Fifty days apart is well outside `lookback_days`, so the loud one is out of
     the window and must not be shown *despite* having 750x the reactions.
     """
-    _two_posts(monkeypatch, apart_days=50)
+    _two_posts(monkeypatch, session, apart_days=50)
 
     rows = client.get("/sources/competitors", params={"page_ids": 1}).json()
 
@@ -148,7 +178,7 @@ def test_a_reactions_sort_cannot_be_frozen_by_an_old_viral_post(client, monkeypa
     assert len(everything) == 2, "the window hides a row from one order, not from the table"
 
 
-def test_a_stale_pool_still_ranks_rather_than_answering_empty(client, monkeypatch):
+def test_a_stale_pool_still_ranks_rather_than_answering_empty(client, session, monkeypatch):
     """The window is anchored to the newest post in scope, not to the clock.
 
     Subtracting the window from `now()` is the obvious version and it returns an
@@ -159,7 +189,7 @@ def test_a_stale_pool_still_ranks_rather_than_answering_empty(client, monkeypatc
     Both fixtures here are dated 2026-08 and the suite runs long after that, so
     a clock-anchored window would return nothing.
     """
-    _two_posts(monkeypatch)
+    _two_posts(monkeypatch, session)
 
     rows = client.get("/sources/competitors", params={"page_ids": 1}).json()
 
@@ -168,7 +198,7 @@ def test_a_stale_pool_still_ranks_rather_than_answering_empty(client, monkeypatc
 
 
 def test_a_resync_refreshes_the_image_url_and_metrics_but_not_the_text(
-    client, engine, monkeypatch
+    client, engine, session, monkeypatch
 ):
     """Facebook's CDN URLs are signed and expire in about four days.
 
@@ -176,6 +206,8 @@ def test_a_resync_refreshes_the_image_url_and_metrics_but_not_the_text(
     the post is still on screen. Metrics move with it. The text does not: it is
     what the operator chose, and a Draft's provenance must not drift.
     """
+
+    _assign(session, 1, WATCHED)
 
     def sync(image_url: str, reactions: int, text: str, **params):
         monkeypatch.setattr(
@@ -186,6 +218,7 @@ def test_a_resync_refreshes_the_image_url_and_metrics_but_not_the_text(
                     kind=SourceKind.COMPETITOR_POST,
                     external_id="same_post",
                     synced_for_page_id=page.id,
+                    competitor_page_id=WATCHED,
                     image_url=image_url,
                     reactions=reactions,
                     text=text,
@@ -267,6 +300,7 @@ def test_a_competitor_post_already_written_from_is_flagged(
     """
     from app.models import Draft
 
+    _assign(session, 1, WATCHED)
     monkeypatch.setattr(
         routes.metricool,
         "fetch_competitor_posts",
@@ -275,12 +309,14 @@ def test_a_competitor_post_already_written_from_is_flagged(
                 kind=SourceKind.COMPETITOR_POST,
                 external_id="spent",
                 synced_for_page_id=page.id,
+                competitor_page_id=WATCHED,
                 text="…",
             ),
             SourceItemBase(
                 kind=SourceKind.COMPETITOR_POST,
                 external_id="fresh",
                 synced_for_page_id=page.id,
+                competitor_page_id=WATCHED,
                 text="…",
             ),
         ],
@@ -397,7 +433,9 @@ def test_the_competitor_pool_spans_every_page_by_default(client, session, monkey
     whichever Page, and read by all of them.
 
     `synced_for_page_id` still records which set a post arrived through. It is
-    provenance now, not ownership.
+    provenance only — it grants nothing — so each Page here is ticked for the
+    competitor its own post came from, and the default scope is the union of
+    every Page's tick list rather than a bypass of them.
     """
     other = Page(name="The Fact Feed", facebook_page_id="603815099479680",
                  metricool_blog_id="5600362")
@@ -405,13 +443,19 @@ def test_the_competitor_pool_spans_every_page_by_default(client, session, monkey
     session.commit()
     session.refresh(other)
 
+    watched_by_two = "104188601272158"
+    _assign(session, 1, WATCHED)
+    _assign(session, other.id, watched_by_two)
+
     session.add_all(
         [
             SourceItem(kind=SourceKind.COMPETITOR_POST, external_id="a",
                        author="Watched By One", synced_for_page_id=1,
+                       competitor_page_id=WATCHED,
                        published_at=datetime(2026, 8, 1, tzinfo=timezone.utc)),
             SourceItem(kind=SourceKind.COMPETITOR_POST, external_id="b",
                        author="Watched By Two", synced_for_page_id=other.id,
+                       competitor_page_id=watched_by_two,
                        published_at=datetime(2026, 8, 2, tzinfo=timezone.utc)),
         ]
     )
@@ -560,11 +604,13 @@ def test_reach_counts_used_sources_the_grid_window_is_hiding(client, session):
     no longer visible to it. Distinct, because two drafts from one post is one
     used source, which is what the marker means.
     """
+    _assign(session, 1, WATCHED)
     used, unused = (
         SourceItem(
             kind=SourceKind.COMPETITOR_POST,
             external_id=name,
             synced_for_page_id=1,
+            competitor_page_id=WATCHED,
             published_at=datetime(2026, 8, 1, tzinfo=timezone.utc),
         )
         for name in ("already-written-from", "never-touched")

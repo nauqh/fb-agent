@@ -109,27 +109,44 @@ def _assigned_to(session: Session, scope_ids: list[int]) -> list[str]:
 def _visible_to(session: Session, scope_ids: list[int]):
     """Which stored competitor posts these Pages may read.
 
-    **Assignment decides, provenance is the fallback.** With assignments, a post
-    is visible to a Page because someone chose that competitor for it — which is
-    the whole point, since Metricool's 100-competitor ceiling means the set a
-    competitor happens to sit in says nothing about which Pages should read it.
+    **Assignment decides, and nothing else does.** A post is visible to a Page
+    because someone chose that competitor for it — which is the whole point,
+    since Metricool's 100-competitor ceiling means the set a competitor happens
+    to sit in says nothing about which Pages should read it.
 
-    Without any assignment for the scope, it falls back to provenance: the sets
-    those Pages own in Metricool. That fallback is not politeness, it is what
-    makes this shippable — the moment the column exists, every Page has zero
-    assignments, and a strict reading would blank every grid in the app until
-    someone had ticked their way through the Settings screen.
+    This used to fall back to provenance — `synced_for_page_id`, the sets those
+    Pages own in Metricool — whenever a scope had no assignments at all. The
+    fallback was a rollout concession: the moment the column existed every Page
+    had zero assignments, and a strict reading would have blanked every grid
+    until someone had ticked their way through Settings.
 
-    The fallback ends per scope, not globally: assigning one competitor to one
-    Page switches that Page to assignments alone. That is abrupt by design.
-    A Page in a half-configured state, showing its Metricool set *plus* its
-    assignments, is a grid nobody can predict.
+    It is removed because the concession outlived the rollout and was actively
+    misleading. Two Pages read entirely different things through one screen with
+    nothing on it saying which mode was in force, and the switch between them
+    fired on the **first** assignment. Measured 2026-09-05:
+
+        Fitness Girls   0 assignments, 484 posts on screen   (provenance)
+        Bible Focus     1 assignment,    0 posts on screen   (assignment)
+
+    Bible Focus is not the broken one — it is the honest one. Going from zero
+    assignments to one collapsed a full grid to a single competitor, and that is
+    exactly the bug that was reported against The Fact Feed: its `created_at`
+    column shows one assignment at 2026-08-10 11:23:14, Ancient History
+    Explorers, and twenty-five more added in one second at 14:50:06. For those
+    three and a half hours the grid was that one competitor and nothing else,
+    which is precisely what the operator saw and could not explain from Settings.
+
+    A cliff at one assignment is worse than a floor at zero. Now the rule reads
+    the same at every count: a Page shows what is ticked for it, so an empty grid
+    means an empty tick list rather than a mode nobody was told about. The cost
+    is that a Page with nothing assigned shows nothing — see `CompetitorReach`
+    and the Sources empty state, which name that case rather than leaving it to
+    look like a quiet week.
     """
     base = SourceItem.kind == SourceKind.COMPETITOR_POST
-    assigned = _assigned_to(session, scope_ids)
-    if assigned:
-        return base & SourceItem.competitor_page_id.in_(assigned)  # type: ignore[union-attr]
-    return base & SourceItem.synced_for_page_id.in_(scope_ids)  # type: ignore[union-attr]
+    return base & SourceItem.competitor_page_id.in_(  # type: ignore[union-attr]
+        _assigned_to(session, scope_ids)
+    )
 
 
 class SourceSort(str, Enum):
@@ -372,12 +389,21 @@ class CompetitorReach(BaseModel):
     """
 
     assigned: int
-    """`page_competitor` rows for the scope. Zero means the provenance fallback."""
+    """`page_competitor` rows for the scope. Zero is now an empty grid.
+
+    It used to mean the provenance fallback, and a Page could show a full grid
+    on zero assignments. `_visible_to` says why that ended. The screen leans on
+    this hardest in the zero case, because that is the one where Sync is not the
+    answer and Settings is.
+    """
 
     own_set_posts: int
     """Stored posts that arrived through these Pages' own Metricool sets.
 
-    What a sync would have filled. Zero alongside `assigned == 0` is the state
+    What a sync would have filled. No longer what the grid reads — it is kept
+    because it is the difference between "nothing has arrived" and "plenty has
+    arrived and none of it is ticked", which are the two halves of an empty grid
+    and want opposite next moves. Zero alongside `assigned == 0` is the state
     worth naming out loud: nothing reaches this Page at all, and no amount of
     pressing Sync will change that.
     """
