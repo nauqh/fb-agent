@@ -208,8 +208,6 @@ def get_competitor_posts(
             _upsert(session, fetched, refresh_volatile=True)
         session.commit()
 
-    query = select(SourceItem).where(visible)
-
     if sort is SourceSort.REACTIONS:
         # **Ranked by reactions, but only inside the lookback window.**
         #
@@ -228,9 +226,7 @@ def get_competitor_posts(
         # is the failure this file already warns about twice. Anchoring to the
         # data means the answer is always "the best of the most recent week we
         # have", which is the same thing whenever the pool is fresh.
-        #
-        # `published_at` descending is the tiebreak, so equal reactions still
-        # read newest-first rather than by insertion order.
+        windowed = [visible]
         newest_at = session.exec(
             select(func.max(SourceItem.published_at)).where(visible)
         ).one()
@@ -238,19 +234,83 @@ def get_competitor_posts(
             window = newest_at - timedelta(
                 days=sources_config.competitors.lookback_days
             )
-            query = query.where(
+            windowed += [
                 col(SourceItem.published_at).is_not(None),
                 col(SourceItem.published_at) >= window,
-            )
-        query = query.order_by(
+            ]
+
+        # **One competitor cannot own the grid.**
+        #
+        # A flat `ORDER BY reactions` was the whole ranking, and on a Page with
+        # a loud competitor it turned 60 slots into one publisher's feed.
+        # Measured 2026-09-05, top 60 by reactions:
+        #
+        #     Fitness Girls    59 of 60 David J Harris Jr.   18 authors in window
+        #     The Fact Feed    33 of 60 Things You Don't Know 19 authors in window
+        #     History Retraced 21 of 60 The Historian's Den   17 authors in window
+        #
+        # The Fact Feed reads 26 assigned competitors and 19 of them published
+        # inside the window; 8 of those 19 reached the grid not at all. That is
+        # the complaint — Settings says a Page reads many competitors and the
+        # grid shows one — and it is not a data problem: every one of those posts
+        # is stored, visible, and in the window. It simply lost 60 comparisons to
+        # a page that gets 100x the reactions of everyone it is ranked against.
+        #
+        # So rank *within* each competitor first, and take a round at a time:
+        # every competitor's best post before any competitor's second. The grid
+        # opens on the strongest post from each of the 19, which is what "best of
+        # the last 7 days" was supposed to mean — reactions still order each
+        # round, so the loudest publisher still leads, it just cannot repeat
+        # until everyone else has had a turn. Self-tuning: with two competitors
+        # in the window they split 30/30, with sixty they get one each.
+        #
+        # Partitioned on `author`, not `competitor_page_id`, because 819 stored
+        # rows predate that column and hold null — see `VOLATILE`. Those rows
+        # carry the same author string as their backfilled siblings, so `author`
+        # is the key that treats one competitor as one competitor.
+        #
+        # A window function rather than fetching the window and interleaving in
+        # Python: History Retraced's window is 791 rows, and `grid_limit` exists
+        # so that a grid read does not carry the pool across the wire.
+        best_first = (
+            # `published_at` descending is the tiebreak, so equal reactions still
+            # read newest-first rather than by insertion order.
             col(SourceItem.reactions).desc().nulls_last(),
             col(SourceItem.published_at).desc(),
+        )
+        ranked = (
+            select(
+                col(SourceItem.id).label("id"),
+                func.row_number()
+                .over(partition_by=col(SourceItem.author), order_by=best_first)
+                .label("rank"),
+                col(SourceItem.reactions).label("reactions"),
+                col(SourceItem.published_at).label("published_at"),
+            )
+            .where(*windowed)
+            .subquery()
+        )
+        query = (
+            select(SourceItem)
+            .join(ranked, col(SourceItem.id) == ranked.c.id)
+            .order_by(
+                ranked.c.rank,
+                ranked.c.reactions.desc().nulls_last(),
+                ranked.c.published_at.desc(),
+            )
         )
     else:
         # Newest first, unwindowed — a strict "what has arrived lately" read.
         # No window is needed because recency *is* the ranking here: the newest
         # 60 of a growing pool are recent by construction.
-        query = query.order_by(col(SourceItem.published_at).desc())
+        #
+        # Deliberately *not* interleaved by competitor. This order is a log, and
+        # a log that has been reshuffled to look fair is no longer answering the
+        # question it was asked. Reactions is a ranking, and a ranking is the
+        # thing that owes every competitor a hearing.
+        query = select(SourceItem).where(visible).order_by(
+            col(SourceItem.published_at).desc()
+        )
 
     rows = session.exec(query.limit(sources_config.competitors.grid_limit)).all()
 
