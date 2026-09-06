@@ -77,8 +77,12 @@ def _scope(session: Session, page_ids: list[int] | None) -> list[Page]:
 
     So a source is added to one Page's competitor set in Metricool and read by
     all of them. `synced_for_page_id` stays on the row, but as *provenance* —
-    which Page's set it arrived through — rather than as ownership. It is what
-    this filter narrows on when the operator wants one Page's set specifically.
+    which Page's set it arrived through — rather than as ownership.
+
+    What this narrows is the **read**: the Pages whose tick lists `_visible_to`
+    unions. It no longer narrows the sync, which always covers every brand —
+    provenance is where the allowance had room, and a Page's freshness must not
+    depend on it. See `get_competitor_posts`.
 
     Deliberately unlike RSS, which stays per-Page: feeds cost nothing to list
     twice, and the beats genuinely do not overlap.
@@ -102,6 +106,62 @@ def _assigned_to(session: Session, scope_ids: list[int]) -> list[str]:
             select(PageCompetitor.competitor_page_id)  # type: ignore[arg-type]
             .where(PageCompetitor.page_id.in_(scope_ids))  # type: ignore[union-attr]
             .distinct()
+        ).all()
+    )
+
+
+def _sync_targets(session: Session, pages: list[Page]) -> list[Page]:
+    """The brands a sync for these Pages has to fetch from.
+
+    Not the same question as "which Pages am I looking at", and conflating the
+    two is what froze Bodybuilding Tips N Tricks for 27 days. `fetch_competitor_
+    posts` is per-`blogId`: a competitor's posts arrive only through the brand it
+    sits under in Metricool, and which brand that is was decided by where the
+    100-competitor allowance had room. Bodybuilding reads seven competitors, its
+    own brand set is **empty**, and three of the seven are hosted by Fitness
+    Girls — so Sync there asked for Bodybuilding's set, was correctly told it has
+    none, and changed nothing while 241 current posts sat under a brand nobody
+    had reason to open.
+
+    The host is read from posts already stored rather than from Metricool, so
+    this costs one query and no vendor call. Measured 2026-09-06:
+
+        History Retraced   17 ticked -> History Retraced, The Fact Feed
+        The Fact Feed      26 ticked -> History Retraced, The Fact Feed
+        Bodybuilding        7 ticked -> Fitness Girls
+        Fitness Recipes    15 ticked -> Fitness Girls
+
+    The scope's own Pages are always included. That is what covers a competitor
+    freshly added to this brand's set and ticked before anything of theirs has
+    ever been fetched — there is no stored row to read a host from yet, and the
+    overwhelmingly common case is that it was added right here.
+
+    The gap it leaves: tick a competitor hosted by a brand that hosts nothing
+    else you read, before any of its posts exist locally, and this will not
+    reach it until some other sync stores one. Settings names the host brand on
+    every pool row, which is the compensation; storing it on `page_competitor`
+    would close it properly and costs a column and a migration.
+    """
+    scope_ids = [page.id for page in pages]
+    hosts: set[int] = set()
+
+    ticked = _assigned_to(session, scope_ids)
+    if ticked:
+        hosts = {
+            host
+            for host in session.exec(
+                select(SourceItem.synced_for_page_id)  # type: ignore[arg-type]
+                .where(SourceItem.kind == SourceKind.COMPETITOR_POST)
+                .where(SourceItem.competitor_page_id.in_(ticked))  # type: ignore[union-attr]
+                .distinct()
+            ).all()
+            if host is not None
+        }
+
+    wanted = hosts | set(scope_ids)
+    return list(
+        session.exec(
+            select(Page).where(Page.id.in_(wanted)).order_by(Page.name)  # type: ignore[union-attr,arg-type]
         ).all()
     )
 
@@ -190,28 +250,41 @@ def get_competitor_posts(
     No time-based cooldown. A cooldown guesses at how stale is too stale; the
     operator looking at the grid knows, and the button is right there.
 
-    A sync now costs one Metricool call **per Page in scope**, so the automatic
-    empty-pool sync is the one to watch as Pages are added: it is the only path
-    that fans out without the operator asking for it.
+    **A sync fetches the brands that feed the scope, not the brands the scope
+    is.** Those are different — see `_sync_targets`, which is where the reason
+    lives. Syncing the scope's own brands is what left Bodybuilding Tips N Tricks
+    27 days stale: its Metricool set is empty, so its Sync button fetched nothing
+    while the competitors it reads were filling up under Fitness Girls. Sorting
+    by Newest could not help either — nothing new had been stored to sort.
+
+    Still one Metricool call per brand fetched, and the fetch is the expensive
+    part. Measured 2026-09-06, whole account: 1,677 posts, **31.4s**, of which
+    four brands account for 24s and six empty ones cost 1.3s each. Reaching only
+    the hosts brings a Bodybuilding sync to one call, about 2.3s.
+
+    Sequential on purpose. Threading would bound a full-account sync at its
+    slowest brand — roughly 10s — and that is the fix to reach for if this grows,
+    but it is concurrency added to a route that has none.
     """
     pages = _scope(session, page_ids)
     scope_ids = [page.id for page in pages]
     visible = _visible_to(session, scope_ids)
 
-    # Counted over what the *sync* would fill — the Pages' own Metricool sets —
-    # not over what is visible. Those differ once assignments exist, and using
-    # the visible count would re-sync on every read for a Page whose assigned
-    # competitors happen to be quiet: zero visible is a legitimate answer there,
-    # not an empty pool. That is a 5.5s, 1.6MB vendor call per read.
+    # Counted across **every** competitor post, not the scope's own sets. This
+    # question is "has a sync ever run", and the scoped count answered a
+    # different one: a Page whose Metricool set is empty has zero of its own
+    # posts permanently, so `stored == 0` held on every read and fired a vendor
+    # call that fetched nothing, every time. Six of ten brands are in that state
+    # today. Counting the pool makes this fire once, on a genuinely empty
+    # database, which is the first-run case it was written for.
     stored = session.exec(
         select(func.count())
         .select_from(SourceItem)
         .where(SourceItem.kind == SourceKind.COMPETITOR_POST)
-        .where(SourceItem.synced_for_page_id.in_(scope_ids))  # type: ignore[union-attr]
     ).one()
 
     if refresh or stored == 0:
-        for page in pages:
+        for page in _sync_targets(session, pages):
             try:
                 fetched = metricool.fetch_competitor_posts(page)
             except metricool.MetricoolError as error:

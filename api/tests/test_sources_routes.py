@@ -272,6 +272,136 @@ def test_a_plain_read_does_not_sync(client, monkeypatch):
     assert len(calls) == 2
 
 
+def test_a_sync_fetches_the_brand_that_hosts_what_this_page_reads(
+    client, session, monkeypatch
+):
+    """Sync the brands that *feed* the scope, not the brands the scope *is*.
+
+    `fetch_competitor_posts` is per-`blogId`, so a competitor's posts arrive only
+    through the brand it sits under — and which brand that is was decided by
+    where the 100-competitor allowance had room, not by who reads it. Measured
+    2026-09-06 on Bodybuilding Tips N Tricks: seven assigned competitors, its own
+    Metricool set empty, three of the seven hosted by Fitness Girls. Pressing
+    Sync there asked for Bodybuilding's set, was told it has none, and left the
+    grid 27 days stale with 241 current posts waiting under another brand.
+
+    Page 1 here is Bodybuilding: it ticks a competitor whose only stored post
+    arrived under Page 2, so a sync scoped to Page 1 must reach Page 2's brand.
+    """
+    other = Page(
+        name="Hosts The Competitors",
+        facebook_page_id="603815099479680",
+        metricool_blog_id="6307776",
+    )
+    session.add(other)
+    session.commit()
+    session.refresh(other)
+
+    # The one stored post is what records where this competitor is hosted.
+    session.add(
+        SourceItem(
+            kind=SourceKind.COMPETITOR_POST,
+            external_id="hosted-elsewhere",
+            competitor_page_id=WATCHED,
+            synced_for_page_id=other.id,
+            published_at=datetime(2026, 8, 1, tzinfo=timezone.utc),
+            text="…",
+        )
+    )
+    session.commit()
+    _assign(session, 1, WATCHED)
+
+    fetched_for: list[str] = []
+    monkeypatch.setattr(
+        routes.metricool,
+        "fetch_competitor_posts",
+        lambda page, **_: fetched_for.append(page.name) or [],
+    )
+
+    client.get("/sources/competitors", params={"page_ids": 1, "refresh": True})
+
+    assert other.name in fetched_for
+
+
+def test_a_sync_leaves_brands_this_page_does_not_read_alone(
+    client, session, monkeypatch
+):
+    """The other half: reaching the hosts is not an excuse to sync everything.
+
+    A full-account sync is 1,677 posts and 31.4s across ten brands (measured
+    2026-09-06), most of it for brands the Page in scope reads nothing from.
+    Page 2 here hosts nothing Page 1 ticks, so it is not fetched.
+    """
+    other = Page(
+        name="Unrelated Brand",
+        facebook_page_id="603815099479680",
+        metricool_blog_id="6307776",
+    )
+    session.add(other)
+    session.commit()
+    _assign(session, 1, WATCHED)
+
+    fetched_for: list[str] = []
+    monkeypatch.setattr(
+        routes.metricool,
+        "fetch_competitor_posts",
+        lambda page, **_: fetched_for.append(page.name) or [],
+    )
+
+    client.get("/sources/competitors", params={"page_ids": 1, "refresh": True})
+
+    assert fetched_for == ["History Retraced"]
+
+
+def test_an_empty_brand_set_does_not_resync_on_every_read(
+    client, session, monkeypatch
+):
+    """The auto-sync asks "has a sync ever run", not "has this Page's set filled".
+
+    Those came apart the moment a brand held no competitors of its own. The
+    count used to be scoped to the Pages being read, and for such a Page it is
+    zero permanently — so `stored == 0` held on *every* read and fired a vendor
+    call that fetched nothing, every time. Six of ten brands were in that state
+    when this was written.
+
+    Page 2 here is one of them: nothing ever arrives under its own id. Once the
+    pool has been filled by anything at all, reading it must stop syncing.
+    """
+    other = Page(
+        name="Empty Metricool Set",
+        facebook_page_id="603815099479680",
+        metricool_blog_id="6307776",
+    )
+    session.add(other)
+    session.commit()
+    session.refresh(other)
+
+    calls: list[str] = []
+
+    def only_page_one(page, **_):
+        calls.append(page.name)
+        if page.id != 1:
+            return []  # This brand's set is empty upstream.
+        return [
+            SourceItemBase(
+                kind=SourceKind.COMPETITOR_POST,
+                external_id="p1",
+                synced_for_page_id=page.id,
+                competitor_page_id=WATCHED,
+                text="…",
+            )
+        ]
+
+    monkeypatch.setattr(routes.metricool, "fetch_competitor_posts", only_page_one)
+
+    client.get("/sources/competitors", params={"page_ids": 1})  # fills the pool
+    calls.clear()
+
+    client.get("/sources/competitors", params={"page_ids": other.id})
+    client.get("/sources/competitors", params={"page_ids": other.id})
+    assert calls == []  # its own set is empty, but the pool is not
+
+
 def test_a_metricool_failure_is_502_not_an_empty_grid(client, monkeypatch):
     """An empty grid reads as "no competitor posted this week"."""
 
