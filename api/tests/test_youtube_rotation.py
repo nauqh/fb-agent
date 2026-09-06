@@ -78,6 +78,36 @@ def test_a_dead_video_fails_on_the_first_client(monkeypatch, no_sleep):
     assert len(attempts) == 1
 
 
+def test_without_a_proxy_the_cookieless_pass_never_runs(monkeypatch, no_sleep):
+    """Production did six attempts where four were possible.
+
+    Once the clients were exhausted with cookies, the second pass repeated all
+    of them with the cookies removed — from the same datacenter IP, which can
+    only ever answer with the bot-check. It also overwrote `last_error`, so the
+    operator was told to re-export a cookies file that was working fine.
+    """
+    monkeypatch.setattr(sources.settings, "ytdlp_proxy_url", "")
+    attempts = _run_and_count(monkeypatch, "ERROR: [youtube] x: The page needs to be reloaded.")
+
+    assert len(attempts) == len(sources.PLAYER_CLIENTS)
+    # Only the cookieless pass sets `cookiefile` to an explicit None; a run with
+    # no export configured leaves the key out altogether, so the presence of the
+    # key holding None — not `.get()` returning None — is what identifies it.
+    assert not any(
+        "cookiefile" in options and options["cookiefile"] is None
+        for options in attempts
+    )
+
+
+def test_with_a_proxy_the_cookieless_pass_runs(monkeypatch, no_sleep):
+    """The retry is sound when something else supplies the anonymity."""
+    monkeypatch.setattr(sources.settings, "ytdlp_proxy_url", "http://proxy.example:8080")
+    attempts = _run_and_count(monkeypatch, "ERROR: [youtube] x: The page needs to be reloaded.")
+
+    assert len(attempts) == 2 * len(sources.PLAYER_CLIENTS)
+    assert attempts[-1]["cookiefile"] is None
+
+
 def test_bot_signals_reach_the_rotation(monkeypatch, no_sleep):
     """Every signal in the list must actually rotate — the list is only useful
     if `_run` consults it, and this is the assertion that ties the two."""

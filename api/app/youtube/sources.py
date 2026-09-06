@@ -375,6 +375,15 @@ FORMAT = (
 )
 
 PLAYER_CLIENTS = (
+    # First because it is the only combination upstream recommends for a
+    # *logged-in* download, which is every download this tool makes. Sending
+    # cookies moves YouTube onto `tv_downgraded`, and that client is the one
+    # currently answering "The page needs to be reloaded" — so the three
+    # clients below, all chosen when the tool ran anonymously, fail as a group
+    # the moment cookies start working. Measured on Railway: with cookies all
+    # three returned the SABR error, without cookies all three returned the
+    # bot-check (yt-dlp/yt-dlp#17389).
+    "default,web_embedded",
     "tv_embedded,mweb",
     "android,web",
     "ios,mweb",
@@ -551,13 +560,29 @@ def _run(
     """Run a download (or a listing) with the player-client rotation.
 
     The rotation is the port of the old outer loop: each client is tried in
-    order, and only a `_BOT_SIGNALS` miss moves to the next one. A cookie
-    failure gets one retry without the file before the rotation even starts,
-    because a stale export fails identically under every client.
+    order, and only a `_BOT_SIGNALS` miss moves to the next one. A whole second
+    pass without the cookies exists for a stale export, which fails identically
+    under every client — but it runs only behind a proxy, because anonymous is
+    a thing you can be from a residential IP and not from this one.
     """
     last_error: Exception | None = None
 
-    for attempt in (0, 1):
+    # The second, cookieless pass only earns its place when there is a proxy to
+    # make it anonymous. Without one it repeats the request from the same
+    # datacenter IP with the credentials removed, which is the thing the cookie
+    # branch below already refuses to do and for the same reason: it cannot
+    # succeed, and it teaches the bot-checker that the IP is worth blocking.
+    # Observed doing exactly that in production — three clients failed with
+    # cookies, then three more announced themselves as unauthenticated, and the
+    # only lasting effect was on Railway's reputation.
+    #
+    # It also fixed the error message for free. `_friendly` reports
+    # `last_error`, so the anonymous pass overwrote a real diagnosis ("the page
+    # needs to be reloaded") with the bot-check that its own missing cookies
+    # had caused, and told the operator to re-export a file that was working.
+    passes = (0, 1) if settings.ytdlp_proxy_url.strip() else (0,)
+
+    for attempt in passes:
         use_cookies = attempt == 0
         for player_client in PLAYER_CLIENTS:
             try:
