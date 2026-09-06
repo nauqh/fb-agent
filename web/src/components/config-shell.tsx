@@ -34,7 +34,15 @@ export type ConfigSection = {
   /** Also the URL hash, so a section can be linked to and survives a reload. */
   id: string;
   label: string;
-  /** The count or figure that describes this section, right-aligned. */
+  /**
+   * The count or figure that describes this section, right-aligned.
+   *
+   * `PENDING` while the query behind it is in flight. Undefined means this
+   * section has no figure at all — a different fact, and the rail has to render
+   * them differently: a blank where a number is coming reads as "nothing here",
+   * which is exactly the wrong answer for the column whose job is to report on
+   * sections you cannot see.
+   */
   meta?: React.ReactNode;
   /**
    * Something here is unset, and it stops something else from working. Renders
@@ -127,7 +135,11 @@ export function ConfigShell({
                     onClick={() => open(section.id)}
                     aria-current={section.id === shown?.id ? "page" : undefined}
                     className={cn(
-                      "group flex shrink-0 items-center gap-2 rounded-md px-2.5 py-1.5 text-[13px] whitespace-nowrap transition-colors lg:w-full",
+                      // The press is on pointer-*down*, which is the whole
+                      // point: feedback that waits for the click has already
+                      // lost the feeling of directness. 100ms and a hair under
+                      // 1.0 — enough to feel, not enough to notice.
+                      "group flex shrink-0 items-center gap-2 rounded-md px-2.5 py-1.5 text-[13px] whitespace-nowrap transition-[transform,background-color,color] duration-100 active:scale-[0.98] lg:w-full",
                       section.id === shown?.id
                         ? "bg-accent font-medium text-foreground"
                         : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
@@ -150,6 +162,17 @@ export function ConfigShell({
     </div>
   );
 }
+
+/**
+ * Stand-in for a figure that has not arrived yet.
+ *
+ * Measured before this existed: on first paint the rail showed Feeds, Prompts
+ * and Competitors with no figure at all, for as long as their queries took —
+ * three sections reporting nothing, on the column that exists to report. An
+ * en dash at the same width as a one- or two-digit count also stops the row
+ * reflowing when the number lands.
+ */
+export const PENDING = <span aria-hidden>&ndash;</span>;
 
 function RailLabel({ section }: { section: ConfigSection }) {
   return (

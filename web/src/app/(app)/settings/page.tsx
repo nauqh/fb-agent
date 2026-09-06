@@ -13,7 +13,7 @@ import {
 import { toast } from "sonner";
 
 import { CompetitorMark } from "@/components/competitor-mark";
-import { Block, ConfigShell, Gap, Pane } from "@/components/config-shell";
+import { Block, ConfigShell, Gap, Pane, PENDING } from "@/components/config-shell";
 import { Loading } from "@/components/loading";
 import { ScreenHeader } from "@/components/screen";
 import { Button } from "@/components/ui/button";
@@ -126,6 +126,16 @@ export default function SettingsScreen() {
   return (
     <ConfigShell
       header={<ScreenHeader title="Settings" />}
+      // Three groups rather than one list of six. The sections did not change
+      // shape, but "This Page" over all of them was a label that ruled nothing
+      // out — every section on this screen is about this Page. Naming what a
+      // section *is for* lets the rail be read as three short lists.
+      //
+      // Grouping rather than merging is the deliberate half. Feeds and
+      // Competitors are both sources and the Sources screen tabs them together,
+      // but folding them into one pane would cost 1,200px of scroll and two of
+      // the counts below — and the counts are the point of this rail
+      // (`config-shell.tsx`). A group heading buys the same adjacency for free.
       groups={[
         {
           label: "This Page",
@@ -137,44 +147,23 @@ export default function SettingsScreen() {
               body: <Identity page={page} />,
             },
             {
-              id: "feeds",
-              label: "Feeds",
-              meta: sources?.feeds.length ?? "",
-              gap: sources ? sources.feeds.length === 0 : false,
-              body: <Feeds pageId={pageId} sources={sources} />,
-            },
-            {
               id: "times",
               label: "Publishing times",
-              meta: slots?.length ?? "",
+              meta: slots ? slots.length : PENDING,
               gap: slots ? slots.length === 0 : false,
               body: (
                 <TimeSlots pageId={pageId} slots={slots} refresh={refreshSlots} />
               ),
             },
-            {
-              id: "writing",
-              label: "Writing",
-              meta: ownLengths > 0 ? `${ownLengths}/5` : "house",
-              gap: promptsWithoutLengths,
-              body: (
-                <Writing
-                  page={page}
-                  ownPrompts={ownPrompts}
-                  unenforced={promptsWithoutLengths}
-                />
-              ),
-            },
-            {
-              id: "prompts",
-              label: "Prompts",
-              meta: prompts ? `${ownPrompts}/${prompts.length}` : "",
-              body: <Prompts pageId={pageId} files={prompts} />,
-            },
+          ],
+        },
+        {
+          label: "Sources",
+          sections: [
             {
               id: "competitors",
               label: "Competitors",
-              meta: assignments ? `${assigned} read` : "",
+              meta: assignments ? `${assigned} read` : PENDING,
               // Triangle when nothing is ticked. Since `_visible_to` reads the
               // tick list and only the tick list, that is a Page whose
               // Competitors grid is empty — and every other screen renders it
@@ -187,6 +176,38 @@ export default function SettingsScreen() {
                   assignments={assignments}
                   error={competitorsError}
                   loading={competitorsLoading}
+                />
+              ),
+            },
+            {
+              id: "feeds",
+              label: "Feeds",
+              meta: sources ? sources.feeds.length : PENDING,
+              gap: sources ? sources.feeds.length === 0 : false,
+              body: <Feeds pageId={pageId} sources={sources} />,
+            },
+          ],
+        },
+        {
+          label: "Output",
+          sections: [
+            {
+              id: "writing",
+              label: "Writing",
+              // Both halves, because the section now holds both and the
+              // disagreement between them is what the triangle is for:
+              // "house · 2/3" is a Page with its own prompts and no lengths.
+              meta: prompts
+                ? `${ownLengths > 0 ? `${ownLengths}/5` : "house"} · ${ownPrompts}/${prompts.length}`
+                : PENDING,
+              gap: promptsWithoutLengths,
+              body: (
+                <Writing
+                  page={page}
+                  pageId={pageId}
+                  files={prompts}
+                  ownPrompts={ownPrompts}
+                  unenforced={promptsWithoutLengths}
                 />
               ),
             },
@@ -362,7 +383,7 @@ function AssignToggle({
       type="button"
       onClick={onToggle}
       title={`Let ${pageName} read this competitor.`}
-      className="flex shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted"
+      className="flex shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-xs text-muted-foreground transition-[transform,background-color,color] duration-100 hover:bg-muted active:scale-95"
     >
       <Plus className="size-3" />
       Assign
@@ -407,6 +428,9 @@ function Competitors({
   loading: boolean;
 }) {
   const assignedIds = (assignments ?? []).map((one) => one.competitor_page_id);
+  // Lifted out of `PoolPicker` so the header can hold the trigger and the
+  // picker can hold the list.
+  const [poolOpen, setPoolOpen] = useState(false);
 
   /**
    * Assignment writes replace the set whole — a tick list is a set, and
@@ -422,19 +446,34 @@ function Competitors({
         [...assignedIds, providerId],
         name ? { [providerId]: name } : {},
       );
+      toast.success(`${page.name} now reads ${name ?? providerId}.`);
       emit();
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : "Could not save");
     }
   }
 
-  async function unassign(providerId: string) {
+  /**
+   * Untick, with an Undo rather than a confirmation.
+   *
+   * Both halves are deliberate. A write that says nothing on success is a write
+   * the operator has to verify by looking — these two were silent, and only an
+   * error ever reached the screen. And a dialog would be the wrong instrument:
+   * unticking destroys nothing, because `set_assignments` keeps a removed row's
+   * note and re-ticking restores it (`routes/competitors.py`). Confirming
+   * reversible actions is what trains people to click through the dialogs that
+   * do matter.
+   */
+  async function unassign(providerId: string, name: string | null) {
     if (pageId === null) return;
     try {
       await setAssignments(
         pageId,
         assignedIds.filter((id) => id !== providerId),
       );
+      toast.success(`${page.name} no longer reads ${name ?? providerId}.`, {
+        action: { label: "Undo", onClick: () => void assign(providerId, name) },
+      });
       emit();
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : "Could not save");
@@ -446,6 +485,18 @@ function Competitors({
       title="Competitors this Page reads"
       hint="This list is the whole of it — the Competitors grid on Sources shows exactly what is ticked here, at every count. The pool is shared, so one competitor can feed several Pages, and which brand it sits under in Metricool does not matter."
       meta={assignments ? `${assignments.length} read` : undefined}
+      // The one action this section has, in the header rather than under an
+      // 800px list. `Pane` has carried an `action` slot beside the count since
+      // it was written and nothing had used it; the eye is already going to
+      // that corner for the figure.
+      action={
+        assignments && !poolOpen ? (
+          <Button variant="outline" size="sm" onClick={() => setPoolOpen(true)}>
+            <Plus className="size-3.5" />
+            Assign from the pool
+          </Button>
+        ) : null
+      }
     >
       {error ? (
         // This section fails alone. Everything else on the screen is a local
@@ -497,12 +548,19 @@ function Competitors({
                       </div>
                       <ExternalLink className="size-3 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
                     </a>
+                    {/* Visible at rest, not revealed on hover. It was
+                        `opacity-0 group-hover:opacity-100`, which on a touch
+                        screen means the only way to untick a competitor does
+                        not exist — there is no hover to reveal it with. Faint
+                        is enough to keep it quiet. */}
                     <button
                       type="button"
-                      onClick={() => void unassign(one.competitor_page_id)}
+                      onClick={() =>
+                        void unassign(one.competitor_page_id, one.name)
+                      }
                       aria-label="Stop reading"
                       title={`${page.name} reads this competitor. Click to stop.`}
-                      className="shrink-0 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100 focus-visible:opacity-100"
+                      className="shrink-0 rounded p-1 text-muted-foreground opacity-45 transition-[opacity,transform,background-color,color] duration-100 hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100 focus-visible:opacity-100 active:scale-90"
                     >
                       <X className="size-3.5" />
                     </button>
@@ -512,11 +570,14 @@ function Competitors({
             </Block>
           )}
 
-          <PoolPicker
-            pageName={page.name}
-            assignedIds={assignedIds}
-            onAssign={assign}
-          />
+          {poolOpen ? (
+            <PoolPicker
+              pageName={page.name}
+              assignedIds={assignedIds}
+              onAssign={assign}
+              onHide={() => setPoolOpen(false)}
+            />
+          ) : null}
         </div>
       )}
     </Pane>
@@ -541,24 +602,17 @@ function PoolPicker({
   pageName,
   assignedIds,
   onAssign,
+  onHide,
 }: {
   pageName: string;
   assignedIds: string[];
   onAssign: (providerId: string, name: string | null) => void;
+  onHide: () => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const { data: pool, error, loading } = useQuery(() => getCompetitorPages(), [], {
-    enabled: open,
-  });
-
-  if (!open) {
-    return (
-      <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
-        <Plus className="size-3.5" />
-        Assign from the pool
-      </Button>
-    );
-  }
+  // Mounting *is* opening — the trigger lives in the pane header now, and this
+  // renders only once it has been pressed. So the vendor call fires on mount
+  // and still never on a plain Settings view.
+  const { data: pool, error, loading } = useQuery(() => getCompetitorPages(), []);
 
   const seen = new Set(assignedIds);
   const candidates = (pool ?? []).filter((row) => {
@@ -573,7 +627,7 @@ function PoolPicker({
         <p className="font-mono text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
           The pool — not yet assigned here
         </p>
-        <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
+        <Button variant="ghost" size="sm" onClick={onHide}>
           Hide
         </Button>
       </div>
@@ -876,12 +930,32 @@ const LIMIT_ROWS: { field: LimitField; label: string; group: string }[] = [
   { field: "first_comment_max_paragraphs", label: "Max ¶", group: "First comment" },
 ];
 
+/**
+ * What this Page is told to write, and what it is held to. One section.
+ *
+ * They were two — Writing and Prompts — and the seam was visible in the code
+ * before it was visible on screen: `promptsWithoutLengths` is computed in the
+ * screen and rendered as a warning in *Writing* about the state of *Prompts*.
+ * Its own text is the argument for merging them: "a prompt asking for a shorter
+ * hook is a request; the validator is what enforces it." An operator reading
+ * that had to hold two rail sections in their head to see one rule, and the
+ * disagreement was only visible from the half that was not causing it.
+ *
+ * Now the request and the enforcement are on one screen, in that order: the
+ * numbers first because they are five inputs and a Save, the prompt editor
+ * below because it is 700px and its own tabs. The pane runs long. That is the
+ * cost, and it is cheaper than the seam.
+ */
 function Writing({
   page,
+  pageId,
+  files,
   ownPrompts,
   unenforced,
 }: {
   page: Page;
+  pageId: number | null;
+  files: PromptFile[] | null;
   ownPrompts: number;
   unenforced: boolean;
 }) {
@@ -890,13 +964,14 @@ function Writing({
       title="How this Page writes"
       hint={
         <>
-          Leave a box empty to use the house number. These are the lengths the
-          writer is told to hit <em>and</em> the ones a draft is checked against
-          &mdash; they cannot disagree.
+          The prompts tell the writer what to aim for; the lengths are what a
+          draft is checked against. They cannot disagree &mdash; leave a box
+          empty to use the house number.
         </>
       }
+      meta={files ? `${files.filter((one) => one.source !== "global").length} overridden` : undefined}
     >
-      <div className="space-y-5">
+      <div className="space-y-6">
         {unenforced ? (
           <Gap
             title={`This Page has ${ownPrompts === 1 ? "its own prompt" : `${ownPrompts} prompts of its own`} but house lengths.`}
@@ -909,6 +984,10 @@ function Writing({
         ) : null}
 
         <WritingLimits page={page} />
+
+        <div className="border-t pt-6">
+          <Prompts pageId={pageId} files={files} />
+        </div>
       </div>
     </Pane>
   );
@@ -1044,6 +1123,9 @@ const SOURCE_LABEL: Record<PromptFile["source"], string> = {
  *
  * One prompt at a time since 2026-08-17. Three 10-row textareas stacked made a
  * 1,400px section in which the one being edited was usually off screen.
+ *
+ * A `Block` inside Writing rather than a `Pane` of its own since 2026-09-06 —
+ * see `Writing` for why the two stopped being separate sections.
  */
 function Prompts({
   pageId,
@@ -1060,21 +1142,16 @@ function Prompts({
   const active = files?.find((file) => file.filename === open) ?? files?.[0];
 
   return (
-    <Pane
-      title="Prompts"
-      hint={
-        <>
-          What this Page tells the model. Empty means it inherits the reviewed
-          default in <code>api/prompts/</code> &mdash; saving text here overrides
-          it for this Page only.
-        </>
-      }
-      meta={files ? `${files.filter((one) => one.source !== "global").length} overridden` : undefined}
-    >
+    <Block label="Prompts — what the writer is told">
       {files === null ? (
         <Loading label="Loading prompts" className="h-64" />
       ) : (
         <div className="space-y-4">
+          <p className="max-w-prose text-[13px] text-muted-foreground">
+            Empty means this Page inherits the reviewed default in{" "}
+            <code>api/prompts/</code>. Saving text here overrides it for this
+            Page only.
+          </p>
           {/* The shared pill shell (`ui/tabs.tsx`) rather than a second
               hand-rolled one: the three are alternatives, not a list, and
               which one you are editing has to stay visible while the textarea
@@ -1109,7 +1186,7 @@ function Prompts({
           ) : null}
         </div>
       )}
-    </Pane>
+    </Block>
   );
 }
 
