@@ -386,6 +386,7 @@ _BOT_SIGNALS = (
     "sign in to confirm",
     "not a bot",
     "requested format is not available",
+    "the page needs to be reloaded",
 )
 """Messages that mean "the client was blocked" — worth trying another player
 surface for. Anything else is a real failure and retrying a different client
@@ -395,7 +396,17 @@ would only bury the actual message.
 (`ytdlp-errors.ts` excludes it from cookie errors, `isBotOrRateLimit` lacks
 it — the old tool failed fast). Kept here as an owned change: a blocked client
 can surface as a missing format rather than an explicit refusal, and a rotation
-costs a couple of seconds against the hours a fail-fast can cost on a VPS."""
+costs a couple of seconds against the hours a fail-fast can cost on a VPS.
+
+`the page needs to be reloaded` is the same shape and cost a production cycle
+to find. YouTube forces SABR streaming on the `web`/`web_safari` surfaces and
+those extractors answer with it — specifically *when cookies are sent*, which
+is why it only appeared once cookies started working and never before. It is a
+per-client failure with a per-client fix, so it belongs to the rotation; without
+it here `_run` raised on the first client and the other two were never tried.
+Upstream's advice is to upgrade, which is not a lever we have: 2026.8.19 was
+already the newest stable release when this was hit (yt-dlp/yt-dlp#17389,
+#17405)."""
 
 _COOKIE_SIGNALS = (
     "login required",

@@ -28,3 +28,10 @@ node_modules/
 
 # YouTube tool dev shim
 api/.shorts-dev/
+
+# A yt-dlp cookies export is a live Google session, not a config file. It lands
+# here on the way to YTDLP_COOKIES_B64 and should be deleted after encoding —
+# this is the guard for the times it is not. The old repo kept the same line
+# (social-agent .gitignore, `/secrets/youtube-cookies.txt`).
+cookies.txt
+*.cookies.txt
