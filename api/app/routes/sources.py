@@ -677,23 +677,12 @@ class CompetitorOut(BaseModel):
     assigned_page_ids: list[int] = []
     """Which of our Pages read this competitor. The editable half of this row.
 
-    Empty means no Page has assigned it — which, while a Page has no assignments
-    at all, still shows in that Page's grid through the provenance fallback. The
-    two are different states and the screen has to say which is in force.
-    """
-
-    reads_by_default: bool = False
-    """Whether the Page this sits under reads it *without* an assignment.
-
-    True when that Page holds no assignments at all, so `_visible_to` is still
-    on the provenance fallback for it. Sent because the screen cannot work it
-    out: it sees this row's own assignments and has no way to know whether some
-    *other* competitor switched this Page into assignment-only mode.
-
-    Without it the column lies at scale. Measured while this was added: 88 of 92
-    competitors had no assignment, and 8 of the 10 Pages were still on the
-    fallback — so "not assigned" was rendering against rows that were being read
-    every day, which is the opposite of what an operator would conclude.
+    Empty means nobody reads it, full stop. It used to mean less than that: a
+    Page holding no assignments read its whole brand set through the provenance
+    fallback, so an unassigned competitor was often still being read, and this
+    field was accompanied by a `reads_by_default` flag saying which of the two
+    was in force. `_visible_to` dropped the fallback on 2026-09-05 and the flag
+    went with it — there is one state now, and it is this list.
     """
 
     page_id: int
@@ -751,14 +740,6 @@ def get_competitor_pages(
     for row in session.exec(select(PageCompetitor)).all():
         assignments.setdefault(row.competitor_page_id, []).append(row.page_id)
 
-    # A Page switches to assignment-only the moment it has one assignment of any
-    # kind — see `_visible_to`. So this is a property of the Page, not of the
-    # competitor, and it is read from every assignment rather than from this
-    # row's.
-    assignment_holders = {
-        page_id for page_ids in assignments.values() for page_id in page_ids
-    }
-
     rows = []
     for page in pages:
         try:
@@ -778,7 +759,6 @@ def get_competitor_pages(
                 picture=competitor.get("picture"),
                 posts_stored=counts.get(competitor["name"], 0),
                 assigned_page_ids=assignments.get(competitor["provider_id"], []),
-                reads_by_default=page.id not in assignment_holders,
                 page_id=page.id,
                 page_name=page.name,
             )

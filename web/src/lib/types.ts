@@ -93,6 +93,13 @@ export interface SourceItem {
   author: string | null;
   /** competitor_post only. */
   synced_for_page_id: number | null;
+  /**
+   * The competitor's Facebook page id. competitor_post only.
+   *
+   * What the grid is filtered by — a Page reads the posts whose competitor it
+   * has ticked — and what `competitorAvatar` turns into a logo.
+   */
+  competitor_page_id: string | null;
   text: string;
   url: string | null;
   image_url: string | null;

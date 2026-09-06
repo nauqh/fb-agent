@@ -11,8 +11,9 @@ same twenty sources would need those twenty added five times, spending the whole
 allowance on twenty distinct sources. So a competitor is added once, under
 whichever Page has room, and assigned here to every Page that should read it.
 
-Until a Page has any assignment it falls back to the competitor set it owns in
-Metricool — see `routes/sources._visible_to`, which is where that rule lives.
+Assignment decides and nothing else does, at every count — a Page with none
+reads nothing. It used to fall back to the competitor set it owns in Metricool;
+see `routes/sources._visible_to`, which is where that rule lives and why it went.
 """
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -73,8 +74,9 @@ def set_assignments(
     """Replace this Page's assignments with the set given.
 
     Replace rather than merge, for the reason `AssignmentIn` gives. Removing the
-    last one puts the Page back on the Metricool-set fallback, which is a real
-    state and not an error: it is what every Page starts in.
+    last one leaves the Page reading nothing, which is a real state and not an
+    error — it is what every Page starts in, and the Sources empty state names
+    it rather than letting it look like a quiet week.
     """
     if session.get(Page, page_id) is None:
         raise HTTPException(status_code=404, detail=f"No page {page_id}")

@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "broken-image",
+        "value": "*",
+        "files": [
+          "src/components/source-card.tsx"
+        ],
+        "createdAt": "2026-09-06T06:38:04.957Z",
+        "reason": "L301 match is prose inside a docstring explaining why a plain <img> is used, not markup; the real element at L344 is guarded by 'if (!src) return null' and degrades via onError to an ImageOff tile"
+      }
+    ]
+  }
+}

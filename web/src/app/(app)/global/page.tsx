@@ -685,16 +685,15 @@ function HeaderHint({
  * 2 rows of 92, so the arrow is the exception the eye can find rather than a
  * shape repeated down the page.
  *
- * Assignment is not the same as reading, which is why this is not a
- * `join(", ")`. A Page falls back to the set it is filed under until it has an
- * assignment of its own (`routes/sources._visible_to`), so an unassigned
- * competitor is often still being read — by the brand it sits in. This column
- * used to print "not assigned" for every one of them: measured when that was
- * written, 88 of 92 rows, and 44 of those were being read every day.
+ * Assignment is now the same as reading, which it was not until 2026-09-05: a
+ * Page with no assignments of its own read the whole set it was filed under
+ * (`routes/sources._visible_to`), so an unassigned competitor was often still
+ * being read, and this column carried a third "(default)" state fed by a
+ * `reads_by_default` flag to say so. Measured when that was written, 88 of 92
+ * rows were unassigned and 44 of those were being read every day.
  *
- * `reads_by_default` and the assignment list cannot both apply. A Page holding
- * any assignment has left the fallback, so a Page that assigned *this* row can
- * never also be reading it by default.
+ * The fallback is gone, so the flag is too, and unassigned now means exactly
+ * nobody — which is what the red below has always claimed.
  */
 function ReadBy({
   row,
@@ -718,22 +717,9 @@ function ReadBy({
     );
   }
 
-  if (row.reads_by_default) {
-    return (
-      <span className="text-muted-foreground">
-        {row.page_name}{" "}
-        {/* Marked, because it is a different fact from an assignment: it holds
-            only until someone assigns anything to this Page, at which point
-            this competitor silently stops being read. */}
-        <span className="opacity-70">(default)</span>
-      </span>
-    );
-  }
-
-  // The genuine empty state, and worth a red: the Page it sits under has
-  // assignments and none of them is this, so nothing reads it — while it goes
-  // on spending one of the hundred. Measured at 44 of 92 when this was written,
-  // and fixed by assigning each of them to the brand whose slot they hold.
+  // Worth a red: nothing reads this competitor, while it goes on spending one
+  // of the hundred. Measured at 44 of 92 when this was written, and fixed by
+  // assigning each of them to the brand whose slot they hold.
   return (
     <Crosses from={row.page_name}>
       <span className="text-destructive">nobody</span>

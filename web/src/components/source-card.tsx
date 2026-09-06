@@ -17,10 +17,12 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { CompetitorMark } from "@/components/competitor-mark";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import { MetaChip } from "@/components/meta-chip";
 import type { SourceKind } from "@/lib/types";
+import { competitorAvatar } from "@/lib/competitor-avatar";
 import { chars, fullDate, metric, timeAgo } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -45,6 +47,13 @@ export const KIND_GLYPH: Record<SourceKind, typeof Users> = {
 interface SourceCardProps {
   kind: SourceKind;
   author: string | null;
+  /**
+   * The competitor's Facebook page id, for their logo. competitor_post only.
+   *
+   * Optional because the other two kinds have no logo to show and the Cart
+   * spreads a stored item straight onto this card.
+   */
+  competitor_page_id?: string | null;
   text: string;
   url: string | null;
   image_url?: string | null;
@@ -78,6 +87,7 @@ interface SourceCardProps {
 export function SourceCard({ selected, pending, onToggle, ...item }: SourceCardProps) {
   const [open, setOpen] = useState(false);
   const { author, text, url, image_url, published_at, reactions, comments, shares, used } = item;
+  const logo = competitorAvatar(item.competitor_page_id ?? null);
 
   return (
     <div className="relative h-full">
@@ -97,7 +107,19 @@ export function SourceCard({ selected, pending, onToggle, ...item }: SourceCardP
         )}
       >
         <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 space-y-1">
+          {/* The logo, where there is one. A grid of 60 competitor posts is
+              read by author before it is read by text, and several of these
+              pages have near-identical names — the mark is how the operator
+              tells them apart at a glance. Tweets and RSS items have none and
+              take the width instead. */}
+          {logo ? (
+            <CompetitorMark
+              name={author ?? "?"}
+              picture={logo}
+              className="size-9 mt-0.5"
+            />
+          ) : null}
+          <div className="min-w-0 flex-1 space-y-1">
             <p className="flex items-center gap-1.5 truncate text-sm font-medium">
               {author ?? "Unknown"}
               {used ? (

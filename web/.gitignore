@@ -43,3 +43,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# design hook: the suppression list is shared, its scan cache is not
+.impeccable/hook.cache.json
