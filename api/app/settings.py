@@ -402,6 +402,17 @@ class Settings(BaseSettings):
     IPs hit YouTube's bot-check without it. The worker never writes this file
     (the old tool's work-copy discipline becomes moot when you do not hand
     yt-dlp a file to overwrite)."""
+    ytdlp_cookies_b64: str = ""
+    """The same export, base64-encoded, for hosts with no persistent disk.
+
+    Railway's filesystem is rebuilt on every deploy, so a cookies file copied
+    into the container once is gone the next time it ships — which is how
+    production ended up downloading anonymously from a datacenter IP and
+    reporting it as an expired session. A variable survives the deploy; the
+    file it decodes to does not have to.
+
+    `ytdlp_cookies_file` still wins when it points at a file that exists, so a
+    laptop keeps using its own export and nothing here changes locally."""
     ytdlp_proxy_url: str = ""
     """Residential egress, when the datacenter IP is blocked even with cookies.
     An opt-in env var, exactly as the old VPS ran it."""

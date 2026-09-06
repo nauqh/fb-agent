@@ -3,6 +3,19 @@
 # downloads its own 3.11 and this image's interpreter goes unused.
 FROM python:3.11-slim
 
+# The two binaries the YouTube tool shells out to, neither of which the slim
+# image carries. Both were missing in production and both fail late, in a job,
+# rather than at boot:
+#
+#   ffmpeg  `process.py` trims and concats with it as a subprocess.
+#   node    `sources.py` pins yt-dlp's JS-challenge solver to the node runtime
+#           (`js_runtimes={"node": {}}`). Without it a bot-challenged video
+#           cannot be solved, and the rotation burns all three player clients
+#           before reporting the generic "session expired" line.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ffmpeg nodejs ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+
 # Install uv.
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 

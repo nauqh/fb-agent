@@ -29,6 +29,7 @@ from app.routes import (
 from app.settings import API_DIR, layout, settings
 from app.youtube import process as youtube_worker
 from app.youtube import routes as youtube_routes
+from app.youtube import sources as youtube_sources
 
 
 @asynccontextmanager
@@ -47,6 +48,9 @@ async def lifespan(_app: FastAPI):
         job_stranded = youtube_worker.sweep_stranded(session)
     if job_stranded:
         logger.info("swept {} youtube job(s) stranded by a restart", job_stranded)
+    # Before any job runs: turn YTDLP_COOKIES_B64 into the file yt-dlp wants.
+    # A host that rebuilds its disk every deploy can only be handed a variable.
+    youtube_sources.install_cookies_from_env()
     # The one consumer of `youtube_job` rows. Five videos a day; a daemon thread
     # in the API process replaces the old VPS pm2 worker + Redis queue.
     youtube_worker.start()

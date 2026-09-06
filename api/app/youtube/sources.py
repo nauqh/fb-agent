@@ -33,7 +33,10 @@ a second service that never won is not worth a dependency (docs/youtube-python-r
 
 from __future__ import annotations
 
+import base64
+import binascii
 import re
+import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -438,6 +441,51 @@ def flat_playlist_entries(url: str) -> list[dict]:
     return entries
 
 
+COOKIES_FROM_ENV = Path(tempfile.gettempdir()) / "ytdlp-cookies.txt"
+"""Where `install_cookies_from_env` decodes `YTDLP_COOKIES_B64` to. Temp, not
+the repo: it is a live Google session, and the host it runs on rebuilds its
+disk on every deploy anyway."""
+
+
+def install_cookies_from_env() -> str | None:
+    """Materialize `YTDLP_COOKIES_B64` on disk. Called once, at startup.
+
+    yt-dlp wants a *path*, and a host without persistent storage can only be
+    given a variable — so the variable becomes a path here, before any job
+    runs. Returns the path written, or None when there was nothing to write.
+
+    A bad decode logs and returns None rather than raising: cookies are one
+    tool's dependency, and the rest of this API (drafts, generate, publish)
+    must still boot without them.
+    """
+    raw = settings.ytdlp_cookies_b64.strip()
+    if not raw:
+        return None
+    try:
+        data = base64.b64decode(raw, validate=True)
+    except (binascii.Error, ValueError):
+        logger.error("[yt-dlp] YTDLP_COOKIES_B64 is not valid base64 — ignoring it")
+        return None
+    COOKIES_FROM_ENV.write_bytes(data)
+    logger.info("[yt-dlp] cookies written to {}", COOKIES_FROM_ENV)
+    return str(COOKIES_FROM_ENV)
+
+
+def _cookie_path() -> str:
+    """The cookies file to hand yt-dlp, or "" when there is none.
+
+    An explicit `YTDLP_COOKIES_FILE` wins, but only when it actually exists —
+    production had it pointing at a path that was never in the image, and the
+    old code took the name for the file and downloaded anonymously.
+    """
+    explicit = settings.ytdlp_cookies_file.strip()
+    if explicit and Path(explicit).exists():
+        return explicit
+    if COOKIES_FROM_ENV.exists():
+        return str(COOKIES_FROM_ENV)
+    return ""
+
+
 def _base_options(player_client: str, *, use_cookies: bool, channel_tab: bool) -> dict:
     extractor_args: dict[str, dict] = {
         "youtube": {"player_client": [player_client]},
@@ -469,8 +517,8 @@ def _base_options(player_client: str, *, use_cookies: bool, channel_tab: bool) -
         "outtmpl": {"default": "%(id)s.%(ext)s"},
     }
 
-    cookies = settings.ytdlp_cookies_file.strip()
-    if use_cookies and cookies and Path(cookies).exists():
+    cookies = _cookie_path()
+    if use_cookies and cookies:
         options["cookiefile"] = cookies
     elif not use_cookies:
         options["cookiefile"] = None
