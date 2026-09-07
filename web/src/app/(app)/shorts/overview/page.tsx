@@ -258,8 +258,11 @@ function VideoTable({
           <span className="min-w-0 flex-1 font-mono text-[10px] tracking-[0.12em] text-muted-foreground uppercase">
             Video
           </span>
-          <span className="w-32 shrink-0 text-right font-mono text-[10px] tracking-[0.12em] text-muted-foreground uppercase">
+          <span className="w-16 shrink-0 text-right font-mono text-[10px] tracking-[0.12em] text-muted-foreground uppercase">
             Watch
+          </span>
+          <span className="w-32 shrink-0 text-right font-mono text-[10px] tracking-[0.12em] text-muted-foreground uppercase">
+            Views
           </span>
           <span className="w-24 shrink-0 text-right font-mono text-[10px] tracking-[0.12em] text-muted-foreground uppercase">
             Published
@@ -475,49 +478,55 @@ function VideoDetail({ video }: { video: YoutubeVideo }) {
       <Thumbnail src={video.thumbnail_url} className="w-48 sm:w-64" />
 
       <div className="min-w-0 flex-1 space-y-4">
-        <h3 className="text-sm font-semibold leading-snug">{video.title}</h3>
-
-        <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-          <Breakdown value={video.views} label="views" />
-          <Breakdown value={video.likes} label="likes" />
-          <Breakdown value={video.comments} label="comments" />
-          <Breakdown value={video.shares} label="shares" />
-          {video.avg_watch_s != null ? (
-            <Breakdown value={Math.round(video.avg_watch_s)} label="s avg watch" />
-          ) : null}
-        </p>
-
-        <div className="flex flex-wrap items-center gap-2">
-          {video.watch_url ? (
-            <Button variant="outline" size="sm" asChild>
-              <a href={video.watch_url} target="_blank" rel="noreferrer">
-                <ExternalLink className="size-3.5" />
-                Watch on YouTube
-              </a>
-            </Button>
-          ) : null}
-          <span className="ml-auto text-[11px] text-muted-foreground">
+        <div>
+          <h3 className="text-sm font-semibold leading-snug">{video.title}</h3>
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            {video.kind ? `${video.kind === "short" ? "Short" : "Video"}` : null}
+            {video.kind && video.published_at ? " · " : ""}
             {video.published_at ? (
               <span title={fullDate(video.published_at)}>
                 Published {timeAgo(video.published_at)}
               </span>
             ) : null}
-            {video.kind ? ` · ${video.kind === "short" ? "Short" : "Video"}` : ""}
-          </span>
+          </p>
         </div>
+
+        {/* The breakdown as a stat grid — the number carries the weight, the
+            word beneath it does not, the same Figure rule as the summary. */}
+        <dl className="flex flex-wrap gap-x-8 gap-y-3">
+          <Stat value={metric(video.views)} label="Views" />
+          <Stat value={metric(video.likes)} label="Likes" />
+          <Stat value={metric(video.comments)} label="Comments" />
+          <Stat value={metric(video.shares)} label="Shares" />
+          {video.avg_watch_s != null ? (
+            <Stat value={`${Math.round(video.avg_watch_s)}s`} label="Avg watch" />
+          ) : null}
+        </dl>
+
+        {video.watch_url ? (
+          <Button variant="outline" size="sm" asChild>
+            <a href={video.watch_url} target="_blank" rel="noreferrer">
+              <ExternalLink className="size-3.5" />
+              Watch on YouTube
+            </a>
+          </Button>
+        ) : null}
       </div>
     </div>
   );
 }
 
-function Breakdown({ value, label }: { value: number; label: string }) {
+/** One stat of the detail grid: the number carries the weight, the word does not. */
+function Stat({ value, label }: { value: string; label: string }) {
   return (
-    <span>
-      <strong className="font-semibold text-foreground tabular-nums">
-        {metric(value)}
-      </strong>{" "}
-      {label}
-    </span>
+    <div className="flex flex-col gap-0.5">
+      <dd className="text-sm font-semibold tracking-tight text-foreground tabular-nums">
+        {value}
+      </dd>
+      <dt className="font-mono text-[10px] tracking-[0.12em] text-muted-foreground uppercase">
+        {label}
+      </dt>
+    </div>
   );
 }
 
