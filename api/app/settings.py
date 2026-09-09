@@ -416,6 +416,21 @@ class Settings(BaseSettings):
     ytdlp_proxy_url: str = ""
     """Residential egress, when the datacenter IP is blocked even with cookies.
     An opt-in env var, exactly as the old VPS ran it."""
+    ytdlp_pot_server_url: str = ""
+    """Where the bgutil PO token server answers, e.g. http://127.0.0.1:4416
+    when it runs beside the API in the same container.
+
+    A PO token is YouTube's proof of origin for a player client; the mweb /
+    android / ios clients of the rotation now skip every GVS format without
+    one, so those fallbacks are armed but hollow. The bgutil-ytdlp-pot-provider
+    plugin (in pyproject) fetches tokens from this server automatically —
+    no rotation code consults it directly.
+
+    The token is bound to the IP it was generated from. The plugin forwards
+    `ytdlp_proxy_url` to the server for token generation, so behind a proxy the
+    two egresses agree; without one the server must share the API's own IP,
+    which is why it belongs on the same host. Unreachable server degrades to a
+    tokenless download with a warning — the same behavior as unset."""
     ffmpeg_path: str = ""
     """Explicit ffmpeg binary location. Normally found on PATH; this exists so
     a winget install that a fresh shell has not seen on PATH is available

@@ -510,6 +510,13 @@ def _base_options(player_client: str, *, use_cookies: bool, channel_tab: bool) -
     extractor_args: dict[str, dict] = {
         "youtube": {"player_client": [player_client]},
     }
+    pot_server = settings.ytdlp_pot_server_url.strip()
+    if pot_server:
+        # The bgutil PO token provider plugin reads this extractor arg
+        # (`youtubepot-bgutilhttp:base_url`). Unset, the plugin falls back to
+        # its own default (127.0.0.1:4416), so the arg is injected only when
+        # an operator has actually pointed the API at a token host.
+        extractor_args["youtubepot-bgutilhttp"] = {"base_url": [pot_server]}
     if channel_tab:
         # Channel tabs hit YouTube's auth wall even when the videos themselves
         # are public — that wall is what the old tool's
