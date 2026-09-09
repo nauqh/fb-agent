@@ -37,7 +37,13 @@ import {
   setPromptFile,
   updatePage,
 } from "@/lib/api/pages";
-import type { Page, PromptFile } from "@/lib/types";
+import {
+  createPromptTemplate,
+  deletePromptTemplate,
+  listPromptTemplates,
+  updatePromptTemplate,
+} from "@/lib/api/prompt-templates";
+import type { Page, PromptFile, PromptTemplate } from "@/lib/types";
 import { usePageScope } from "@/lib/page-scope";
 import { emit } from "@/lib/store";
 import { useQuery } from "@/lib/use-query";
@@ -83,6 +89,14 @@ export default function SettingsScreen() {
   const { data: prompts } = useQuery(() => listPromptFiles(pageId!), [pageId], {
     enabled: pageId !== null,
   });
+  // Global, not per-Page — a style is picked on the generate screen against
+  // whichever Page the run targets, so it reads the same on every Page. That
+  // is also why it sits inside Writing rather than being a rail section: the
+  // rail counts what *this Page* owns, and a style is owned by nobody.
+  const {
+    data: templates,
+    refresh: refreshTemplates,
+  } = useQuery(listPromptTemplates, []);
   // One read, and it does not leave the building. The assignments are local
   // rows and they are the whole answer: what this Page reads. Metricool is not
   // asked anything until "Assign from the pool" is opened.
@@ -208,6 +222,8 @@ export default function SettingsScreen() {
                   files={prompts}
                   ownPrompts={ownPrompts}
                   unenforced={promptsWithoutLengths}
+                  templates={templates}
+                  refreshTemplates={refreshTemplates}
                 />
               ),
             },
@@ -952,12 +968,16 @@ function Writing({
   files,
   ownPrompts,
   unenforced,
+  templates,
+  refreshTemplates,
 }: {
   page: Page;
   pageId: number | null;
   files: PromptFile[] | null;
   ownPrompts: number;
   unenforced: boolean;
+  templates: PromptTemplate[] | null;
+  refreshTemplates: () => Promise<void>;
 }) {
   return (
     <Pane
@@ -987,6 +1007,10 @@ function Writing({
 
         <div className="border-t pt-6">
           <Prompts pageId={pageId} files={files} />
+        </div>
+
+        <div className="border-t pt-6">
+          <PostStyles templates={templates} refresh={refreshTemplates} />
         </div>
       </div>
     </Pane>
@@ -1283,3 +1307,260 @@ function PromptEditor({ pageId, file }: { pageId: number; file: PromptFile }) {
     </div>
   );
 }
+
+/** The three layers a style can carry, in the order the writer reads them. */
+const TEMPLATE_FIELDS = [
+  { field: "system_prompt", label: "System", hint: "The post's shape and voice." },
+  { field: "overlay_prompt", label: "Overlay", hint: "Rules for the text panel." },
+  { field: "image_prompt", label: "Image", hint: "Photography rules for the hero." },
+] as const;
+
+type TemplateField = (typeof TEMPLATE_FIELDS)[number]["field"];
+
+/**
+ * The template library (client request, 2026-08-20).
+ *
+ * Named post styles, picked on the generate screen. **Deltas, never copies**:
+ * each textarea starts empty and empty means inherit, the same contract the
+ * per-Page prompts above have — a style that restated the whole house prompt
+ * would be a second copy of it, and copies drifting apart is the measured
+ * failure the prompt files were rescued from. The API refuses an all-blank
+ * template outright: it would change nothing and only crowd the dropdown.
+ *
+ * Global rather than per-Page — see the query note in `SettingsScreen`.
+ */
+function PostStyles({
+  templates,
+  refresh,
+}: {
+  templates: PromptTemplate[] | null;
+  refresh: () => Promise<void>;
+}) {
+  // Which form is open: a template's id, `"new"`, or none. One at a time —
+  // two editors over the same row would race the last save to the server.
+  const [open, setOpen] = useState<number | "new" | null>(null);
+
+  async function saved(message: string) {
+    toast.success(message);
+    await refresh();
+    setOpen(null);
+  }
+
+  return (
+    <Block label="Post styles — an optional layer on any run">
+      {templates === null ? (
+        <Loading label="Loading post styles" className="h-24" />
+      ) : (
+        <div className="space-y-4">
+          <p className="max-w-prose text-[13px] text-muted-foreground">
+            A style carries only what it changes: an empty box inherits this
+            Page&rsquo;s prompt. Pick one on the generate screen; &ldquo;Page
+            default&rdquo; writes as configured here.
+          </p>
+
+          <ul className="space-y-1">
+            {templates.map((template) => (
+              <li
+                key={template.id}
+                className="group flex items-center gap-2 rounded-xl px-2 py-1.5 text-[13px] hover:bg-muted/40"
+              >
+                <span className="min-w-0 flex-1 truncate font-medium">
+                  {template.name}
+                </span>
+                {/* Which layers it actually carries — a style with only an
+                    image layer reads very differently from a full rewrite of
+                    the post structure, and the row is where that shows. */}
+                <span className="flex shrink-0 items-center gap-1">
+                  {TEMPLATE_FIELDS.filter(
+                    ({ field }) => (template[field] ?? "").trim() !== "",
+                  ).map(({ field, label }) => (
+                    <span
+                      key={field}
+                      className="rounded-full border bg-muted/40 px-1.5 py-0.5 text-[11px] text-muted-foreground"
+                    >
+                      {label}
+                    </span>
+                  ))}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setOpen(open === template.id ? null : template.id)}
+                  className="shrink-0 rounded px-1.5 py-0.5 text-[12px] text-muted-foreground hover:text-foreground"
+                >
+                  {open === template.id ? "Close" : "Edit"}
+                </button>
+                <RemoveTemplate
+                  template={template}
+                  removed={() => saved(`${template.name} removed.`)}
+                />
+              </li>
+            ))}
+          </ul>
+
+          {open === "new" ? (
+            <TemplateForm
+              onSaved={() => saved("Style created.")}
+              onCancel={() => setOpen(null)}
+            />
+          ) : null}
+          {typeof open === "number" ? (
+            <TemplateForm
+              initial={templates.find((one) => one.id === open)}
+              onSaved={() => saved("Style updated.")}
+              onCancel={() => setOpen(null)}
+            />
+          ) : null}
+
+          {open === null ? (
+            <Button variant="ghost" size="sm" onClick={() => setOpen("new")}>
+              <Plus className="size-4" />
+              New style
+            </Button>
+          ) : null}
+        </div>
+      )}
+    </Block>
+  );
+}
+
+/**
+ * Two-step delete, inline. There is no dialog anywhere in this app and nothing
+ * points at a style once it is gone — drafts are unpinned server-side — but a
+ * style is the operator's own writing, so one accidental click should not be
+ * the end of it. The armed state says so instead of opening a modal.
+ */
+function RemoveTemplate({
+  template,
+  removed,
+}: {
+  template: PromptTemplate;
+  removed: () => Promise<void>;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [armed, setArmed] = useState(false);
+
+  async function remove() {
+    if (!armed) {
+      setArmed(true);
+      return;
+    }
+    setBusy(true);
+    try {
+      await deletePromptTemplate(template.id);
+      await removed();
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Could not remove");
+    } finally {
+      setBusy(false);
+      setArmed(false);
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={remove}
+      disabled={busy}
+      aria-label={`Delete ${template.name}`}
+      title={armed ? `Click again to delete ${template.name}` : `Delete ${template.name}`}
+      className={cn(
+        "shrink-0 rounded p-1 text-muted-foreground transition-colors hover:bg-destructive/10",
+        armed ? "text-destructive" : "hover:text-destructive",
+      )}
+    >
+      {busy ? <Loader2 className="size-3 animate-spin" /> : <Trash2 className="size-3" />}
+    </button>
+  );
+}
+
+function TemplateForm({
+  initial,
+  onSaved,
+  onCancel,
+}: {
+  initial?: PromptTemplate;
+  onSaved: () => Promise<void>;
+  onCancel: () => void;
+}) {
+  const [form, setForm] = useState<Record<TemplateField | "name", string>>(() => ({
+    name: initial?.name ?? "",
+    system_prompt: initial?.system_prompt ?? "",
+    overlay_prompt: initial?.overlay_prompt ?? "",
+    image_prompt: initial?.image_prompt ?? "",
+  }));
+  const [busy, setBusy] = useState(false);
+
+  // The same rule the API enforces, checked here so the button can say no
+  // before a round trip does: a style with no name, or nothing in any layer,
+  // would change nothing about how a draft is written.
+  const writable =
+    form.name.trim() !== "" &&
+    TEMPLATE_FIELDS.some(({ field }) => form[field].trim() !== "");
+  const dirty =
+    initial === undefined ||
+    form.name !== initial.name ||
+    TEMPLATE_FIELDS.some(({ field }) => form[field] !== (initial[field] ?? ""));
+
+  async function save() {
+    setBusy(true);
+    try {
+      const body = {
+        name: form.name.trim(),
+        ...Object.fromEntries(
+          TEMPLATE_FIELDS.map(({ field }) => [field, form[field].trim() || null]),
+        ),
+      };
+      if (initial) {
+        await updatePromptTemplate(initial.id, body);
+      } else {
+        await createPromptTemplate(body);
+      }
+      await onSaved();
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Could not save");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="space-y-3 rounded-2xl border bg-muted/20 p-3">
+      <div className="space-y-1">
+        <Label htmlFor="template-name">Name</Label>
+        <Input
+          id="template-name"
+          value={form.name}
+          onChange={(event) => setForm({ ...form, name: event.target.value })}
+          placeholder="Meme, Recipe card, Motivational..."
+          className="max-w-72"
+        />
+      </div>
+
+      {TEMPLATE_FIELDS.map(({ field, label, hint }) => (
+        <div key={field} className="space-y-1">
+          <Label htmlFor={`template-${field}`}>{label}</Label>
+          <Textarea
+            id={`template-${field}`}
+            rows={4}
+            className="font-mono text-[13px]"
+            value={form[field]}
+            onChange={(event) => setForm({ ...form, [field]: event.target.value })}
+            placeholder="Empty inherits this Page's prompt."
+          />
+          <p className="text-[12px] text-muted-foreground">{hint}</p>
+        </div>
+      ))}
+
+      <div className="flex items-center gap-3">
+        <Button size="sm" disabled={!writable || !dirty || busy} onClick={() => void save()}>
+          {busy ? <Loader2 className="size-4 animate-spin" /> : null}
+          {initial ? "Save style" : "Create style"}
+        </Button>
+        <Button variant="ghost" size="sm" disabled={busy} onClick={onCancel}>
+          Cancel
+        </Button>
+      </div>
+    </div>
+  );
+}
+

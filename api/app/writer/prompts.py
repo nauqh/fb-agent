@@ -116,6 +116,19 @@ def _tokens(layout: Layout) -> dict[str, str]:
     }
 
 
+def substitute(text: str, layout: Layout) -> str:
+    """The layout tokens, applied to text that is not one of the three files.
+
+    The only current caller is the prompt-template layer: a template's delta is
+    written in the same screen as the Page prompts, so it may name the panel
+    percentage or the highlight colour the same way. Same plain `str.replace`
+    — a stray brace cannot raise at generation time.
+    """
+    for token, value in _tokens(layout).items():
+        text = text.replace(token, value)
+    return text
+
+
 def source_of(name: str, page_name: str | None = None):
     """The file that would be read for `name`, per Page or global.
 

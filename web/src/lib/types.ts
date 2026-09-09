@@ -177,6 +177,12 @@ export interface Draft {
   hero_from_source: boolean;
   /** `card` or `full_overlay` for this draft alone. Null follows the Page. */
   template: "card" | "full_overlay" | null;
+  /**
+   * The post style this run was generated under, or null for the Page's own
+   * prompts unlayered. Stored on the row, not re-read at rewrite time — a
+   * regenerate uses the voice the draft was written in, not today's dropdown.
+   */
+  prompt_template_id: number | null;
   /** Text only, on purpose — distinct from a picture that failed to draw. */
   no_image: boolean;
 
@@ -224,6 +230,22 @@ export interface PromptFile {
 
   /** False for a prompt with no column behind it — it can only be a file. */
   editable: boolean;
+}
+
+/**
+ * A named post style: an extra prompt layer picked on the generate screen.
+ *
+ * The client's 2026-08-20 request. Each field is a **delta**, never a copy —
+ * blank inherits the Page's prompt chain unchanged. A template that restated
+ * the whole house prompt would be a second copy of it, and copies drifting
+ * apart is the measured failure the prompt files were rescued from.
+ */
+export interface PromptTemplate {
+  id: number;
+  name: string;
+  system_prompt: string | null;
+  overlay_prompt: string | null;
+  image_prompt: string | null;
 }
 
 /**

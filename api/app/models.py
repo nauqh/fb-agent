@@ -686,6 +686,37 @@ class SourceItem(SourceItemBase, table=True):
     created_at: datetime = Field(default_factory=_now)
 
 
+class PromptTemplate(SQLModel, table=True):
+    """A named post style: an extra prompt layer the operator selects at run time.
+
+    The client's 2026-08-20 request. Each field is a **delta**, never a copy:
+    blank means the draft inherits the Page's prompt chain unchanged, and a
+    template that restates the whole house prompt is the old tool's drift
+    disaster returning — three Pages once held 2,030 byte-identical characters
+    of one prompt and all three went stale (see `writer/prompts.py`). A Meme
+    template is a dozen lines of "ignore the essay structure above", not three
+    full prompts.
+
+    The layering, not replacement, is also why the fields can be independent:
+    a template that only changes the image brief carries no system text at all.
+    """
+
+    __tablename__ = "prompt_template"
+
+    id: int | None = Field(default=None, primary_key=True)
+    name: str = Field(unique=True)
+
+    system_prompt: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
+    """Layered onto the writer's instructions, outranking the Page's own."""
+
+    overlay_prompt: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
+    """Panel-text rules, layered beside the system layer for this style."""
+
+    image_prompt: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
+    """Layered onto the hero brief, not the writer — the image model never sees
+    the writer's instructions (see `image/hero.py`)."""
+
+
 class Draft(SQLModel, table=True):
     """A generated post awaiting review.
 
@@ -706,6 +737,17 @@ class Draft(SQLModel, table=True):
     status: DraftStatus = Field(
         default=DraftStatus.GENERATING, index=True, sa_type=_stored_enum(DraftStatus)
     )
+
+    prompt_template_id: int | None = Field(
+        default=None, foreign_key="prompt_template.id"
+    )
+    """The post style this run was generated under, stored rather than re-derived.
+
+    A regenerate or a hero rebuild must use the voice the draft was written in —
+    re-reading the operator's current selection would let a dropdown change
+    retroactively rewrite half a draft in a different voice. Null is the normal
+    case: the Page's own prompt chain, nothing layered.
+    """
 
 
     hook: str | None = None

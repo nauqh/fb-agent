@@ -96,6 +96,11 @@ export interface GenerateRequest {
   hero_from_source?: boolean;
   /** `card` or `full_overlay` for the drafts this run makes. Null takes the Page's. */
   template?: "card" | "full_overlay" | null;
+  /**
+   * The post style this run generates under, from the library on Settings.
+   * Null or omitted writes with the Page's own prompts, unlayered.
+   */
+  prompt_template_id?: number | null;
   /** Text only: no hero, no card, and the one generate path that costs nothing. */
   no_image?: boolean;
 }

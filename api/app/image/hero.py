@@ -159,6 +159,7 @@ def generate(
     layout: Layout | None = None,
     page_name: str | None = None,
     page=None,
+    style: str | None = None,
 ) -> Hero:
     """Image bytes for `prompt`, shaped for the hero box, and the model that drew it.
 
@@ -180,6 +181,11 @@ def generate(
     (`docs/feedback/2026-08-15/old-tool-prompts.md`). Leave it `None` and the
     global file is used, which is correct for a Page that has no directory.
 
+    **`style` is the run's post-style image layer**, appended after the brief
+    and outranking it. Same shape as the writer's POST STYLE block: a delta the
+    operator's template carries, never a second copy of the brief (see
+    `models.PromptTemplate`).
+
     **A refusal and an outage are not the same failure, and only one is billed.**
     This used to retry neither, on the reasoning that "a second attempt is a
     second charge". That holds for a refusal — the model answered, the answer was
@@ -199,8 +205,11 @@ def generate(
 
     client = genai.Client(api_key=settings.gemini_api_key)
     ratio = aspect_ratio_for(layout.image.width, hero_height_px)
+    system = prompts.image_prompt(layout, page_name, page)
+    if style and style.strip():
+        system += f"\n\nPOST STYLE (these rules outrank the brief above):\n{style}"
     config = types.GenerateContentConfig(
-        system_instruction=prompts.image_prompt(layout, page_name, page),
+        system_instruction=system,
         response_modalities=["IMAGE"],
         image_config=types.ImageConfig(aspect_ratio=ratio),
     )

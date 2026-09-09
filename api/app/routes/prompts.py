@@ -26,10 +26,10 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app.db import get_session
-from app.models import Page
+from app.models import Draft, Page, PromptTemplate
 from app.settings import layout
 from app.writer import prompts
 
@@ -125,3 +125,125 @@ def set_prompt(
 
     resolved = prompts.list_prompt_files(layout, page.name, page)
     return PromptFile(**next(f for f in resolved if f["filename"] == filename))
+
+
+# --- the template library ----------------------------------------------------
+#
+# The client's 2026-08-20 request: named post styles, each carrying its own
+# system/overlay/image text, selectable at run time. One rule from everything
+# above carries over unchanged: **a template stores deltas, never copies.**
+# Blank inherits the Page's chain; a template that restated the whole house
+# prompt would be a copy that drifts.
+#
+# Its own sub-router, registered before `router` in `main.py`: `PUT
+# /templates/{id}` under the router above would match `/{page_id}/{filename}`
+# first and die on `page_id` not being an integer.
+
+templates_router = APIRouter(prefix="/prompts/templates", tags=["prompts"])
+
+
+class TemplateBody(BaseModel):
+    name: str
+    system_prompt: str | None = None
+    overlay_prompt: str | None = None
+    image_prompt: str | None = None
+
+
+class TemplateOut(TemplateBody):
+    id: int
+    """What the screens read back; `TemplateBody` alone is what they send."""
+
+
+def _template_out(row: PromptTemplate) -> TemplateOut:
+    return TemplateOut(
+        id=row.id,
+        name=row.name,
+        system_prompt=row.system_prompt,
+        overlay_prompt=row.overlay_prompt,
+        image_prompt=row.image_prompt,
+    )
+
+
+@templates_router.get("")
+def list_templates(session: Session = Depends(get_session)) -> list[TemplateOut]:
+    return [_template_out(row) for row in session.exec(select(PromptTemplate)).all()]
+
+
+@templates_router.post("", status_code=201)
+def create_template(
+    body: TemplateBody, session: Session = Depends(get_session)
+) -> TemplateOut:
+    name = body.name.strip()
+    if not name:
+        raise HTTPException(422, "A template needs a name.")
+    if not any(
+        (text or "").strip()
+        for text in (body.system_prompt, body.overlay_prompt, body.image_prompt)
+    ):
+        raise HTTPException(
+            422,
+            "A template with all three prompts blank changes nothing — it "
+            "would only add a dropdown entry. Leave the prompts blank by not "
+            "creating it.",
+        )
+    if session.exec(
+        select(PromptTemplate).where(PromptTemplate.name == name)
+    ).first():
+        raise HTTPException(409, f"A template named {name!r} already exists.")
+
+    row = PromptTemplate(
+        name=name,
+        system_prompt=body.system_prompt,
+        overlay_prompt=body.overlay_prompt,
+        image_prompt=body.image_prompt,
+    )
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    return _template_out(row)
+
+
+@templates_router.put("/{template_id}")
+def update_template(
+    template_id: int,
+    body: TemplateBody,
+    session: Session = Depends(get_session),
+) -> TemplateOut:
+    row = session.get(PromptTemplate, template_id)
+    if row is None:
+        raise HTTPException(404, f"No template {template_id}")
+    name = body.name.strip()
+    if not name:
+        raise HTTPException(422, "A template needs a name.")
+    clash = session.exec(
+        select(PromptTemplate).where(PromptTemplate.name == name)
+    ).first()
+    if clash and clash.id != template_id:
+        raise HTTPException(409, f"A template named {name!r} already exists.")
+
+    row.name = name
+    row.system_prompt = body.system_prompt
+    row.overlay_prompt = body.overlay_prompt
+    row.image_prompt = body.image_prompt
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    return _template_out(row)
+
+
+@templates_router.delete("/{template_id}", status_code=204)
+def delete_template(template_id: int, session: Session = Depends(get_session)) -> None:
+    row = session.get(PromptTemplate, template_id)
+    if row is None:
+        raise HTTPException(404, f"No template {template_id}")
+
+    # Drafts that were generated under this style keep their text; only the
+    # pointer goes. A dangling id would make the next rewrite fail on a lookup
+    # the operator cannot fix from any screen.
+    for draft in session.exec(
+        select(Draft).where(Draft.prompt_template_id == template_id)
+    ).all():
+        draft.prompt_template_id = None
+        session.add(draft)
+    session.delete(row)
+    session.commit()

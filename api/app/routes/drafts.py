@@ -25,7 +25,7 @@ from sqlmodel import Session, select
 from app import generate, media
 from app.db import get_session
 from app.log import logger
-from app.models import Draft, DraftStatus, Page, SourceItem, SourceItemBase
+from app.models import Draft, DraftStatus, Page, PromptTemplate, SourceItem, SourceItemBase
 from app.publish import metricool as publisher
 from app.settings import layout, settings
 from app.writer import agent as writer
@@ -49,6 +49,10 @@ class GenerateRequest(BaseModel):
     template: str | None = None
     """`card` or `full_overlay` for the drafts this run produces. Null takes
     the Page's, which is what a run that does not care should send."""
+
+    prompt_template_id: int | None = None
+    """The post style this run generates under, from the prompts screen's
+    template library. Null writes with the Page's own prompts, unlayered."""
 
     no_image: bool = False
     """Produce text-only drafts: no hero, no card, nothing to composite.
@@ -81,6 +85,7 @@ def start_generate(
             request.hero_from_source,
             request.template,
             request.no_image,
+            request.prompt_template_id,
         )
     except generate.GenerateError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
@@ -447,7 +452,17 @@ def regenerate_field(
     try:
         instruction = (body.instruction or "").strip() if body else ""
         result = writer.rewrite(
-            page, source, draft.topic, field, keeping, instruction or None
+            page,
+            source,
+            draft.topic,
+            field,
+            keeping,
+            instruction or None,
+            template=(
+                session.get(PromptTemplate, draft.prompt_template_id)
+                if draft.prompt_template_id
+                else None
+            ),
         )
     except Exception as error:  # noqa: BLE001 — upstream, and the row is untouched
         raise HTTPException(

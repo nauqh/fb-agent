@@ -4,8 +4,10 @@ import pytest
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 from pydantic_ai.exceptions import UnexpectedModelBehavior
 from pydantic_ai.messages import ModelMessage, ModelResponse, ToolCallPart
+from types import SimpleNamespace
 
 from app.models import Page, SourceItem, SourceKind
+from app.settings import layout
 from app.writer import agent as writer
 from app.writer import validators
 from pydantic_ai.messages import BinaryImage
@@ -37,6 +39,28 @@ GOOD = {
 
 def test_a_compliant_draft_reports_nothing():
     assert validators.check(GOOD["hook"], GOOD["caption"], GOOD["first_comment"]) == []
+
+
+def test_a_minimal_post_passes_without_a_body():
+    """A meme/quote/recipe post: hook + short plain caption, first comment null.
+
+    The essay rules made that shape unwritable, which is why minimal competitor
+    posts came out as essays about something else — the only structure that
+    survived validation was the full one.
+    """
+    for body in (None, "", "   "):
+        assert validators.check("No excuses. Train.", "Show up anyway.", body) == []
+
+
+def test_a_minimal_post_still_keeps_the_hook_and_line_rules():
+    reasons = validators.check("word " * 66, "line\n" * 6, None)
+    assert any("66 words" in reason for reason in reasons)
+    assert any("6 points" in reason for reason in reasons)
+    assert not any("emoji" in reason for reason in reasons)
+
+
+def test_a_minimal_post_earns_no_year_warning():
+    assert validators.advise(None) == []
 
 
 def test_a_hook_that_asks_a_question_is_caught():
@@ -158,6 +182,40 @@ def test_a_compliant_draft_passes_on_the_first_call(page):
     assert len(calls) == 1, "the happy path must cost exactly one call"
 
 
+def test_a_post_template_layers_last_and_says_it_outranks(page):
+    """The client's named post styles: delta only, layered last, last wins.
+
+    Layering rather than replacement is the drift defence — the template
+    carries the few lines its style changes, never a copy of the house prose
+    (see `models.PromptTemplate`). Last-wins is the same mechanism the page
+    lengths use.
+    """
+    template = SimpleNamespace(
+        name="Meme",
+        system_prompt="The post is one image and one line. No essay.",
+        overlay_prompt="The panel holds the line, in capitals.",
+        image_prompt=None,
+    )
+
+    instructions = writer._instructions(page, layout, template)
+
+    assert "POST STYLE: Meme" in instructions
+    assert "one image and one line" in instructions
+    assert "The panel holds the line" in instructions
+    assert instructions.strip().endswith("in capitals.")
+
+
+def test_a_post_template_with_only_an_image_layer_changes_no_text_instructions(page):
+    template = SimpleNamespace(
+        name="Bright",
+        system_prompt=None,
+        overlay_prompt="",
+        image_prompt="Bright daylight.",
+    )
+
+    assert "POST STYLE" not in writer._instructions(page, layout, template)
+
+
 def test_a_violation_is_retried_and_corrected(page):
     """The phase's done-when: a hook ending in `?` comes back fixed, not warned."""
     bad = {**GOOD, "hook": "Did Marie Tharp really map the ocean floor?"}
@@ -229,6 +287,22 @@ def test_a_competitor_post_binds_the_subject_without_lending_its_words():
     instruction = writer.source_instruction(SourceKind.COMPETITOR_POST)
 
     assert "Do not reuse their wording" in instruction
+
+
+def test_a_competitor_instruction_tells_the_model_to_mirror_the_shape():
+    """The old instruction said "do not reuse their structure", which for a
+    meme or a recipe card meant: discard the only thing worth copying. The
+    schema and validators also made the minimal shape unwritable — both fixed;
+    this pins the prompt half.
+    """
+    instruction = writer.source_instruction(SourceKind.COMPETITOR_POST)
+
+    assert "minimal post" in instruction
+    assert "left out entirely" in instruction
+    assert "their structure" not in instruction
+    # Theme may be recreated; the artefact itself may not.
+    assert "same theme" in instruction
+    assert "never their actual photograph" in instruction
 
 
 def test_the_prompt_carries_the_source_text_and_its_instruction():

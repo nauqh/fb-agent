@@ -217,7 +217,10 @@ def no_meta_phrases(recap: str, first_comment: str) -> str | None:
 
 
 def check(
-    hook: str, recap: str, first_comment: str, limits: Limits | None = None
+    hook: str,
+    recap: str,
+    first_comment: str | None,
+    limits: Limits | None = None,
 ) -> list[str]:
     """The blocking rules, in reading order. Empty means the draft is compliant.
 
@@ -229,20 +232,34 @@ def check(
     admission price for blocking, because a rule that raises `ModelRetry` and
     cannot be satisfied does not warn — it kills the run at
     `Exceeded maximum output retries`. See `advise` for the rest.
+
+    A blank first comment is not a broken draft — it is a minimal post (see
+    `source_instruction`): image plus a short caption, no body. The essay rules
+    cannot judge a shape with no essay in it, so only the hook, the caption's
+    line count and the meta-phrase ban are enforced; the emoji rule is a
+    story-post convention and a character floor on a quote would be a dead run.
     """
-    results = [
-        hook_length(hook, limits),
-        hook_has_no_question(hook),
-        recap_point_count(recap),
-        recap_lines_start_with_emoji(recap),
-        first_comment_paragraphs(first_comment, limits),
-        body_length(first_comment, limits),
-        no_meta_phrases(recap, first_comment),
-    ]
+    if not (first_comment or "").strip():
+        results = [
+            hook_length(hook, limits),
+            hook_has_no_question(hook),
+            recap_point_count(recap),
+            no_meta_phrases(recap, ""),
+        ]
+    else:
+        results = [
+            hook_length(hook, limits),
+            hook_has_no_question(hook),
+            recap_point_count(recap),
+            recap_lines_start_with_emoji(recap),
+            first_comment_paragraphs(first_comment, limits),
+            body_length(first_comment, limits),
+            no_meta_phrases(recap, first_comment),
+        ]
     return [reason for reason in results if reason]
 
 
-def advise(first_comment: str) -> list[str]:
+def advise(first_comment: str | None) -> list[str]:
     """Rules that inform the operator but must never block the writer.
 
     `birth_death_years` is here because it cannot be made precise. It asks for
@@ -254,5 +271,11 @@ def advise(first_comment: str) -> list[str]:
     died. It is genuinely useful as a nudge and useless as a gate, which is what
     a Warning is for — and how the old repo had it (`validation.ts:100`, "may be
     missing").
+
+    A blank first comment is a minimal post, not a body missing its years, and
+    the rule would fire on every meme and quote the writer is now allowed to
+    make — so it stays quiet there.
     """
+    if not (first_comment or "").strip():
+        return []
     return [reason for reason in [birth_death_years(first_comment)] if reason]

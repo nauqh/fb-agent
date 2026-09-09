@@ -7,8 +7,10 @@ import { Loader2, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { generate } from "@/lib/api/drafts";
+import { listPromptTemplates } from "@/lib/api/prompt-templates";
 import { sourceKey, useCart } from "@/lib/cart";
 import { usePageScope } from "@/lib/page-scope";
+import { useQuery } from "@/lib/use-query";
 import { Button } from "@/components/ui/button";
 
 /**
@@ -79,6 +81,16 @@ export function CartPanel() {
    */
   const [noImage, setNoImage] = useState(false);
   /**
+   * The post style this run writes under, from the library on Settings.
+   *
+   * Not sticky between runs, like the picture options: a style is a property
+   * of these sources — a meme cart wants Meme, the next may not. Empty string
+   * is "Page default" and is sent as null rather than omitted, so a run made
+   * after a selection is explicitly un-styled rather than by accident.
+   */
+  const [styleId, setStyleId] = useState("");
+  const { data: templates } = useQuery(listPromptTemplates, []);
+  /**
    * RSS only, mirroring the server, which refuses the rest.
    *
    * A competitor post's picture is a rival page's own creative and a tweet's
@@ -103,10 +115,12 @@ export function CartPanel() {
         page_ids: [page.id],
         hero_from_source: offerSourceHero && heroFromSource && !noImage,
         no_image: noImage,
+        prompt_template_id: styleId === "" ? null : Number(styleId),
       });
       cart.clear();
       setHeroFromSource(false);
       setNoImage(false);
+      setStyleId("");
       toast.success(`${ids.length} draft${ids.length === 1 ? "" : "s"} generating.`, {
         description: "Progress is on the Review screen.",
       });
@@ -182,6 +196,26 @@ export function CartPanel() {
               count is the honest part — it says how many of the ticked items
               can actually supply one, which is the difference between "free
               heroes" and "some free heroes and some warnings". */}
+          {/* The post style. A native select, not the pill Tabs the Settings
+              prompts use: the dock is one row and a style is a choice among
+              many, not a toggle. Hidden while empty — a style applies to the
+              run, and with nothing ticked there is no run. */}
+          {cart.count > 0 ? (
+            <select
+              value={styleId}
+              onChange={(event) => setStyleId(event.target.value)}
+              title="Write this run under a post style — managed in Settings → Post styles"
+              className="h-7 max-w-36 shrink-0 truncate rounded-md border bg-card px-1.5 text-xs text-muted-foreground"
+            >
+              <option value="">Page default</option>
+              {(templates ?? []).map((template) => (
+                <option key={template.id} value={template.id}>
+                  {template.name}
+                </option>
+              ))}
+            </select>
+          ) : null}
+
           {/* Text only. Beside the other picture option because they answer
               the same question — where does the image come from — and one of
               the answers is "there isn't one". */}

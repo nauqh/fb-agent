@@ -50,20 +50,31 @@ class DraftContent(BaseModel):
     # validators are still the backstop; the prompt is the instruction.
     hook: str = Field(description="The text drawn on the image panel. No questions.")
     caption: str = Field(description="The recap: at most 5 points, each opening with an emoji.")
-    first_comment: str = Field(
+    first_comment: str | None = Field(
+        default=None,
         description=(
             "The main body, as paragraphs separated by a blank line. Length and "
-            "paragraph count are stated in the prompt."
-        )
+            "paragraph count are stated in the prompt. Leave it out (null) ONLY "
+            "when the instruction says the source is a minimal post — a meme, "
+            "quote, recipe card or motivational image with little or no caption "
+            "text — and the post must mirror that shape. For a minimal post an "
+            "empty first comment is the format, not an omission to fix."
+        ),
     )
     highlight_phrases: list[str] = Field(
         description="Short substrings copied verbatim out of the hook."
     )
-    image_prompt: str = Field(description="A photorealistic hero prompt for this story.")
+    image_prompt: str = Field(
+        description=(
+            "A photorealistic hero prompt for this story. For a competitor post, "
+            "depict the theme of their image — same subject, scene and mood — "
+            "composed fresh; never their actual photograph."
+        )
+    )
 
 
-def _instructions(page: Page, layout: Layout) -> str:
-    """System prompt, panel rules, and how to treat the source.
+def _instructions(page: Page, layout: Layout, template=None) -> str:
+    """System prompt, panel rules, how to treat the source, and the post style.
 
     The last part is the one that cannot be got wrong. `source_instruction`
     decides how the Source Item is read, and every kind now binds the subject:
@@ -81,6 +92,13 @@ def _instructions(page: Page, layout: Layout) -> str:
     second copy to drift — the exact failure `prompts.py` is written against. A
     Page that has asked for 30 words gets a line saying so, and it goes last, so
     it wins over whatever the inherited prose says.
+
+    **A post template layers last of all**, for the same reason the lengths do:
+    last wins. It carries only its delta — the fields the style actually
+    changes — and says it outranks, which is the same mechanism the minimal-post
+    instruction uses and the one that has survived contact with the model. The
+    template's text is a delta by construction (see `models.PromptTemplate`),
+    so there is no second copy of the house prose here to drift.
     """
     parts = [
         prompts.system_prompt(layout, page.name, page),
@@ -98,6 +116,21 @@ def _instructions(page: Page, layout: Layout) -> str:
             f"{limits.body_max_chars:,} characters.\n"
             f"- The first comment must be {low}–{high} paragraphs."
         )
+    if template is not None:
+        layers = []
+        for label, text in (
+            ("SYSTEM", template.system_prompt),
+            ("OVERLAY (text panel rules)", template.overlay_prompt),
+        ):
+            if (text or "").strip():
+                layers.append(f"{label}:\n{prompts.substitute(text, layout)}")
+        if layers:
+            parts.append(
+                f"POST STYLE: {template.name}. These instructions outrank "
+                "everything above for this draft. Where they change the "
+                "structure, lengths or rules above, follow them.\n\n"
+                + "\n\n".join(layers)
+            )
     return "\n\n".join(parts)
 
 
@@ -122,21 +155,40 @@ def source_instruction(kind: SourceKind) -> str:
     be said alongside "not their words". An RSS item has no such pull — nobody
     republishes a Smithsonian article verbatim by accident.
 
-    Their *picture* is still off-limits, and that rule did not move: see
-    `generate.build_image`, where `hero_from_source` stays RSS-only. Retelling a
-    story is sourcing; reusing the image a rival page shot is lifting.
+    Their *picture* is still off-limits as a file, and that rule did not move:
+    see `generate.build_image`, where `hero_from_source` stays RSS-only. But the
+    line used to forbid imitating anything the image looked like, which for a
+    meme or a recipe card forbade the theme itself — the one thing a recreation
+    is of. The distinction now drawn is theme versus artefact: depict what
+    their picture depicts, freshly composed in the page's style; never their
+    photograph, crop, baked-in text or card.
     """
     if kind is SourceKind.COMPETITOR_POST:
         return (
             "The source below is a competitor's post about a real story. Write "
             "about that SAME story — the same subject, people and events. Do not "
-            "invent a different subject. Do not reuse their wording, their "
-            "opening or their structure: the story is shared, the writing is ours. "
-            "An image of the post may accompany it; read it only for the subject "
-            "and its details. Never describe or imitate the image's own style, "
-            "composition, colours, layout or card design, and never ask the hero "
-            "model to reproduce anything the image looks like — a reused picture "
-            "would be lifting what the rival shot."
+            "invent a different subject. Do not reuse their wording or their "
+            "opening: the story is shared, the writing is ours.\n"
+            "Their post's SHAPE is part of the brief. Match it:\n"
+            "- A full post — an image with a substantial caption — gets the "
+            "standard structure defined above: hook, recap, first comment.\n"
+            "- A minimal post — a meme, a quote, a recipe card, a motivational "
+            "image with little or no caption text — gets the same minimal shape: "
+            "the hook carries the message their image carries, adapted into our "
+            "voice and never their exact words; the caption is a few short plain "
+            "lines with no emoji list and no invented points; and the first "
+            "comment is left out entirely (null). This outranks the structure "
+            "defined above. Do not pad a minimal post into an essay — that is "
+            "recreating something the source never was.\n"
+            "An image of the post may accompany it; read it for the subject, its "
+            "details, which shape it is, and the THEME it depicts. The image "
+            "prompt must describe a fresh photograph of that same theme — the "
+            "same subject, activity, scene and mood their picture shows — "
+            "composed in this page's own photographic style, never their actual "
+            "photograph, their exact composition or crop, any text baked into "
+            "their image, or their card design and branding. Recreating the "
+            "theme is the job; reusing the picture itself would be lifting what "
+            "the rival shot."
         )
     return (
         "The source below is FACTUAL. Write about this same story, the same "
@@ -243,11 +295,14 @@ def write(
     topic: str | None = None,
     model=None,
     image: BinaryImage | None = None,
+    template=None,
 ):
     """A brand-compliant draft, or an explanation. Never a retry.
 
     `image` is the competitor post's own picture, fetched by `generate` and
     sent alongside the text so the model can read it — never a style sample.
+    `template` is the run's post style row, layered last in the instructions;
+    None is the normal case.
 
     Two different retries live here and they are not the same thing.
     `ModelRetry` corrects a draft that broke a brand rule — that is the writer
@@ -263,10 +318,11 @@ def write(
         user_contents(user_prompt(source, topic), image),
         _validator_for(validators.Limits.for_page(page)),
         model,
+        template=template,
     )
 
 
-def _run(page: Page, prompt, validator, model=None):
+def _run(page: Page, prompt, validator, model=None, template=None):
     """Ask the model, stepping down the fallback chain while it is unavailable.
 
     Extracted so `rewrite` cannot grow a second copy of the ladder — the two
@@ -285,7 +341,7 @@ def _run(page: Page, prompt, validator, model=None):
         agent = Agent(
             model,
             output_type=DraftContent,
-            instructions=_instructions(page, layout),
+            instructions=_instructions(page, layout, template),
             retries=MAX_RETRIES,
         )
         agent.output_validator(validator)
@@ -298,7 +354,7 @@ def _run(page: Page, prompt, validator, model=None):
             agent = Agent(
                 _model(name),
                 output_type=DraftContent,
-                instructions=_instructions(page, layout),
+                instructions=_instructions(page, layout, template),
                 model_settings=_model_settings(name),
                 retries=MAX_RETRIES,
             )
@@ -348,11 +404,13 @@ def _field_rules(field: str, limits: validators.Limits | None = None):
                 validators.hook_has_no_question(content.hook),
             ]
         elif field == "caption":
-            found = [
-                validators.recap_point_count(content.caption),
-                validators.recap_lines_start_with_emoji(content.caption),
-                validators.no_meta_phrases(content.caption, ""),
-            ]
+            # A minimal post's caption is plain lines; the emoji convention only
+            # exists on a story post, signalled by the body being present.
+            minimal = not (content.first_comment or "").strip()
+            found = [validators.recap_point_count(content.caption)]
+            if not minimal:
+                found.append(validators.recap_lines_start_with_emoji(content.caption))
+            found.append(validators.no_meta_phrases(content.caption, ""))
         else:
             found = [
                 validators.first_comment_paragraphs(content.first_comment, limits),
@@ -435,6 +493,7 @@ def rewrite(
     keeping: dict[str, str],
     instruction: str | None = None,
     model=None,
+    template=None,
 ):
     """One field again, written to sit with the ones being kept.
 
@@ -447,6 +506,10 @@ def rewrite(
     They are verbatim substrings of the hook, so phrases chosen for the old one
     match nothing in the new one and render no gold at all — a silent failure
     that looks like the highlight feature being broken.
+
+    `template` is the draft's post style (see `write`). A rewrite in a different
+    voice than the draft was written in is how a meme field gets regenerated as
+    an essay — the stored id, not the operator's current dropdown, decides.
 
     `instruction` steers one rewrite and is **not** stored on the Draft and
     **not** turned into a validator: it describes an action, not the post, and a
@@ -470,4 +533,5 @@ def rewrite(
         rewrite_prompt(source, topic, field, keeping, instruction),
         _field_rules(field, validators.Limits.for_page(page)),
         model,
+        template=template,
     )

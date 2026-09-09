@@ -28,11 +28,19 @@ from app import layout_for, media
 from app.db import get_engine
 from app.image import compositor, hero
 from app.image import text as overlay
-from app.models import Draft, DraftStatus, Page, SourceItem, SourceItemBase, SourceKind
+from app.models import (
+    Draft,
+    DraftStatus,
+    Page,
+    PromptTemplate,
+    SourceItem,
+    SourceItemBase,
+    SourceKind,
+)
 from app.settings import settings
 from app.sources import rss
 from app.writer import agent as writer
-from app.writer import validators
+from app.writer import prompts, validators
 
 IMAGE_INPUT_TIMEOUT = 20.0
 IMAGE_INPUT_MAX_BYTES = 4 * 1024 * 1024
@@ -168,6 +176,7 @@ def start_run(
     hero_from_source: bool = False,
     template: str | None = None,
     no_image: bool = False,
+    prompt_template_id: int | None = None,
 ) -> list[int]:
     """Insert one placeholder Draft per (source × page) and return the ids.
 
@@ -184,6 +193,12 @@ def start_run(
     if missing:
         raise GenerateError(f"No page {sorted(missing)[0]}")
 
+    post_style = None
+    if prompt_template_id is not None:
+        post_style = session.get(PromptTemplate, prompt_template_id)
+        if post_style is None:
+            raise GenerateError(f"No prompt template {prompt_template_id}")
+
     rows = resolve_sources(session, sources)
     session.flush()  # so every SourceItem has an id to point a Draft at
 
@@ -192,6 +207,7 @@ def start_run(
             page_id=page_id,
             source_item_id=row.id if row else None,
             topic=topic if row is None else None,
+            prompt_template_id=post_style.id if post_style else None,
             # Only where there is a Source Item to take a picture from. A
             # topic-only draft has no feed and no image_url, so carrying the
             # flag would guarantee the warning above on every one of them.
@@ -267,7 +283,17 @@ def _run_one(session: Session, draft_id: int) -> None:
             and (source.image_url or "").strip()
             else ""
         )
-        result = writer.write(page, source, draft.topic, image=image)
+        result = writer.write(
+            page,
+            source,
+            draft.topic,
+            image=image,
+            template=(
+                session.get(PromptTemplate, draft.prompt_template_id)
+                if draft.prompt_template_id
+                else None
+            ),
+        )
         content = result.output
 
         draft.hook = content.hook
@@ -410,8 +436,18 @@ def build_image(session: Session, draft: Draft, page: Page) -> list[str]:
                 image_bytes, media.filename(draft.id or 0, "hero", "png")
             )
         else:
+            style = None
+            if draft.prompt_template_id:
+                post_style = session.get(PromptTemplate, draft.prompt_template_id)
+                if post_style and (post_style.image_prompt or "").strip():
+                    style = prompts.substitute(post_style.image_prompt, layout)
             drawn = hero.generate(
-                draft.image_prompt or "", plan.hero_height_px, layout, page.name, page
+                draft.image_prompt or "",
+                plan.hero_height_px,
+                layout,
+                page.name,
+                page,
+                style=style,
             )
             image_bytes = drawn.data
             if drawn.model != settings.gemini_image_model:

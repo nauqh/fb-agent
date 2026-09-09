@@ -5,7 +5,7 @@ import pytest
 from sqlmodel import Session, func, select
 
 from app import generate, media
-from app.models import Draft, DraftStatus, SourceItem, SourceItemBase, SourceKind
+from app.models import Draft, DraftStatus, PromptTemplate, SourceItem, SourceItemBase, SourceKind
 from app.settings import settings
 from app.writer import agent as writer
 from app.writer.agent import DraftContent
@@ -119,6 +119,33 @@ def test_a_topic_only_run_needs_no_source(client, engine, written):
     assert response.status_code == 202
     assert _count(engine, SourceItem) == 0
     assert _count(engine, Draft) == 1
+
+
+def test_a_run_can_generate_under_a_post_style(client, engine, session, written):
+    """The style id is stored on the draft, not resolved at write time.
+
+    A regenerate later must use the voice the draft was written in, so the
+    pointer travels with the row (see `models.Draft.prompt_template_id`).
+    """
+    style = PromptTemplate(name="Meme", system_prompt="One image, one line.")
+    session.add(style)
+    session.commit()
+    session.refresh(style)
+
+    [draft_id] = client.post(
+        "/generate",
+        json={"page_ids": [1], "topic": "x", "prompt_template_id": style.id},
+    ).json()
+
+    assert client.get(f"/drafts/{draft_id}").json()["prompt_template_id"] == style.id
+
+
+def test_a_run_with_an_unknown_post_style_is_refused(client, written):
+    response = client.post(
+        "/generate", json={"page_ids": [1], "topic": "x", "prompt_template_id": 99}
+    )
+
+    assert response.status_code == 422
 
 
 # --- what the run produces ---------------------------------------------------
@@ -579,7 +606,7 @@ def rewritten(monkeypatch):
             image_prompt="a sled dog team on sea ice",
         )
 
-    def fake(page, source, topic, field, keeping, instruction=None, model=None):
+    def fake(page, source, topic, field, keeping, instruction=None, model=None, template=None):
         seen["field"] = field
         seen["keeping"] = keeping
         seen["instruction"] = instruction
