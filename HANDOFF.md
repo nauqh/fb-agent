@@ -1,8 +1,12 @@
 # Handoff
 
-**Updated:** 2026-08-17 · **Next focus:** the deploy. Every round of client
+**Updated:** 2026-09-10 · **Next focus:** the deploy. Every round of client
 feedback that is not blocked on them is in `main` and none of it is deployed —
-`docs/feedback/2026-08-11/`, `-14/`, `-15/`, `-16/`, newest last.
+`docs/feedback/2026-08-11/`, `-14/`, `-15/`, `-16/`, newest last. The
+YouTube-side blocker (the `mweb` client refusing downloads without a PO
+token) is attested as of `6a090ae` and proven in the built image; what remains
+unproven is the same chain on a Railway deploy.
+
 
 Conventions and integration traps live in `CLAUDE.md`, which loads automatically.
 This file is state: what is proven, what is mid-flight, what to do next.
@@ -72,6 +76,17 @@ Verified against live services:
   and rendered in a browser on the Review screen.
 - One real Gemini image call, to confirm the image model accepts a
   `system_instruction`. It does.
+- **The PO token mint runs beside the API** (2026-09-10, `6a090ae`). The
+  bgutil server builds in a `node:22` stage of `api/Dockerfile` and starts in
+  the same container, on `127.0.0.1:4416`, *because the token is bound to the
+  IP it was minted from* — a second Railway service would mint for the wrong
+  egress. Verified in the built image, not just in tests: the mint boots, the
+  plugin fetches from it, and a real download on the `mweb` client succeeds —
+  the one client that previously failed. Unset `YTDLP_POT_SERVER_URL` means
+  today's behavior exactly (the plugin falls back to its own
+  `127.0.0.1:4416`); set it explicitly on Railway to make the wire visible.
+  531 tests pass. Not yet exercised on a Railway deploy: whether the container
+  egress and the mint agree once Railway's IP is in the picture.
 
 **The Metricool write path has been run, and it publishes.** This paragraph said
 the opposite for days after it stopped being true — "never run", "no draft has a
