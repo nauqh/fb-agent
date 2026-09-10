@@ -121,6 +121,10 @@ export function ComposedImage({
 
   const hue = (seed * 47) % 360;
   const full = layout.template === "full_overlay";
+  /** The no-overlay card (client, 2026-09-11): no panel, no badge, no gold —
+      the hero is full bleed and the logo is the only overlay. Matches the
+      compositor's `plan=None`, so the preview beside the PNG stays honest. */
+  const noPanel = !(overlayText ?? "").trim();
 
   /** A card pixel as a percentage of the card's width. */
   const scale = (px: number) => `${(px / layout.image.width) * 100}%`;
@@ -198,7 +202,7 @@ export function ComposedImage({
           column above it only positions the panel. On a card the hero occupies
           its own box and is cropped to it — which is what the compositor does,
           and why this is not simply full-bleed in both cases: the crop differs. */}
-      {full ? (
+      {full || noPanel ? (
         <div className="absolute inset-0" style={heroSrc ? undefined : gradient}>
           {heroImage}
         </div>
@@ -206,9 +210,9 @@ export function ComposedImage({
 
       <div
         className="relative min-h-0 flex-1"
-        style={full || heroSrc ? undefined : gradient}
+        style={full || noPanel || heroSrc ? undefined : gradient}
       >
-        {full ? null : heroImage}
+        {full || noPanel ? null : heroImage}
 
         {/* The headline chip, bottom-left of the hero share — whose bottom edge
             *is* the top of the panel, on either template. `cqw` throughout
@@ -216,7 +220,7 @@ export function ComposedImage({
             compositor's gap is a fraction of the height: at 896×1120 a share of
             height is 1.25× the same share of width. Drawn on `full_overlay`
             only, and only when the Page has a word for it. */}
-        {full && page.badge_text ? (
+        {full && !noPanel && page.badge_text ? (
           <span
             className="absolute font-bold uppercase leading-none"
             style={{
@@ -242,7 +246,7 @@ export function ComposedImage({
           </span>
         ) : null}
 
-        <Watermark layout={layout} page={page} full={full} />
+        <Watermark layout={layout} page={page} full={full || noPanel} />
 
         {/* On the seam by default: `bottom-0` is the hero's own edge, and the
             50% translate puts half the disc onto the panel. */}
@@ -251,7 +255,9 @@ export function ComposedImage({
 
       {/* Panel. `min-height` is the floor from `panel.ratio`; the content pushes
           it taller, up to `panel.max_ratio` — the same cap the compositor
-          applies, without which the panel grows past the top of the card. */}
+          applies, without which the panel grows past the top of the card. A
+          no-overlay draft draws none at all. */}
+      {!noPanel ? (
       <div
         className="relative shrink-0 overflow-hidden"
         style={{
@@ -305,6 +311,7 @@ export function ComposedImage({
           )}
         </p>
       </div>
+      ) : null}
 
       {/* Placed by the operator: against the card, not the hero, because the
           disc can now be anywhere including entirely on the panel. */}

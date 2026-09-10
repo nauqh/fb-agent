@@ -31,6 +31,7 @@ def written(monkeypatch):
 
 BODY = {
     "name": "Meme",
+    "page_id": 1,
     "system_prompt": "One image, one line. No essay.",
     "overlay_prompt": None,
     "image_prompt": None,
@@ -56,7 +57,12 @@ def test_a_template_can_be_updated(client, session):
     created = _create(client).json()
     response = client.put(
         f"/prompts/templates/{created['id']}",
-        json={"name": "Quote", "system_prompt": "New text.", "image_prompt": "x"},
+        json={
+            "name": "Quote",
+            "page_id": 1,
+            "system_prompt": "New text.",
+            "image_prompt": "x",
+        },
     )
 
     assert response.status_code == 200
@@ -97,3 +103,17 @@ def test_deleting_a_template_unpins_its_drafts(client, session, written):
     assert client.delete(f"/prompts/templates/{created['id']}").status_code == 204
 
     assert client.get(f"/drafts/{draft_id}").json()["prompt_template_id"] is None
+
+
+def test_a_template_belongs_to_its_page_only(client):
+    """The client's 2026-09-11 report: History Retraced was offered
+    Bodybuilding's Workout Infographic through the null-global contract. A
+    style is one Page's; another Page's list does not have it, and a style
+    without a Page cannot exist at all."""
+    created = _create(client, page_id=1).json()
+
+    assert [t["name"] for t in client.get("/prompts/templates?page_id=1").json()] == [
+        "Meme"
+    ]
+    assert client.get("/prompts/templates?page_id=2").json() == []
+    assert _create(client, page_id=None).status_code == 422

@@ -366,7 +366,7 @@ def inset_centre(
 
 def compose(
     hero: bytes,
-    plan: OverlayPlan,
+    plan: OverlayPlan | None,
     phrases: list[str],
     watermark: str | bytes | None,
     inset: Inset | None = None,
@@ -376,22 +376,28 @@ def compose(
 ) -> bytes:
     """The finished JPEG. Everything variable was decided before this call.
 
-    Two card forms, and `layout.template` picks between them. On a `card` the
-    hero and the panel divide the height. On a `full_overlay` the hero fills the
-    card and the panel is laid over its bottom — the same panel, at the same
-    height, drawn at the same y; what changes is that there is photograph
-    underneath it, which is only visible if `panel.opacity` is below 1.
+    Three card forms. On a `card` the hero and the panel divide the height; on
+    a `full_overlay` the hero fills the card and the panel is laid over its
+    bottom — the same panel, at the same height, drawn at the same y; what
+    changes is that there is photograph underneath it, which is only visible if
+    `panel.opacity` is below 1.
+
+    **`plan=None` is the no-overlay card** (client, 2026-09-11): the hero is
+    full bleed, there is no panel, no badge and no gold — the image and the
+    logo are the whole visual. The badge sits just above a panel and has no
+    home without one, so it does not draw.
     """
     layout = layout or default_layout
-    full_overlay = layout.template == "full_overlay"
+    full_overlay = plan is not None and layout.template == "full_overlay"
 
-    if not plan.lines:
-        raise CompositeError("the overlay text produced no lines to draw")
-    if plan.is_clipped:
-        raise CompositeError(
-            f"the overlay needs {plan.content_height_px}px of panel and the "
-            f"maximum is {plan.panel_height_px}px; it would be cut off mid-word"
-        )
+    if plan is not None:
+        if not plan.lines:
+            raise CompositeError("the overlay text produced no lines to draw")
+        if plan.is_clipped:
+            raise CompositeError(
+                f"the overlay needs {plan.content_height_px}px of panel and the "
+                f"maximum is {plan.panel_height_px}px; it would be cut off mid-word"
+            )
 
     width = layout.image.width
     canvas = Image.new("RGBA", (width, layout.image.height))
@@ -401,14 +407,19 @@ def compose(
     except OSError as error:
         raise CompositeError(f"the hero image did not decode ({error})") from error
 
-    hero_height = layout.image.height if full_overlay else plan.hero_height_px
+    hero_height = (
+        layout.image.height
+        if full_overlay or plan is None
+        else plan.hero_height_px
+    )
     canvas.paste(_cover(source, width, hero_height), (0, 0))
 
     # `alpha_composite`, not `paste`: a panel below full opacity has to blend
     # with what is under it, and `paste` would replace those pixels with a
     # semi-transparent black instead — which then flattens onto black at the
     # JPEG step and looks like an opaque panel that ignored the setting.
-    canvas.alpha_composite(render_panel(plan, phrases, layout), (0, plan.hero_height_px))
+    if plan is not None:
+        canvas.alpha_composite(render_panel(plan, phrases, layout), (0, plan.hero_height_px))
 
     margin = round(width * layout.image.edge_margin_ratio)
 
@@ -445,7 +456,8 @@ def compose(
         # Default is centred on the seam: half on the photograph, half on the
         # panel. That overlap is the effect — a disc wholly inside the hero is a
         # sticker, and one wholly inside the panel is an avatar. The operator
-        # can drag it anywhere from there.
+        # can drag it anywhere from there. With no panel there is no seam, so
+        # the disc centres on the card.
         disc = circular_portrait(
             inset.data,
             layout,
@@ -453,7 +465,10 @@ def compose(
             inset.border_width_px,
             inset.border_color,
         )
-        x, y = inset_centre(inset, plan, layout)
+        if plan is None:
+            x, y = width // 2, layout.image.height // 2
+        else:
+            x, y = inset_centre(inset, plan, layout)
         canvas.alpha_composite(disc, (x - disc.width // 2, y - disc.height // 2))
 
     out = io.BytesIO()

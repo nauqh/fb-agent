@@ -1,12 +1,13 @@
 # Handoff
 
-**Updated:** 2026-09-10 · **Next focus:** the client's 2026-09-10 feedback fixes
-are **uncommitted in the working tree** — see "The 2026-09-10 feedback round"
-below for what changed and the migration incident to read before touching
-alembic. Every earlier round is in `main`. The YouTube-side blocker (the `mweb`
-client refusing downloads without a PO token) is attested as of `6a090ae` and
-proven in the built image; what remains unproven is the same chain on a Railway
-deploy.
+**Updated:** 2026-09-11 · **Next focus:** two uncommitted rounds on top of
+`6ad69ec` — post styles fully per-Page (`page_id` NOT NULL, migration
+`4c88d1d59926`, applied live) and the no-overlay opt-out (empty overlay prompt
+= image and logo only). See "The 2026-09-11 rounds" below. Read "The migration
+incident" in the 2026-09-10 section before touching alembic. The YouTube-side
+blocker (the `mweb` client refusing downloads without a PO token) is attested
+as of `6a090ae` and proven in the built image; what remains unproven is the
+same chain on a Railway deploy.
 
 
 Conventions and integration traps live in `CLAUDE.md`, which loads automatically.
@@ -35,9 +36,53 @@ expression against it either errors or reads as zero. Four commits were reported
 to the operator as unpushed on the strength of that count while the remote
 already had them. `ls-remote` asks GitHub; nothing local can be stale.
 
-## The 2026-09-10 feedback round — UNCOMMITTED, read before anything else
+## The 2026-09-11 rounds — UNCOMMITTED, read before anything else
 
-Four client quotes, three fixes, no commits. `git status` shows `app/models.py`,
+Two rounds after `6ad69ec`. Both browser-verified; API suite **538 passed**,
+tsc/eslint clean, `alembic check` clean.
+
+**Round 1 — prompts lose the inherited framing; styles are strictly per-Page.**
+The client reported History Retraced being offered Bodybuilding's "Workout
+Infographic" — the leak was the legacy `page_id: null` row and the
+null-means-global contract. Removed entirely: `page_id` is **NOT NULL** (every
+style is one Page's; the defaults in `api/prompts/` are the only shared layer),
+the one legacy row was assigned to Bodybuilding in migration `4c88d1d59926` by
+a `name ILIKE 'bodybuilding%'` lookup before the column tightened, the API
+`page_id` is required, and the Settings label no longer counts "overridden"
+prompts — the source dots on the prompt tabs are gone entirely, and "inherited"
+wording is gone from the screen. Tests pin the scoping
+(`test_a_template_belongs_to_its_page_only`).
+
+**Round 2 — the no-overlay opt-out.** Client rule: an overlay prompt **edited
+to empty** means the Page's images carry no text panel — the picture and the
+logo only. Three states now exist on `Page.overlay_prompt` and they must stay
+distinct: `null` = inherit the file ("Use the default" sends this), `""` =
+explicit no-overlay (stated by a chip in the Settings editor), text = override.
+Chain: `prompts.stored` returns `""` for an emptied overlay column only,
+`set_prompt` stores `""` (null clears), `writer._instructions` appends a last
+"NO OVERLAY TEXT" instruction and drops the template's OVERLAY layer when the
+Page has opted out, `DraftContent.hook` is nullable, `validators.check` skips
+the hook rules, `compositor.compose` takes `plan=None` and draws full-bleed
+hero + logo (no panel, no badge, inset centred), and the web preview
+(`composed-image.tsx`) matches with its own `noPanel` branch. The
+"Use the default" button sends `null` — a bug found in the browser: the box
+also kept the cleared text because `PromptEditor` keyed on filename alone; it
+now keys on filename + body.
+
+Open edge, deliberately not built: a template cannot turn overlay back ON for
+a Page that opted out — the Page-level switch is authoritative and the
+template's OVERLAY layer is skipped there. Say so if the client wants styles
+to override the opt-out.
+
+Browser evidence: `.scratchpad/verify-overlay.js` (empty save → chip; "Use the
+default" → restored), 538 tests including the new no-panel compose,
+`test_an_emptied_overlay_prompt_instructs_no_overlay`,
+`test_saving_an_empty_overlay_persists_the_opt_out`,
+`test_a_null_hook_breaks_no_rules`.
+
+## The 2026-09-10 feedback round — committed as `6ad69ec`, superseded in part by the 2026-09-11 rounds above
+
+Four client quotes, three fixes, all in `6ad69ec`. `git status` at the time showed `app/models.py`,
 `app/routes/prompts.py`, four web files, and one new migration.
 
 1. **The "own prompts but house lengths" warning is gone.** The client asked

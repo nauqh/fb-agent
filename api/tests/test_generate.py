@@ -127,7 +127,7 @@ def test_a_run_can_generate_under_a_post_style(client, engine, session, written)
     A regenerate later must use the voice the draft was written in, so the
     pointer travels with the row (see `models.Draft.prompt_template_id`).
     """
-    style = PromptTemplate(name="Meme", system_prompt="One image, one line.")
+    style = PromptTemplate(name="Meme", page_id=1, system_prompt="One image, one line.")
     session.add(style)
     session.commit()
     session.refresh(style)

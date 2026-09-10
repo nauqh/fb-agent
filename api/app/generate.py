@@ -385,8 +385,6 @@ def build_image(session: Session, draft: Draft, page: Page) -> list[str]:
         # by choice and one whose generation failed look identical on the row
         # otherwise, and only one of them may be published.
         return []
-    if not draft.hook:
-        return [f"{IMAGE_WARNING}no hook, so there is nothing to draw."]
 
     try:
         # This Page's layout, not the file's: `layout.yml` is the default and a
@@ -396,7 +394,10 @@ def build_image(session: Session, draft: Draft, page: Page) -> list[str]:
         # the space it was measured for.
         layout = layout_for.resolve_draft(session, page.id, draft.template)
 
-        plan = overlay.plan(draft.hook, layout)
+        # A null hook is the no-overlay opt-out (client, 2026-09-11), not a
+        # failure: the card is the hero and the logo, full bleed, no panel.
+        # `plan` is None exactly when there is nothing to draw on it.
+        plan = overlay.plan(draft.hook, layout) if (draft.hook or "").strip() else None
         warnings: list[str] = []
 
         if draft.hero_image_path:
@@ -443,7 +444,7 @@ def build_image(session: Session, draft: Draft, page: Page) -> list[str]:
                     style = prompts.substitute(post_style.image_prompt, layout)
             drawn = hero.generate(
                 draft.image_prompt or "",
-                plan.hero_height_px,
+                plan.hero_height_px if plan else layout.image.height,
                 layout,
                 page.name,
                 page,
@@ -546,8 +547,11 @@ def _highlight_warnings(content) -> list[str]:
 
     Caught here rather than in `validators.check` because it is a rule about the
     *compositor*, not about the brand — see design.md on `overlay.txt` being a
-    contract with the renderer.
+    contract with the renderer. A no-overlay draft (null hook) has no panel and
+    no gold, so there is nothing to warn about.
     """
+    if not (content.hook or "").strip():
+        return []
     missing = [p for p in content.highlight_phrases if p not in content.hook]
     if missing:
         return [

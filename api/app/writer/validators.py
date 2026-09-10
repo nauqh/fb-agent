@@ -217,7 +217,7 @@ def no_meta_phrases(recap: str, first_comment: str) -> str | None:
 
 
 def check(
-    hook: str,
+    hook: str | None,
     recap: str,
     first_comment: str | None,
     limits: Limits | None = None,
@@ -238,18 +238,27 @@ def check(
     cannot judge a shape with no essay in it, so only the hook, the caption's
     line count and the meta-phrase ban are enforced; the emoji rule is a
     story-post convention and a character floor on a quote would be a dead run.
+
+    A blank hook is not a broken draft either (client, 2026-09-11): it is the
+    no-overlay opt-out, a post whose image carries no text panel. The hook rules
+    cannot judge a shape with no panel text, so they are skipped; the caption
+    and body rules still run.
     """
+    has_hook = bool((hook or "").strip())
+    hook_rules = (
+        []
+        if not has_hook
+        else [hook_length(hook, limits), hook_has_no_question(hook)]
+    )
     if not (first_comment or "").strip():
         results = [
-            hook_length(hook, limits),
-            hook_has_no_question(hook),
+            *hook_rules,
             recap_point_count(recap),
             no_meta_phrases(recap, ""),
         ]
     else:
         results = [
-            hook_length(hook, limits),
-            hook_has_no_question(hook),
+            *hook_rules,
             recap_point_count(recap),
             recap_lines_start_with_emoji(recap),
             first_comment_paragraphs(first_comment, limits),

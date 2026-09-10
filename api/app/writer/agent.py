@@ -48,7 +48,15 @@ class DraftContent(BaseModel):
     # 35-word hook and 1-3 highlights, so a description carrying the old numbers
     # sends the model two caps in the same request and lets it pick. The
     # validators are still the backstop; the prompt is the instruction.
-    hook: str = Field(description="The text drawn on the image panel. No questions.")
+    hook: str | None = Field(
+        default=None,
+        description=(
+            "The text drawn on the image panel. No questions. Return null ONLY "
+            "when the instructions say this post has NO overlay text — then the "
+            "image carries no text panel at all. For any post with an overlay, "
+            "this is required."
+        ),
+    )
     caption: str = Field(description="The recap: at most 5 points, each opening with an emoji.")
     first_comment: str | None = Field(
         default=None,
@@ -62,7 +70,7 @@ class DraftContent(BaseModel):
         ),
     )
     highlight_phrases: list[str] = Field(
-        description="Short substrings copied verbatim out of the hook."
+        description="Short substrings copied verbatim out of the hook. Empty when the hook is null."
     )
     image_prompt: str = Field(
         description=(
@@ -116,11 +124,15 @@ def _instructions(page: Page, layout: Layout, template=None) -> str:
             f"{limits.body_max_chars:,} characters.\n"
             f"- The first comment must be {low}–{high} paragraphs."
         )
+    no_overlay = not prompts.overlay_prompt(layout, page.name, page).strip()
     if template is not None:
         layers = []
         for label, text in (
             ("SYSTEM", template.system_prompt),
-            ("OVERLAY (text panel rules)", template.overlay_prompt),
+            # Skipped when the Page has opted out of overlay text entirely: the
+            # Page-level switch is authoritative, and layering panel rules for a
+            # post that must not carry a panel would only confuse the model.
+            ("OVERLAY (text panel rules)", None if no_overlay else template.overlay_prompt),
         ):
             if (text or "").strip():
                 layers.append(f"{label}:\n{prompts.substitute(text, layout)}")
@@ -131,6 +143,17 @@ def _instructions(page: Page, layout: Layout, template=None) -> str:
                 "structure, lengths or rules above, follow them.\n\n"
                 + "\n\n".join(layers)
             )
+    if no_overlay:
+        # Last, so last wins over the structure above (client, 2026-09-11: an
+        # emptied overlay prompt means the post carries no text panel — the
+        # image and the logo only).
+        parts.append(
+            "NO OVERLAY TEXT. This post carries no text panel on the image — "
+            "the picture and the page logo are the whole visual. Return null "
+            "for `hook` and an empty list for `highlight_phrases`. Ignore any "
+            "instruction above that asks for hook or panel text; the caption "
+            "and first comment are unchanged."
+        )
     return "\n\n".join(parts)
 
 

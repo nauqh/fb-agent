@@ -90,11 +90,11 @@ export function CartPanel() {
    */
   const [styleId, setStyleId] = useState("");
   const { data: pageTemplates } = useQuery(listPromptTemplates, []);
-  // A style belongs to the Page it was created on (client, 2026-09-10); null
-  // page_id is a legacy global row. Filtered here because `page` can be null
-  // for a render before the switcher resolves.
+  // A style belongs to the Page it was created on (client, 2026-09-10).
+  // Filtered here because `page` can be null for a render before the switcher
+  // resolves; then nothing is offered, which is right.
   const templates = (pageTemplates ?? []).filter(
-    (template) => template.page_id === null || template.page_id === page?.id,
+    (template) => template.page_id === page?.id,
   );
   /**
    * RSS only, mirroring the server, which refuses the rest.

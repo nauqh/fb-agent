@@ -314,3 +314,24 @@ def test_a_shouting_page_wraps_and_draws_the_panel_in_capitals(
 
     assert " ".join(shouted) == " ".join(written).upper()
     assert len(shouted) >= len(written)
+
+
+def test_a_no_overlay_draft_composes_full_bleed_with_no_panel():
+    """`plan=None` is the no-overlay opt-out (client, 2026-09-11): the hero is
+    full bleed, there is no panel and no badge — the image and the logo are the
+    whole card. Asserted against pixels, not just a 200: the bottom of the card
+    is photograph, not the panel black it would be with a plan.
+    """
+    from app.image import compositor
+
+    hero = io.BytesIO()
+    Image.new("RGB", (1280, 1600), (200, 40, 40)).save(hero, format="PNG")
+
+    jpeg = compositor.compose(hero.getvalue(), None, [], None, None, None)
+    card = Image.open(io.BytesIO(jpeg)).convert("RGB")
+
+    width, height = card.size
+    assert (width, height) == (896, 1120)
+    # Bottom strip: photograph red, never the panel's black.
+    bottom = card.getpixel((width // 2, height - 10))
+    assert bottom[0] > 120 and sum(bottom[:3]) > 200

@@ -706,11 +706,12 @@ class PromptTemplate(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     name: str = Field(unique=True)
 
-    page_id: int | None = Field(default=None, foreign_key="page.id", index=True)
+    page_id: int = Field(foreign_key="page.id", index=True)
     """The Page this style belongs to (client, 2026-09-10: styles were
-    appearing on every Page and should be Page specific). Null means a global
-    row — every template created before the column existed — and it is still
-    offered on every Page so the legacy rows stay reachable."""
+    appearing on every Page and should be Page specific — History Retraced
+    was offered Bodybuilding's Workout Infographic through the old null-global
+    contract). Every style is one Page's; the defaults in `api/prompts/` are
+    the only shared layer."""
 
     system_prompt: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
     """Layered onto the writer's instructions, outranking the Page's own."""

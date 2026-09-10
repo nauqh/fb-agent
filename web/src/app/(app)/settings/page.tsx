@@ -124,9 +124,6 @@ export default function SettingsScreen() {
 
   const assigned = assignments?.length ?? 0;
 
-  const ownLengths = LIMIT_ROWS.filter(({ field }) => page[field] !== null).length;
-  const ownPrompts = (prompts ?? []).filter((one) => one.source !== "global").length;
-
   return (
     <ConfigShell
       header={<ScreenHeader title="Settings" />}
@@ -198,7 +195,6 @@ export default function SettingsScreen() {
             {
               id: "writing",
               label: "Writing",
-              meta: prompts ? `${ownLengths > 0 ? `${ownLengths}/5` : "house"} · ${ownPrompts}/${prompts.length}` : PENDING,
               body: (
                 <Writing
                   page={page}
@@ -957,10 +953,10 @@ function Writing({
         <>
           The prompts tell the writer what to aim for; the lengths are what a
           draft is checked against. They cannot disagree &mdash; leave a box
-          empty to use the house number.
+          empty to use the default.
         </>
       }
-      meta={files ? `${files.filter((one) => one.source !== "global").length} overridden` : undefined}
+      meta={files ? `${files.length} prompts` : undefined}
     >
       <div className="space-y-6">
         <WritingLimits page={page} />
@@ -970,7 +966,7 @@ function Writing({
         </div>
 
         <div className="border-t pt-6">
-          <PostStyles pageId={pageId} templates={templates} refresh={refreshTemplates} />
+          <PostStyles pageId={pageId!} templates={templates} refresh={refreshTemplates} />
         </div>
       </div>
     </Pane>
@@ -1082,7 +1078,7 @@ function WritingLimits({ page }: { page: Page }) {
           </Button>
         ) : null}
         <p className="text-[13px] text-muted-foreground">
-          Empty inherits the house number, shown greyed.
+          Empty inherits the default, shown greyed.
         </p>
       </div>
     </div>
@@ -1093,17 +1089,16 @@ function WritingLimits({ page }: { page: Page }) {
 const SOURCE_LABEL: Record<PromptFile["source"], string> = {
   page: "this Page's own",
   "file-override": "file, api/prompts/pages/",
-  global: "inherited from api/prompts/",
+  global: "default, api/prompts/",
 };
 
 /**
  * The three prompts, editable per Page (F5).
  *
- * Each box shows the text **as sent**, which for an inherited prompt is the
- * global file's. That is deliberate and it is also the trap: typing into a box
- * that reads "inherited" and saving creates an override of the whole thing. The
- * label above each box says which of the three it is, and Save is disabled
- * until the text actually differs, so inheriting is never ended by accident.
+ * Every Page writes under its own prompt; when a box was never saved, the
+ * default in `api/prompts/` is what is sent — that is the whole inheritance,
+ * and it is shown only so an operator knows what they are about to replace.
+ * Saving text here makes it this Page's own, for this Page only.
  *
  * One prompt at a time since 2026-08-17. Three 10-row textareas stacked made a
  * 1,400px section in which the one being edited was usually off screen.
@@ -1132,9 +1127,11 @@ function Prompts({
       ) : (
         <div className="space-y-4">
           <p className="max-w-prose text-[13px] text-muted-foreground">
-            Empty means this Page inherits the reviewed default in{" "}
-            <code>api/prompts/</code>. Saving text here overrides it for this
-            Page only.
+            Each Page writes under its own prompt. Where nothing has been
+            saved, the default in <code>api/prompts/</code> is used; saving
+            here makes it this Page&rsquo;s own. An <strong>empty overlay
+            prompt</strong> means the Page&rsquo;s images carry no text panel —
+            the picture and the logo only.
           </p>
           {/* The shared pill shell (`ui/tabs.tsx`) rather than a second
               hand-rolled one: the three are alternatives, not a list, and
@@ -1149,24 +1146,22 @@ function Prompts({
                   className="font-mono"
                 >
                   {file.filename}
-                  {file.source !== "global" ? (
-                    <span
-                      aria-label="overridden"
-                      className={cn(
-                        "size-1.5 rounded-full",
-                        active?.filename === file.filename
-                          ? "bg-background"
-                          : "bg-foreground",
-                      )}
-                    />
-                  ) : null}
                 </TabsTrigger>
               ))}
             </TabsList>
           </Tabs>
 
+          {/* Keyed on the body as well as the name: "Use the default" swaps
+              the inherited text in underneath a mounted editor, and a key of
+              the filename alone left the box showing the cleared text. A body
+              change is a server change, so remounting on it is right for every
+              path that reaches one. */}
           {active ? (
-            <PromptEditor key={active.filename} pageId={pageId!} file={active} />
+            <PromptEditor
+              key={active.filename + ":" + active.body}
+              pageId={pageId!}
+              file={active}
+            />
           ) : null}
         </div>
       )}
@@ -1179,14 +1174,14 @@ function PromptEditor({ pageId, file }: { pageId: number; file: PromptFile }) {
   const [busy, setBusy] = useState(false);
   const dirty = text !== file.body;
 
-  async function save(body: string) {
+  async function save(body: string | null) {
     setBusy(true);
     try {
       const saved = await setPromptFile(pageId, file.filename, body);
       toast(
         saved.source === "page"
           ? `${file.filename} is now this Page's own.`
-          : `${file.filename} is back to the inherited prompt.`,
+          : `${file.filename} is back to the default.`,
       );
       emit();
     } catch (cause) {
@@ -1211,6 +1206,15 @@ function PromptEditor({ pageId, file }: { pageId: number; file: PromptFile }) {
         <span className="text-muted-foreground">
           {file.chars.toLocaleString()} chars
         </span>
+        {/* The no-overlay opt-out, stated where the empty box is (client,
+            2026-09-11): an emptied overlay prompt is a decision, not a
+            blank, and it is the one prompt where empty changes the picture
+            rather than falling back to the default. */}
+        {file.filename === "overlay.txt" && file.source === "page" && file.body.trim() === "" ? (
+          <span className="rounded-full border bg-muted/40 px-2 py-0.5 text-[11px] text-muted-foreground">
+            No overlay text — drafts on this Page get the image and logo only
+          </span>
+        ) : null}
       </div>
 
       {file.editable ? (
@@ -1240,14 +1244,16 @@ function PromptEditor({ pageId, file }: { pageId: number; file: PromptFile }) {
                 Revert
               </Button>
             ) : null}
-            {/* Only when there is an override to clear. On an inherited prompt
-                this button would claim to undo something that is not there. */}
+            {/* Only when there is an override to clear. On a default prompt
+                this button would claim to undo something that is not there.
+                Sends null, never "" — on overlay.txt an empty string is the
+                no-overlay opt-out, and the button's job is the opposite. */}
             {file.source === "page" ? (
               <Button
                 variant="ghost"
                 size="sm"
                 disabled={busy}
-                onClick={() => void save("")}
+                onClick={() => void save(null)}
               >
                 Use the default
               </Button>
@@ -1294,7 +1300,7 @@ function PostStyles({
   templates,
   refresh,
 }: {
-  pageId: number | null;
+  pageId: number;
   templates: PromptTemplate[] | null;
   refresh: () => Promise<void>;
 }) {
@@ -1443,7 +1449,7 @@ function TemplateForm({
   onSaved,
   onCancel,
 }: {
-  pageId: number | null;
+  pageId: number;
   initial?: PromptTemplate;
   onSaved: () => Promise<void>;
   onCancel: () => void;
@@ -1472,6 +1478,7 @@ function TemplateForm({
     try {
       const body = {
         name: form.name.trim(),
+        page_id: pageId,
         ...Object.fromEntries(
           TEMPLATE_FIELDS.map(({ field }) => [field, form[field].trim() || null]),
         ),
@@ -1479,7 +1486,7 @@ function TemplateForm({
       if (initial) {
         await updatePromptTemplate(initial.id, body);
       } else {
-        await createPromptTemplate({ ...body, page_id: pageId });
+        await createPromptTemplate(body);
       }
       await onSaved();
     } catch (cause) {

@@ -636,3 +636,48 @@ def test_the_prompt_states_this_pages_lengths_so_the_check_cannot_surprise_it():
     assert capped.index("LENGTHS FOR THIS PAGE") > capped.index(
         "You are writing for the Facebook page"
     ), "the override has to come last to win"
+
+
+def test_an_emptied_overlay_prompt_instructs_no_overlay_and_skips_the_template_layer(page):
+    """The client's 2026-09-11 rule: an overlay prompt emptied in Settings means
+    the post carries no text panel — the image and the logo only. The NO OVERLAY
+    instruction goes last so last-wins over the structure above, and a template's
+    panel rules are not layered for a post that must not carry a panel."""
+    page.overlay_prompt = "   "
+    template = SimpleNamespace(
+        name="Meme",
+        system_prompt=None,
+        overlay_prompt="The panel holds the line, in capitals.",
+        image_prompt=None,
+    )
+
+    instructions = writer._instructions(page, layout, template)
+
+    assert "NO OVERLAY TEXT" in instructions
+    assert "null" in instructions and "highlight_phrases" in instructions
+    # The page-level switch is authoritative: no panel rules for a panel-less post.
+    assert "The panel holds the line" not in instructions
+
+
+def test_a_page_with_an_overlay_prompt_never_sees_the_no_overlay_instruction(page):
+    template = SimpleNamespace(
+        name="Meme", system_prompt=None, overlay_prompt="Panel rules.", image_prompt=None
+    )
+
+    instructions = writer._instructions(page, layout, template)
+
+    assert "NO OVERLAY TEXT" not in instructions
+    assert "Panel rules." in instructions
+
+
+def test_a_null_hook_breaks_no_rules():
+    """A no-overlay draft (null hook, no highlights) is compliant: the hook rules
+    cannot judge a shape with no panel text."""
+    reasons = validators.check(
+        None,
+        GOOD["caption"],
+        GOOD["first_comment"],
+        validators.Limits(),
+    )
+
+    assert reasons == []

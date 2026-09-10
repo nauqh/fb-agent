@@ -26,7 +26,6 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import or_
 from sqlmodel import Session, select
 
 from app.db import get_session
@@ -65,10 +64,11 @@ class PromptFile(BaseModel):
 
 
 class PromptEdit(BaseModel):
-    body: str
-    """The Page's own text. **Blank clears the override** and returns the Page to
-    the inherited file, which is the only sane reading of an emptied textarea:
-    storing `""` would send the model no system prompt at all."""
+    body: str | None
+    """The Page's own text. `null` clears the override and returns the Page to
+    the inherited file. A non-null blank keeps the new overlay semantics: for
+    `overlay.txt` an empty string is the explicit no-overlay opt-out (see
+    `prompts.stored`), for the other two it clears like `null`."""
 
 
 @router.get("")
@@ -118,7 +118,16 @@ def set_prompt(
             f"{', '.join(sorted(prompts.COLUMN))}.",
         )
 
-    setattr(page, column, edit.body.strip() or None)
+    # Three states, and they have to stay distinct: `None` is "back to the
+    # file", `""` on overlay.txt is the no-overlay opt-out (`prompts.stored`),
+    # and text is the override. For system/image an empty box clears like
+    # `None` — an emptied textarea there has never meant anything else.
+    if edit.body is None:
+        setattr(page, column, None)
+    elif filename == "overlay.txt":
+        setattr(page, column, edit.body.strip())
+    else:
+        setattr(page, column, edit.body.strip() or None)
     page.updated_at = datetime.now(timezone.utc)
     session.add(page)
     session.commit()
@@ -145,8 +154,8 @@ templates_router = APIRouter(prefix="/prompts/templates", tags=["prompts"])
 
 class TemplateBody(BaseModel):
     name: str
-    page_id: int | None = None
-    """The Page the style is created from; null only for legacy/global rows."""
+    page_id: int
+    """The Page the style belongs to — every style is one Page's."""
     system_prompt: str | None = None
     overlay_prompt: str | None = None
     image_prompt: str | None = None
@@ -161,6 +170,7 @@ def _template_out(row: PromptTemplate) -> TemplateOut:
     return TemplateOut(
         id=row.id,
         name=row.name,
+        page_id=row.page_id,
         system_prompt=row.system_prompt,
         overlay_prompt=row.overlay_prompt,
         image_prompt=row.image_prompt,
@@ -171,13 +181,12 @@ def _template_out(row: PromptTemplate) -> TemplateOut:
 def list_templates(
     page_id: int | None = None, session: Session = Depends(get_session)
 ) -> list[TemplateOut]:
-    """Page specific (client, 2026-09-10): with `page_id`, this Page's styles
-    plus the legacy global ones (null) so old rows stay editable somewhere."""
+    """With `page_id`, that Page's styles only — styles are per-Page (client,
+    2026-09-10). Without it, everything, for screens that have not picked a
+    Page yet."""
     query = select(PromptTemplate)
     if page_id is not None:
-        query = query.where(
-            or_(PromptTemplate.page_id == page_id, PromptTemplate.page_id.is_(None))
-        )
+        query = query.where(PromptTemplate.page_id == page_id)
     return [_template_out(row) for row in session.exec(query).all()]
 
 
@@ -204,7 +213,6 @@ def create_template(
         raise HTTPException(409, f"A template named {name!r} already exists.")
     if body.page_id is not None and session.get(Page, body.page_id) is None:
         raise HTTPException(404, f"No Page {body.page_id}")
-
     row = PromptTemplate(
         name=name,
         page_id=body.page_id,

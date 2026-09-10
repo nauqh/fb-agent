@@ -16,8 +16,7 @@ import { del, get, post, put } from "@/lib/api/client";
  */
 
 export async function listPromptTemplates(pageId?: number): Promise<PromptTemplate[]> {
-  // Page-scoped (client, 2026-09-10): the API returns this Page's styles plus
-  // the legacy global ones (null page_id) so old rows stay editable.
+  // Page-scoped (client, 2026-09-10): with pageId, that Page's styles only.
   return get<PromptTemplate[]>(
     pageId === undefined ? "/prompts/templates" : `/prompts/templates?page_id=${pageId}`,
   );
@@ -25,8 +24,8 @@ export async function listPromptTemplates(pageId?: number): Promise<PromptTempla
 
 export interface TemplateBody {
   name: string;
-  /** The Page the style belongs to; null/omitted is the legacy global row. */
-  page_id?: number | null;
+  /** The Page the style belongs to — every style is one Page's. */
+  page_id: number;
   /** Blank clears the field — the template then inherits that prompt. */
   system_prompt?: string | null;
   overlay_prompt?: string | null;

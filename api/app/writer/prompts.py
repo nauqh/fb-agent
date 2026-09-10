@@ -160,15 +160,25 @@ not need a second place to live.
 def stored(name: str, page) -> str | None:
     """This Page's own text for `name`, if someone has written one.
 
-    Blank is not an override. A textarea that has been emptied means "go back to
-    the inherited prompt", and storing `""` would instead send the model nothing
-    at all — a Page with no voice, failing in a way that looks like the model
-    misbehaving rather than like a setting.
+    Blank is not an override for system and image: a textarea emptied means "go
+    back to the inherited prompt", and storing `""` would instead send the
+    model nothing at all — a Page with no voice, failing in a way that looks
+    like the model misbehaving rather than like a setting.
+
+    **Overlay is the exception (client, 2026-09-11).** An emptied overlay box is
+    the explicit "no overlay text" opt-out: the Page wants the image and logo
+    only, and storing `""` — not `None` — is what says so. `None` still means
+    inherit, which is why the two states have to stay distinct in the column.
     """
     if page is None:
         return None
-    text = (getattr(page, COLUMN.get(name, ""), None) or "").strip()
-    return text or None
+    text = getattr(page, COLUMN.get(name, ""), None)
+    if text is None:
+        return None
+    stripped = text.strip()
+    if not stripped:
+        return "" if name == "overlay.txt" else None
+    return stripped
 
 
 def _read(

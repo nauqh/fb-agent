@@ -236,3 +236,47 @@ def test_only_the_three_known_prompts_can_be_stored_on_a_page():
 
     for entry in prompts.list_prompt_files(layout, page.name, page):
         assert entry["editable"] == (entry["filename"] in prompts.COLUMN)
+
+
+def test_an_emptied_overlay_is_the_no_overlay_opt_out_not_a_clear():
+    """The client's 2026-09-11 rule: an overlay prompt emptied in Settings means
+    the Page's images carry no text panel — not "inherit the default". System
+    and image keep the old contract; the two states have to stay distinct."""
+    page = Page(name=BODYBUILDING, facebook_page_id="1", overlay_prompt="   ")
+
+    assert prompts.stored("overlay.txt", page) == ""
+    assert prompts.overlay_prompt(layout, page.name, page) == ""
+    # The neighbours keep the inherit contract.
+    assert prompts.stored("system.txt", page) is None
+
+
+def test_saving_an_empty_overlay_persists_the_opt_out(client, session):
+    """Through the route, not just the helper — `set_prompt` used to turn every
+    empty body into `None`, which would have made the opt-out unreachable."""
+    page = Page(name=BODYBUILDING, facebook_page_id="1")
+    session.add(page)
+    session.commit()
+    session.refresh(page)
+
+    saved = client.put(
+        f"/prompts/{page.id}/overlay.txt", json={"body": "   "}
+    ).json()
+    assert saved["source"] == "page"
+    assert saved["body"] == ""
+
+    session.refresh(page)
+    assert page.overlay_prompt == ""
+    assert prompts.overlay_prompt(layout, page.name, page) == ""
+
+    cleared = client.put(
+        f"/prompts/{page.id}/overlay.txt", json={"body": "Panel text rules."}
+    ).json()
+    assert cleared["source"] == "page" and cleared["body"].strip()
+
+    # The screen's "Use the default" sends null, which is the only road back to
+    # inherit — a non-null "" is the opt-out and must not restore the file.
+    restored = client.put(f"/prompts/{page.id}/overlay.txt", json={"body": None})
+    assert restored.status_code == 200
+    session.refresh(page)
+    assert page.overlay_prompt is None
+    assert prompts.overlay_prompt(layout, page.name, page).strip()

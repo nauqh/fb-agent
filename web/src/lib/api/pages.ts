@@ -118,7 +118,9 @@ export async function listPromptFiles(pageId?: number): Promise<PromptFile[]> {
 export async function setPromptFile(
   pageId: number,
   filename: string,
-  body: string,
+  /** null clears the override — the Page reads the default file again. An
+      empty string on overlay.txt is the no-overlay opt-out, not a clear. */
+  body: string | null,
 ): Promise<PromptFile> {
   return put<PromptFile>(`/prompts/${pageId}/${filename}`, { body });
 }
