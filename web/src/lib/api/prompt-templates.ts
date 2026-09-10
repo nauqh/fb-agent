@@ -15,12 +15,18 @@ import { del, get, post, put } from "@/lib/api/client";
  * next redeploy.
  */
 
-export async function listPromptTemplates(): Promise<PromptTemplate[]> {
-  return get<PromptTemplate[]>("/prompts/templates");
+export async function listPromptTemplates(pageId?: number): Promise<PromptTemplate[]> {
+  // Page-scoped (client, 2026-09-10): the API returns this Page's styles plus
+  // the legacy global ones (null page_id) so old rows stay editable.
+  return get<PromptTemplate[]>(
+    pageId === undefined ? "/prompts/templates" : `/prompts/templates?page_id=${pageId}`,
+  );
 }
 
 export interface TemplateBody {
   name: string;
+  /** The Page the style belongs to; null/omitted is the legacy global row. */
+  page_id?: number | null;
   /** Blank clears the field — the template then inherits that prompt. */
   system_prompt?: string | null;
   overlay_prompt?: string | null;

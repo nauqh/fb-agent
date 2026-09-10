@@ -26,6 +26,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import or_
 from sqlmodel import Session, select
 
 from app.db import get_session
@@ -144,6 +145,8 @@ templates_router = APIRouter(prefix="/prompts/templates", tags=["prompts"])
 
 class TemplateBody(BaseModel):
     name: str
+    page_id: int | None = None
+    """The Page the style is created from; null only for legacy/global rows."""
     system_prompt: str | None = None
     overlay_prompt: str | None = None
     image_prompt: str | None = None
@@ -165,8 +168,17 @@ def _template_out(row: PromptTemplate) -> TemplateOut:
 
 
 @templates_router.get("")
-def list_templates(session: Session = Depends(get_session)) -> list[TemplateOut]:
-    return [_template_out(row) for row in session.exec(select(PromptTemplate)).all()]
+def list_templates(
+    page_id: int | None = None, session: Session = Depends(get_session)
+) -> list[TemplateOut]:
+    """Page specific (client, 2026-09-10): with `page_id`, this Page's styles
+    plus the legacy global ones (null) so old rows stay editable somewhere."""
+    query = select(PromptTemplate)
+    if page_id is not None:
+        query = query.where(
+            or_(PromptTemplate.page_id == page_id, PromptTemplate.page_id.is_(None))
+        )
+    return [_template_out(row) for row in session.exec(query).all()]
 
 
 @templates_router.post("", status_code=201)
@@ -190,9 +202,12 @@ def create_template(
         select(PromptTemplate).where(PromptTemplate.name == name)
     ).first():
         raise HTTPException(409, f"A template named {name!r} already exists.")
+    if body.page_id is not None and session.get(Page, body.page_id) is None:
+        raise HTTPException(404, f"No Page {body.page_id}")
 
     row = PromptTemplate(
         name=name,
+        page_id=body.page_id,
         system_prompt=body.system_prompt,
         overlay_prompt=body.overlay_prompt,
         image_prompt=body.image_prompt,

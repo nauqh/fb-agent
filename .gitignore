@@ -35,3 +35,6 @@ api/.shorts-dev/
 # (social-agent .gitignore, `/secrets/youtube-cookies.txt`).
 cookies.txt
 *.cookies.txt
+
+# Session scratchpads: verify scripts, screenshots, throwaway state.
+.scratchpad/

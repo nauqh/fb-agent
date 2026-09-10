@@ -89,14 +89,15 @@ export default function SettingsScreen() {
   const { data: prompts } = useQuery(() => listPromptFiles(pageId!), [pageId], {
     enabled: pageId !== null,
   });
-  // Global, not per-Page — a style is picked on the generate screen against
-  // whichever Page the run targets, so it reads the same on every Page. That
-  // is also why it sits inside Writing rather than being a rail section: the
-  // rail counts what *this Page* owns, and a style is owned by nobody.
+  // Per-Page (client, 2026-09-10): a style belongs to the Page it was created
+  // on. The API also returns the legacy global rows (null page_id) so the ones
+  // that predate the split stay editable somewhere.
   const {
     data: templates,
     refresh: refreshTemplates,
-  } = useQuery(listPromptTemplates, []);
+  } = useQuery(() => listPromptTemplates(pageId!), [pageId], {
+    enabled: pageId !== null,
+  });
   // One read, and it does not leave the building. The assignments are local
   // rows and they are the whole answer: what this Page reads. Metricool is not
   // asked anything until "Assign from the pool" is opened.
@@ -125,17 +126,6 @@ export default function SettingsScreen() {
 
   const ownLengths = LIMIT_ROWS.filter(({ field }) => page[field] !== null).length;
   const ownPrompts = (prompts ?? []).filter((one) => one.source !== "global").length;
-
-  /**
-   * A Page told to write short by a prompt nothing enforces.
-   *
-   * This is C6/C7's failure mode as a live check rather than a note in a doc.
-   * The two fitness Pages have their own prompt files asking for a 30-word hook
-   * while all five length columns are null, so the validator still allows the
-   * house 65 — the prompt asks and nothing holds it to it. Worth a triangle in
-   * the rail, because no screen would otherwise show the disagreement.
-   */
-  const promptsWithoutLengths = ownPrompts > 0 && ownLengths === 0;
 
   return (
     <ConfigShell
@@ -208,20 +198,12 @@ export default function SettingsScreen() {
             {
               id: "writing",
               label: "Writing",
-              // Both halves, because the section now holds both and the
-              // disagreement between them is what the triangle is for:
-              // "house · 2/3" is a Page with its own prompts and no lengths.
-              meta: prompts
-                ? `${ownLengths > 0 ? `${ownLengths}/5` : "house"} · ${ownPrompts}/${prompts.length}`
-                : PENDING,
-              gap: promptsWithoutLengths,
+              meta: prompts ? `${ownLengths > 0 ? `${ownLengths}/5` : "house"} · ${ownPrompts}/${prompts.length}` : PENDING,
               body: (
                 <Writing
                   page={page}
                   pageId={pageId}
                   files={prompts}
-                  ownPrompts={ownPrompts}
-                  unenforced={promptsWithoutLengths}
                   templates={templates}
                   refreshTemplates={refreshTemplates}
                 />
@@ -939,7 +921,7 @@ const HOUSE = {
 type LimitField = keyof typeof HOUSE;
 
 const LIMIT_ROWS: { field: LimitField; label: string; group: string }[] = [
-  { field: "hook_max_words", label: "Max words", group: "Hook" },
+  { field: "hook_max_words", label: "Max words", group: "Overlay" },
   { field: "first_comment_min_chars", label: "Min chars", group: "First comment" },
   { field: "first_comment_max_chars", label: "Max chars", group: "First comment" },
   { field: "first_comment_min_paragraphs", label: "Min ¶", group: "First comment" },
@@ -949,33 +931,22 @@ const LIMIT_ROWS: { field: LimitField; label: string; group: string }[] = [
 /**
  * What this Page is told to write, and what it is held to. One section.
  *
- * They were two — Writing and Prompts — and the seam was visible in the code
- * before it was visible on screen: `promptsWithoutLengths` is computed in the
- * screen and rendered as a warning in *Writing* about the state of *Prompts*.
- * Its own text is the argument for merging them: "a prompt asking for a shorter
- * hook is a request; the validator is what enforces it." An operator reading
- * that had to hold two rail sections in their head to see one rule, and the
- * disagreement was only visible from the half that was not causing it.
- *
- * Now the request and the enforcement are on one screen, in that order: the
- * numbers first because they are five inputs and a Save, the prompt editor
- * below because it is 700px and its own tabs. The pane runs long. That is the
- * cost, and it is cheaper than the seam.
+ * They were two — Writing and Prompts — and were merged onto one screen so the
+ * request and its enforcement sit together: the numbers first because they are
+ * five inputs and a Save, the prompt editor below because it is 700px and its
+ * own tabs. The pane runs long. That is the cost, and it is cheaper than the
+ * seam.
  */
 function Writing({
   page,
   pageId,
   files,
-  ownPrompts,
-  unenforced,
   templates,
   refreshTemplates,
 }: {
   page: Page;
   pageId: number | null;
   files: PromptFile[] | null;
-  ownPrompts: number;
-  unenforced: boolean;
   templates: PromptTemplate[] | null;
   refreshTemplates: () => Promise<void>;
 }) {
@@ -992,17 +963,6 @@ function Writing({
       meta={files ? `${files.filter((one) => one.source !== "global").length} overridden` : undefined}
     >
       <div className="space-y-6">
-        {unenforced ? (
-          <Gap
-            title={`This Page has ${ownPrompts === 1 ? "its own prompt" : `${ownPrompts} prompts of its own`} but house lengths.`}
-          >
-            A prompt asking for a shorter hook is a request; the validator is
-            what enforces it. While every box below is empty, a draft is checked
-            against {HOUSE.hook_max_words} words and {HOUSE.first_comment_min_chars}–
-            {HOUSE.first_comment_max_chars} characters whatever the prompt says.
-          </Gap>
-        ) : null}
-
         <WritingLimits page={page} />
 
         <div className="border-t pt-6">
@@ -1010,7 +970,7 @@ function Writing({
         </div>
 
         <div className="border-t pt-6">
-          <PostStyles templates={templates} refresh={refreshTemplates} />
+          <PostStyles pageId={pageId} templates={templates} refresh={refreshTemplates} />
         </div>
       </div>
     </Pane>
@@ -1064,7 +1024,7 @@ function WritingLimits({ page }: { page: Page }) {
     }
   }
 
-  // Grouped by the thing being measured, so "Hook" is one box and "First
+  // Grouped by the thing being measured, so "Overlay" is one box and "First
   // comment" is four — five identical full-width rows read as five unrelated
   // settings and took 250px to carry five numbers.
   const groups = [...new Set(LIMIT_ROWS.map((row) => row.group))];
@@ -1318,7 +1278,9 @@ const TEMPLATE_FIELDS = [
 type TemplateField = (typeof TEMPLATE_FIELDS)[number]["field"];
 
 /**
- * The template library (client request, 2026-08-20).
+ * The template library (client request, 2026-08-20; scoped per Page on
+ * 2026-09-10 — styles were appearing on every Page and should be Page
+ * specific).
  *
  * Named post styles, picked on the generate screen. **Deltas, never copies**:
  * each textarea starts empty and empty means inherit, the same contract the
@@ -1326,13 +1288,13 @@ type TemplateField = (typeof TEMPLATE_FIELDS)[number]["field"];
  * would be a second copy of it, and copies drifting apart is the measured
  * failure the prompt files were rescued from. The API refuses an all-blank
  * template outright: it would change nothing and only crowd the dropdown.
- *
- * Global rather than per-Page — see the query note in `SettingsScreen`.
  */
 function PostStyles({
+  pageId,
   templates,
   refresh,
 }: {
+  pageId: number | null;
   templates: PromptTemplate[] | null;
   refresh: () => Promise<void>;
 }) {
@@ -1399,12 +1361,14 @@ function PostStyles({
 
           {open === "new" ? (
             <TemplateForm
+              pageId={pageId}
               onSaved={() => saved("Style created.")}
               onCancel={() => setOpen(null)}
             />
           ) : null}
           {typeof open === "number" ? (
             <TemplateForm
+              pageId={pageId}
               initial={templates.find((one) => one.id === open)}
               onSaved={() => saved("Style updated.")}
               onCancel={() => setOpen(null)}
@@ -1474,10 +1438,12 @@ function RemoveTemplate({
 }
 
 function TemplateForm({
+  pageId,
   initial,
   onSaved,
   onCancel,
 }: {
+  pageId: number | null;
   initial?: PromptTemplate;
   onSaved: () => Promise<void>;
   onCancel: () => void;
@@ -1513,7 +1479,7 @@ function TemplateForm({
       if (initial) {
         await updatePromptTemplate(initial.id, body);
       } else {
-        await createPromptTemplate(body);
+        await createPromptTemplate({ ...body, page_id: pageId });
       }
       await onSaved();
     } catch (cause) {

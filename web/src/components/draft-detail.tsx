@@ -886,20 +886,20 @@ export function DraftDetail({
                     word count and a 65-word limit, all of which do nothing —
                     reported as "the image and hook are blank". */}
                 {published ? (
-                  <Field label="Hook" hint="part of the picture">
+                  <Field label="Overlay" hint="part of the picture">
                     <p className="text-sm text-muted-foreground">
-                      This post’s hook was drawn into the picture when it first
-                      went out, so there is nothing to edit here.
+                      This post’s overlay was drawn into the picture when it
+                      first went out, so there is nothing to edit here.
                     </p>
                   </Field>
                 ) : (
                 <Field
-                  label="Hook"
+                  label="Overlay"
                   regenerate={
                     <Regenerate
                       draftId={draftId}
                       field="hook"
-                      label="Hook"
+                      label="Overlay"
                       form={form}
                       onProposal={applyProposal}
                     />

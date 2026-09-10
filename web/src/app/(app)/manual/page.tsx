@@ -192,7 +192,7 @@ function WriteItYourself() {
         </div>
         <p className="text-[11px] leading-relaxed text-muted-foreground">
           {file
-            ? "Your picture is the hero. The panel, the hook and the watermark are drawn over it."
+            ? "Your picture is the hero. The panel, the overlay and the watermark are drawn over it."
             : "Optional. Without one there is no card to publish yet — the gradient above is a placeholder, not the post."}
         </p>
       </div>

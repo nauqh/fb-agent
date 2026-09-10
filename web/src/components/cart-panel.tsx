@@ -89,7 +89,13 @@ export function CartPanel() {
    * after a selection is explicitly un-styled rather than by accident.
    */
   const [styleId, setStyleId] = useState("");
-  const { data: templates } = useQuery(listPromptTemplates, []);
+  const { data: pageTemplates } = useQuery(listPromptTemplates, []);
+  // A style belongs to the Page it was created on (client, 2026-09-10); null
+  // page_id is a legacy global row. Filtered here because `page` can be null
+  // for a render before the switcher resolves.
+  const templates = (pageTemplates ?? []).filter(
+    (template) => template.page_id === null || template.page_id === page?.id,
+  );
   /**
    * RSS only, mirroring the server, which refuses the rest.
    *

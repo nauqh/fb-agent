@@ -1,11 +1,12 @@
 # Handoff
 
-**Updated:** 2026-09-10 · **Next focus:** the deploy. Every round of client
-feedback that is not blocked on them is in `main` and none of it is deployed —
-`docs/feedback/2026-08-11/`, `-14/`, `-15/`, `-16/`, newest last. The
-YouTube-side blocker (the `mweb` client refusing downloads without a PO
-token) is attested as of `6a090ae` and proven in the built image; what remains
-unproven is the same chain on a Railway deploy.
+**Updated:** 2026-09-10 · **Next focus:** the client's 2026-09-10 feedback fixes
+are **uncommitted in the working tree** — see "The 2026-09-10 feedback round"
+below for what changed and the migration incident to read before touching
+alembic. Every earlier round is in `main`. The YouTube-side blocker (the `mweb`
+client refusing downloads without a PO token) is attested as of `6a090ae` and
+proven in the built image; what remains unproven is the same chain on a Railway
+deploy.
 
 
 Conventions and integration traps live in `CLAUDE.md`, which loads automatically.
@@ -33,6 +34,71 @@ trusting either this file or the output of a push.
 expression against it either errors or reads as zero. Four commits were reported
 to the operator as unpushed on the strength of that count while the remote
 already had them. `ls-remote` asks GitHub; nothing local can be stale.
+
+## The 2026-09-10 feedback round — UNCOMMITTED, read before anything else
+
+Four client quotes, three fixes, no commits. `git status` shows `app/models.py`,
+`app/routes/prompts.py`, four web files, and one new migration.
+
+1. **The "own prompts but house lengths" warning is gone.** The client asked
+   where it came from; the operator's answer was that it was History Retraced's
+   scope and Pages now differ, so it was removed rather than explained. Removed
+   whole: the `Gap`, the rail triangle (`gap:` on the Writing section), and the
+   `promptsWithoutLengths` computation in `web/src/app/(app)/settings/page.tsx`.
+   The rail meta (`house · 2/3`) stays — only the warning died.
+2. **Post styles are per-Page.** The client: they "seem to be appearing on all
+   pages; it should be page specific". `PromptTemplate.page_id` (nullable FK →
+   page, migration `d1ab74d861bc`, **already applied to the live database**).
+   Null page_id = the legacy global rows, still listed on every Page so they
+   stay editable somewhere — that contract lives in `list_templates` and in the
+   `listPromptTemplates` doc comment. Settings creates with `page_id`; the cart
+   dropdown filters client-side (`cart-panel.tsx`). Name uniqueness is still
+   global — left alone rather than reworking the constraint.
+3. **Hook → Overlay** in every user-visible label: the draft drawer (three
+   labels + the repost notice), the lengths group on Settings, the Manual
+   helper text. The field is still `hook` everywhere — data and API untouched,
+   only the words changed.
+4. **No overlay toggle, deliberately.** Client asked whether post types can
+   skip the text overlay; the operator's answer: it is cheap to generate and
+   delete manually. Nothing built.
+
+Checks at the time of writing: `tsc --noEmit` clean, `eslint src` clean, API
+**531 passed** (~160s), `alembic check` "No new upgrade operations detected".
+
+**Driven in a browser (2026-09-10, Playwright, real-Chrome channel), 12/12:**
+signed in; Writing pane shows no warning and the Overlay group; created "ZZ
+test style" on Bible Focus → listed there with a layer chip; switched the scope
+to Bodybuilding Tips N Tricks → **not** offered there; deleted it (API) → gone
+from the list; a draft drawer on `/review/422` shows **Overlay** and no plain
+"Hook" label; zero page errors. The script is `.scratchpad/verify-feedback.js`.
+
+One live row worth a decision, not a code change: **"Workout Infographic"**
+(id 3, the client's own fitness-infographic image brief) predates the split and
+is a legacy `page_id: null` row, so it still appears on every Page. When the
+client says which Page it belongs to — it reads as a Bodybuilding Tips N Tricks
+style — one `UPDATE prompt_template SET page_id = <id> WHERE id = 3` scopes it;
+there is no move control on any screen and none was built.
+
+**⚠️ The migration incident, so it is not rediscovered calmly:**
+`alembic revision --autogenerate` diffed the models against the live database
+and picked up three orphan tables main never had — `youtube_schedule`,
+`shortlist_run`, `skipped_item` — and I ran `upgrade head` without reading the
+generated file first. All three are dropped from the live database.
+
+- `youtube_schedule`: documented **empty and unreferenced** in
+  `77c12e0f0a01`; nothing lost.
+- `shortlist_run` / `skipped_item`: belong to the **unmerged** board branch
+  (`423be42`, not an ancestor of main). They may have held experiment rows
+  (shortlist runs, skipped-item memory). If anything on that branch is ever
+  wanted, its schema is recoverable from `423be42:api/app/models.py` and this
+  migration's `downgrade()` — but any rows in them are gone; I have no backup
+  and did not take one.
+
+The migration file as committed-matching-to-DB is correct now (drops + the
+`page_id` column); trimming the drops out of the file would make it lie about
+what the live schema is. The lesson stands anyway: **read the autogenerated
+migration before upgrading**, especially against the only database the app
+has.
 
 ## The current job: the client's feedback
 

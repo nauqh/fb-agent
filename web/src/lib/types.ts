@@ -243,6 +243,9 @@ export interface PromptFile {
 export interface PromptTemplate {
   id: number;
   name: string;
+  /** The Page the style belongs to; null is a legacy global row, offered on
+      every Page. */
+  page_id: number | null;
   system_prompt: string | null;
   overlay_prompt: string | null;
   image_prompt: string | null;
