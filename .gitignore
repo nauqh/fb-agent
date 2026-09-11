@@ -13,7 +13,7 @@ wheels/
 node_modules/
 .next/
 
-# Local state — never committed
+# Local state - never committed
 *.db
 *.db-wal
 *.db-shm
@@ -30,7 +30,7 @@ node_modules/
 api/.shorts-dev/
 
 # A yt-dlp cookies export is a live Google session, not a config file. It lands
-# here on the way to YTDLP_COOKIES_B64 and should be deleted after encoding —
+# here on the way to YTDLP_COOKIES_B64 and should be deleted after encoding -
 # this is the guard for the times it is not. The old repo kept the same line
 # (social-agent .gitignore, `/secrets/youtube-cookies.txt`).
 cookies.txt
@@ -38,3 +38,11 @@ cookies.txt
 
 # Session scratchpads: verify scripts, screenshots, throwaway state.
 .scratchpad/
+
+# Parallel-session status files - live session state, not history (AGENTS.md).
+.agents/
+
+# Live status of concurrent agent sessions (see AGENTS.md). State, not history -
+# but the directory itself has to exist for "read every file in it" to work.
+.agents/status/*
+!.agents/status/.gitkeep

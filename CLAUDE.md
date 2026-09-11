@@ -1,8 +1,10 @@
 # Working in this repo
 
-Loaded automatically every session. Conventions and traps only — the domain
+Loaded automatically every session. Conventions and traps only - the domain
 language is `CONTEXT.md`, the reasoning is in `docs/` and the commit messages,
 and the current state of play is `HANDOFF.md`.
+
+@AGENTS.md
 
 ## Orientation
 
@@ -19,7 +21,7 @@ and the current state of play is `HANDOFF.md`.
 api/   uv run pytest -q          # 430 at time of writing, ~170s
 api/   uv run alembic check      # "No new upgrade operations detected"
 web/   npx tsc --noEmit
-web/   npx eslint src            # clean — keep it that way
+web/   npx eslint src            # clean - keep it that way
 ```
 
 `alembic check` is the one that tests cannot cover: the suite builds its schema
@@ -31,14 +33,14 @@ the code out of step.
 `eslint src` exits 0, **including warnings**. It carried one standing
 `set-state-in-effect` error in `review-list.tsx` for a long time, described here
 as pre-existing and to be left alone; it was neither hard nor a false positive
-once read. A new problem is a new problem — fix it rather than adding a note
+once read. A new problem is a new problem - fix it rather than adding a note
 here. Deleting a feature usually strands an import or a handler, and that is
 what the warning is telling you.
 
 ## Verify in a browser, not just in tests
 
 A green suite has repeatedly not meant a working screen. Playwright is installed
-in the **old** repo — require it by absolute path from a script in the
+in the **old** repo - require it by absolute path from a script in the
 scratchpad:
 
 ```js
@@ -73,7 +75,7 @@ fixed it.
 **Drive `http://localhost:3000`, never `http://127.0.0.1:3000`.** Next 16 blocks
 `/_next/*` dev resources from any origin not in `allowedDevOrigins`, so the
 browser gets server-rendered HTML with no client bundle: skeletons that never
-resolve, zero API calls, and *no error in the page* — the warning is on the dev
+resolve, zero API calls, and *no error in the page* - the warning is on the dev
 server's stdout. An hour went into this looking like a broken screen. The
 `127.0.0.1` note in `next.config.ts` is the opposite direction (Next → uvicorn),
 where localhost really does resolve to `::1` and fail.
@@ -87,7 +89,7 @@ restarted, or `touch` a watched file.
   been swept into a commit this way once already.
 - Ask before creating a branch.
 - No `Co-Authored-By` trailers.
-- Commit messages carry the evidence — what was measured, what failed, why the
+- Commit messages carry the evidence - what was measured, what failed, why the
   obvious alternative was rejected. They are the durable record; this file and
   `HANDOFF.md` are not.
 
@@ -102,7 +104,7 @@ delete-and-reseed. Say which you are doing.
 
 ## Style
 
-The user asks for simple approaches and pushes back on over-engineering — they
+The user asks for simple approaches and pushes back on over-engineering - they
 are usually right, and several of this codebase's better decisions came from that
 pushback. Match the density of the surrounding file: source carries dense
 explanatory comments, `.env.example` was explicitly asked to stay terse.
@@ -115,7 +117,7 @@ Each of these cost real time to find. They are pinned by tests in
 - **Metricool does not re-host images.** Their help centre says the normalize
   endpoint copies the file to their servers. Tested with a JPEG and a PNG: it
   echoes the URL back unchanged and returns no `mediaId`. The image URL must
-  still resolve when Facebook fetches it at publish time — hence a *public*
+  still resolve when Facebook fetches it at publish time - hence a *public*
   bucket. The old app used signed URLs expiring at `publishAt + 2h`; 0 of 105 of
   its published posts still have working images.
 - `Accept: application/json` on the normalize **GET** answers 500 "No acceptable
