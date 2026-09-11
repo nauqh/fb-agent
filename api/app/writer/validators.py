@@ -96,32 +96,6 @@ META_PHRASES = ("look back", "as of today", "as we look back")
 
 _EMOJI_START = re.compile(r"^[\s•\-*]*[\U0001F000-\U0001FAFF☀-➿⬀-⯿]")
 
-_ERA = r"(?:AD|BC|BCE|CE)"
-_YEAR = rf"(?:\d{{1,4}}\s*{_ERA}|\d{{3,4}})"
-"""A year is 3-4 digits, or 1-4 digits when an era marker settles it.
-
-The era is what makes `(69 BC - 30 BC)` safe to accept while `(2 - 3 hours)` is
-still not a lifespan.
-"""
-_DASH = r"[-‒–—―]"
-_BIRTH_DEATH = re.compile(
-    rf"\(\s*b\.\s*{_YEAR}|\(\s*{_YEAR}\s*{_DASH}\s*{_YEAR}\s*\)", re.I
-)
-"""Ported from `validation.ts:41`, then widened, because it had to be right here.
-
-The original matched `\\d{4}` with no era suffix. In the old repo that was a
-*warning* - "may be missing birth/death years" - so a false negative was noise.
-Here the rule raises `ModelRetry`, and a false negative is unsatisfiable: the
-writer produced `Wu Zetian (624 - 705 AD)`, was told no years were found,
-resubmitted the same correct text twice, and the run died at
-`Exceeded maximum output retries`. Every pre-1000 subject on a *history* page
-was unwritable.
-
-So: three-digit years, and an optional AD/BC/BCE/CE inside the parentheses.
-Moving a rule from warning to blocker raises the bar on its precision - a loose
-warning is noise, a loose blocker is a dead run.
-"""
-
 
 def _words(text: str) -> int:
     return len([word for word in text.strip().split() if word])
@@ -192,22 +166,6 @@ def body_length(first_comment: str, limits: Limits | None = None) -> str | None:
     return None
 
 
-def birth_death_years(first_comment: str) -> str | None:
-    """Advisory, not blocking. See `advise`.
-
-    The brand rule is "every person named needs birth/death years". That is not
-    checkable without knowing who is a person: a regex can confirm the pattern
-    is *present*, never that it is present for everyone, and never that a story
-    names nobody at all.
-    """
-    if not _BIRTH_DEATH.search(first_comment):
-        return (
-            "No birth/death years found. Every person named needs them: "
-            "(1828-1894) for the dead, (b. 1994) for the living."
-        )
-    return None
-
-
 def no_meta_phrases(recap: str, first_comment: str) -> str | None:
     haystack = f"{recap}\n{first_comment}".lower()
     found = [phrase for phrase in META_PHRASES if phrase in haystack]
@@ -231,7 +189,7 @@ def check(
     emoji, a paragraph break, a character count, a banned phrase. That is the
     admission price for blocking, because a rule that raises `ModelRetry` and
     cannot be satisfied does not warn - it kills the run at
-    `Exceeded maximum output retries`. See `advise` for the rest.
+    `Exceeded maximum output retries`.
 
     A blank first comment is not a broken draft - it is a minimal post (see
     `source_instruction`): image plus a short caption, no body. The essay rules
@@ -266,25 +224,3 @@ def check(
             no_meta_phrases(recap, first_comment),
         ]
     return [reason for reason in results if reason]
-
-
-def advise(first_comment: str | None) -> list[str]:
-    """Rules that inform the operator but must never block the writer.
-
-    `birth_death_years` is here because it cannot be made precise. It asks for
-    something no regex can confirm - that *every person named* carries years -
-    and it fires just as loudly on a story that names no people at all. That is
-    not hypothetical: an Atlas Obscura piece about the Zantigo taco chain
-    mentions no person, so the rule could not be satisfied by any rewrite, and
-    the writer spent both retries resubmitting a correct draft before the run
-    died. It is genuinely useful as a nudge and useless as a gate, which is what
-    a Warning is for - and how the old repo had it (`validation.ts:100`, "may be
-    missing").
-
-    A blank first comment is a minimal post, not a body missing its years, and
-    the rule would fire on every meme and quote the writer is now allowed to
-    make - so it stays quiet there.
-    """
-    if not (first_comment or "").strip():
-        return []
-    return [reason for reason in [birth_death_years(first_comment)] if reason]

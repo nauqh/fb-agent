@@ -327,9 +327,7 @@ def _run_one(session: Session, draft_id: int) -> None:
         draft.image_prompt = content.image_prompt
 
         # Residue: what the writer could not fix within its retries. Every
-        # blocking rule is enforced first, so a Warning from `check` has already
-        # survived correction. `advise` adds the rules that were never enforced
-        # because they cannot be satisfied on demand.
+        # rule is enforced, so a Warning here has already survived correction.
         draft.warnings = validators.check(
             content.hook,
             content.caption,
@@ -338,7 +336,6 @@ def _run_one(session: Session, draft_id: int) -> None:
         )
         if image_warning:
             draft.warnings = draft.warnings + [image_warning]
-        draft.warnings += validators.advise(content.first_comment)
         draft.warnings += _highlight_warnings(content)
 
         # Deliberately still `generating`. Setting `review` here - before the

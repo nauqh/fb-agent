@@ -59,10 +59,6 @@ def test_a_minimal_post_still_keeps_the_hook_and_line_rules():
     assert not any("emoji" in reason for reason in reasons)
 
 
-def test_a_minimal_post_earns_no_year_warning():
-    assert validators.advise(None) == []
-
-
 def test_a_hook_that_asks_a_question_is_caught():
     reason = validators.hook_has_no_question("Did Marie Tharp map the ocean floor?")
     assert reason and "question" in reason
@@ -83,41 +79,6 @@ def test_a_recap_line_without_an_emoji_is_caught():
     assert reason and "do not start with an emoji" in reason
 
 
-@pytest.mark.parametrize(
-    "years",
-    [
-        "Marie Tharp (1920-2006) did",
-        "Ada Lovelace (b. 1990) does",
-        "Ada Lovelace (1815 — 1852) wrote",  # em dash
-        # Antiquity. These were all rejected until 2026-08-06: the pattern was
-        # `\d{4}` with no era, so every pre-1000 subject was unwritable on a
-        # history page - and because this rule raises `ModelRetry`, the writer
-        # resubmitted correct text until it ran out of retries and the run died.
-        "Wu Zetian (624 – 705 AD) ascended",  # en dash
-        "Hypatia (350 - 415 CE) taught",
-        "Cleopatra (69 BC - 30 BC) ruled",
-        "Someone (b. 812) lived",
-    ],
-)
-def test_birth_and_death_years_are_recognised(years):
-    assert validators.birth_death_years(years) is None
-
-
-@pytest.mark.parametrize(
-    "text",
-    [
-        "Marie Tharp mapped the ocean floor.",
-        "The year 1934 appears bare, outside parentheses.",
-        # The era marker is what keeps a short span from reading as a lifespan.
-        "It took (2 - 3 hours) to build.",
-        "Rated (4 - 5 stars) by critics.",
-    ],
-)
-def test_a_body_with_no_years_is_caught(text):
-    reason = validators.birth_death_years(text)
-    assert reason and "birth/death years" in reason
-
-
 @pytest.mark.parametrize("phrase", ["as we look back", "As Of Today", "a look back at"])
 def test_meta_phrases_are_caught_case_insensitively(phrase):
     assert validators.no_meta_phrases("", f"And {phrase}, the map endures.")
@@ -130,26 +91,28 @@ def test_every_violation_is_reported_at_once():
     assert len(reasons) >= 4
 
 
-def test_a_story_naming_no_people_does_not_block_the_writer():
+def test_a_story_naming_no_people_blocks_nothing():
     """The Zantigo case: an Atlas Obscura piece about a taco chain.
 
-    No person is named, so no rewrite can produce birth/death years. While this
-    was a blocking rule the writer resubmitted a correct draft until it ran out
-    of retries and the run died.
+    No person is named. While the birth/death-years rule existed - first as a
+    blocker, then as an advisory - this shape failed one way or another: the
+    writer resubmitted a correct draft until it ran out of retries, and later
+    the warning fired on every person-less story. The rule is gone entirely:
+    each Page's prompt chain carries whatever its posts need, and a regex
+    cannot know who is a person.
     """
     body = "\n\n".join(
         ["The chain opened in Minneapolis. " * 28, "Then it closed for good. " * 30]
     )
 
     assert validators.check("A hook.", "🌮 One point.", body) == []
-    assert validators.advise(body), "still worth telling the operator"
 
 
 def test_the_blocking_rules_are_only_ones_the_model_can_act_on():
     """A rule that cannot be satisfied on demand kills the run instead of warning."""
     blocking = "\n".join(validators.check("Why?", "no emoji", "short"))
 
-    assert "birth/death years" not in blocking
+    assert "years" not in blocking
 
 
 # --- the retry loop ----------------------------------------------------------
