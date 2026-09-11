@@ -14,11 +14,11 @@ when the operator ticks them, which is what keeps `source_item` from filling
 with hundreds of unread items.
 """
 
+import re
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from html import unescape
-import re
 from urllib.parse import urlsplit
 
 import feedparser
@@ -293,7 +293,7 @@ def probe(url: str, timeout: float = 10.0) -> Probe:
         ) as client:
             response = client.get(url)
             response.raise_for_status()
-    except Exception as error:  # noqa: BLE001 - every failure here is the same answer
+    except Exception as error:
         raise ValueError(f"{url} did not answer: {_describe(error)}") from error
 
     parsed = feedparser.parse(response.content)

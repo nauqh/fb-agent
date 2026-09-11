@@ -19,16 +19,14 @@ produce loop is the whole product for now.
 from __future__ import annotations
 
 import re
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlmodel import Session, select
-
-import httpx
-from datetime import datetime, timedelta, timezone
 
 from app.db import get_session
 from app.models import (

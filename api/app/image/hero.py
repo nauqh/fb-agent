@@ -102,7 +102,7 @@ def from_url(url: str, client: httpx.Client | None = None) -> bytes:
     try:
         picture = Image.open(io.BytesIO(response.content))
         picture.load()
-    except Exception as error:  # noqa: BLE001 - any decode failure is the same answer
+    except Exception as error:
         raise HeroError(
             f"the feed's image is not one Pillow can read ({error}): {url}"
         ) from error
@@ -220,7 +220,7 @@ def generate(
                 response = client.models.generate_content(
                     model=model, contents=contents, config=config
                 )
-            except Exception as error:  # noqa: BLE001 - reported on the row, not raised at the caller
+            except Exception as error:
                 # Includes 404 "no longer available", which is how a pinned
                 # fallback rots. Not transient, so it surfaces immediately
                 # instead of being spent as three attempts and a step sideways.

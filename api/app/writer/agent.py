@@ -383,7 +383,7 @@ def _run(page: Page, prompt, validator, model=None, template=None):
             )
             agent.output_validator(validator)
             return agent.run_sync(prompt)
-        except Exception as error:  # noqa: BLE001 - re-raised below if not transient
+        except Exception as error:
             if not is_transient(error):
                 raise
             last = error

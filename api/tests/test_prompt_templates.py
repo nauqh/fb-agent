@@ -10,7 +10,7 @@ import pytest
 from sqlmodel import select
 
 from app import generate
-from app.models import Draft, PromptTemplate
+from app.models import PromptTemplate
 
 
 @pytest.fixture
@@ -110,7 +110,7 @@ def test_a_template_belongs_to_its_page_only(client):
     Bodybuilding's Workout Infographic through the null-global contract. A
     style is one Page's; another Page's list does not have it, and a style
     without a Page cannot exist at all."""
-    created = _create(client, page_id=1).json()
+    _create(client, page_id=1)
 
     assert [t["name"] for t in client.get("/prompts/templates?page_id=1").json()] == [
         "Meme"

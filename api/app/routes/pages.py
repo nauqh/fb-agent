@@ -115,7 +115,7 @@ async def upload_watermark(
     try:
         picture = Image.open(io.BytesIO(data))
         picture.load()
-    except Exception as error:  # noqa: BLE001 - any decode failure is the same answer
+    except Exception as error:
         raise HTTPException(
             status_code=422,
             detail=f"That file is not an image Pillow can read ({error}).",

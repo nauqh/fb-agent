@@ -26,7 +26,6 @@ from app.image.text import OverlayPlan, Segment, get_measurer, segment_lines
 from app.settings import API_DIR, Layout
 from app.settings import layout as default_layout
 
-
 JPEG_QUALITY = 92
 """The old system's number (`portrait-inset.ts:79`). 4.5× smaller, no visible loss.
 

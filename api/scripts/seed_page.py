@@ -29,8 +29,8 @@ from sqlmodel import Session, select
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.db import get_engine, init_db  # noqa: E402
-from app.models import Page  # noqa: E402
+from app.db import get_engine, init_db
+from app.models import Page
 
 PAGES = [
     {

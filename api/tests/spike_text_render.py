@@ -17,6 +17,7 @@ import sys
 from pathlib import Path
 
 from fontTools.ttLib import TTFont
+from PIL import Image
 
 API_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(API_DIR))  # so `app.settings` resolves when run directly
@@ -94,7 +95,6 @@ def check_measurement() -> bool:
 
 def _render(svg: str) -> "Image.Image":
     import resvg_py
-    from PIL import Image
 
     OUT.mkdir(parents=True, exist_ok=True)
     png = bytes(resvg_py.svg_to_bytes(svg_string=svg, font_files=[str(FONT)]))
@@ -122,8 +122,6 @@ def check_render() -> bool:
     Detection is by measurement, not by eye: the rendered ink must be no wider
     than the advance width fontTools computed, and within a few pixels of it.
     """
-    from PIL import Image  # noqa: F401 - imported for the type in _render
-
     sample = "In 1923, archaeologists opened a sealed tomb"
     expected = Measurer(FONT).width(sample, 36)
 
@@ -152,7 +150,7 @@ def check_render() -> bool:
         print("  <-- resvg is not using the local TTF; it fell back silently")
 
     # The real panel, now with the family that actually resolves.
-    panel = f"""<svg xmlns="http://www.w3.org/2000/svg" width="896" height="224">
+    panel = """<svg xmlns="http://www.w3.org/2000/svg" width="896" height="224">
   <rect width="896" height="224" fill="#000000"/>
   <text x="448" y="90" font-family="Arial" font-weight="bold" font-size="36"
         fill="#ffffff" text-anchor="middle">In 1923, archaeologists opened</text>

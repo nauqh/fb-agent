@@ -117,8 +117,10 @@ def test_alignment_moves_the_anchor_rather_than_being_ignored():
     anything paired with the x it hangs from. Left-aligned text anchored
     "start" at the centre x starts halfway across the card.
     """
-    from app.image import compositor, text as overlay
-    from app.settings import Layout, layout as defaults
+    from app.image import compositor
+    from app.image import text as overlay
+    from app.settings import Layout
+    from app.settings import layout as defaults
 
     def aligned(align: str) -> str:
         values = defaults.model_dump()
@@ -135,7 +137,8 @@ def test_alignment_moves_the_anchor_rather_than_being_ignored():
 
 def _templated(template: str, panel_opacity: float | None = None):
     """The file's layout as one of the two card forms."""
-    from app.settings import Layout, layout as defaults
+    from app.settings import Layout
+    from app.settings import layout as defaults
 
     values = defaults.model_dump()
     values["template"] = template
@@ -145,7 +148,8 @@ def _templated(template: str, panel_opacity: float | None = None):
 
 
 def _drawn(layout, badge_text=None) -> "Image.Image":
-    from app.image import compositor, text as overlay
+    from app.image import compositor
+    from app.image import text as overlay
 
     hero = io.BytesIO()
     Image.new("RGB", (1280, 1600), (200, 40, 40)).save(hero, format="PNG")

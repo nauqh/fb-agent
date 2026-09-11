@@ -25,7 +25,14 @@ from sqlmodel import Session, select
 from app import generate, media
 from app.db import get_session
 from app.log import logger
-from app.models import Draft, DraftStatus, Page, PromptTemplate, SourceItem, SourceItemBase
+from app.models import (
+    Draft,
+    DraftStatus,
+    Page,
+    PromptTemplate,
+    SourceItem,
+    SourceItemBase,
+)
 from app.publish import metricool as publisher
 from app.settings import layout, settings
 from app.writer import agent as writer
@@ -174,7 +181,7 @@ async def create_manual_draft(
         try:
             picture = Image.open(io.BytesIO(data))
             picture.load()
-        except Exception as error:  # noqa: BLE001 - any decode failure is the same
+        except Exception as error:
             raise HTTPException(
                 status_code=422,
                 detail=f"That file is not an image Pillow can read ({error}).",
@@ -473,7 +480,7 @@ def regenerate_field(
                 else None
             ),
         )
-    except Exception as error:  # noqa: BLE001 - upstream, and the row is untouched
+    except Exception as error:
         raise HTTPException(
             status_code=502,
             detail=f"The writer could not rewrite that ({type(error).__name__}).",
@@ -574,7 +581,7 @@ async def upload_hero(
     try:
         picture = Image.open(io.BytesIO(data))
         picture.load()
-    except Exception as error:  # noqa: BLE001 - any decode failure is the same answer
+    except Exception as error:
         raise HTTPException(
             status_code=422,
             detail=f"That file is not an image Pillow can read ({error}).",
@@ -638,7 +645,7 @@ async def upload_inset(
     try:
         picture = Image.open(io.BytesIO(data))
         picture.load()
-    except Exception as error:  # noqa: BLE001 - any decode failure is the same answer
+    except Exception as error:
         raise HTTPException(
             status_code=422, detail=f"That file is not an image Pillow can read ({error})."
         ) from error

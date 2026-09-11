@@ -42,8 +42,6 @@ import sqlalchemy as sa
 
 # SQLModel's own column types (AutoString) are rendered into these files by
 # autogenerate, so the import has to be here even when a revision does not use it.
-import sqlmodel
-
 from alembic import op
 
 # revision identifiers, used by Alembic.

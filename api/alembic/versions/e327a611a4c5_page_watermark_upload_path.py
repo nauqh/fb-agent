@@ -7,12 +7,13 @@ Create Date: 2026-08-11 00:46:33.367656
 """
 from typing import Sequence, Union
 
-from alembic import op
 import sqlalchemy as sa
+
 # SQLModel's own column types (AutoString) are rendered into these files by
 # autogenerate, so the import has to be here even when a revision does not use it.
 import sqlmodel
 
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = 'e327a611a4c5'

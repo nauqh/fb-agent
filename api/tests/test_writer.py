@@ -1,16 +1,16 @@
 """The brand rules, and the retry loop. No network, no model spend."""
 
-import pytest
-from pydantic_ai.models.function import AgentInfo, FunctionModel
-from pydantic_ai.exceptions import UnexpectedModelBehavior
-from pydantic_ai.messages import ModelMessage, ModelResponse, ToolCallPart
 from types import SimpleNamespace
+
+import pytest
+from pydantic_ai.exceptions import UnexpectedModelBehavior
+from pydantic_ai.messages import BinaryImage, ModelMessage, ModelResponse, ToolCallPart
+from pydantic_ai.models.function import AgentInfo, FunctionModel
 
 from app.models import Page, SourceItem, SourceKind
 from app.settings import layout
 from app.writer import agent as writer
 from app.writer import validators
-from pydantic_ai.messages import BinaryImage
 
 # A draft that breaks nothing, used as the baseline every test mutates.
 GOOD = {

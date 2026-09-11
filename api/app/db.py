@@ -91,8 +91,9 @@ def init_db() -> None:
     between the models and the live database, and it should say "No new upgrade
     operations detected" before a deploy.
     """
-    from alembic import command
     from alembic.config import Config
+
+    from alembic import command
 
     config = Config(str(API_DIR / "alembic.ini"))
     config.set_main_option("script_location", str(API_DIR / "alembic"))

@@ -2,14 +2,21 @@
 
 import httpx
 import pytest
+from pydantic_ai.messages import BinaryImage
 from sqlmodel import Session, func, select
 
 from app import generate, media
-from app.models import Draft, DraftStatus, PromptTemplate, SourceItem, SourceItemBase, SourceKind
+from app.models import (
+    Draft,
+    DraftStatus,
+    PromptTemplate,
+    SourceItem,
+    SourceItemBase,
+    SourceKind,
+)
 from app.settings import settings
 from app.writer import agent as writer
 from app.writer.agent import DraftContent
-from pydantic_ai.messages import BinaryImage
 
 CURATED = "https://www.smithsonianmag.com/history/a-story-180987410/"
 
