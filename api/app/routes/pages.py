@@ -3,7 +3,7 @@
 One page in v1, so this is a small surface: the Settings screen reads a Page and
 shows it. Prompts are files now and are edited in an editor, not here.
 
-Nothing in the UI writes a Page any more — `daily_quota` was the only field it
+Nothing in the UI writes a Page any more - `daily_quota` was the only field it
 edited, and it is gone. `PATCH` stays because `watermark_image_path` is still a
 per-page value and Phase 4 is the code that reads it; a Page with the wrong
 watermark needs a way back that is not a SQL prompt.
@@ -26,7 +26,7 @@ router = APIRouter(prefix="/pages", tags=["pages"])
 
 
 class PageUpdate(BaseModel):
-    """Every field optional — the Settings form sends only what changed.
+    """Every field optional - the Settings form sends only what changed.
 
     Identity is absent on purpose: `name`, `facebook_page_id` and
     `metricool_blog_id` come from Metricool and are not the operator's to edit.
@@ -34,7 +34,7 @@ class PageUpdate(BaseModel):
 
     watermark_image_path: str | None = None
     watermark_text: str | None = None
-    """Null here means "print the Page's name" — it is a clear, not a blank."""
+    """Null here means "print the Page's name" - it is a clear, not a blank."""
 
     watermark_enabled: bool | None = None
     """False publishes a clean photograph: no image mark and no text either."""
@@ -43,7 +43,7 @@ class PageUpdate(BaseModel):
     """The headline chip's word. Null draws no chip. `full_overlay` only."""
 
     # How long this Page writes (C6, C7). Null clears the override and returns
-    # the Page to the house numbers in `writer/validators.py` — which is why
+    # the Page to the house numbers in `writer/validators.py` - which is why
     # these are `int | None` and why the form sends null rather than 0.
     hook_max_words: int | None = Field(default=None, ge=5, le=200)
     first_comment_min_chars: int | None = Field(default=None, ge=100, le=10_000)
@@ -89,7 +89,7 @@ async def upload_watermark(
     cannot put it there, which made "commit a PNG under `api/assets/`" a rule
     only two Pages could follow.
 
-    Hosting the watermark is the exact thing that failed in the old system — the
+    Hosting the watermark is the exact thing that failed in the old system - the
     bucket was cleared and every path started returning `NoSuchKey`. What made
     that eight silent months rather than one failed post was the compositor
     swallowing it (`return null`, image-composite.ts:136) and printing the page
@@ -99,7 +99,7 @@ async def upload_watermark(
 
     Re-encoded to PNG **with its alpha kept**. The mark is white ink meant to sit
     on a photograph; flattened to RGB it arrives as a white wordmark on a white
-    box, which is not a subtle failure but is an easy one to write —
+    box, which is not a subtle failure but is an easy one to write -
     `upload_inset` does exactly that, correctly, because a disc is cover-cropped
     over the panel and has no transparency to lose.
     """
@@ -115,7 +115,7 @@ async def upload_watermark(
     try:
         picture = Image.open(io.BytesIO(data))
         picture.load()
-    except Exception as error:  # noqa: BLE001 — any decode failure is the same answer
+    except Exception as error:  # noqa: BLE001 - any decode failure is the same answer
         raise HTTPException(
             status_code=422,
             detail=f"That file is not an image Pillow can read ({error}).",
@@ -181,7 +181,7 @@ def update_page(
     # floor: a band of zero width, where every draft fails one end, burns both
     # retries and the run ends at `Exceeded maximum output retries`. That is
     # what made C7 look unbuildable. The numbers are the operator's to choose
-    # now, so the screen has to catch the unsatisfiable combination itself —
+    # now, so the screen has to catch the unsatisfiable combination itself -
     # the model cannot, and reports it as a dead run.
     impossible = validators.Limits.for_page(page).disagrees()
     if impossible:
@@ -229,7 +229,7 @@ def add_slot(
 ) -> PageTimeSlot:
     """Add a time. The same time twice is refused rather than stored.
 
-    A duplicate is not two slots — it is one counted twice, and "next available"
+    A duplicate is not two slots - it is one counted twice, and "next available"
     would offer it, find it taken and offer it again on the next pass.
     """
     _page(session, page_id)
@@ -258,8 +258,8 @@ def remove_slot(
 ) -> None:
     """Removing a slot changes tomorrow's suggestion and nothing already queued.
 
-    Nothing points at a slot — a scheduled post carries its own time in
-    Metricool's planner — so this cannot cascade into published work.
+    Nothing points at a slot - a scheduled post carries its own time in
+    Metricool's planner - so this cannot cascade into published work.
     """
     row = session.get(PageTimeSlot, slot_id)
     if row is None or row.page_id != page_id:

@@ -1,9 +1,9 @@
-# A Page is the only identity — `brand_key` is deliberately destroyed
+# A Page is the only identity - `brand_key` is deliberately destroyed
 
 The previous system carried two overlapping identities for the same thing: a
 `brand_key` (`hr`/`tff`/`bf`/`htt`) hardcoded as a four-value constant in
 `brand-config.ts`, and a `target_page_id` from Metricool. Settings resolved
-two-level — a page-level row falling back to a brand-level row — enforced by two
+two-level - a page-level row falling back to a brand-level row - enforced by two
 partial unique indexes.
 
 It decayed exactly as you would expect. `brand_key` was widened from an enum to

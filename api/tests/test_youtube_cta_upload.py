@@ -1,6 +1,6 @@
 """The CTA upload's signed flow: mint, verify, complete.
 
-The old multipart upload died twice in production — first on Vercel's
+The old multipart upload died twice in production - first on Vercel's
 serverless request-body ceiling (~4.5MB, not raiseable), then on the bucket
 the row pointed at not existing. The replacement never carries bytes: the
 browser PUTs the clip straight to Supabase with a token the API minted, and
@@ -27,7 +27,7 @@ def supabase_store(monkeypatch):
     """The real store, on a MockTransport that answers the two calls the flow
     makes of Supabase: the sign, and the HEAD that `complete` uses to check
     the bytes landed. The sign answers with a url for whatever path was
-    requested; only minted paths then HEAD as existing — which is also how
+    requested; only minted paths then HEAD as existing - which is also how
     `test_complete_refuses_bytes_that_never_landed` gets its ghost path.
 
     The settings are patched too, not just the transport: the URL the route
@@ -93,7 +93,7 @@ def test_complete_creates_the_row(client: TestClient, supabase_store, session: S
 
 
 def test_complete_refuses_a_path_it_did_not_mint(client: TestClient, supabase_store):
-    """Any bucket object, not just a fresh clip — including a processed video
+    """Any bucket object, not just a fresh clip - including a processed video
     a worker is mid-concat on."""
     response = client.post(
         "/youtube/cta-templates/complete",

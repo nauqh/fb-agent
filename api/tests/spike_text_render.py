@@ -1,4 +1,4 @@
-"""Phase 0 spike — does the Python text stack match the TypeScript one?
+"""Phase 0 spike - does the Python text stack match the TypeScript one?
 
 Two questions, both blocking Phase 4:
 
@@ -46,7 +46,7 @@ class Measurer:
     glyphs, scale by fontSize / unitsPerEm.
 
     Kerning is *not* optional. opentype.js applies it by default, and dropping
-    it silently widens capital-heavy text — "AVATAR" measured 10.69px too wide,
+    it silently widens capital-heavy text - "AVATAR" measured 10.69px too wide,
     which is `kern`'s AV/VA/AT/TA pairs at -152 units each over a 2048 em.
     A token measured too wide wraps a line early, which changes the line count,
     which changes the panel height. The error compounds; it does not average out.
@@ -114,7 +114,7 @@ def check_render() -> bool:
 
     The trap this guards: resvg does not fail when it cannot match a
     `font-family`. It silently substitutes a system face and returns a
-    perfectly good PNG of the wrong font — which then disagrees with every
+    perfectly good PNG of the wrong font - which then disagrees with every
     width fontTools measured, so the wrapping is right for a font that is not
     on screen. The family here must be the TTF's own name table entry
     ("Arial" / "Bold"), not the file name ("Arial Bold").
@@ -122,7 +122,7 @@ def check_render() -> bool:
     Detection is by measurement, not by eye: the rendered ink must be no wider
     than the advance width fontTools computed, and within a few pixels of it.
     """
-    from PIL import Image  # noqa: F401 — imported for the type in _render
+    from PIL import Image  # noqa: F401 - imported for the type in _render
 
     sample = "In 1923, archaeologists opened a sealed tomb"
     expected = Measurer(FONT).width(sample, 36)

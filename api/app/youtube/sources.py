@@ -2,8 +2,8 @@
 
 Parse it, list a channel's Shorts, rank them, download one. The old tool
 spread these across `youtubeUrl.ts`, `youtubeChannelShortsApiService.ts`,
-`ytdlpService.ts` and `youtubeDownloadService.ts`; they are one job — "turn a
-pasted URL into the bytes of the right video" — and they share the same enemy
+`ytdlpService.ts` and `youtubeDownloadService.ts`; they are one job - "turn a
+pasted URL into the bytes of the right video" - and they share the same enemy
 (YouTube's bot-check) and the same settings (cookies, proxy, API key).
 
 The download half is yt-dlp as a library, not a CLI: the old tool shelled out
@@ -27,7 +27,7 @@ The strategy that costs real time to rediscover is ported wholesale:
   filter is the definition of a Short: `contentDetails.duration` ≤ 3 minutes.
 
 There is no Cobalt. The old production logs show Cobalt always answered
-`error.api.youtube.login` from a datacenter IP and yt-dlp was the real path —
+`error.api.youtube.login` from a datacenter IP and yt-dlp was the real path -
 a second service that never won is not worth a dependency (docs/youtube-python-rebuild.md).
 """
 
@@ -75,7 +75,7 @@ URL_PATTERNS = {
 
 MAX_SHORTS_LIMIT = 10
 """How many top Shorts a channel paste can enqueue at once. A clamp, and the
-upper bound the picker renders — the old tool's identical constant."""
+upper bound the picker renders - the old tool's identical constant."""
 
 MAX_TRIM_SECONDS = 60
 DEFAULT_TRIM_SECONDS = 3
@@ -190,14 +190,14 @@ def list_channel_shorts(channel_url: str) -> list[ChannelShort]:
 def resolve_by_rank(channel_url: str, rank: int) -> ChannelShort:
     """`@channel/shorts` rank #N → one concrete Short.
 
-    The worker's channel path resolves here before downloading — a channel URL
+    The worker's channel path resolves here before downloading - a channel URL
     is a ranking, not a file (see `parse_youtube_source`).
     """
     ranked = list_channel_shorts(channel_url)
     index = rank - 1
     if index < 0 or index >= len(ranked):
         raise DiscoveryError(
-            f"Short #{rank} is out of range — the channel listed {len(ranked)} Shorts."
+            f"Short #{rank} is out of range - the channel listed {len(ranked)} Shorts."
         )
     return ranked[index]
 
@@ -378,7 +378,7 @@ PLAYER_CLIENTS = (
     # First because it is the only combination upstream recommends for a
     # *logged-in* download, which is every download this tool makes. Sending
     # cookies moves YouTube onto `tv_downgraded`, and that client is the one
-    # currently answering "The page needs to be reloaded" — so the three
+    # currently answering "The page needs to be reloaded" - so the three
     # clients below, all chosen when the tool ran anonymously, fail as a group
     # the moment cookies start working. Measured on Railway: with cookies all
     # three returned the SABR error, without cookies all three returned the
@@ -397,19 +397,19 @@ _BOT_SIGNALS = (
     "requested format is not available",
     "the page needs to be reloaded",
 )
-"""Messages that mean "the client was blocked" — worth trying another player
+"""Messages that mean "the client was blocked" - worth trying another player
 surface for. Anything else is a real failure and retrying a different client
 would only bury the actual message.
 
 `requested format is not available` is **not** in the old tool's rotation list
 (`ytdlp-errors.ts` excludes it from cookie errors, `isBotOrRateLimit` lacks
-it — the old tool failed fast). Kept here as an owned change: a blocked client
+it - the old tool failed fast). Kept here as an owned change: a blocked client
 can surface as a missing format rather than an explicit refusal, and a rotation
 costs a couple of seconds against the hours a fail-fast can cost on a VPS.
 
 `the page needs to be reloaded` is the same shape and cost a production cycle
 to find. YouTube forces SABR streaming on the `web`/`web_safari` surfaces and
-those extractors answer with it — specifically *when cookies are sent*, which
+those extractors answer with it - specifically *when cookies are sent*, which
 is why it only appeared once cookies started working and never before. It is a
 per-client failure with a per-client fix, so it belongs to the rotation; without
 it here `_run` raised on the first client and the other two were never tried.
@@ -427,7 +427,7 @@ _COOKIE_SIGNALS = (
     "cookies file missing",
     "does not look like a netscape format cookies file",
 )
-"""Retry-once hints for a stale browser export — the old tool's
+"""Retry-once hints for a stale browser export - the old tool's
 `isCookieError` list, ported with the additions. The retry drops the cookie
 file when a proxy is set, or fails loud with the re-export message when it is
 not (see `_run`).
@@ -441,7 +441,7 @@ a video that will not come back."""
 def download_video(url: str, output_path: str) -> str | None:
     """Download one video to `output_path`. Returns its title, if yt-dlp gave one.
 
-    `output_path` is final — yt-dlp merges to it when it must split the
+    `output_path` is final - yt-dlp merges to it when it must split the
     bestvideo+bestaudio pair. The caller owns cleanup.
     """
     info = _run(url, output_path=output_path)
@@ -449,7 +449,7 @@ def download_video(url: str, output_path: str) -> str | None:
 
 
 def flat_playlist_entries(url: str) -> list[dict]:
-    """The channel tab as `--flat-playlist` JSON rows — id, title, view count.
+    """The channel tab as `--flat-playlist` JSON rows - id, title, view count.
 
     Used for ranking a channel's Shorts when no `YOUTUBE_API_KEY` is
     configured; `_via_ytdlp` is the caller."""
@@ -471,7 +471,7 @@ def install_cookies_from_env() -> str | None:
     """Materialize `YTDLP_COOKIES_B64` on disk. Called once, at startup.
 
     yt-dlp wants a *path*, and a host without persistent storage can only be
-    given a variable — so the variable becomes a path here, before any job
+    given a variable - so the variable becomes a path here, before any job
     runs. Returns the path written, or None when there was nothing to write.
 
     A bad decode logs and returns None rather than raising: cookies are one
@@ -484,7 +484,7 @@ def install_cookies_from_env() -> str | None:
     try:
         data = base64.b64decode(raw, validate=True)
     except (binascii.Error, ValueError):
-        logger.error("[yt-dlp] YTDLP_COOKIES_B64 is not valid base64 — ignoring it")
+        logger.error("[yt-dlp] YTDLP_COOKIES_B64 is not valid base64 - ignoring it")
         return None
     COOKIES_FROM_ENV.write_bytes(data)
     logger.info("[yt-dlp] cookies written to {}", COOKIES_FROM_ENV)
@@ -494,7 +494,7 @@ def install_cookies_from_env() -> str | None:
 def _cookie_path() -> str:
     """The cookies file to hand yt-dlp, or "" when there is none.
 
-    An explicit `YTDLP_COOKIES_FILE` wins, but only when it actually exists —
+    An explicit `YTDLP_COOKIES_FILE` wins, but only when it actually exists -
     production had it pointing at a path that was never in the image, and the
     old code took the name for the file and downloaded anonymously.
     """
@@ -519,7 +519,7 @@ def _base_options(player_client: str, *, use_cookies: bool, channel_tab: bool) -
         extractor_args["youtubepot-bgutilhttp"] = {"base_url": [pot_server]}
     if channel_tab:
         # Channel tabs hit YouTube's auth wall even when the videos themselves
-        # are public — that wall is what the old tool's
+        # are public - that wall is what the old tool's
         # `youtubetab:skip=authcheck` existed for.
         extractor_args["youtubetab"] = {"skip": ["authcheck"]}
 
@@ -531,7 +531,7 @@ def _base_options(player_client: str, *, use_cookies: bool, channel_tab: bool) -
         # (`--js-runtimes node --remote-components ejs:github`) and kept
         # verbatim: `node` as the JS engine and the EJS solver fetched from
         # GitHub. Without both, a bot-challenged video fails where the old
-        # tool got through — same values, same `{}` shape the API wants.
+        # tool got through - same values, same `{}` shape the API wants.
         "js_runtimes": {"node": {}},
         "remote_components": {"ejs:github": {}},
         "noplaylist": True,
@@ -569,7 +569,7 @@ def _run(
     The rotation is the port of the old outer loop: each client is tried in
     order, and only a `_BOT_SIGNALS` miss moves to the next one. A whole second
     pass without the cookies exists for a stale export, which fails identically
-    under every client — but it runs only behind a proxy, because anonymous is
+    under every client - but it runs only behind a proxy, because anonymous is
     a thing you can be from a residential IP and not from this one.
     """
     last_error: Exception | None = None
@@ -579,7 +579,7 @@ def _run(
     # datacenter IP with the credentials removed, which is the thing the cookie
     # branch below already refuses to do and for the same reason: it cannot
     # succeed, and it teaches the bot-checker that the IP is worth blocking.
-    # Observed doing exactly that in production — three clients failed with
+    # Observed doing exactly that in production - three clients failed with
     # cookies, then three more announced themselves as unauthenticated, and the
     # only lasting effect was on Railway's reputation.
     #
@@ -606,7 +606,7 @@ def _run(
                 last_error = error
 
                 if use_cookies and _has_signal(message, _COOKIE_SIGNALS):
-                    # One pass without the file — but only when that pass has a
+                    # One pass without the file - but only when that pass has a
                     # proxy to hide behind, which is how `withCookieErrorFallback`
                     # gated it. Retrying anonymously from a datacenter IP is
                     # guaranteed to bot-block again *and* teaches the checker the
@@ -625,7 +625,7 @@ def _run(
                 if not _has_signal(message, _BOT_SIGNALS):
                     raise YoutubeDlError(_friendly(message)) from error
 
-                # A 429 / bot-check is a rate limit, not a dead end — but it
+                # A 429 / bot-check is a rate limit, not a dead end - but it
                 # has to be treated like one. The old tool slept 2s between
                 # player clients (`ytdlpService.ts`), and it ran each attempt
                 # as a fresh CLI spawn; this one is in-process, so hammering

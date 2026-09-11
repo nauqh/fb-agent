@@ -4,10 +4,10 @@
  * Mirrors `api/app/youtube/routes.py`. Three verbs matter to this screen:
  *
  * - `POST /youtube/jobs` returns ids immediately and the worker fills the row
- *   — the operator never waits on the download/trim/concat.
+ *   - the operator never waits on the download/trim/concat.
  * - `GET /youtube/jobs/{id}` is polled while a row is in flight, the same
  *   pattern the rail uses for `generating`.
- * - `GET /youtube/jobs/{id}/download` serves the produced mp4 — it doubles as
+ * - `GET /youtube/jobs/{id}/download` serves the produced mp4 - it doubles as
  *   the `<video>` source and the download link, so the browser only talks to
  *   one origin and the bucket never needs to be public to this screen.
  */
@@ -83,13 +83,13 @@ export async function listCtaTemplates(): Promise<CtaTemplate[]> {
 }
 
 /**
- * A clip in, a library row out — without the bytes ever crossing this app.
+ * A clip in, a library row out - without the bytes ever crossing this app.
  *
  * Three small calls. The API mints a path and a signed upload URL; the browser
  * PUTs the file straight to Supabase with the token as its Bearer; the API
  * then creates the row over the path it can prove received bytes. Production's
  * 413 came from Vercel's serverless request-body ceiling on the old multipart
- * route, which no config raises — this is why the file no longer goes through
+ * route, which no config raises - this is why the file no longer goes through
  * the proxy at all.
  */
 const MAX_CTA_BYTES = 50 * 1024 * 1024;
@@ -117,7 +117,7 @@ export async function deleteCtaTemplate(id: number): Promise<void> {
   await del(`/youtube/cta-templates/${id}`);
 }
 
-/** Presence-only readout of the tool's config — see `GET /youtube/config`. */export interface YoutubeConfig {
+/** Presence-only readout of the tool's config - see `GET /youtube/config`. */export interface YoutubeConfig {
   youtube_api_key_configured: boolean;
   cookies_configured: boolean;
   proxy_configured: boolean;
@@ -130,12 +130,12 @@ export async function getYoutubeConfig(): Promise<YoutubeConfig> {
 }
 
 /**
- * The Shorts workspace's Overview — what a channel put out and how it landed.
+ * The Shorts workspace's Overview - what a channel put out and how it landed.
  *
  * Reads live from Metricool, stored nowhere: their numbers move as YouTube's
  * counts catch up, and a cached copy is a wrong copy. `days=0` is the whole
  * catalog (a channel's videos are a bounded set) and has no `previous` to
- * compare against — mirroring the route, `days=0` returns an empty previous.
+ * compare against - mirroring the route, `days=0` returns an empty previous.
  */
 export interface YoutubeBrand {
   id: string;

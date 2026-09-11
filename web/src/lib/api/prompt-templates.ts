@@ -6,7 +6,7 @@ import { del, get, post, put } from "@/lib/api/client";
  *
  * `GET · POST /prompts/templates`, `PUT · DELETE /prompts/templates/{id}`.
  *
- * Each template stores **deltas, never copies** — a blank field inherits the
+ * Each template stores **deltas, never copies** - a blank field inherits the
  * Page's prompt chain (see `PromptTemplate`). That is the same contract
  * `setPromptFile` has, and for the same measured reason: full copies drift.
  *
@@ -24,9 +24,9 @@ export async function listPromptTemplates(pageId?: number): Promise<PromptTempla
 
 export interface TemplateBody {
   name: string;
-  /** The Page the style belongs to — every style is one Page's. */
+  /** The Page the style belongs to - every style is one Page's. */
   page_id: number;
-  /** Blank clears the field — the template then inherits that prompt. */
+  /** Blank clears the field - the template then inherits that prompt. */
   system_prompt?: string | null;
   overlay_prompt?: string | null;
   image_prompt?: string | null;

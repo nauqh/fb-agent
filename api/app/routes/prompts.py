@@ -14,7 +14,7 @@ Two things make a textarea the right answer now rather than the wrong one:
   same prompt, and there are no copies.
 - **A file cannot be edited in production at all.** Railway's filesystem is
   ephemeral (see `db.py`), so a screen that wrote `prompts/pages/<slug>/x.txt`
-  would lose the edit on the next redeploy — silently, and days later. The
+  would lose the edit on the next redeploy - silently, and days later. The
   client has been asking for this since F5 (2026-08-15), believing they had
   already written prompts that in fact did not exist.
 
@@ -40,7 +40,7 @@ class PromptFile(BaseModel):
     filename: str
     chars: int
     body: str
-    """As substituted from `layout.yml`, not as typed — a raw `{panel_pct}` on
+    """As substituted from `layout.yml`, not as typed - a raw `{panel_pct}` on
     screen would not tell the operator whether the prompt and the compositor
     agree."""
     overridden: bool
@@ -51,7 +51,7 @@ class PromptFile(BaseModel):
     model is sent."""
 
     source: str
-    """`page`, `file-override` or `global` — *which* of the three, not just that
+    """`page`, `file-override` or `global` - *which* of the three, not just that
     it differs.
 
     `overridden` alone cannot answer the question the operator is about to act
@@ -60,7 +60,7 @@ class PromptFile(BaseModel):
     Railway, could not have been written from here either."""
 
     editable: bool
-    """False for any prompt with no column behind it — see `prompts.COLUMN`."""
+    """False for any prompt with no column behind it - see `prompts.COLUMN`."""
 
 
 class PromptEdit(BaseModel):
@@ -102,7 +102,7 @@ def set_prompt(
 ) -> PromptFile:
     """Give one Page its own text for one prompt, or clear it back to the file.
 
-    Per Page only — there is no route that edits a global. The globals are the
+    Per Page only - there is no route that edits a global. The globals are the
     reviewed default and belong in git; making them editable here is what would
     reopen the drift the file layout was chosen to prevent, because every Page
     reads them.
@@ -121,7 +121,7 @@ def set_prompt(
     # Three states, and they have to stay distinct: `None` is "back to the
     # file", `""` on overlay.txt is the no-overlay opt-out (`prompts.stored`),
     # and text is the override. For system/image an empty box clears like
-    # `None` — an emptied textarea there has never meant anything else.
+    # `None` - an emptied textarea there has never meant anything else.
     if edit.body is None:
         setattr(page, column, None)
     elif filename == "overlay.txt":
@@ -155,7 +155,7 @@ templates_router = APIRouter(prefix="/prompts/templates", tags=["prompts"])
 class TemplateBody(BaseModel):
     name: str
     page_id: int
-    """The Page the style belongs to — every style is one Page's."""
+    """The Page the style belongs to - every style is one Page's."""
     system_prompt: str | None = None
     overlay_prompt: str | None = None
     image_prompt: str | None = None
@@ -181,7 +181,7 @@ def _template_out(row: PromptTemplate) -> TemplateOut:
 def list_templates(
     page_id: int | None = None, session: Session = Depends(get_session)
 ) -> list[TemplateOut]:
-    """With `page_id`, that Page's styles only — styles are per-Page (client,
+    """With `page_id`, that Page's styles only - styles are per-Page (client,
     2026-09-10). Without it, everything, for screens that have not picked a
     Page yet."""
     query = select(PromptTemplate)
@@ -203,7 +203,7 @@ def create_template(
     ):
         raise HTTPException(
             422,
-            "A template with all three prompts blank changes nothing — it "
+            "A template with all three prompts blank changes nothing - it "
             "would only add a dropdown entry. Leave the prompts blank by not "
             "creating it.",
         )

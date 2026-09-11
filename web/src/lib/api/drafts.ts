@@ -10,7 +10,7 @@ import { del, delJson, get, patch, post, postForm, upload } from "@/lib/api/clie
  */
 
 export interface DraftFilter {
-  /** `"all"` means every status — the server takes no filter rather than one. */
+  /** `"all"` means every status - the server takes no filter rather than one. */
   status?: DraftStatus | "all";
   page_id?: number;
 }
@@ -30,7 +30,7 @@ export async function getDraft(id: number): Promise<Draft> {
  * Operator edits. The written fields only; status moves through its own routes.
  *
  * `image_prompt` is in here because it is the only lever on a hero the model
- * refused — the writer produced it, so the operator has to be able to correct it
+ * refused - the writer produced it, so the operator has to be able to correct it
  * before paying for another generation.
  */
 export type DraftEdit = Partial<
@@ -63,7 +63,7 @@ export async function rejectDraft(id: number): Promise<Draft> {
 }
 
 /**
- * `POST /drafts/{id}/unapprove` — undo, for the toast.
+ * `POST /drafts/{id}/unapprove` - undo, for the toast.
  *
  * Approve is reversible right up until the v2 Metricool push, which is exactly
  * why nothing downstream may treat Approve as final: an approved Draft can come
@@ -78,7 +78,7 @@ export interface GenerateRequest {
    * The Source Items to write from, **by value**.
    *
    * Generate is the only thing that writes a `source_item` row, so it takes the
-   * item rather than an id — see docs/plan.md, "Ticking stops writing". The
+   * item rather than an id - see docs/plan.md, "Ticking stops writing". The
    * server decides which kinds the client may author: an RSS item is host-checked
    * against the curated feeds, and a competitor post must already exist, because
    * the Metricool sync owns those rows.
@@ -91,7 +91,7 @@ export interface GenerateRequest {
    * Take each Source Item's own picture as the hero instead of buying one from
    * Gemini. Off by default, so the paid path is the one you ask for.
    *
-   * Ignored for a topic-only run — there is no Source Item to take one from.
+   * Ignored for a topic-only run - there is no Source Item to take one from.
    */
   hero_from_source?: boolean;
   /** `card` or `full_overlay` for the drafts this run makes. Null takes the Page's. */
@@ -111,7 +111,7 @@ export interface GenerateRequest {
  * Returns draft ids immediately at 202: the rows exist at `status='generating'`
  * and a background task fills them in, so the client polls `getDraft` until the
  * status moves. One real draft takes 45-130 seconds depending on how loaded the
- * model is — which is why this is a poll and not a wait.
+ * model is - which is why this is a poll and not a wait.
  */
 export async function generate(request: GenerateRequest): Promise<number[]> {
   return post<number[]>("/generate", request);
@@ -121,7 +121,7 @@ export async function generate(request: GenerateRequest): Promise<number[]> {
  * A draft the operator wrote, with no model call of any kind.
  *
  * The old app's second generate mode. Unlike `generate` this answers with the
- * finished row rather than ids to poll — there is no writer and no background
+ * finished row rather than ids to poll - there is no writer and no background
  * task, so there is nothing to wait for.
  *
  * Multipart because of the optional picture, which becomes the draft's *hero*:
@@ -148,7 +148,7 @@ export async function createManualDraft(input: {
 /**
  * Buy a new hero.
  *
- * The free half of this endpoint — reuse the hero, redraw the panel — is not
+ * The free half of this endpoint - reuse the hero, redraw the panel - is not
  * called from here: `PATCH /drafts/{id}` does it on every save that touches the
  * drawn text, so there is no state in which the client needs to ask separately.
  * This is the paid half, and the only call in the app that spends money on
@@ -172,7 +172,7 @@ export async function uploadInset(id: number, file: File): Promise<Draft> {
 /**
  * Use the operator's own picture as the hero.
  *
- * The way out of a subject the model will not draw correctly — exercise
+ * The way out of a subject the model will not draw correctly - exercise
  * photographs being the case that prompted it, where re-rolling buys another
  * impossible pose rather than a better one. Free, like the inset: this is a
  * file, not a generation.
@@ -201,7 +201,7 @@ export interface RewriteProposal {
  *
  * **A proposal, not a save.** The row is untouched; the text lands in the
  * editor and the operator presses Save, exactly as they do for text they typed.
- * Revert throws it away. That one rule — Rewrite proposes, Save writes — is what
+ * Revert throws it away. That one rule - Rewrite proposes, Save writes - is what
  * replaced the bug where the row moved and the screen did not.
  *
  * `keeping` is what the other fields say **on screen**, unsaved edits included:
@@ -230,7 +230,7 @@ export async function removeInset(id: number): Promise<Draft> {
 /**
  * Hand the post to Metricool.
  *
- * Uploads the composite, then schedules — in that order, because Metricool
+ * Uploads the composite, then schedules - in that order, because Metricool
  * stores a link and Facebook fetches it when the post is due. Metricool
  * publishes and posts the first comment itself.
  *
@@ -248,7 +248,7 @@ export async function publishDraft(id: number, when?: string): Promise<Draft> {
  *
  * Answers with the draft carrying a **new** `metricool_post_id`: Metricool has
  * no in-place update, so every edit replaces the post with a different one. The
- * returned draft is the only thing that knows which post is now ours — do not
+ * returned draft is the only thing that knows which post is now ours - do not
  * hold the old id anywhere.
  *
  * `when` is a naive local time, as `publishDraft` takes.
@@ -264,7 +264,7 @@ export async function rescheduleDraft(id: number, when: string): Promise<Draft> 
  * good. The client's complaint (D6) was that a scheduled post could not be
  * taken back, not that they wanted to lose the work.
  *
- * This is also what unfreezes the image — while a draft is in Metricool the
+ * This is also what unfreezes the image - while a draft is in Metricool the
  * composite cannot be redrawn, because Metricool is holding a link to the file.
  */
 export async function unscheduleDraft(id: number): Promise<Draft> {
@@ -280,7 +280,7 @@ export interface PublishMode {
  * Which of the two things the button above is about to do.
  *
  * `METRICOOL_PUBLISH_AS_DRAFT` is per-environment and the two environments
- * disagree on purpose — `false` on Railway, `true` on a laptop, where nothing
+ * disagree on purpose - `false` on Railway, `true` on a laptop, where nothing
  * should be able to reach an audience. Neither screen could tell, and both said
  * "Handed to Metricool" either way. Seven real posts went into the planner as
  * drafts under that sentence and never published.
@@ -295,7 +295,7 @@ export async function publishMode(): Promise<PublishMode> {
 /**
  * Gone for good, pictures and all.
  *
- * Reject is the reversible one — a decision that stays on the record. This is
+ * Reject is the reversible one - a decision that stays on the record. This is
  * for a row nobody should have to look at again.
  */
 export async function deleteDraft(id: number): Promise<void> {

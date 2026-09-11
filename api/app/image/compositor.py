@@ -1,7 +1,7 @@
 """Hero + black panel + gold highlights + watermark + inset, at 896×1120.
 
 The rasterising half. `text.py` decided every number this file uses; here it
-only draws. Geometry is ported from `image-composite.ts` — cover-crop the hero,
+only draws. Geometry is ported from `image-composite.ts` - cover-crop the hero,
 panel below it, watermark top-right of the hero inset by the edge margin, and
 the circular portrait bottom-right, straddling the seam between the two.
 
@@ -33,7 +33,7 @@ JPEG_QUALITY = 92
 Measured across the composites this repo had accumulated: 1.21MB as PNG against
 0.27MB as JPEG, for the same picture. Nothing reads a composite except the review
 screen and Facebook, and the publish step used to convert to JPEG on the way out
-anyway — so storing PNG meant paying for the large file and then throwing it
+anyway - so storing PNG meant paying for the large file and then throwing it
 away. Emitting JPEG here deletes that conversion instead of moving it.
 """
 
@@ -64,7 +64,7 @@ def _tspans(segments: list[Segment], layout: Layout) -> str:
 def panel_svg(plan: OverlayPlan, phrases: list[str], layout: Layout) -> str:
     """The text panel, exactly as the rasteriser will see it.
 
-    `font-family` must be the TTF's own name-table entry — `Arial` with
+    `font-family` must be the TTF's own name-table entry - `Arial` with
     `font-weight="bold"`, never `"Arial Bold"`. resvg does not error on an
     unmatched family; it substitutes a system face and returns a valid PNG of
     the wrong font, which then disagrees with every width `text.py` measured.
@@ -74,7 +74,7 @@ def panel_svg(plan: OverlayPlan, phrases: list[str], layout: Layout) -> str:
     width = layout.image.width
     height = plan.panel_height_px
     left, right = padding.left_px, width - padding.right_px
-    # `text-anchor` is the whole of alignment in SVG — there is no text-align —
+    # `text-anchor` is the whole of alignment in SVG - there is no text-align -
     # so the anchor and the x it hangs from move together. This was hardcoded to
     # the centre while `text.align` was served, stored and offered as a control,
     # which made the control a no-op: the API answered 200, the screen showed
@@ -123,7 +123,7 @@ def render_panel(plan: OverlayPlan, phrases: list[str], layout: Layout) -> Image
 
 
 def _cover(image: Image.Image, width: int, height: int) -> Image.Image:
-    """Fill the box, crop the overflow, centred — sharp's `fit: cover`.
+    """Fill the box, crop the overflow, centred - sharp's `fit: cover`.
 
     Needed because the hero cannot be ordered at an exact size: Gemini takes an
     aspect ratio, not dimensions, and returns its own resolution near it.
@@ -142,13 +142,13 @@ def _watermark(source: str | bytes | None, box_px: int) -> Image.Image | None:
     """The page's logo, scaled to fit `box_px`. Never enlarged past its own size.
 
     Two kinds of source, because a Page's mark can be either a committed asset
-    under `api/assets/` — a `str` path, relative to `API_DIR` — or one the
+    under `api/assets/` - a `str` path, relative to `API_DIR` - or one the
     operator uploaded, which arrives as the `bytes` its caller already fetched
     from the bucket. Fetching is the caller's job: this module draws, and a
     compositor that could reach for a bucket object is a compositor that fails
     with a network error inside a render.
 
-    Raises `CompositeError` when a source is configured but unreadable — see the
+    Raises `CompositeError` when a source is configured but unreadable - see the
     module docstring. `None` means the Page has no logo, which is a choice.
     """
     if not source:
@@ -163,7 +163,7 @@ def _watermark(source: str | bytes | None, box_px: int) -> Image.Image | None:
         named = "the uploaded watermark" if isinstance(source, bytes) else repr(source)
         raise CompositeError(
             f"watermark {named} did not load ({error}). The image is not "
-            f"composed without it — a missing logo must not ship silently."
+            f"composed without it - a missing logo must not ship silently."
         ) from error
 
     scale = min(box_px / image.width, box_px / image.height, 1.0)
@@ -179,7 +179,7 @@ def watermark_text_svg(text: str, layout: Layout) -> str:
 
     Ported from `buildWatermarkSvg` (image-composite.ts:108) including its
     numbers: `0.022 × width` for the size with a 16px floor, right-anchored, 95%
-    white. At 896px that is 20px type — small, and meant to be: it is a credit,
+    white. At 896px that is 20px type - small, and meant to be: it is a credit,
     not a brand mark, and anything larger reads as a caption on the photograph.
 
     The margin is ours (`edge_margin_ratio`, 18px) rather than the old file's
@@ -214,7 +214,7 @@ def badge_svg(label: str, layout: Layout) -> tuple[str, int, int]:
     Ported from `buildHeadlineBadgeSvg`, with one deliberate departure: the old
     file *estimates* the label's width as `chars × fontSize × 0.62` plus a
     `0.35em` safety margin, because it had no measurer on the compositing path.
-    We have one — `text.get_measurer` reads the same TTF resvg draws with — so
+    We have one - `text.get_measurer` reads the same TTF resvg draws with - so
     the box is measured rather than guessed. On "NEWS" at 22px the estimate runs
     4px narrow, which spends the padding rather than the word: the chip claimed
     18px a side and drew nearer 16.
@@ -271,7 +271,7 @@ def circular_portrait(
     """The inset: a cover-cropped picture in a disc, with a ring around it.
 
     The ring is a stroke *centred on the circle edge*, matching the old app's
-    `buildCircularPortrait` — half of it sits over the picture and half outside,
+    `buildCircularPortrait` - half of it sits over the picture and half outside,
     which is why the canvas is padded (`PortraitLayout.ring_pad`). Black by
     default, so the half that crosses the panel disappears into it and the disc
     reads as a cut-out rather than a sticker.
@@ -280,7 +280,7 @@ def circular_portrait(
     `None` on any of them takes the Page's layout. Clamped here as well as on
     write, because a row can predate a change to the bounds in `layout.yml`.
 
-    A border width of **0 draws no ring at all** rather than a hairline — Pillow
+    A border width of **0 draws no ring at all** rather than a hairline - Pillow
     treats `width=0` as "fill the shape", so an unguarded call would paint a
     solid disc of the border colour straight over the picture.
     """
@@ -329,7 +329,7 @@ class Inset(NamedTuple):
     Every field but `data` is an *override*: `None` means the Page's layout
     decides, which is the same contract `inset_size_px` has had on the row since
     it existed. The ring is per draft rather than only per Page because the
-    right ring depends on the picture inside it — a dark portrait wants a light
+    right ring depends on the picture inside it - a dark portrait wants a light
     one and a bright one usually wants none.
     """
 
@@ -349,12 +349,12 @@ def inset_centre(
     A null ratio resolves *here* rather than on the row, because the default
     depends on the draft: the panel grows with the copy, so the seam is at a
     different height on every card. Bottom-right at the edge margin, centred on
-    the seam — `portraitTop`/`portraitLeft` in `brand-image-layout.ts:139-140`,
+    the seam - `portraitTop`/`portraitLeft` in `brand-image-layout.ts:139-140`,
     converted from a corner to a centre.
     """
     width, height = layout.image.width, layout.image.height
     # The draft's border, because the ring's own width decides how far the drawn
-    # square extends past the disc — anchoring on a padding that assumed the
+    # square extends past the disc - anchoring on a padding that assumed the
     # Page's border would drift the disc sideways as the ring got thicker.
     ring = layout.portrait.ring_size(inset.size_px, width, inset.border_width_px)
     margin = round(width * layout.image.edge_margin_ratio)
@@ -378,12 +378,12 @@ def compose(
 
     Three card forms. On a `card` the hero and the panel divide the height; on
     a `full_overlay` the hero fills the card and the panel is laid over its
-    bottom — the same panel, at the same height, drawn at the same y; what
+    bottom - the same panel, at the same height, drawn at the same y; what
     changes is that there is photograph underneath it, which is only visible if
     `panel.opacity` is below 1.
 
     **`plan=None` is the no-overlay card** (client, 2026-09-11): the hero is
-    full bleed, there is no panel, no badge and no gold — the image and the
+    full bleed, there is no panel, no badge and no gold - the image and the
     logo are the whole visual. The badge sits just above a panel and has no
     home without one, so it does not draw.
     """
@@ -416,7 +416,7 @@ def compose(
 
     # `alpha_composite`, not `paste`: a panel below full opacity has to blend
     # with what is under it, and `paste` would replace those pixels with a
-    # semi-transparent black instead — which then flattens onto black at the
+    # semi-transparent black instead - which then flattens onto black at the
     # JPEG step and looks like an opaque panel that ignored the setting.
     if plan is not None:
         canvas.alpha_composite(render_panel(plan, phrases, layout), (0, plan.hero_height_px))
@@ -424,7 +424,7 @@ def compose(
     margin = round(width * layout.image.edge_margin_ratio)
 
     if full_overlay and badge_text and badge_text.strip():
-        # Bottom-left, sitting on the photograph just above the panel — the old
+        # Bottom-left, sitting on the photograph just above the panel - the old
         # app's `badgeTop`. Never on a `card`, where the panel starts exactly
         # where the badge would go.
         chip = _badge(badge_text, layout)
@@ -441,7 +441,7 @@ def compose(
         canvas.paste(mark, (width - mark.width - margin, top), mark)
     elif fallback_text:
         # Only when the Page has *no* mark configured at all. A configured one
-        # that will not load raised above and never reaches here — that order is
+        # that will not load raised above and never reaches here - that order is
         # the whole difference from the old compositor, which fell through to
         # this branch on a failed load and printed the name for eight months
         # while looking like it was working.
@@ -454,7 +454,7 @@ def compose(
 
     if inset is not None:
         # Default is centred on the seam: half on the photograph, half on the
-        # panel. That overlap is the effect — a disc wholly inside the hero is a
+        # panel. That overlap is the effect - a disc wholly inside the hero is a
         # sticker, and one wholly inside the panel is an avatar. The operator
         # can drag it anywhere from there. With no panel there is no seam, so
         # the disc centres on the card.
@@ -474,7 +474,7 @@ def compose(
     out = io.BytesIO()
     # `convert("RGB")` on a canvas that still had transparency would composite
     # it onto *black* without saying so. Safe here only because the hero covers
-    # every pixel — on a `card` up to the panel, and on a `full_overlay` the
+    # every pixel - on a `card` up to the panel, and on a `full_overlay` the
     # whole surface. If a layout ever leaves a gap, this is where it turns into
     # a black band.
     canvas.convert("RGB").save(out, format="JPEG", quality=JPEG_QUALITY)

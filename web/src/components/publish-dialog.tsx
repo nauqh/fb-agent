@@ -16,8 +16,8 @@ import {
  *
  * Reject and even Delete only affect our own row; this hands the post to
  * Metricool, and from there it goes to a page with an audience on a schedule we
- * no longer own. The old app confirmed nothing — `Publish now` fired on the
- * click — and that is the one part of its shape not worth copying.
+ * no longer own. The old app confirmed nothing - `Publish now` fired on the
+ * click - and that is the one part of its shape not worth copying.
  *
  * `children` is where the time gets chosen when there is nowhere else to put
  * it. The drawer has a footer and puts `PublishAt` in it directly, the way the

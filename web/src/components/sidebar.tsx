@@ -45,7 +45,7 @@ import { cn } from "@/lib/utils";
  * lay all four out in a row without a second copy of the markup.
  *
  * Collapsing is `lg`-only, and it is driven entirely by `lg:` classes rather
- * than by branching in JS — below `lg` the rail is already a horizontal bar
+ * than by branching in JS - below `lg` the rail is already a horizontal bar
  * with nothing to reclaim, and a JS branch would strip the brand off the phone
  * layout too.
  */
@@ -56,7 +56,7 @@ const LINKS: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/overview", label: "Overview", icon: BarChart3 },
   { href: "/sources", label: "Sources", icon: Layers },
   // Beside Sources rather than after Review: both are ways of starting a run,
-  // and the loop below them — Review, Schedule — is the same whichever one fed
+  // and the loop below them - Review, Schedule - is the same whichever one fed
   // it. The topic field used to live in the Sources dock and moved here.
   { href: "/manual", label: "Manual", icon: PenLine },
   { href: "/review", label: "Review", icon: Inbox },
@@ -65,8 +65,8 @@ const LINKS: { href: string; label: string; icon: LucideIcon }[] = [
 
 /**
  * The two configuration screens, kept apart because they answer different
- * questions. Settings is "this Page" — its feeds, its watermark, which
- * competitors it reads. Global is "the account" — the competitor pool and its
+ * questions. Settings is "this Page" - its feeds, its watermark, which
+ * competitors it reads. Global is "the account" - the competitor pool and its
  * Metricool budget, the image layout, the prompts. Neither is scoped by the
  * Page switcher in the same way, and mixing them put an account-wide number
  * under a per-Page heading.
@@ -81,7 +81,7 @@ const CONFIG: { href: string; label: string; icon: LucideIcon }[] = [
  *
  * Deliberately small: the v1 tool is produce → history → settings and nothing
  * else. The group renders in place of the Facebook `LINKS` when the workspace
- * pill says Shorts — same rail, same active-state gold, same collapse rules,
+ * pill says Shorts - same rail, same active-state gold, same collapse rules,
  * different destinations. Publishing, metrics and the channel picker are not
  * here yet, and adding a route to this list is how they arrive.
  */
@@ -96,7 +96,7 @@ const SHORTS_CONFIG: { href: string; label: string; icon: LucideIcon }[] = [
 ];
 
 /** The two workspaces. Path-driven: `/shorts*` is Shorts, everything else is
- *  the Facebook agent. This is the whole "switch between everything" — one
+ *  the Facebook agent. This is the whole "switch between everything" - one
  *  pill, and the nav group under it swaps. */
 type Workspace = "facebook" | "shorts";
 
@@ -108,7 +108,7 @@ function workspaceOf(pathname: string): Workspace {
  * Which nav href owns the current path. The longest match wins.
  *
  * Neither simpler rule works on its own. A bare `startsWith` lit two rows at
- * once in the Shorts workspace — `/shorts` is a string prefix of
+ * once in the Shorts workspace - `/shorts` is a string prefix of
  * `/shorts/history`, so Produce stayed gold on every screen in the group.
  * Exact-match-only would fix that but unlights Review on `/review/[id]`, which
  * is a real screen.
@@ -119,7 +119,7 @@ function workspaceOf(pathname: string): Workspace {
  * one takes it. The `/` in the prefix test keeps `/settings` from claiming a
  * hypothetical `/settings-v2`.
  *
- * Pass every href in the rail — the winner can live in the other group
+ * Pass every href in the rail - the winner can live in the other group
  * (`/shorts` is in `SHORTS_LINKS`, `/shorts/settings` in `SHORTS_CONFIG`).
  */
 function activeHref(pathname: string, hrefs: string[]): string | null {
@@ -134,7 +134,7 @@ function activeHref(pathname: string, hrefs: string[]): string | null {
 const GHOST_ICON =
   "flex size-8 shrink-0 items-center justify-center rounded-md text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none";
 
-/** The Facebook mark — a workspace glyph drawn as the brand itself, not an
+/** The Facebook mark - a workspace glyph drawn as the brand itself, not an
  *  invented icon. `currentColor` so the rail's tinting applies like any other
  *  icon. Simple-icons path. */
 function FacebookMark({ className }: { className?: string }) {
@@ -145,7 +145,7 @@ function FacebookMark({ className }: { className?: string }) {
   );
 }
 
-/** The YouTube mark — same role, opposite workspace. Simple-icons path. */
+/** The YouTube mark - same role, opposite workspace. Simple-icons path. */
 function YoutubeMark({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden>
@@ -155,7 +155,7 @@ function YoutubeMark({ className }: { className?: string }) {
 }
 
 export function Sidebar({
-  // Collapsed unless the layout's cookie says otherwise — matching the default
+  // Collapsed unless the layout's cookie says otherwise - matching the default
   // there, so a Sidebar rendered without the prop cannot disagree with the
   // server about how wide the first paint should be.
   defaultCollapsed = true,
@@ -193,11 +193,11 @@ export function Sidebar({
   function toggle() {
     const next = !collapsed;
     setCollapsed(next);
-    // A year, path-wide. No `secure` — this is served over http on the laptop.
+    // A year, path-wide. No `secure` - this is served over http on the laptop.
     document.cookie = `${COLLAPSE_COOKIE}=${next ? "1" : "0"}; path=/; max-age=31536000; samesite=lax`;
   }
 
-  // Drafts still needing a decision, and rows currently in flight — the two
+  // Drafts still needing a decision, and rows currently in flight - the two
   // numbers that tell the operator there is work waiting without opening the
   // screen.
   // Scoped to the selected Page, like the queue itself. A badge reading 3 over
@@ -223,7 +223,7 @@ export function Sidebar({
   // The Cart is in-memory and lives only on Sources, so without a count here a
   // Cart filled and then navigated away from is invisible. The Facebook queue
   // badges mean nothing in the Shorts workspace, and the cart is a Sources
-  // thing — neither should paint a count onto a Shorts rail.
+  // thing - neither should paint a count onto a Shorts rail.
   const counts: Record<string, number | null> =
     workspace === "shorts"
       ? {}
@@ -243,12 +243,12 @@ export function Sidebar({
           /**
            * Width is the only thing that moves, and the icons do not move at all.
            *
-           * `px-3` on the nav and `px-3` on each item put every icon at x=24–40
+           * `px-3` on the nav and `px-3` on each item put every icon at x=24-40
            * in both states, so 64px collapsed is not an arbitrary width: it is
            * 24 + 16 + 24, the number that leaves the icons exactly where the
            * 240px rail already had them. Centring them with `justify-center`
            * instead makes them jump to the middle the instant the label hides,
-           * racing ahead of the width animation — which was the jank.
+           * racing ahead of the width animation - which was the jank.
            *
            * `overflow-hidden` so the labels clip as the rail narrows rather than
            * wrapping onto a second line on the way. `ease-linear` matches the
@@ -261,7 +261,7 @@ export function Sidebar({
       >
         {/* `lg:pb-3`, not `pb-1`: the Page heading used to sit under this row
             and supply the gap down to the first icon. With it gone the header
-            owns that spacing itself — and the same value in both states, so
+            owns that spacing itself - and the same value in both states, so
             collapsing no longer shifts the nav vertically. */}
         {/* No `gap` here: the only gap that matters is the one between the
             brand and the trigger, and it has to shrink *with* the brand or it
@@ -269,12 +269,12 @@ export function Sidebar({
             off the edge. It rides on the brand as `mr` instead. */}
         <div className="flex h-14 shrink-0 items-center px-4 whitespace-nowrap lg:h-auto lg:pt-5 lg:pb-3">
           {/**
-           * Collapsed, the rail carries no brand — the trigger is the only
+           * Collapsed, the rail carries no brand - the trigger is the only
            * thing in the header, as the old app's is.
            *
            * It gets there by shrinking, not by `hidden`. `hidden` is instant,
            * so the brand vanished on the click while the rail still had 300ms
-           * of travel left — the one part of the collapse that was not
+           * of travel left - the one part of the collapse that was not
            * animating. `width: auto` cannot be transitioned, so `max-width`
            * does the work: 10rem is clear of its ~90px natural width, so it
            * never clips while open.
@@ -309,12 +309,12 @@ export function Sidebar({
               GHOST_ICON,
               // After GHOST_ICON, not before: that string starts with
               // `flex`, and tailwind-merge resolves display conflicts
-              // last-wins — ordered the other way the toggle reappears in
+              // last-wins - ordered the other way the toggle reappears in
               // the mobile bar, where there is nothing to collapse.
               "hidden lg:flex",
               // Always `ml-auto`, never a switch to `mx-auto`. Once the brand
               // shrinks to nothing the collapsed content box is 64 − 32 = 32px
-              // and the button is 32px, so "flush right" *is* centred — and it
+              // and the button is 32px, so "flush right" *is* centred - and it
               // glides there with the rail instead of jumping on the click.
               "lg:ml-auto",
             )}
@@ -328,7 +328,7 @@ export function Sidebar({
 
         {/* The workspace switch: one pill, two destinations, path-driven. It
             sits above the nav so the whole group under it reads as one
-            workspace — the same "two alternatives" pill the app uses for
+            workspace - the same "two alternatives" pill the app uses for
             sort, not a second nav. Collapsed, the labels have no room, so it
             becomes a single icon. The icon is the workspace you would switch
             **to** (on Facebook it shows Clapperboard: "go to Shorts"). */}
@@ -356,11 +356,11 @@ export function Sidebar({
 
         <nav
           className={cn(
-            // `px-3` is constant on purpose — see the width note above.
+            // `px-3` is constant on purpose - see the width note above.
             "flex gap-1 overflow-x-auto px-3 py-2",
             // `lg:overflow-x-hidden` matters: `overflow-x-auto` above is for
             // the mobile bar, and left un-reset it makes the collapsed rail
-            // scroll sideways — the labels stay in flow while faded, so they
+            // scroll sideways - the labels stay in flow while faded, so they
             // overflow the 40px content box and this element, being its own
             // scroll container, offers to scroll to them. The aside's
             // `overflow-hidden` clips the paint but cannot stop that.
@@ -368,8 +368,8 @@ export function Sidebar({
           )}
         >
           {/* Collapsed, the workspace switch rides in the nav's own flow with
-              the **exact item geometry** — `px-3 py-2` and a `size-4` mark in
-              a relative span — so the brand glyph lands in the same pixel
+              the **exact item geometry** - `px-3 py-2` and a `size-4` mark in
+              a relative span - so the brand glyph lands in the same pixel
               column and row band as every nav icon. The separator below marks
               it as the workspace header; the mark is the workspace you would
               switch **to**: on the Facebook side it shows YouTube, and vice
@@ -422,7 +422,7 @@ export function Sidebar({
 
           <div className="lg:mt-auto lg:border-t lg:pt-2">
             {/* Only mounted when there is something in flight, so the footer
-                does not reserve an empty strip above Settings — and hidden
+                does not reserve an empty strip above Settings - and hidden
                 outright when collapsed rather than faded, because a 64px rail
                 has no room to say "2 generating" and a faded block would sit
                 there as a gap. */}
@@ -511,12 +511,12 @@ function Item({
       href={href}
       aria-current={active ? "page" : undefined}
       className={cn(
-        // `px-3` constant, and no `justify-center` — the icon must not move.
+        // `px-3` constant, and no `justify-center` - the icon must not move.
         "relative flex shrink-0 items-center gap-2.5 rounded-md px-3 py-2 text-sm whitespace-nowrap transition-colors",
         // Each row clips its own faded label, so the overflow never reaches
         // the nav. Hiding it only on the nav leaves the nav's scrollWidth
         // wider than its box, and a `hidden` scroll container still scrolls
-        // when something inside it takes focus — which would slide the icons
+        // when something inside it takes focus - which would slide the icons
         // out of line on a tab press.
         collapsed && "lg:overflow-hidden",
         // Full-contrast in both states. Greying the inactive items made the
@@ -551,7 +551,7 @@ function Item({
        * Faded out, not `hidden`.
        *
        * `hidden` is instant, so on collapse every label vanished on the click
-       * and the rail then spent 300ms shrinking around empty space — which is
+       * and the rail then spent 300ms shrinking around empty space - which is
        * what read as unsmooth. Keeping them in flow and fading them means the
        * text is still there, being clipped by the rail's `overflow-hidden` as
        * it narrows. They keep their width while faded, so the row overflows

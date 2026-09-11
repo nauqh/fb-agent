@@ -29,7 +29,7 @@ import { cn } from "@/lib/utils";
 /** What each kind is called on screen. The stored values are not operator-facing.
  *
  *  Exported because the review drawer names the source a Draft came from and has
- *  to call it the same thing the grid did — the operator is being asked to
+ *  to call it the same thing the grid did - the operator is being asked to
  *  recognise a card they ticked. */
 export const KIND_LABEL: Record<SourceKind, string> = {
   competitor_post: "Competitor post",
@@ -77,7 +77,7 @@ interface SourceCardProps {
  * The card used to say otherwise in two words that raised more questions than
  * they answered.
  *
- * Clicking the card ticks it, as it always has — the grid is a bulk picker and
+ * Clicking the card ticks it, as it always has - the grid is a bulk picker and
  * ticking is the frequent action, so it keeps the whole surface. Reading the
  * full post is the rare one and gets the small corner button. The expand button
  * is a *sibling* of the card button rather than a child: nesting one `<button>`
@@ -99,8 +99,8 @@ export function SourceCard({ selected, pending, onToggle, ...item }: SourceCardP
           "group flex h-full w-full flex-col gap-3 rounded-2xl border p-4 text-left transition-colors",
           "hover:border-foreground/25 disabled:opacity-60",
           selected && "border-gold bg-gold/[0.06] hover:border-gold",
-          // Dimmed, not hidden or disabled. A post worth writing twice exists —
-          // a different angle on the same story — so this is a warning, not a
+          // Dimmed, not hidden or disabled. A post worth writing twice exists -
+          // a different angle on the same story - so this is a warning, not a
           // rule. Hiding it would also make the grid shrink for reasons the
           // operator cannot see.
           used && !selected && "opacity-55",
@@ -109,7 +109,7 @@ export function SourceCard({ selected, pending, onToggle, ...item }: SourceCardP
         <div className="flex items-start justify-between gap-3">
           {/* The logo, where there is one. A grid of 60 competitor posts is
               read by author before it is read by text, and several of these
-              pages have near-identical names — the mark is how the operator
+              pages have near-identical names - the mark is how the operator
               tells them apart at a glance. Tweets and RSS items have none and
               take the width instead. */}
           {logo ? (
@@ -201,7 +201,7 @@ export function SourceCard({ selected, pending, onToggle, ...item }: SourceCardP
       <Dialog open={open} onOpenChange={setOpen}>
       {/* Fit the copy. The dialog grows to the post's length (capped at 85vh so
           a genuinely long one scrolls), and the image sits as a single corner
-          cell — Word's “squared” wrapping — rather than taking its own column.
+          cell - Word's “squared” wrapping - rather than taking its own column.
           That is the whole rework: one cell, image top-right beside the title,
           story beneath it in the same column. */}
       <DialogContent
@@ -222,7 +222,7 @@ export function SourceCard({ selected, pending, onToggle, ...item }: SourceCardP
           <div className="space-y-3">
             {/* The image floated right, squared: it takes its own rectangle and
                 the story flows around it instead of bending to its full height.
-                It must be a normal-flow sibling — not inside flex, where a float
+                It must be a normal-flow sibling - not inside flex, where a float
                 would become its own full row and produce the white band under
                 the title. `clear-both` on the stats bar ends the wrap so the
                 rule spans full width. */}
@@ -260,7 +260,7 @@ export function SourceCard({ selected, pending, onToggle, ...item }: SourceCardP
           </div>
         </div>
 
-        {/* Actions dock at the foot, full width — the post's own row. */}
+        {/* Actions dock at the foot, full width - the post's own row. */}
         <div className="flex flex-wrap items-center justify-end gap-2 border-t bg-muted/40 px-4 py-3">
           {url ? (
             <Button variant="outline" asChild>
@@ -287,10 +287,10 @@ export function SourceCard({ selected, pending, onToggle, ...item }: SourceCardP
 
 /**
  * The post's picture, or a broken-image mark when one was expected and failed.
- * Nothing is drawn when the post never had an image — the text row takes the width.
+ * Nothing is drawn when the post never had an image - the text row takes the width.
  *
  * **Small, but no longer tiny.** Metricool serves a 130×130 thumbnail and
- * nothing larger — `stp=dst-jpg_s130x130_tt6`, and the URL signature covers that
+ * nothing larger - `stp=dst-jpg_s130x130_tt6`, and the URL signature covers that
  * parameter, so asking for s480/s720/p720 or dropping `stp` all return 403. The
  * payload carries no HD field either. The old system stretched that 130px across
  * the full card width and was blurry for exactly this reason.
@@ -303,17 +303,17 @@ export function SourceCard({ selected, pending, onToggle, ...item }: SourceCardP
  * get sharper.
  *
  * A picture that loaded and *failed* still gets `ImageOff`, because that one is
- * damage — as opposed to a post that never had a picture, which shows nothing.
+ * damage - as opposed to a post that never had a picture, which shows nothing.
  *
- * A bigger image does exist — the post's own `og:image` is 600×750 and is
- * readable without auth — but that is one extra request against facebook.com
+ * A bigger image does exist - the post's own `og:image` is 600×750 and is
+ * readable without auth - but that is one extra request against facebook.com
  * per post, which is not something to do 60 times per grid load. It belongs at
  * tick time, alongside the Phase 4 download-and-store, or behind the detail
  * dialog above, which opens one post at a time.
  *
  * `onError` is not decoration. Facebook's CDN URLs are signed and expire about
  * four days after they are issued, and Metricool hands back a freshly signed one
- * on every sync — so what is on screen is normally fine, but anything not just
+ * on every sync - so what is on screen is normally fine, but anything not just
  * synced is a 403. The old system rendered these with no error handling and its
  * stored URLs are, right now, all dead: four sampled production rows expired on
  * 2026-07-31 and return 403 today.
@@ -332,7 +332,7 @@ function SourceThumbnail({
 
   // A refreshed sync can replace a dead URL with a live one, so the failure has
   // to clear when `src` changes. Adjusted during render rather than in an
-  // effect — the same pattern as `use-query.ts` — because an effect would show
+  // effect - the same pattern as `use-query.ts` - because an effect would show
   // the placeholder for one frame before correcting itself.
   const [renderedSrc, setRenderedSrc] = useState(src);
   if (src !== renderedSrc) {
@@ -340,7 +340,7 @@ function SourceThumbnail({
     setFailed(false);
   }
 
-  // No picture at all — nothing to show, so no tile. A placeholder here made
+  // No picture at all - nothing to show, so no tile. A placeholder here made
   // a post that never had an image look like one whose image had broken, and at
   // four imageless items per screen that is a row of silent damage. Omitting
   // the tile entirely lets the text take the width instead.
@@ -349,7 +349,7 @@ function SourceThumbnail({
   if (!src) return null;
 
   if (failed) {
-    // A picture that loaded and failed is a broken tile, not an absent one —
+    // A picture that loaded and failed is a broken tile, not an absent one -
     // `ImageOff` marks real damage rather than a post that simply had no image.
     return (
       <div className={cn(tile, "flex items-center justify-center bg-muted", className)}>

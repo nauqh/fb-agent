@@ -7,7 +7,7 @@ import { Logo } from "@/components/logo";
  * The signed-out frame: what this is on the left, the form on the right.
  *
  * The old app's shape (`components/auth/welcome-shell.tsx`), with its copy
- * replaced rather than reworded. Its three points sold a product to strangers —
+ * replaced rather than reworded. Its three points sold a product to strangers -
  * "For creators and teams", "Automate your content pipeline". This screen has
  * exactly one visitor, who owns the thing, so the panel says what the app does
  * instead of why it is worth having.
@@ -38,7 +38,7 @@ export function WelcomeShell({ children }: { children: ReactNode }) {
     <div className="grid min-h-svh w-full lg:grid-cols-2">
       <section className="relative flex min-h-[34vh] flex-col overflow-hidden bg-zinc-950 px-8 py-8 text-zinc-50 sm:px-12 lg:min-h-svh lg:px-14 lg:py-10">
         {/* Two washes rather than one, so the panel has a light source. Both
-            are gold at low alpha — the same hue as the mark, not a second
+            are gold at low alpha - the same hue as the mark, not a second
             accent introduced for a background. */}
         <div
           aria-hidden
@@ -64,7 +64,7 @@ export function WelcomeShell({ children }: { children: ReactNode }) {
               The draft factory
             </h1>
             <p className="mt-4 text-base leading-relaxed text-zinc-400 sm:text-lg">
-              Sources in, finished posts out — reviewed by hand before anything
+              Sources in, finished posts out - reviewed by hand before anything
               reaches a page.
             </p>
 

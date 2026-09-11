@@ -3,7 +3,7 @@
 `POST /layout/sample` exists because the editor's live preview is CSS. That
 preview is an approximation and says so; these tests are about the other half,
 where the answer comes back from the same `text.plan` and `compositor.compose`
-that publish. Two things it must never do — bill for a hero, or write a row —
+that publish. Two things it must never do - bill for a hero, or write a row -
 are asserted here rather than left to the reading.
 """
 
@@ -24,7 +24,7 @@ def _with_hero(session, page, photograph: bytes) -> Draft:
     draft = Draft(
         page_id=page.id,
         status=DraftStatus.APPROVED,
-        hook="Whatever this draft's own hook is — the sample supplies its own.",
+        hook="Whatever this draft's own hook is - the sample supplies its own.",
         hero_image_path=media.store.save(photograph, "7-hero.png"),
     )
     session.add(draft)
@@ -198,12 +198,12 @@ def test_the_badge_is_measured_rather_than_estimated():
     assert height == 22 + 8 * 2
 
     # `chars × fontSize × 0.62 + 0.35em`, the old estimate, against the advance
-    # widths of the real face. It comes out *narrow* on this label — the chip
+    # widths of the real face. It comes out *narrow* on this label - the chip
     # was 4px tighter than its own word, so the 18px padding it claimed was
     # nearer 16 on each side.
     estimate = round(len("NEWS") * 22 * 0.62 + 22 * 0.35) + 18 * 2
     assert width > estimate, "still using the old estimate"
-    assert width - estimate < 10, "and not wildly apart — it was an estimate, not a bug"
+    assert width - estimate < 10, "and not wildly apart - it was an estimate, not a bug"
     assert 'rx="19"' in svg, "half the height, not the configured 24"
 
 
@@ -233,7 +233,7 @@ def test_an_alignment_that_is_not_one_is_refused_by_both_routes(
     """`text_align` was a bare `str`, so `"sideways"` stored and answered 200.
 
     The write is validated by building the `Layout` it would produce, which
-    means anything that model accepts reaches the compositor — where an
+    means anything that model accepts reaches the compositor - where an
     unknown anchor does not raise, it draws the text somewhere else.
     """
     _with_hero(session, page, a_photograph)
@@ -264,7 +264,7 @@ def test_an_alignment_that_is_not_one_is_refused_by_both_routes(
 def test_capitals_are_a_page_setting_that_the_file_defaults_to_off(client, page):
     """Null tracks `layout.yml`; `false` is a Page that decided against it.
 
-    Three-valued like every other override, which is what `overridden` reports —
+    Three-valued like every other override, which is what `overridden` reports -
     a Page that has chosen "as written" no longer follows the file, and the
     screen has to be able to say so.
     """
@@ -288,7 +288,7 @@ def test_capitals_are_a_page_setting_that_the_file_defaults_to_off(client, page)
 def test_a_shouting_page_wraps_and_draws_the_panel_in_capitals(
     client, session, page, a_photograph
 ):
-    """Through the real compositor, not the helper — the wrap sees the capitals.
+    """Through the real compositor, not the helper - the wrap sees the capitals.
 
     The lines come back from `text.plan`, so this also pins the thing that made
     the setting worth measuring: capitals are wider, so a shouted panel needs at
@@ -318,7 +318,7 @@ def test_a_shouting_page_wraps_and_draws_the_panel_in_capitals(
 
 def test_a_no_overlay_draft_composes_full_bleed_with_no_panel():
     """`plan=None` is the no-overlay opt-out (client, 2026-09-11): the hero is
-    full bleed, there is no panel and no badge — the image and the logo are the
+    full bleed, there is no panel and no badge - the image and the logo are the
     whole card. Asserted against pixels, not just a 200: the bottom of the card
     is photograph, not the panel black it would be with a plan.
     """

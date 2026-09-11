@@ -13,12 +13,12 @@ import { cn } from "@/lib/utils";
  * **Rows are derived from the data, not from the clock.** The obvious grid is 24
  * hour-rows, which is what a general calendar needs; this page is not general.
  * Measured across a fortnight of History Retraced: 9-10 posts a day at ten
- * distinct hours — roughly every two hours from midnight to noon, then 20:00 and
+ * distinct hours - roughly every two hours from midnight to noon, then 20:00 and
  * 22:00. Twenty-four rows would be half empty and twice as tall, and the reader
  * would scroll past fourteen blank bands to compare Tuesday with Wednesday.
  *
  * That regularity is also the argument for a grid at all. When slots repeat, the
- * useful question is *which slot is empty* — and an absence cannot be rendered
+ * useful question is *which slot is empty* - and an absence cannot be rendered
  * in a list. A missing 08:00 is invisible in a feed of what exists and obvious
  * as a hole in a column.
  */
@@ -56,7 +56,7 @@ export function ScheduleWeek({
           This week
         </Button>
         <p className="ml-2 text-sm text-muted-foreground">
-          {label(days[0])} — {label(days[6])}
+          {label(days[0])} - {label(days[6])}
           <span className="ml-2 tabular-nums">· {inWeek.length} posts</span>
         </p>
       </div>
@@ -203,7 +203,7 @@ function key(date: Date): string {
   return new Date(date.getTime() - offset).toISOString().slice(0, 10);
 }
 
-/** The Page's today, not the browser's — `key()` is for grid columns, which
+/** The Page's today, not the browser's - `key()` is for grid columns, which
  *  are built from `startOfWeek(pageNoon())` and so are already in step. */
 function todayKey(): string {
   return pageToday();

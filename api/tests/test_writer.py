@@ -45,7 +45,7 @@ def test_a_minimal_post_passes_without_a_body():
     """A meme/quote/recipe post: hook + short plain caption, first comment null.
 
     The essay rules made that shape unwritable, which is why minimal competitor
-    posts came out as essays about something else — the only structure that
+    posts came out as essays about something else - the only structure that
     survived validation was the full one.
     """
     for body in (None, "", "   "):
@@ -91,9 +91,9 @@ def test_a_recap_line_without_an_emoji_is_caught():
         "Ada Lovelace (1815 — 1852) wrote",  # em dash
         # Antiquity. These were all rejected until 2026-08-06: the pattern was
         # `\d{4}` with no era, so every pre-1000 subject was unwritable on a
-        # history page — and because this rule raises `ModelRetry`, the writer
+        # history page - and because this rule raises `ModelRetry`, the writer
         # resubmitted correct text until it ran out of retries and the run died.
-        "Wu Zetian (624 – 705 AD) ascended",
+        "Wu Zetian (624 – 705 AD) ascended",  # en dash
         "Hypatia (350 - 415 CE) taught",
         "Cleopatra (69 BC - 30 BC) ruled",
         "Someone (b. 812) lived",
@@ -185,7 +185,7 @@ def test_a_compliant_draft_passes_on_the_first_call(page):
 def test_a_post_template_layers_last_and_says_it_outranks(page):
     """The client's named post styles: delta only, layered last, last wins.
 
-    Layering rather than replacement is the drift defence — the template
+    Layering rather than replacement is the drift defence - the template
     carries the few lines its style changes, never a copy of the house prose
     (see `models.PromptTemplate`). Last-wins is the same mechanism the page
     lengths use.
@@ -266,8 +266,8 @@ def test_retries_are_capped(page):
 def test_every_kind_binds_the_subject(kind):
     """Reversing this produces confident output about the wrong story.
 
-    The competitor-post branch used to say the opposite — "a STYLE sample,
-    choose your own subject" — and the client reported it on 2026-08-18 as posts
+    The competitor-post branch used to say the opposite - "a STYLE sample,
+    choose your own subject" - and the client reported it on 2026-08-18 as posts
     that were not generated from the competitor posts they ticked. They were;
     the prompt told the model to write about something else.
     """
@@ -292,7 +292,7 @@ def test_a_competitor_post_binds_the_subject_without_lending_its_words():
 def test_a_competitor_instruction_tells_the_model_to_mirror_the_shape():
     """The old instruction said "do not reuse their structure", which for a
     meme or a recipe card meant: discard the only thing worth copying. The
-    schema and validators also made the minimal shape unwritable — both fixed;
+    schema and validators also made the minimal shape unwritable - both fixed;
     this pins the prompt half.
     """
     instruction = writer.source_instruction(SourceKind.COMPETITOR_POST)
@@ -378,7 +378,7 @@ def test_the_picture_reaches_the_model_not_just_the_content_list(page):
 
 
 def test_a_rewrite_never_carries_the_picture(page):
-    """Decided, not overlooked — the old app's regenerate was text-only too.
+    """Decided, not overlooked - the old app's regenerate was text-only too.
 
     The fields being kept are in the prompt verbatim and were written while the
     model could see the picture, so its contribution is already there as prose.
@@ -444,7 +444,7 @@ def test_our_own_rule_messages_are_never_read_as_an_outage(message):
     """`"500"` lives inside `"1500"`, and `BODY_MIN_CHARS` is 1,500.
 
     While the codes were matched as bare substrings, a brand-rule failure could
-    read as an overloaded server and move the run onto a different model — a
+    read as an overloaded server and move the run onto a different model - a
     silent model swap for a reason that has nothing to do with availability.
     """
     assert not writer.is_transient(RuntimeError(message))
@@ -469,14 +469,14 @@ def test_no_pinned_version_is_a_fallback(retired):
 
     `gemini-2.5-flash` is the sharper case: *"no longer available to new
     users."* It still answered on the project the key had always belonged to
-    and 404'd on a project created the same afternoon — so a pinned model can
+    and 404'd on a project created the same afternoon - so a pinned model can
     be alive for us and dead for a clone, and `models.list()` reports neither.
     """
     assert retired not in writer.settings.text_fallback_chain
 
 
 def test_the_fallback_chain_is_the_one_that_was_checked():
-    """A tripwire on a default, not a rule. The rule used to be aliases only —
+    """A tripwire on a default, not a rule. The rule used to be aliases only -
     Google repoints an alias, a pin expires silently. Then the alias was
     measured: `gemini-flash-latest` answered a ping and 503'd on a real
     `writer.rewrite` in the same minute, because it points at a busy model.
@@ -516,7 +516,7 @@ def test_the_text_drawn_on_the_image_is_the_text_the_rules_guard(page):
     """The hole the merge closed.
 
     `validators.check` ran on `hook` while the compositor drew `overlay_text`,
-    so the panel — the one part of the post a reader cannot scroll past — was
+    so the panel - the one part of the post a reader cannot scroll past - was
     the only copy no brand rule touched. A 200-word question could reach a
     finished image. Now a hook that breaks a rule is retried before anything is
     drawn from it.
@@ -541,9 +541,9 @@ def test_the_text_drawn_on_the_image_is_the_text_the_rules_guard(page):
 # The client's C6 and C7 (2026-08-15) are the same complaint C5 was: the numbers
 # were History Retraced's and every Page got them. Bodybuilding Tips and Fitness
 # Recipes want a 30-word hook and a first comment capped at 1,500 characters over
-# 3–4 paragraphs; the history page wants none of that.
+# 3-4 paragraphs; the history page wants none of that.
 #
-# C7 sat dropped for two days because 1,500 was the global *floor* — their
+# C7 sat dropped for two days because 1,500 was the global *floor* - their
 # ceiling was our minimum, so no draft could satisfy both. That is why `Limits`
 # carries `disagrees()` and why the route calls it before saving.
 
@@ -624,7 +624,7 @@ def test_the_prompt_states_this_pages_lengths_so_the_check_cannot_surprise_it():
     """A rule the model was never told is a retry it cannot act on.
 
     The house numbers are already in the prompt prose, so they are *not*
-    repeated — a second copy is the drift `prompts.py` is written against.
+    repeated - a second copy is the drift `prompts.py` is written against.
     """
     from app.settings import layout
 
@@ -640,7 +640,7 @@ def test_the_prompt_states_this_pages_lengths_so_the_check_cannot_surprise_it():
 
 def test_an_emptied_overlay_prompt_instructs_no_overlay_and_skips_the_template_layer(page):
     """The client's 2026-09-11 rule: an overlay prompt emptied in Settings means
-    the post carries no text panel — the image and the logo only. The NO OVERLAY
+    the post carries no text panel - the image and the logo only. The NO OVERLAY
     instruction goes last so last-wins over the structure above, and a template's
     panel rules are not layered for a post that must not carry a panel."""
     page.overlay_prompt = "   "

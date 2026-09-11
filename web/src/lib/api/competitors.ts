@@ -3,7 +3,7 @@ import { del, get, post, put } from "./client";
 /**
  * Which Competitors feed which Pages.
  *
- * Ours, not Metricool's — the competitor *list* is still theirs and still read
+ * Ours, not Metricool's - the competitor *list* is still theirs and still read
  * live (`getCompetitorPages`). What is stored is an assignment they have no way
  * to express: one competitor serving several of our Pages.
  *
@@ -18,7 +18,7 @@ import { del, get, post, put } from "./client";
 export interface Assignment {
   id: number;
   page_id: number;
-  /** Metricool's `providerId` — the join key, never the display name. */
+  /** Metricool's `providerId` - the join key, never the display name. */
   competitor_page_id: string;
   name: string | null;
   /** Why this Page reads it. A table has no history; this is the compensation. */
@@ -33,7 +33,7 @@ export async function getAssignments(pageId: number): Promise<Assignment[]> {
  * Replace this Page's assignments with the set given.
  *
  * A whole set, not add/remove: a checkbox list *is* a set, and sending it whole
- * makes the request idempotent — two clicks racing end at the state the second
+ * makes the request idempotent - two clicks racing end at the state the second
  * described rather than at whichever order the deltas arrived in.
  *
  * Omitting `notes` keeps the notes already stored, so a bare tick list cannot
@@ -67,7 +67,7 @@ export interface Allowance {
 }
 
 /**
- * Costs one request per brand, so it is its own call — the competitor list
+ * Costs one request per brand, so it is its own call - the competitor list
  * should not wait several seconds for a number beside it.
  *
  * Counts every brand deliberately. Measured while this was written: 92 of 100
@@ -82,8 +82,8 @@ export async function getAllowance(): Promise<Allowance> {
 /**
  * Start watching a Facebook page. Writes to Metricool, stores nothing here.
  *
- * `pageId` only decides which brand's set it lands in — where the allowance is
- * spent — not who may read it. Any Page can then be assigned it.
+ * `pageId` only decides which brand's set it lands in - where the allowance is
+ * spent - not who may read it. Any Page can then be assigned it.
  */
 export async function addToPool(pageId: number, facebookPageId: string): Promise<void> {
   await post<{ added: string }>("/competitors", {

@@ -1,7 +1,7 @@
 import { PageSwitcher } from "@/components/page-switcher";
 
 /**
- * Every screen's title row — and the one place the Page switcher is mounted.
+ * Every screen's title row - and the one place the Page switcher is mounted.
  *
  * The switcher lives here rather than in each screen so that adding a screen
  * cannot mean forgetting it. It renders nothing while there is a single Page,

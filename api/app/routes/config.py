@@ -3,7 +3,7 @@
 `layout.yml` is parsed once at import into a frozen model and is still the
 default. Serving it is what lets a screen show the values the compositor will
 actually use, rather than a copy maintained by hand on the other side of the
-wire — which is what the preview was doing, and which drifts the moment either
+wire - which is what the preview was doing, and which drifts the moment either
 side is edited alone.
 
 **It stopped being read-only.** The original note here said layout is config
@@ -13,14 +13,14 @@ holding when the operator wanted a news card to look unlike a history card, and
 a file cannot answer that: this API runs from a container image, so a written
 file is gone at the next deploy.
 
-So the file keeps the defaults — a change to it is still a diff — and a
+So the file keeps the defaults - a change to it is still a diff - and a
 `page_layout` row holds only what one Page changed. `DELETE` removes the row,
 which is what makes "reset" mean *back to the file* rather than *back to
 whatever the file said when you first pressed save*.
 
 Image dimensions and the font stay out of it. 4:5 is the tallest ratio Facebook
 renders in feed, and a font family that does not match the TTF's name table
-makes resvg substitute a serif silently and still return a valid PNG — neither
+makes resvg substitute a serif silently and still return a valid PNG - neither
 failure is visible from a form.
 """
 
@@ -65,7 +65,7 @@ def _layout_with(session: Session, page_id: int, changes: dict) -> Layout:
     The shape both the write and the preview need: `{**yaml, **row, **changes}`.
     `changes` is a `LayoutPatch` dumped with `exclude_unset=True`, so a field
     that is present and `null` clears an override and one that is absent leaves
-    it alone — the distinction a per-field reset is built on.
+    it alone - the distinction a per-field reset is built on.
 
     The transient `PageLayout` is never added to the session. It exists because
     `as_overrides` is the one place the flat column names and the nested file
@@ -169,8 +169,8 @@ def patch_layout(
     changes = body.model_dump(exclude_unset=True)
 
     # Validated before it is stored, by building the layout it would produce.
-    # resvg does not fail on a bad value — it renders something wrong and
-    # returns a valid PNG — so a 422 here is the only place this can be caught.
+    # resvg does not fail on a bad value - it renders something wrong and
+    # returns a valid PNG - so a 422 here is the only place this can be caught.
     try:
         _layout_with(session, page_id, changes)
     except Exception as error:
@@ -205,7 +205,7 @@ class SampleOut(BaseModel):
     image_base64: str
     content_type: str = "image/jpeg"
     hero_draft_id: int
-    """Which draft's hero this was drawn on — the sample is not a fixed picture."""
+    """Which draft's hero this was drawn on - the sample is not a fixed picture."""
 
     lines: list[str]
     panel_height_px: int
@@ -219,7 +219,7 @@ def render_sample(
 ) -> SampleOut:
     """One card, drawn by the compositor, from values that are not saved yet.
 
-    The editor's live preview is CSS and is an approximation on purpose — it
+    The editor's live preview is CSS and is an approximation on purpose - it
     moves as a slider does. This is the other half: the same `text.plan` and
     `compositor.compose` that publish, so the wrap, the kerning and the panel
     height are the real ones rather than the browser's guess at them. Both are
@@ -246,7 +246,7 @@ def render_sample(
             status_code=409,
             detail=(
                 "No draft on this Page has a hero image to sample. Generate one "
-                "on the queue first — a preview does not draw its own, because "
+                "on the queue first - a preview does not draw its own, because "
                 "that is a paid call per press."
             ),
         )

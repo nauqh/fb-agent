@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
  * Solid `bg-foreground` on `text-background` rather than a bordered panel: the
  * collapsed rail's only job here is to name an icon, and an inverted chip reads
  * at a glance where a pale outlined box does not. `delayDuration={0}` for the
- * same reason — the browser's native `title` takes about a second to appear,
+ * same reason - the browser's native `title` takes about a second to appear,
  * which is long enough to have already clicked the wrong icon.
  */
 
@@ -53,7 +53,7 @@ function TooltipContent({
         {...props}
       >
         {children}
-        {/* Radix's own triangle, not the usual rotated-square trick — that one
+        {/* Radix's own triangle, not the usual rotated-square trick - that one
             carries a `-translate-y` tuned for a tooltip sitting above its
             trigger, and the rail's tooltips sit to the right of theirs. */}
         <TooltipPrimitive.Arrow className="fill-foreground" width={11} height={5} />

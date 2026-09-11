@@ -1,4 +1,4 @@
-/** The prototype's stand-in for fb_agent.db — reduced to the part that lived. */
+/** The prototype's stand-in for fb_agent.db - reduced to the part that lived. */
 
 type Listener = () => void;
 const listeners = new Set<Listener>();

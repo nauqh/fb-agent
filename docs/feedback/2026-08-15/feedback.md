@@ -1,11 +1,11 @@
-# Client Feedback — 2026-08-15
+# Client Feedback - 2026-08-15
 
 Third round. Sent after the logos landed (B6) and the client generated their
 first real drafts for the two new Pages: **BBTT** (Bodybuilding Tips) and **FR**
 (Fitness Recipes).
 
 Every item is one complaint: **the app writes and draws in History Retraced's
-voice for every Page.** That is not a bug in any one place — it is the shape of
+voice for every Page.** That is not a bug in any one place - it is the shape of
 `api/prompts/*.txt`, which is one global set of files with no per-Page
 dimension, and of `writer/validators.py`, whose numbers are module constants.
 
@@ -23,13 +23,13 @@ file; `address.md` gets written as things ship.
 | Item | Summary | Status |
 |------|---------|--------|
 | **B6** | Logos / watermarks | ✅ Confirmed done by the client |
-| **C4** | Overlay text in ALL CAPS for BBTT and FR, and nowhere to set it | ✅ Shipped 2026-08-15 — per-Page `text_uppercase`, applied at draw time |
-| **C5** | Hero should be modern, bright, fitness-magazine — not sepia history | ✅ Shipped 2026-08-16 — per-Page prompts in `api/prompts/pages/<slug>/`. BBTT's are **drafted, not the client's**, and need approval |
+| **C4** | Overlay text in ALL CAPS for BBTT and FR, and nowhere to set it | ✅ Shipped 2026-08-15 - per-Page `text_uppercase`, applied at draw time |
+| **C5** | Hero should be modern, bright, fitness-magazine - not sepia history | ✅ Shipped 2026-08-16 - per-Page prompts in `api/prompts/pages/<slug>/`. BBTT's are **drafted, not the client's**, and need approval |
 | **C6** | Hook: straight to the point, no year/event/character scaffolding, ≤30 words | ✅ **Shipped 2026-08-17**, after two days dropped. The cap is a per-Page setting, null inheriting the house 65 |
-| **C7** | First comment: ≤1,500 chars, 3–4 short paragraphs, straight to content | ✅ **Shipped 2026-08-17.** It needed the validator and the prompt to move together, which is what made it unbuildable by prompt alone |
-| **F5** | The client already wrote new prompts in the **old** tool's Settings tab | ✅ Read 2026-08-16 — `old-tool-prompts.md`. FR has a real spec; **BBTT has none**. The buried half — *"I edit prompts in Settings"* — shipped 2026-08-17 |
+| **C7** | First comment: ≤1,500 chars, 3-4 short paragraphs, straight to content | ✅ **Shipped 2026-08-17.** It needed the validator and the prompt to move together, which is what made it unbuildable by prompt alone |
+| **F5** | The client already wrote new prompts in the **old** tool's Settings tab | ✅ Read 2026-08-16 - `old-tool-prompts.md`. FR has a real spec; **BBTT has none**. The buried half - *"I edit prompts in Settings"* - shipped 2026-08-17 |
 
-C4–C7 all resolve to the same missing thing, so they are best read together:
+C4-C7 all resolve to the same missing thing, so they are best read together:
 see "One voice, ten Pages" in `comprehension.md`.
 
 ---
@@ -64,7 +64,7 @@ see "One voice, ten Pages" in `comprehension.md`.
 > to update the prompts, please let me know. Within the old tool, I did write new
 > prompts already in Setting tab. Thanks so much em!
 
-The referenced screenshot is **not** in this folder. Ask for it — the example
+The referenced screenshot is **not** in this folder. Ask for it - the example
 overlay text is quoted above verbatim, which is most of its value, but the
 picture is the only evidence we have of the caps style as the client renders it
 today.
@@ -73,7 +73,7 @@ today.
 
 ## Itemised
 
-### B6 — Logos (confirmed)
+### B6 - Logos (confirmed)
 
 > Logos done.
 
@@ -81,18 +81,18 @@ Round 2's blocker, closed by the client's own upload. This is what unblocked
 their RSS work and produced the BBTT drafts every item below is about. Nothing
 to do.
 
-### C4 — Overlay text in capitals, per Page
+### C4 - Overlay text in capitals, per Page
 
 > could you please set the overlay text to ALL CAPITAL LETTERS for BBTT and FR
 > pages? As this is the current style we've been using. I can't see anywhere to
 > change this.
 
 Two halves, and the second is the one the client actually reported. Capitals are
-not implemented anywhere — not in the compositor, not in the browser preview —
+not implemented anywhere - not in the compositor, not in the browser preview -
 so there is genuinely nothing to see. But note the request is **per Page**:
 History Retraced keeps its mixed case.
 
-### C5 — Hero style
+### C5 - Hero style
 
 > Hero image should be modern with bright lighting, fitness lifestyle magazine
 > style. The draft posts I created for BBTT seem to follow the History Retraced
@@ -101,17 +101,17 @@ History Retraced keeps its mixed case.
 The client is describing the output correctly and has diagnosed it correctly:
 the hero prompt is History Retraced's, and every Page gets it.
 
-### C6 — Hook
+### C6 - Hook
 
 > go straight to the point without listing "historical year/event/character".
 > Capped at 30 words.
 
 Read the example carefully before building to this: it **does** name a person
-(Eugen Sandow) and it carries no year. So the ask is to drop the *scaffolding* —
-the obligation to open with a dated historical anchor — not to ban names. It is
+(Eugen Sandow) and it carries no year. So the ask is to drop the *scaffolding* -
+the obligation to open with a dated historical anchor - not to ban names. It is
 exactly 30 words.
 
-### C7 — First comment
+### C7 - First comment
 
 > a bit shorter, capped at 1,500 characters. Go straight to the main content.
 > 3-4 short paragraphs.
@@ -120,7 +120,7 @@ The one item that cannot be half-shipped: 1,500 characters is our **minimum**
 today and 4 paragraphs fails a blocking rule, so a compliant BBTT first comment
 is currently unreachable. See `comprehension.md`.
 
-### F5 — The prompts the client already wrote
+### F5 - The prompts the client already wrote
 
 > For these 2 pages, I used different prompts to gen content ... Within the old
 > tool, I did write new prompts already in Setting tab.
@@ -128,10 +128,10 @@ is currently unreachable. See `comprehension.md`.
 This is the most valuable sentence in the message and the easiest to skim past.
 The client has already written the BBTT and FR prompts, in
 `D:\Laboratory\social-agent`, where prompts are per-Page rows editable from a
-Settings tab. Those rows are their real specification; items C5–C7 are a summary
+Settings tab. Those rows are their real specification; items C5-C7 are a summary
 of them. Read them before writing anything new.
 
-**Read 2026-08-16 — `old-tool-prompts.md`.** Half true. Fitness Recipes has a
+**Read 2026-08-16 - `old-tool-prompts.md`.** Half true. Fitness Recipes has a
 real, detailed prompt. **Bodybuilding Tips does not**: all four of its prompt
 columns are byte-identical to History Retraced's and have been since 2026-07-05.
 The client believes they wrote one. That belief is also the explanation for

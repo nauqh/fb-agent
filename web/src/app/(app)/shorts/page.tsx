@@ -28,12 +28,12 @@ import { QueryError } from "@/components/query-error";
 import { Loading } from "@/components/loading";
 
 /**
- * Produce — the Shorts tool's one screen.
+ * Produce - the Shorts tool's one screen.
  *
  * Paste a link, pick the CTA, make a video. The row *is* the job: enqueue
  * returns an id immediately, the worker fills it, and this screen polls until
  * the produced mp4 is ready to play and download. No publishing, no brands,
- * no scheduling — that is deliberately not here yet (see the Shorts nav).
+ * no scheduling - that is deliberately not here yet (see the Shorts nav).
  */
 export default function ProduceScreen() {
   const [url, setUrl] = useState("");
@@ -50,7 +50,7 @@ export default function ProduceScreen() {
 
   /**
    * A single video is one job; a channel URL would be N. v1 ships the single
-   * path — the first returned id is the one this screen watches.
+   * path - the first returned id is the one this screen watches.
    */
   async function make() {
     if (!url.trim() || !ctaId || !hasTemplates) return;
@@ -74,7 +74,7 @@ export default function ProduceScreen() {
       />
 
       {/* The scrollable column: the job card lands below the form, and with a
-          short document the whole screen must be able to scroll to it — the
+          short document the whole screen must be able to scroll to it - the
           app layout's `<main>` is `overflow-hidden`, so a screen that does not
           scroll itself traps the video below the fold with no way down. */}
       <div className="min-h-0 flex-1 overflow-y-auto pr-1">
@@ -203,7 +203,7 @@ function CtaEmptyState({ onOpen }: { onOpen: () => void }) {
     >
       <UploadCloud className="size-5" />
       <span>
-        No CTA clip yet. <span className="text-foreground">Add your first one</span> —
+        No CTA clip yet. <span className="text-foreground">Add your first one</span> -
         it&rsquo;s the clip appended to every video.
       </span>
     </button>
@@ -229,7 +229,7 @@ function JobCard({ jobId }: { jobId: number }) {
     return <div className="mt-4"><Loading label="Making your video" className="h-40" /></div>;
   }
 
-  // The worker finished faster than the first poll beat? No — the query's
+  // The worker finished faster than the first poll beat? No - the query's
   // first attempt is awaited before data arrives. `!job` then means 404.
   if (error || !job) return null;
 
@@ -375,7 +375,7 @@ function CtaDialog({
 }
 
 /** The URL shapes the backend accepts, mirrored for a live hint. Mirrors
- *  `parse_youtube_source` in api/app/youtube/sources.py — drift here is a
+ *  `parse_youtube_source` in api/app/youtube/sources.py - drift here is a
  *  hint that disagrees with the button, never a wrong acceptance. */
 function describeSource(url: string): string | null {
   const trimmed = url.trim();
@@ -385,13 +385,13 @@ function describeSource(url: string): string | null {
   const channel = /^https?:\/\/(?:www\.|m\.)?youtube\.com\/@[^/?#]+(?:[?#].*)?$/i;
 
   if (single.test(trimmed) && /\/shorts\//i.test(trimmed)) {
-    return "Short — download and process this video.";
+    return "Short - download and process this video.";
   }
   if (single.test(trimmed)) {
-    return "Video — download and process this video.";
+    return "Video - download and process this video.";
   }
   if (channel.test(trimmed)) {
-    return "Channel Shorts — pick one in the next version.";
+    return "Channel Shorts - pick one in the next version.";
   }
   return "Invalid URL. Supported: /shorts/ID, watch?v=..., youtu.be/..., @channel/shorts.";
 }

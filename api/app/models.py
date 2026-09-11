@@ -4,7 +4,7 @@ Nothing here carries a user_id (ADR-0002), a brand_key (ADR-0003), or any
 schedule state (ADR-0001). Layout lives in config/layout.yml, not on Page.
 
 `Feed` is the one that data-model.md rejected and this file now has. The
-rejection still reads correctly on its own terms — nothing points at a feed —
+rejection still reads correctly on its own terms - nothing points at a feed -
 but it was answering "does a feed need identity", and the question that brought
 the table back is different: the operator has to be able to add and remove one
 without a deploy. `config/sources.yml` cannot answer that, because the API runs
@@ -38,23 +38,23 @@ def _stored_enum(enum: type) -> SAEnum:
       does not have.
     - **Adding a value should not need a migration at all.** Alembic arrived
       after this was written, so `ALTER TYPE` is now a migration we *could*
-      write — but a new member is a fact about the Python enum, and having it
+      write - but a new member is a fact about the Python enum, and having it
       also be a schema change is a cost with nothing on the other side.
       `create_constraint` is left off for the same reason: a `CHECK` listing the
       values would need altering too.
     - **It must load back as the enum, not as `str`.** `sa_type=String` gets the
       first two and silently loses this one: `generate.build_image` asks
       `source.kind is not SourceKind.RSS` of a row read from the database, and
-      `is not` against a bare string is *always* true — so the feed-image branch
+      `is not` against a bare string is *always* true - so the feed-image branch
       would refuse every draft with "only an RSS item's picture can be reused",
       including the RSS ones. It used to be an `AttributeError` from
       `is_factual`, which at least announced itself; this failure is quiet. The
-      tests do not catch either — they construct their rows rather than
-      reloading them — so it would ship.
+      tests do not catch either - they construct their rows rather than
+      reloading them - so it would ship.
 
     `length` is fixed rather than derived. SQLAlchemy sizes the column to the
     longest *current* value, so a longer member added later would need an
-    `ALTER TABLE` — `alembic check` would catch it now, but 32 is clear of every
+    `ALTER TABLE` - `alembic check` would catch it now, but 32 is clear of every
     value either enum has and there is nothing to catch.
     """
     return SAEnum(enum, native_enum=False, length=32, values_callable=lambda e: [m.value for m in e])
@@ -64,7 +64,7 @@ class SourceKind(StrEnum):
     """The three kinds of external material. **All three bind the subject.**
 
     There used to be an `is_factual` property here saying a competitor post did
-    not — it was borrowed for tone, and the writer was told to pick its own
+    not - it was borrowed for tone, and the writer was told to pick its own
     story. That shipped, and the client's 2026-08-18 report is what it looks like
     from outside: posts generated from ticked competitor posts, about something
     else. Removed rather than inverted, because a property every member answers
@@ -88,21 +88,21 @@ class DraftStatus(StrEnum):
 
     Separate from `review` because a run that produced nothing is not a draft
     awaiting a decision. It used to land in `review`, which put empty rows in the
-    queue beside real ones, looking ready — the operator's only clue was an
+    queue beside real ones, looking ready - the operator's only clue was an
     `error` column nothing rendered.
     """
 
 
 class Page(SQLModel, table=True):
-    """An owned Facebook page. Rows, not constants — adding one is an insert.
+    """An owned Facebook page. Rows, not constants - adding one is an insert.
 
     v1 ran one page, History Retraced; there are **ten** now, and every one of
-    them was an insert. No schema change, no query rewritten — which is ADR-0003
+    them was an insert. No schema change, no query rewritten - which is ADR-0003
     paying off rather than being argued.
 
     Identity and per-Page policy. The prompt columns below are *overrides*, null
     until somebody types into Settings, and null means the file in
-    `api/prompts/` — see app/writer/prompts.py for the three-tier resolution and
+    `api/prompts/` - see app/writer/prompts.py for the three-tier resolution and
     why storing only the override is what keeps the old drift failure dead.
 
     Still no `is_active`. Ten pages and the flag would still never be false: a
@@ -138,14 +138,14 @@ class Page(SQLModel, table=True):
     URL is what stops the other eight rendering as a grey initial.
 
     Explicitly **not** a watermark source. That is stamped into published images
-    and must be a committed file — the old system read it from a bucket, the
+    and must be a committed file - the old system read it from a bucket, the
     bucket was cleared, and the compositor quietly printed the page name instead
     for months. A round profile picture is also the wrong artwork: the watermark
     is a white wordmark on a photograph, not an avatar.
     """
 
     watermark_image_path: str | None = None
-    """The page's own logo, relative to `API_DIR` — a committed asset, not a
+    """The page's own logo, relative to `API_DIR` - a committed asset, not a
     bucket object, so a clone has it and no fetch can fail on it.
 
     Committed rather than hosted because the hosted one is exactly what failed:
@@ -155,7 +155,7 @@ class Page(SQLModel, table=True):
     prints the page name as text instead, so the logo vanished from output with
     nothing raised. See docs/data-model.md for where the file was recovered from.
 
-    Null still means "no logo, render the name as text" — but only as a
+    Null still means "no logo, render the name as text" - but only as a
     deliberate choice for a page without one, never as cover for a broken path.
     """
 
@@ -169,7 +169,7 @@ class Page(SQLModel, table=True):
     sentence naming the file, not eight months of unmarked posts.
 
     It is a second source rather than a replacement because the committed asset
-    cannot 404 and needs no upload — two Pages already have one. This is the
+    cannot 404 and needs no upload - two Pages already have one. This is the
     answer for the other eight, whose artwork is not in the repo and whose
     operator cannot commit a file.
     """
@@ -177,7 +177,7 @@ class Page(SQLModel, table=True):
     watermark_text: str | None = None
     """What to print when the Page has no image mark. Null means its `name`.
 
-    A column and not a constant because the name is the Metricool brand's — "GYM
+    A column and not a constant because the name is the Metricool brand's - "GYM
     Motivation | quotes | videos | tips|" is one of the ten, and that is not what
     anyone wants stamped on a photograph.
 
@@ -189,7 +189,7 @@ class Page(SQLModel, table=True):
     """
 
     badge_text: str | None = None
-    """The headline chip's word — "NEWS", "HISTORY". Null draws no badge.
+    """The headline chip's word - "NEWS", "HISTORY". Null draws no badge.
 
     Drawn on `full_overlay` cards only, where the panel lies over the photograph
     and there is room above it. Per Page rather than per draft, for now: one word
@@ -208,7 +208,7 @@ class Page(SQLModel, table=True):
     its own text still draws its *name*, because unmarked output is how a
     picture ends up reposted with no idea where it came from. This is the
     deliberate opt-out for the operator who wants the photograph alone, and it
-    silences the image and the text together — a half-off switch that still
+    silences the image and the text together - a half-off switch that still
     printed the name would be the confusing one.
     """
 
@@ -233,13 +233,13 @@ class Page(SQLModel, table=True):
 
     Both ends move together or not at all. 1,500 is the *floor* globally, so a
     Page that sets only the ceiling to 1,500 would have a band of zero width and
-    every draft would fail whichever end it missed — which is exactly why C7 was
+    every draft would fail whichever end it missed - which is exactly why C7 was
     dropped in August as unbuildable by prompt alone.
     """
 
     first_comment_min_paragraphs: int | None = None
     first_comment_max_paragraphs: int | None = None
-    """C7: "3-4 short paragraphs". The house range is 2–3."""
+    """C7: "3-4 short paragraphs". The house range is 2-3."""
 
     # --- what this Page tells the model ---------------------------------------
     #
@@ -253,12 +253,12 @@ class Page(SQLModel, table=True):
     # it cannot drift from a global it does not contain.
     #
     # Files alone could not answer the client's F5 ("I did write new prompts
-    # already in Setting tab"), because Railway's filesystem is ephemeral —
+    # already in Setting tab"), because Railway's filesystem is ephemeral -
     # see db.py. An editor that wrote `prompts/pages/<slug>/system.txt` would
     # lose every edit on the next redeploy.
 
     # `TEXT`, declared rather than inferred. SQLModel maps a bare `str` to
-    # `AutoString`, which renders as unbounded VARCHAR — the same storage in
+    # `AutoString`, which renders as unbounded VARCHAR - the same storage in
     # Postgres, but `alembic check` then reports a type difference against the
     # migration on every run, and a check that always fails is a check nobody
     # reads. Declaring it here makes the models and the database agree.
@@ -274,7 +274,7 @@ class Page(SQLModel, table=True):
 
         One method rather than two expressions at each call site, because the
         two answers are one decision: `(None, None)` when the Page is opted out,
-        and otherwise the mark in precedence order — upload, committed asset,
+        and otherwise the mark in precedence order - upload, committed asset,
         then the text, which falls back to the Page's name.
 
         The upload is *fetched* here, so a cleared bucket raises at the caller
@@ -296,7 +296,7 @@ class Page(SQLModel, table=True):
     def watermark_upload_url(self) -> str | None:
         """Where the browser fetches an uploaded mark. Null for a committed one.
 
-        The committed asset is not a bucket object and has no public URL — the
+        The committed asset is not a bucket object and has no public URL - the
         screen reaches it through the API's own `/assets` mount, which the Next
         proxy authenticates. Only the uploaded one is built here, for the same
         reason the Draft URLs are: one place knows what a bucket is.
@@ -311,7 +311,7 @@ class Page(SQLModel, table=True):
 class Feed(SQLModel, table=True):
     """One RSS feed a Page draws from. Rows, so they can be added and removed.
 
-    Per-page because the beats do not overlap — the old system's four brands
+    Per-page because the beats do not overlap - the old system's four brands
     were history, general facts, scripture and hot tubs, and hot tub news is
     noise on a history grid.
 
@@ -326,7 +326,7 @@ class Feed(SQLModel, table=True):
     __tablename__ = "feed"
     __table_args__ = (
         # The same URL twice on one Page is not a second source, it is one
-        # source counted twice — `_merge` deduplicates the items, so the only
+        # source counted twice - `_merge` deduplicates the items, so the only
         # visible effect would be a wasted fetch and a duplicate row on Settings.
         UniqueConstraint("page_id", "url", name="uq_feed_page_url"),
     )
@@ -338,14 +338,14 @@ class Feed(SQLModel, table=True):
     """The byline, and the reason this is not derived from the feed itself.
 
     Curated rather than taken from the feed's own <title>, which is written for
-    feed readers and reads badly on a card — "History | smithsonianmag.com",
+    feed readers and reads badly on a card - "History | smithsonianmag.com",
     "Archaeology News -- ScienceDaily". It reaches the writer as the publisher.
     """
 
     url: str
 
     note: str | None = None
-    """Why this feed earns its place — item count, summary length, whether it
+    """Why this feed earns its place - item count, summary length, whether it
     carries images.
 
     A column rather than a comment because the comments are where this
@@ -364,13 +364,13 @@ class SavedPost(SQLModel, table=True):
 
     **The one thing on the Overview screen that needs a table.** Performance is
     read live from Metricool and cached by nothing; this is not that. A saved
-    post is a decision — "this one worked, write more like it" — and it has to
+    post is a decision - "this one worked, write more like it" - and it has to
     outlive the analytics window it was found in. Metricool's `/stats` call
     takes a date range, so a post drops out of every read once it is old enough,
     and a reference that vanishes on a rolling window is not a reference.
 
     The metrics are copied in, deliberately. They are **what the post scored
-    when it was saved**, not a live figure — a snapshot is the honest thing to
+    when it was saved**, not a live figure - a snapshot is the honest thing to
     show beside "saved 3 months ago", and re-reading them would need the post to
     still be inside the window it has by definition left.
 
@@ -407,7 +407,7 @@ class SavedPost(SQLModel, table=True):
     comments: int = 0
     shares: int = 0
     impressions: int = 0
-    """What it scored **when saved**. A snapshot, never refreshed — see above."""
+    """What it scored **when saved**. A snapshot, never refreshed - see above."""
 
     note: str | None = None
     """Why this one was worth keeping. The whole point of saving it."""
@@ -422,14 +422,14 @@ class PageTimeSlot(SQLModel, table=True):
     """One time of day this Page publishes at. The same times every day.
 
     **This is not schedule state and does not reverse ADR-0001.** The ADR is
-    about mirroring Metricool's planner — what is queued, when, and whether it
-    went out — and none of that is here. A slot is *policy*: "we post at 08:00
+    about mirroring Metricool's planner - what is queued, when, and whether it
+    went out - and none of that is here. A slot is *policy*: "we post at 08:00
     and 19:00", a standing decision that exists whether or not anything is
     queued against it. Metricool has nowhere to keep it and no concept of it.
 
     Nothing points at a row here, deliberately. A scheduled post records its own
     time in the planner, so deleting a slot changes tomorrow's suggestion and
-    nothing that already happened — the same shape as `Feed`.
+    nothing that already happened - the same shape as `Feed`.
 
     No weekday column. The operator chose the same times every day; a weekday
     dimension doubles the table and the form for a distinction they did not
@@ -438,7 +438,7 @@ class PageTimeSlot(SQLModel, table=True):
 
     __tablename__ = "page_time_slot"
     __table_args__ = (
-        # The same time twice is not two slots, it is one slot counted twice —
+        # The same time twice is not two slots, it is one slot counted twice -
         # and "next available" would then offer it, find it taken, and offer it
         # again on the next pass.
         UniqueConstraint("page_id", "minute_of_day", name="uq_time_slot_page_minute"),
@@ -448,12 +448,12 @@ class PageTimeSlot(SQLModel, table=True):
     page_id: int = Field(foreign_key="page.id", index=True)
 
     minute_of_day: int = Field(index=True)
-    """Minutes past midnight, 0–1439, in the Page's zone (`settings.timezone`).
+    """Minutes past midnight, 0-1439, in the Page's zone (`settings.timezone`).
 
     An integer rather than a `TIME` column, and rather than an `HH:MM` string.
     A `TIME` invites the question of which date and therefore which offset it
     carries, which is exactly the confusion the timezone rules in `CLAUDE.md`
-    exist to prevent — there is no instant here, only a time of day. A string
+    exist to prevent - there is no instant here, only a time of day. A string
     would need parsing before it could be sorted or compared, and "8:00" would
     sort after "19:00".
 
@@ -474,7 +474,7 @@ class PageCompetitor(SQLModel, table=True):
 
     This is not a mirror of Metricool's competitor list, and `CONTEXT.md`'s rule
     survives intact: the list is still configured there and still never stored
-    here. What is stored is an *assignment* on top of it — a decision only this
+    here. What is stored is an *assignment* on top of it - a decision only this
     app can hold, because Metricool has no concept of one competitor serving
     several of your pages.
 
@@ -486,7 +486,7 @@ class PageCompetitor(SQLModel, table=True):
     every Page that should read it.
 
     No foreign key to a competitor row, because there is no competitor table and
-    should not be — the list is Metricool's. `competitor_page_id` is their
+    should not be - the list is Metricool's. `competitor_page_id` is their
     `providerId`, and an assignment naming a competitor that has since been
     removed there is harmless: it matches no posts and shows on Settings as a row
     Metricool no longer lists.
@@ -508,7 +508,7 @@ class PageCompetitor(SQLModel, table=True):
     """The competitor's display name when the assignment was made.
 
     A convenience for showing an assignment whose competitor Metricool no longer
-    lists — without it such a row renders as a bare id. Never used to join;
+    lists - without it such a row renders as a bare id. Never used to join;
     `competitor_page_id` is the key precisely because names change.
     """
 
@@ -516,8 +516,8 @@ class PageCompetitor(SQLModel, table=True):
     """Why this Page reads this competitor.
 
     Here because a table has no history and a config file does. Keeping the
-    mapping in `sources.yml` was considered for exactly that reason — `git log`
-    would say who decided a Page should read a competitor, and why — and rejected
+    mapping in `sources.yml` was considered for exactly that reason - `git log`
+    would say who decided a Page should read a competitor, and why - and rejected
     because it would put this behind a deploy while the feed list, the other half
     of the same Settings screen, is editable from a form. Two ways to change two
     similar settings is worse than one missing changelog.
@@ -536,12 +536,12 @@ class PageLayout(SQLModel, table=True):
     `config/layout.yml` is the default and stays in git; a row here holds only
     what a Page changed, and the renderer resolves `{**yaml, **row}`. Resetting
     a Page is deleting its row, which is why every column is nullable rather
-    than seeded with the current values — a row full of copied defaults would
+    than seeded with the current values - a row full of copied defaults would
     silently stop tracking a change to the file.
 
     **This reverses a decision, deliberately.** `config/layout.yml` said it "has
     no per-page section and should not grow one", and `CONTEXT.md` said a Page
-    "does not own styling — every Page renders in the same form and size". Both
+    "does not own styling - every Page renders in the same form and size". Both
     were written when there was one Page. Two Pages with unrelated beats, and an
     operator who wants a news card to look unlike a history card, is new
     evidence rather than a lapse. Both files now say so.
@@ -563,7 +563,7 @@ class PageLayout(SQLModel, table=True):
 
     A column like the rest rather than a Page field, because it is a layout
     value: null means the Page tracks `layout.yml`, and resetting the Page
-    returns it to whatever the file says — the same contract every other
+    returns it to whatever the file says - the same contract every other
     override here has.
     """
 
@@ -612,7 +612,7 @@ class SourceItemBase(SQLModel):
 
     This is what an adapter returns and what the client posts back. It exists
     because **browsing does not write**: an RSS item or tweet is fetched live and
-    shown in the grid long before — and usually without ever — becoming a row,
+    shown in the grid long before - and usually without ever - becoming a row,
     so the unsaved shape needs a type of its own rather than a `SourceItem` with
     a fake id.
 
@@ -622,7 +622,7 @@ class SourceItemBase(SQLModel):
     """
 
     kind: SourceKind = Field(index=True, sa_type=_stored_enum(SourceKind))
-    """Stored as `VARCHAR`, loaded back as `SourceKind` — see `_stored_enum`.
+    """Stored as `VARCHAR`, loaded back as `SourceKind` - see `_stored_enum`.
 
     Loading it back as the enum is load-bearing rather than tidy: `build_image`
     compares this against `SourceKind.RSS` with `is not` to decide whether a
@@ -639,7 +639,7 @@ class SourceItemBase(SQLModel):
     )
     """Which Page's Metricool competitor set this arrived through. Provenance.
 
-    It used to be ownership — the Competitors grid filtered on it — and that was
+    It used to be ownership - the Competitors grid filtered on it - and that was
     wrong for a reason outside this codebase: Metricool caps an account at 100
     competitors *in total*, so five Pages that should each watch the same twenty
     sources cannot each be given them. Which set a competitor sits in is a fact
@@ -656,7 +656,7 @@ class SourceItemBase(SQLModel):
     values are `providerId`s from the competitor list, none unmatched.
 
     Not the display name, which is what the Settings screen joined on first.
-    That matches today and breaks silently the day a competitor renames itself —
+    That matches today and breaks silently the day a competitor renames itself -
     the posts keep arriving under the new name and every count against the old
     one quietly reads zero, which is indistinguishable from a page that stopped
     posting.
@@ -692,7 +692,7 @@ class PromptTemplate(SQLModel, table=True):
     The client's 2026-08-20 request. Each field is a **delta**, never a copy:
     blank means the draft inherits the Page's prompt chain unchanged, and a
     template that restates the whole house prompt is the old tool's drift
-    disaster returning — three Pages once held 2,030 byte-identical characters
+    disaster returning - three Pages once held 2,030 byte-identical characters
     of one prompt and all three went stale (see `writer/prompts.py`). A Meme
     template is a dozen lines of "ignore the essay structure above", not three
     full prompts.
@@ -708,7 +708,7 @@ class PromptTemplate(SQLModel, table=True):
 
     page_id: int = Field(foreign_key="page.id", index=True)
     """The Page this style belongs to (client, 2026-09-10: styles were
-    appearing on every Page and should be Page specific — History Retraced
+    appearing on every Page and should be Page specific - History Retraced
     was offered Bodybuilding's Workout Infographic through the old null-global
     contract). Every style is one Page's; the defaults in `api/prompts/` are
     the only shared layer."""
@@ -720,7 +720,7 @@ class PromptTemplate(SQLModel, table=True):
     """Panel-text rules, layered beside the system layer for this style."""
 
     image_prompt: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
-    """Layered onto the hero brief, not the writer — the image model never sees
+    """Layered onto the hero brief, not the writer - the image model never sees
     the writer's instructions (see `image/hero.py`)."""
 
 
@@ -750,7 +750,7 @@ class Draft(SQLModel, table=True):
     )
     """The post style this run was generated under, stored rather than re-derived.
 
-    A regenerate or a hero rebuild must use the voice the draft was written in —
+    A regenerate or a hero rebuild must use the voice the draft was written in -
     re-reading the operator's current selection would let a dropdown change
     retroactively rewrite half a draft in a different voice. Null is the normal
     case: the Page's own prompt chain, nothing layered.
@@ -760,7 +760,7 @@ class Draft(SQLModel, table=True):
     hook: str | None = None
     """The text on the image panel. Also the only text a brand rule guards.
 
-    `overlay_text` used to sit beside this, holding the same string — the writer
+    `overlay_text` used to sit beside this, holding the same string - the writer
     filled both from prompts that gave them identical rules. It was dropped on
     2026-08-06 because the split had a cost and no benefit: validation ran here
     and the compositor drew the other one.
@@ -774,7 +774,7 @@ class Draft(SQLModel, table=True):
     """**Dead as of 2026-08-12 (feedback E1, reversed). Nothing writes this.**
 
     Kept, not dropped, because 20 of 21 drafts carry values and a dropped column
-    has no undo — one of them is already in Metricool's planner with its tags in
+    has no undo - one of them is already in Metricool's planner with its tags in
     the published text, which is the only record of what that post actually says.
     The writer no longer produces them, `_post_text` no longer appends them, and
     the web app no longer shows the field; new drafts get the empty default.
@@ -794,7 +794,7 @@ class Draft(SQLModel, table=True):
     chosen nothing is not quietly pinned to today's value.
 
     Per draft because the client asked to switch a post between the two forms
-    at review, and the choice depends on the picture — a busy photograph with a
+    at review, and the choice depends on the picture - a busy photograph with a
     face in the lower third is ruined by a panel lying over it, and the same
     panel is the making of a wide landscape.
 
@@ -804,7 +804,7 @@ class Draft(SQLModel, table=True):
     """
 
     no_image: bool = Field(default=False)
-    """Publish this as text only — no hero, no card, no picture at all.
+    """Publish this as text only - no hero, no card, no picture at all.
 
     A column rather than "the composite happens to be missing", because those
     are different states and only one of them is publishable. A draft whose
@@ -820,7 +820,7 @@ class Draft(SQLModel, table=True):
 
     A column rather than a decision made at draw time, because a rebuild has to
     take the same path the run did. Derived from "does the source have an
-    image_url" it would flip on its own — a feed that starts or stops carrying
+    image_url" it would flip on its own - a feed that starts or stops carrying
     pictures would silently change what a rebuild costs and what the card looks
     like.
 
@@ -836,7 +836,7 @@ class Draft(SQLModel, table=True):
     inset_image_path: str | None = None
     """The circular inset: a picture the operator uploaded, cropped to a disc.
 
-    Null is the normal case — no upload, no circle, and the card is the one it
+    Null is the normal case - no upload, no circle, and the card is the one it
     was before. Nothing generates this: it is the one image in the app that
     comes from a person rather than a model, which is why there is no prompt
     column beside it.
@@ -847,7 +847,7 @@ class Draft(SQLModel, table=True):
 
     Per-draft because it is the one thing about the inset that depends on the
     picture in it: a head-and-shoulders portrait reads at 140px and a wide
-    photograph of two people does not. Clamped on write — see
+    photograph of two people does not. Clamped on write - see
     `Layout.portrait.clamp`.
     """
 
@@ -857,7 +857,7 @@ class Draft(SQLModel, table=True):
     Per draft for the same reason the diameter is: the right ring depends on the
     picture in the disc, not on the brand. A dark portrait wants a light ring to
     separate it from the panel; a bright one usually wants none at all. Null and
-    0 are different answers — null tracks whatever the Page is set to, 0 is this
+    0 are different answers - null tracks whatever the Page is set to, 0 is this
     draft choosing to have no ring.
     """
 
@@ -875,7 +875,7 @@ class Draft(SQLModel, table=True):
 
     Ratios rather than pixels, which is what the old app stored
     (`centerXRatio`/`centerYRatio`) and is the only thing that survives the card
-    changing size. **Null is not 0** — it means "wherever the default is", and
+    changing size. **Null is not 0** - it means "wherever the default is", and
     the default cannot be written down as a number here because the seam moves:
     the panel grows with the copy, so `hero_height_px` is different for every
     draft. `compositor.compose` resolves it at draw time.
@@ -906,8 +906,8 @@ class Draft(SQLModel, table=True):
     # bucket; these are where that path resolves to right now.
     #
     # The split is what keeps a row portable. A stored URL welds every draft to
-    # one Supabase project and one bucket name, so changing either — a new
-    # project, a rename, a different region — becomes an UPDATE across the table
+    # one Supabase project and one bucket name, so changing either - a new
+    # project, a rename, a different region - becomes an UPDATE across the table
     # instead of an env var. It is also what lets dev and production differ by
     # one config line rather than by two sets of rows that cannot be swapped.
     #
@@ -942,7 +942,7 @@ class Draft(SQLModel, table=True):
 #
 # The three tables the Shorts pipeline owns: one job, one schedule, one CTA
 # clip library. They sit in models.py with everything else so `create_all`
-# builds one schema and alembic diffs one model set — splitting them into their
+# builds one schema and alembic diffs one model set - splitting them into their
 # own module would give the migration generator two sources of truth.
 #
 # No `user_id`, matching the rest of the app (ADR-0002): one operator, server-
@@ -961,8 +961,8 @@ class JobStatus(StrEnum):
 class CtaTemplate(SQLModel, table=True):
     """The clip appended (at the end) to every processed Short.
 
-    A library, not a setting: the operator builds several clips — subscribe,
-    follow, shop — and picks one per job. `cta_video_url` is the public bucket
+    A library, not a setting: the operator builds several clips - subscribe,
+    follow, shop - and picks one per job. `cta_video_url` is the public bucket
     URL of the uploaded mp4; the worker fetches it *at job time*, so it must
     still resolve when the job runs, which is the same live-URL rule the
     images live by."""
@@ -975,8 +975,8 @@ class CtaTemplate(SQLModel, table=True):
 
 
 class YoutubeJob(SQLModel, table=True):
-    """One processed video. The row *is* the job record — no queue, no event
-    table — exactly as `Draft` is for generation.
+    """One processed video. The row *is* the job record - no queue, no event
+    table - exactly as `Draft` is for generation.
 
     `source_type` mirrors the old tool's enumeration: `direct` (one pasted
     video), `channel_short` (one Short resolved from a channel's ranking), and

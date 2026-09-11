@@ -67,7 +67,7 @@
 }
 
 /*
- * White and black, not a warm ramp — reverted 2026-08-18. A beige-tinted paper
+ * White and black, not a warm ramp - reverted 2026-08-18. A beige-tinted paper
  * ground was tried the same day and read as dull rather than "expensive";
  * white against black chrome reads as clean instead. `--gold` stays the one
  * accent: it is `layout.yml`'s `highlight.color`, the same yellow painted into
@@ -77,7 +77,7 @@
  * The one thing kept from the warm attempt is `--muted-foreground`'s
  * lightness. Stock shadcn's 0.556 read faint once this token carried hint
  * text, rail labels, meta counts and inactive tab labels everywhere rather
- * than being used sparingly — deepened to 0.46 for legibility, but achromatic
+ * than being used sparingly - deepened to 0.46 for legibility, but achromatic
  * (`0 0`) rather than warm, so it reads as a clear grey and not a tint.
  */
 :root {
@@ -104,12 +104,12 @@
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  /* 0.5rem read as a consumer app. Everything derives from this — the scale in
-     `@theme inline` multiplies it — so a card at `rounded-xl` is now 0.35rem
+  /* 0.5rem read as a consumer app. Everything derives from this - the scale in
+     `@theme inline` multiplies it - so a card at `rounded-xl` is now 0.35rem
      rather than 0.7rem, and the pill chips stay pills because they ask for
      `rounded-full` explicitly. */
   --radius: 0.25rem;
-  /* layout.yml highlight.color — the one accent, used for the primary action
+  /* layout.yml highlight.color - the one accent, used for the primary action
      and for Highlight Phrases on the Composed Image. Nothing else. */
   --gold: #f5c542;
   --gold-foreground: oklch(0.205 0 0);
@@ -130,12 +130,12 @@
      share (shadcn's shipped dark, Linear, Radix): the ground darkest, each
      surface one step up so panels read as elevated rather than invisible, and
      hairlines as translucent white instead of solid grey. The client's identity
-     is kept — achromatic, gold the only warm accent — but the flat mid-grey
+     is kept - achromatic, gold the only warm accent - but the flat mid-grey
      of the first pass (card #1a1a1a on background #121212, #444 borders) read
      as murky: no depth and a grey line on every frame.
 
      The primary is raised toward light with a dark label, the way Linear and
-     shadcn make a default button — it is the field the eye lands on, so it
+     shadcn make a default button - it is the field the eye lands on, so it
      should be the lightest thing, not the same grey as everything else. 
      Muted sits one notch down for hint text and metadata. */
   --background: oklch(0.145 0 0);
@@ -144,7 +144,7 @@
   --card-foreground: oklch(0.95 0 0);
   --popover: oklch(0.235 0 0);
   --popover-foreground: oklch(0.95 0 0);
-  /* The field: light fill, dark label — shadcn dark’s default button. */
+  /* The field: light fill, dark label - shadcn dark’s default button. */
   --primary: oklch(0.92 0 0);
   --primary-foreground: oklch(0.21 0 0);
   --secondary: oklch(0.25 0 0);
@@ -156,7 +156,7 @@
   --accent: oklch(0.74 0 0);
   --accent-foreground: oklch(0.2 0 0);
   --destructive: oklch(0.71 0.2 22);
-  /* Hairlines: white at low alpha, not a solid grey — the one change that
+  /* Hairlines: white at low alpha, not a solid grey - the one change that
       makes a dark theme read clean instead of dusty. */
   --border: oklch(1 0 0 / 14%);
   --input: oklch(1 0 0 / 16%);
@@ -194,7 +194,7 @@
  * A minimal scrollbar.
  *
  * The platform default is a wide light-grey trough that reads as a UI element
- * in its own right — on the Review queue it sat beside the drawer's own
+ * in its own right - on the Review queue it sat beside the drawer's own
  * scroller and the two competed. This is a thin thumb, no track, and it takes
  * its colour from the theme so dark mode needs no second rule.
  *
@@ -241,7 +241,7 @@
  *
  * A native range input styles as a grey trough with a platform thumb, which at
  * this size read as a form field rather than as a value being dragged. This is
- * a 6px track that fills to the left of the thumb — `--range-fill` is set per
+ * a 6px track that fills to the left of the thumb - `--range-fill` is set per
  * input, because no browser exposes the value as a CSS variable and the WebKit
  * track cannot see the thumb's position.
  *

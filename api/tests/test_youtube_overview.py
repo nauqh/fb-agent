@@ -2,7 +2,7 @@
 
 The overview's fetch functions go to Metricool, so the route tests
 monkeypatch `app.youtube.overview` where `test_publish.py` monkeypatches the
-publisher — a stubbed call in, a window out. The fetch functions themselves
+publisher - a stubbed call in, a window out. The fetch functions themselves
 are driven through `httpx.MockTransport` to pin the request shape and the
 error folding.
 """

@@ -27,9 +27,9 @@ function Tabs({
 // One pill shell, everywhere a screen switches between alternatives: Sources'
 // Competitors/Tweets/RSS, Overview's Performance/Saved, Manual's two starting
 // points, the Review drawer's Edit/Preview. Rounded-lg to match the app's
-// buttons and chips — the pill's `rounded-full` read as a different element
+// buttons and chips - the pill's `rounded-full` read as a different element
 // next to them. The active trigger is a solid pill rather than a white card
-// with a shadow — the same shell Settings' Prompts tabs use, built by hand
+// with a shadow - the same shell Settings' Prompts tabs use, built by hand
 // there because this component predates it. A second implementation of the
 // same look is worse than widening this one, so the bespoke version was
 // retired in favour of this.
@@ -75,7 +75,7 @@ const same = (a: PillRect | null, b: PillRect | null) =>
 // The pill's own corners, rather than clipping it with `overflow-hidden` on the
 // list. **The obvious way does not work.** A rounded clip is not something the
 // compositor supports, so a transformed child escapes it or renders jagged
-// corners precisely while it animates — WebKit #98538 and the Chromium
+// corners precisely while it animates - WebKit #98538 and the Chromium
 // graphics-dev thread on the same. The advice is either `contain: paint` or
 // giving the child matching radii; the second needs no clip at all, and it also
 // leaves the focus ring unclipped, which `overflow-hidden` would have eaten.
@@ -83,7 +83,7 @@ const same = (a: PillRect | null, b: PillRect | null) =>
 // Only the ends are round, and only on the outside: the pill at the left of a
 // horizontal bar is round on the left and square where it meets its neighbour.
 // The radius is read off the list rather than hardcoded, minus its border,
-// which is the geometry of one box nested inside another — a caller that
+// which is the geometry of one box nested inside another - a caller that
 // changes `rounded-lg` gets a pill that still fits.
 function pillRadius(list: HTMLElement, first: boolean, last: boolean) {
   const style = getComputedStyle(list)
@@ -99,14 +99,14 @@ function pillRadius(list: HTMLElement, first: boolean, last: boolean) {
 
 // The active pill slides between triggers instead of blinking out of one and
 // into the next. One element measured against the active trigger, moved with a
-// transform — the pill is a single continuous object, which is the whole effect.
+// transform - the pill is a single continuous object, which is the whole effect.
 //
 // **The CSS pill on the trigger stays and is the fallback.** Until the first
 // measurement lands there is no `data-indicator` on the list, so the trigger
 // paints its own `bg-foreground` exactly as before: server-rendered HTML, the
 // frame before hydration, and JS-disabled all show a correct static pill. The
-// swap happens in one commit — the indicator appears at the same rect as the
-// background it replaces — so there is no flash between the two.
+// swap happens in one commit - the indicator appears at the same rect as the
+// background it replaces - so there is no flash between the two.
 function TabsList({
   className,
   variant = "default",
@@ -121,13 +121,13 @@ function TabsList({
     const list = listRef.current
     if (!list) return
     // The whole row, not just the active one: which end it sits at decides
-    // which of its corners are round. `:first-child` cannot answer that — the
+    // which of its corners are round. `:first-child` cannot answer that - the
     // indicator itself is the list's first child.
     const triggers = [
       ...list.querySelectorAll<HTMLElement>('[data-slot="tabs-trigger"]'),
     ]
     const index = triggers.findIndex((t) => t.dataset.state === "active")
-    // No active trigger is a real state — a Tabs whose value matches nothing —
+    // No active trigger is a real state - a Tabs whose value matches nothing -
     // and the indicator has to leave rather than sit on the last place it saw.
     if (index === -1) return setPill(null)
     const active = triggers[index]
@@ -136,7 +136,7 @@ function TabsList({
     // The list's border, subtracted. `absolute` is resolved against the padding
     // box and `getBoundingClientRect` is the border box, so without this the
     // pill sits one border-width down and to the right of the trigger it is
-    // meant to cover — visible as a hairline of pill along two edges.
+    // meant to cover - visible as a hairline of pill along two edges.
     const edge = getComputedStyle(list)
     const next = {
       x: target.left - box.left - parseFloat(edge.borderLeftWidth),
@@ -213,11 +213,11 @@ function TabsTrigger({
       data-slot="tabs-trigger"
       className={cn(
         // `text-xs` rather than shadcn's stock `text-sm`: every other small
-        // control in this app — buttons, chips, meta counts — is 12px, and at
+        // control in this app - buttons, chips, meta counts - is 12px, and at
         // 14px plus the wider pill padding this read oversized next to them.
         // Square, except at the ends of the bar, where the fill has to follow
         // the tray's corners. `first:`/`last:` read as the first and last child
-        // of the list, which is only correct while the indicator is absent —
+        // of the list, which is only correct while the indicator is absent -
         // and that is exactly when these matter, because the indicator brings
         // its own computed corners and blanks this fill out.
         //
@@ -230,13 +230,13 @@ function TabsTrigger({
         // Important, and it has to be: this and the `bg-foreground` above are
         // both one variant deep on the same property, so which of them wins is
         // decided by Tailwind's ordering rather than by anything written here.
-        // It lost — and a trigger that keeps its own pill paints the
+        // It lost - and a trigger that keeps its own pill paints the
         // destination solid the instant it is clicked, while the indicator is
         // still travelling towards it. Three pills on screen at once.
         "group-data-[indicator=on]/tabs-list:data-active:bg-transparent!",
         // The label inverts to `text-background`, so it is only legible once
         // the pill is under it. Measured: without the delay the text is 91%
-        // white while the pill has covered barely half the trigger — white on
+        // white while the pill has covered barely half the trigger - white on
         // a white bar, for about three frames. Scoped to `data-active` so it
         // delays the arriving label and nothing else: hover stays instant, and
         // the leaving label drops to muted while the pill is still on it,

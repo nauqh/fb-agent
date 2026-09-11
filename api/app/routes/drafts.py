@@ -63,7 +63,7 @@ class GenerateRequest(BaseModel):
     hero_from_source: bool = False
     """Use each Source Item's own picture as the hero instead of buying one.
 
-    Off by default, so the paid path stays the one you have to ask for — the
+    Off by default, so the paid path stays the one you have to ask for - the
     same reasoning as `new_hero` on the rebuild route, in the opposite
     direction.
     """
@@ -111,8 +111,8 @@ async def create_manual_draft(
 ) -> Draft:
     """A draft the operator wrote, with no model call of any kind.
 
-    The old app's second generate mode — "Create a draft for {page} without
-    calling Gemini" (`generate-panel.tsx:474`) — restored at the client's
+    The old app's second generate mode - "Create a draft for {page} without
+    calling Gemini" (`generate-panel.tsx:474`) - restored at the client's
     request. It is the whole of what their Manual page was.
 
     **Not a generate run.** There is no writer, no `image_prompt`, no retry
@@ -120,7 +120,7 @@ async def create_manual_draft(
     `202` and an id to poll. Nothing here can be slow except the upload.
 
     The picture becomes the **hero**, not the post. It is stored exactly as a
-    generated one would be and `build_image` draws the same card around it —
+    generated one would be and `build_image` draws the same card around it -
     the panel, the hook, the watermark, this Page's layout. Publishing an
     upload untouched would bypass the entire card system, which is the thing
     this app is for.
@@ -174,7 +174,7 @@ async def create_manual_draft(
         try:
             picture = Image.open(io.BytesIO(data))
             picture.load()
-        except Exception as error:  # noqa: BLE001 — any decode failure is the same
+        except Exception as error:  # noqa: BLE001 - any decode failure is the same
             raise HTTPException(
                 status_code=422,
                 detail=f"That file is not an image Pillow can read ({error}).",
@@ -213,7 +213,7 @@ def list_drafts(
     # Newest `limit` rows, not every row ever. The queue paginates client-side
     # and re-polls the whole filtered list every 2s while anything is
     # generating, so unbounded meant the poll grew a megabyte at a time,
-    # forever — nothing prunes `draft`. Five hundred covers a month of daily
+    # forever - nothing prunes `draft`. Five hundred covers a month of daily
     # runs; beyond it the oldest fall off the *queue*, not out of existence:
     # each is still addressable by id, and Metricool holds what it published.
     return list(
@@ -233,7 +233,7 @@ class DraftEdit(BaseModel):
     """The written fields only. Status moves through its own routes.
 
     `image_prompt` is here because it is the only lever on a hero the model
-    refused — the writer produced it, so the operator has to be able to correct
+    refused - the writer produced it, so the operator has to be able to correct
     it before paying for another generation.
     """
 
@@ -272,7 +272,7 @@ def update_draft(
     """Save, and redraw the composite if the saved text is on it.
 
     Recompositing used to be a button the operator pressed after saving, which
-    made "the row" and "the picture" two things that could disagree — and they
+    made "the row" and "the picture" two things that could disagree - and they
     disagreed by default, because the obvious thing to do after editing is to
     save and move on. Doing it here means the stored PNG always matches the
     stored text, whatever client did the saving.
@@ -287,7 +287,7 @@ def update_draft(
 
     Only the text, though. `DRAWN_FIELDS` are refused while a draft is
     scheduled, because changing one redraws the composite and `build_image`
-    deletes the file it supersedes — the picture Metricool is holding a link to.
+    deletes the file it supersedes - the picture Metricool is holding a link to.
     Caption and first comment are not on the image, so they are free of that.
     """
     draft = _require(session, draft_id)
@@ -306,7 +306,7 @@ def update_draft(
             detail=(
                 f"Draft {draft_id} is in Metricool as post {draft.metricool_post_id}. "
                 "Its caption and first comment can still be edited, but anything "
-                "drawn on the image cannot — remove it from Metricool first."
+                "drawn on the image cannot - remove it from Metricool first."
             ),
         )
 
@@ -323,8 +323,8 @@ def update_draft(
             changes["inset_size_px"], layout.image.width
         )
     # Same reasoning, and the same bounds the old app used
-    # (`clampInsetBorderWidthPx`, 0–48). 0 is a legitimate value meaning "no
-    # ring" and must survive the clamp — it is null that means "the Page's".
+    # (`clampInsetBorderWidthPx`, 0-48). 0 is a legitimate value meaning "no
+    # ring" and must survive the clamp - it is null that means "the Page's".
     if changes.get("inset_border_width_px") is not None:
         changes["inset_border_width_px"] = min(
             MAX_INSET_BORDER_PX, max(0, changes["inset_border_width_px"])
@@ -361,14 +361,14 @@ class RewriteRequest(BaseModel):
     is not stored on the Draft and not turned into a brand rule: it describes an
     action, not the post. A rule that should hold for every future draft belongs
     in `validators.py`, where the whole Page sees it. Capped because it is pasted
-    into the prompt in front of the brief — a whole article in here is a second
+    into the prompt in front of the brief - a whole article in here is a second
     brief, not an instruction.
 
     `keeping` is what the *other* fields currently say, which for a client with
     an open editor is what is on screen rather than what is in the row. Sent
     rather than read so that a rewrite never has to write first: the screen used
     to save the operator's unsaved edits before asking, purely because the server
-    read the kept fields off the row. Absent, the row is used — which is what a
+    read the kept fields off the row. Absent, the row is used - which is what a
     caller with no editor open should get.
     """
 
@@ -381,14 +381,14 @@ class RewriteProposal(BaseModel):
 
     The Draft is not touched by a rewrite: the operator presses Save, exactly as
     they do for text they typed themselves, and Revert throws the proposal away.
-    That is the whole of the undo story and it needed no history table — see the
+    That is the whole of the undo story and it needed no history table - see the
     route below.
     """
 
     field: str
     text: str
     highlight_phrases: list[str] | None = None
-    """Only for the hook, and it travels with it — the phrases are verbatim
+    """Only for the hook, and it travels with it - the phrases are verbatim
     substrings of the hook, so the old ones match nothing in the new one."""
 
 
@@ -403,7 +403,7 @@ def regenerate_field(
 
     The old app had this per field (`regenerate-field-control.tsx`,
     `draft-regenerate.ts`) and the rewrite lost it, leaving the whole draft or
-    nothing — so a good hook with a weak caption meant re-rolling the hook too.
+    nothing - so a good hook with a weak caption meant re-rolling the hook too.
 
     **The kept fields go to the model**, which is the difference between this
     and running the writer again. A caption written in isolation is a caption
@@ -415,7 +415,7 @@ def regenerate_field(
     recomposite the card, and that was the source of the worst bug of the round:
     the screen kept the old text, the row held the new, and the Save button that
     appeared wrote the old one back over it. Returning the text instead gives the
-    screen one rule — *Rewrite proposes, Save writes* — and makes Revert the
+    screen one rule - *Rewrite proposes, Save writes* - and makes Revert the
     undo, which no amount of history on the server could have done as well. It
     also means a rewrite the operator rejects costs no row write and no composite
     rebuild.
@@ -429,7 +429,7 @@ def regenerate_field(
     Gemini bill with nowhere to land.
 
     An `instruction` in the body steers this one rewrite ("too short", "mention
-    the year"). Without it the call is the plain re-roll it always was — the
+    the year"). Without it the call is the plain re-roll it always was - the
     no-argument press is the common case and stays one click. With it the model
     is told to follow the operator instead of chasing a new angle, because the
     two contradict each other; see `writer.rewrite_prompt`.
@@ -473,7 +473,7 @@ def regenerate_field(
                 else None
             ),
         )
-    except Exception as error:  # noqa: BLE001 — upstream, and the row is untouched
+    except Exception as error:  # noqa: BLE001 - upstream, and the row is untouched
         raise HTTPException(
             status_code=502,
             detail=f"The writer could not rewrite that ({type(error).__name__}).",
@@ -503,7 +503,7 @@ def rebuild_image(
     call in the app that spends money on demand, which is why it is a flag
     rather than the default.
 
-    The default — reuse the hero, redraw the panel — is what `PATCH` now does on
+    The default - reuse the hero, redraw the panel - is what `PATCH` now does on
     every save that touches the drawn text, so nothing in the UI calls it. It
     stays because a composite can fail on its own (a watermark that will not
     load), and the way back from that must not be to edit something you did not
@@ -541,14 +541,14 @@ async def upload_hero(
     """Use the operator's own picture as the hero, and redraw the card on it.
 
     **The way out of a hero the model cannot get right.** Re-rolling costs a
-    generation every time and, for some subjects, converges on nothing usable —
+    generation every time and, for some subjects, converges on nothing usable -
     the client's case was exercise photographs, where the model returns a
     plausible body in an impossible pose however the prompt is worded. A prompt
     box makes the next attempt better; this makes the attempts stop.
 
     The card is still drawn on top. An upload that skipped the composite would
-    bypass the panel, the highlight and the watermark — the thing the app is
-    for — so this replaces the picture and nothing else, exactly as if the
+    bypass the panel, the highlight and the watermark - the thing the app is
+    for - so this replaces the picture and nothing else, exactly as if the
     generator had returned that image.
 
     Re-encoded to PNG like the inset, and for the same reasons: a file Pillow
@@ -556,7 +556,7 @@ async def upload_hero(
     camera's metadata does not travel to a public bucket.
 
     `hero_from_source` is cleared because it is a claim about where the picture
-    came from, and it no longer holds. The path would win over it either way —
+    came from, and it no longer holds. The path would win over it either way -
     this stops the row saying "the feed's photograph" about an upload.
     """
     draft = _editable(session, draft_id)
@@ -574,7 +574,7 @@ async def upload_hero(
     try:
         picture = Image.open(io.BytesIO(data))
         picture.load()
-    except Exception as error:  # noqa: BLE001 — any decode failure is the same answer
+    except Exception as error:  # noqa: BLE001 - any decode failure is the same answer
         raise HTTPException(
             status_code=422,
             detail=f"That file is not an image Pillow can read ({error}).",
@@ -591,7 +591,7 @@ async def upload_hero(
 
 TEMPLATES = ("card", "full_overlay")
 """The card forms the compositor knows. Checked on write as well as at draw time,
-because a bad one does not fail in resvg — it renders the wrong card and returns
+because a bad one does not fail in resvg - it renders the wrong card and returns
 a perfectly valid PNG."""
 
 
@@ -618,8 +618,8 @@ async def upload_inset(
     Generate and defaulted to Upload (`circular-inset-dialog.tsx`).
 
     Re-encoded to PNG rather than stored as sent. The upload decides nothing
-    about how it is drawn — the compositor cover-crops it to a disc at the
-    draft's size — so keeping the original container buys nothing and keeps
+    about how it is drawn - the compositor cover-crops it to a disc at the
+    draft's size - so keeping the original container buys nothing and keeps
     whatever the camera attached to it. Decoding here also means a file that is
     not an image is a 422 on the upload rather than a broken composite later.
     """
@@ -638,7 +638,7 @@ async def upload_inset(
     try:
         picture = Image.open(io.BytesIO(data))
         picture.load()
-    except Exception as error:  # noqa: BLE001 — any decode failure is the same answer
+    except Exception as error:  # noqa: BLE001 - any decode failure is the same answer
         raise HTTPException(
             status_code=422, detail=f"That file is not an image Pillow can read ({error})."
         ) from error
@@ -657,7 +657,7 @@ def remove_inset(draft_id: int, session: Session = Depends(get_session)) -> Draf
 
     Size, position and the ring go with it, so the next upload starts on the
     seam at the Page's defaults rather than inheriting styling chosen for a
-    picture that is no longer there — a white ring picked for a dark portrait is
+    picture that is no longer there - a white ring picked for a dark portrait is
     wrong for whatever replaces it. Replacing keeps them, which is the point of
     Replace.
 
@@ -682,7 +682,7 @@ def remove_inset(draft_id: int, session: Session = Depends(get_session)) -> Draf
 def _redrawn(session: Session, draft: Draft, page: Page) -> Draft:
     """Save, and rebuild the composite around whatever the inset now is.
 
-    Free — the hero is reused and only the panel and the disc are redrawn — so
+    Free - the hero is reused and only the panel and the disc are redrawn - so
     there is nothing to weigh and no button to press. Same rule as `PATCH`:
     the stored PNG always matches the stored row.
     """
@@ -698,7 +698,7 @@ def delete_draft(draft_id: int, session: Session = Depends(get_session)) -> None
     """Gone for good, along with its pictures.
 
     Distinct from Reject, which is a decision that stays on the record and can
-    be undone. This is for a row nobody should have to look at again — a failed
+    be undone. This is for a row nobody should have to look at again - a failed
     run, a duplicate, a test.
 
     The files go too. They are named after the draft and nothing else points at
@@ -711,7 +711,7 @@ def delete_draft(draft_id: int, session: Session = Depends(get_session)) -> None
     Facebook has not fetched it yet. Deleting the row would take the picture
     with it and the post would go out blank.
 
-    `POST /drafts/{id}/unschedule` is the way through — it removes the post from
+    `POST /drafts/{id}/unschedule` is the way through - it removes the post from
     the planner first, so there is nothing left pointing at the file. Two steps
     rather than one on purpose: cancelling a scheduled post and destroying the
     work are different intentions, and the client's D6 complaint was about the
@@ -776,7 +776,7 @@ def publish_draft(
     """Hand Metricool the post and the link to its picture, record what it is called.
 
     Separate from Approve, and it stays separate. Approve is a queue movement
-    with an undo — `unapprove` exists and the toast offers it. This is the step
+    with an undo - `unapprove` exists and the toast offers it. This is the step
     that cannot be taken back, so it is its own button and its own decision.
 
     There is no upload step any more, and its disappearance is the whole reason
@@ -787,7 +787,7 @@ def publish_draft(
     (`_editable`) makes the live composite permanent instead, so the copy became
     a second file that only existed to be identical to the first.
 
-    Publishing twice is refused rather than allowed to make a duplicate — the
+    Publishing twice is refused rather than allowed to make a duplicate - the
     id is on the row, and the planner is where a scheduled post is changed
     (ADR-0001).
     """
@@ -807,7 +807,7 @@ def publish_draft(
         )
     if not draft.composed_image_path and not draft.no_image:
         # `no_image` is the difference between "text only, on purpose" and "the
-        # picture failed" — identical on the row otherwise, and only one of them
+        # picture failed" - identical on the row otherwise, and only one of them
         # may go out.
         raise HTTPException(
             status_code=409,
@@ -824,7 +824,7 @@ def publish_draft(
         )
 
     # The composite is already a JPEG in a public bucket, so there is nothing to
-    # upload — this is the link to the file `build_image` wrote. It used to be
+    # upload - this is the link to the file `build_image` wrote. It used to be
     # copied to a stable `{draft_id}.jpg` first, on the reasoning that a rebuild
     # would otherwise move the picture out from under a scheduled post. The
     # freeze in `_editable` is what removed the need: a published draft cannot
@@ -879,7 +879,7 @@ def _post_text(draft: Draft) -> str:
 
 @router.post("/drafts/{draft_id}/approve")
 def approve_draft(draft_id: int, session: Session = Depends(get_session)) -> Draft:
-    """A failed run cannot be approved — there is nothing in it to approve.
+    """A failed run cannot be approved - there is nothing in it to approve.
 
     Rejecting one is still allowed: that is how it leaves the queue.
     """
@@ -920,7 +920,7 @@ def _editable(session: Session, draft_id: int) -> Draft:
     """`_require`, plus: a draft that has been pushed to Metricool is frozen.
 
     ADR-0001 already says the planner is where a scheduled post is changed, but
-    nothing enforced it — `metricool_post_id` was read in exactly one place, the
+    nothing enforced it - `metricool_post_id` was read in exactly one place, the
     refusal to publish twice. So editing a published draft was allowed and did
     nothing useful: the row changed here while the post Metricool would send
     stayed as it was.
@@ -929,7 +929,7 @@ def _editable(session: Session, draft_id: int) -> Draft:
     helper rather than a note in a docstring. Metricool holds a link to the
     composite and Facebook fetches it when the post is due, days later. Every
     edit that redraws writes a new composite and deletes the one it supersedes
-    — so an edit here would delete the picture out from under a scheduled post,
+    - so an edit here would delete the picture out from under a scheduled post,
     which then goes out with nothing. Freezing the draft is what makes that
     deletion safe, and is why publishing no longer needs its own copy of the
     file.
@@ -943,7 +943,7 @@ def _editable(session: Session, draft_id: int) -> Draft:
             status_code=409,
             detail=(
                 f"That draft is in Metricool as post {draft.metricool_post_id}. "
-                "Unschedule it first — redrawing the image here would delete the "
+                "Unschedule it first - redrawing the image here would delete the "
                 "file the scheduled post is pointing at."
             ),
         )
@@ -953,7 +953,7 @@ def _editable(session: Session, draft_id: int) -> Draft:
 QUEUED = "queued"
 """What `publish` writes when Metricool accepted the post but did not name it.
 
-A marker that something is scheduled, not a handle — nothing can be edited or
+A marker that something is scheduled, not a handle - nothing can be edited or
 cancelled through it, because there is no id to send."""
 
 
@@ -987,14 +987,14 @@ def _push_to_metricool(
 ) -> Draft:
     """Send this row's text to the post it is scheduled as, and record the new id.
 
-    **The id changes on every edit** — Metricool has no in-place update, and
+    **The id changes on every edit** - Metricool has no in-place update, and
     `publisher.update` explains what was measured. So this writes the returned
     id back; skipping that is the exact bug the old app has, where a draft goes
     on pointing at a post its own edit deleted.
 
     `when=None` keeps the post where the operator put it, by reading the time
     off the planner first. It does *not* mean "now", which is what the payload
-    builder would otherwise assume — a caption fix would have rescheduled the
+    builder would otherwise assume - a caption fix would have rescheduled the
     post to two minutes' time.
     """
     _, blog_id = _metricool_target(session, draft)
@@ -1007,7 +1007,7 @@ def _push_to_metricool(
                 raise HTTPException(
                     status_code=409,
                     detail=(
-                        f"Post {post_id} is no longer in Metricool — it was "
+                        f"Post {post_id} is no longer in Metricool - it was "
                         "deleted there. Unschedule this draft to edit it here."
                     ),
                 )
@@ -1063,7 +1063,7 @@ def unschedule_draft(draft_id: int, session: Session = Depends(get_session)) -> 
     """Take the post out of Metricool and put the draft back in the queue.
 
     The way back that D6 said did not exist. Deliberately **not** a delete of the
-    draft: the work — the text, the picture, the source it came from — is still
+    draft: the work - the text, the picture, the source it came from - is still
     good, and the operator's complaint was that a mistake was unrecoverable, not
     that they wanted to lose the post.
 
@@ -1084,8 +1084,8 @@ def unschedule_draft(draft_id: int, session: Session = Depends(get_session)) -> 
         raise HTTPException(status_code=502, detail=str(error)) from error
 
     draft.metricool_post_id = None
-    # Back to the queue, not to APPROVED. Nothing writes APPROVED any more —
-    # see design.md — and a row that just came back from the planner is work
+    # Back to the queue, not to APPROVED. Nothing writes APPROVED any more -
+    # see design.md - and a row that just came back from the planner is work
     # awaiting the operator's next decision, which is exactly what `review`
     # means. APPROVED here put a green "Approved." pill and a stray Return-to-
     # queue step in front of a draft that had just been pulled back to edit.

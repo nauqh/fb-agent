@@ -7,7 +7,7 @@ Run it from `api/`, like `seed_page.py`.
 
 This replaces `migrate_media_to_supabase.py`, which read `api/media/` and moved
 files off local disk. That directory is gone and so is `settings.media_root`, so
-the only remaining copy of anything is in a bucket — which makes the job
+the only remaining copy of anything is in a bucket - which makes the job
 bucket-to-bucket. It exists for one moment: seeding production the first time a
 database reaches it.
 
@@ -111,7 +111,7 @@ def main() -> int:
                     raise RuntimeError(
                         f"copied {len(data)} bytes, fetched {len(back.content)}"
                     )
-            except Exception as error:  # noqa: BLE001 — report all, stop for none
+            except Exception as error:  # noqa: BLE001 - report all, stop for none
                 failed += 1
                 print(f"  FAILED  draft {draft_id}  {stored}  {error}")
                 continue

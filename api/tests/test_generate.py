@@ -516,7 +516,7 @@ def test_saving_the_same_hook_back_does_not_redraw(client, written, illustrated)
 
 
 def test_saving_without_a_hero_does_not_fail(client, written, monkeypatch):
-    """No picture to draw over is not an error — the text still saves."""
+    """No picture to draw over is not an error - the text still saves."""
     from app.image import hero
 
     monkeypatch.setattr(
@@ -534,7 +534,7 @@ def test_a_draft_stays_generating_until_its_image_exists(client, written, monkey
     """The row used to say "review" while the hero was still being drawn.
 
     `status` was set before `build_image`, so the queue showed a finished-looking
-    draft with a blank thumbnail — and the client stops polling once nothing is
+    draft with a blank thumbnail - and the client stops polling once nothing is
     `generating`, so the picture landed twenty seconds later with nothing left to
     fetch it. It never appeared until the operator reloaded.
     """
@@ -623,7 +623,7 @@ def test_a_rewrite_is_a_proposal_and_writes_nothing(
     client, written, illustrated, rewritten
 ):
     """The whole point of the shape. The route used to set the field on the row,
-    which left the screen showing the old text over a new row — and the Save
+    which left the screen showing the old text over a new row - and the Save
     button that appeared wrote the old text back, undoing the call that had just
     been paid for. Rewrite proposes; Save writes; Revert is the undo."""
     _generate(client)
@@ -638,7 +638,7 @@ def test_a_rewrite_is_a_proposal_and_writes_nothing(
 
 
 def test_the_kept_fields_are_shown_to_the_model(client, written, illustrated, rewritten):
-    """Otherwise the new caption is a caption for a different post — it would not
+    """Otherwise the new caption is a caption for a different post - it would not
     open on the hook that is drawn on the picture above it."""
     _generate(client)
     before = client.get("/drafts/1").json()
@@ -655,7 +655,7 @@ def test_unsaved_kept_fields_are_taken_from_the_request(
 ):
     """What the model must fit is what the operator can see, not what was last
     saved. The screen used to save the whole form before rewriting, purely
-    because the server read the kept fields off the row — a write nobody asked
+    because the server read the kept fields off the row - a write nobody asked
     for, on a button that now writes nothing at all."""
     _generate(client)
 
@@ -673,7 +673,7 @@ def test_a_new_hook_brings_its_highlight_phrases_with_it(
     client, written, illustrated, rewritten
 ):
     """They are verbatim substrings of the hook. Phrases chosen for the old one
-    match nothing in the new one and render no gold at all — a silent failure
+    match nothing in the new one and render no gold at all - a silent failure
     that reads as the highlight feature being broken. They ride along in the
     proposal so that saving the hook saves both together."""
     _generate(client)
@@ -686,7 +686,7 @@ def test_a_new_hook_brings_its_highlight_phrases_with_it(
 
 def test_only_the_hook_carries_highlight_phrases(client, written, illustrated, rewritten):
     """They are defined as substrings of the hook and mean nothing beside a
-    caption — sending them anyway would invite the client to save them."""
+    caption - sending them anyway would invite the client to save them."""
     _generate(client)
 
     proposed = client.post("/drafts/1/regenerate?field=caption").json()
@@ -695,7 +695,7 @@ def test_only_the_hook_carries_highlight_phrases(client, written, illustrated, r
 
 
 def test_a_rewrite_does_not_redraw_the_card(client, written, illustrated, rewritten):
-    """`PATCH` redraws it when the proposal is saved — `hook` and
+    """`PATCH` redraws it when the proposal is saved - `hook` and
     `highlight_phrases` are both in `DRAWN_FIELDS`. Drawing here would spend a
     composite on a rewrite the operator may well throw away, and orphan the file
     it superseded."""
@@ -746,7 +746,7 @@ def test_an_operator_instruction_replaces_the_demand_for_novelty(written):
     assert "genuinely different" in plain
     assert "genuinely different" not in steered
     assert "Make it longer." in steered
-    # The kept fields survive either way — that is what makes the new field fit.
+    # The kept fields survive either way - that is what makes the new field fit.
     assert "keep verbatim" in plain and "keep verbatim" in steered
 
 
@@ -784,7 +784,7 @@ def test_a_published_draft_cannot_be_regenerated(
 #
 # The old app's second generate mode: "Create a draft for {page} without calling
 # Gemini". None of these use `illustrated`, so conftest's autouse guard raising
-# on `hero.generate` is what proves no model was called — the same evidence the
+# on `hero.generate` is what proves no model was called - the same evidence the
 # feed-hero tests rely on, and the whole point of the mode.
 
 
@@ -806,14 +806,14 @@ def test_a_hand_written_draft_needs_no_model(client):
     draft = response.json()
     assert draft["status"] == "review", "it is ready to look at, not queued"
     assert draft["hook"].startswith("In 1925")
-    assert draft["image_prompt"] is None, "nothing wrote one — there was no writer"
+    assert draft["image_prompt"] is None, "nothing wrote one - there was no writer"
 
 
 def test_an_uploaded_picture_becomes_the_hero_and_the_card_is_drawn(
     client, a_photograph
 ):
     """Not the finished post. Publishing an upload untouched would bypass the
-    panel, the hook and the watermark — the whole card system."""
+    panel, the hook and the watermark - the whole card system."""
     response = _manual(
         client,
         hook="A hand-written hook that belongs on the panel.",
@@ -839,7 +839,7 @@ def test_an_entirely_empty_manual_draft_is_refused(client):
 
 def test_a_hand_written_hook_that_breaks_a_rule_is_recorded_not_refused(client):
     """`validators.check` is the writer correcting itself. A human who types a
-    question mark has decided to — so the rule is reported, never enforced."""
+    question mark has decided to - so the rule is reported, never enforced."""
     draft = _manual(client, hook="Did you know about the 1925 serum run?").json()
 
     assert draft["status"] == "review"
@@ -855,7 +855,7 @@ def test_a_manual_draft_against_a_page_that_does_not_exist_is_a_404(client):
 #
 # Note what is *absent* from these: the `illustrated` fixture. The autouse guard
 # in conftest makes `hero.generate` raise, so a run that finishes without it is
-# proof that nothing was billed — which is the whole point of the feature, and
+# proof that nothing was billed - which is the whole point of the feature, and
 # not something an assertion on the row could show.
 
 
@@ -924,7 +924,7 @@ def test_the_fetched_picture_is_stored_rather_than_hot_linked(
 
 def test_a_source_with_no_picture_warns_rather_than_buying_one(client, written):
     """The operator asked for the feed's picture. Silently billing them for a
-    different one is the wrong kind of helpful — and `hero.generate` raising
+    different one is the wrong kind of helpful - and `hero.generate` raising
     here is what proves it did not happen."""
     client.post(
         "/generate",
@@ -947,7 +947,7 @@ def test_a_competitors_picture_is_never_reused_as_our_hero(
     """Reposting a rival page's own creative under our watermark.
 
     The request was for "the image provided by the RSS feed" specifically, and
-    the narrow reading is also the defensible one — a feed image accompanies a
+    the narrow reading is also the defensible one - a feed image accompanies a
     story we are retelling, a competitor's is the thing they made.
     """
     _feed_png(monkeypatch)
@@ -1077,7 +1077,7 @@ def test_the_unread_picture_warning_survives_a_redraw(
     """It shared `IMAGE_WARNING`'s prefix once, and every rebuild path drops
     warnings carrying that prefix before re-deriving them from `build_image`.
 
-    So one press of "draw it again" — or a crop nudge, or an inset upload —
+    So one press of "draw it again" - or a crop nudge, or an inset upload -
     deleted the only record that this draft never saw the rival's picture, and
     nothing re-derived it. A draft written blind then looked like one that
     wasn't.
@@ -1164,7 +1164,7 @@ def test_the_fetch_returns_the_bytes_it_was_given():
 
 
 def test_the_fetch_sends_a_browser_user_agent():
-    """Publisher CDNs 403 an anonymous request — the old app's reason for this."""
+    """Publisher CDNs 403 an anonymous request - the old app's reason for this."""
     seen = {}
 
     def handler(request):
@@ -1234,7 +1234,7 @@ def test_an_image_over_the_cap_is_no_image():
 
 def test_an_empty_body_is_no_image():
     """A 200 with nothing in it built `BinaryImage(data=b"")`, which the model
-    rejects — and a model error fails the whole draft, the one outcome the
+    rejects - and a model error fails the whole draft, the one outcome the
     warning path exists to avoid."""
     with _answering(
         lambda request: httpx.Response(200, content=b"", headers={"content-type": "image/jpeg"})
@@ -1312,7 +1312,7 @@ def _upload(client, data: bytes, name: str = "face.png", kind: str = "image/png"
 
 
 def test_a_fresh_draft_has_no_circle(client, written, illustrated):
-    """Nothing generates the inset — a run never produces one."""
+    """Nothing generates the inset - a run never produces one."""
     draft = _generate(client)
 
     assert draft["inset_image_path"] is None
@@ -1409,7 +1409,7 @@ def test_replacing_the_picture_keeps_where_it_was(
 # --- the operator's own hero --------------------------------------------------
 #
 # The way out of a picture the model will not get right. Everything here is the
-# inset's shape one layer down: same bound, same re-encode, same refusal — but
+# inset's shape one layer down: same bound, same re-encode, same refusal - but
 # it replaces the generated hero rather than adding a circle on top of it.
 
 
@@ -1466,7 +1466,7 @@ def test_an_uploaded_hero_is_no_longer_the_feeds_photograph(
 def test_the_uploaded_hero_is_re_encoded_rather_than_stored_as_sent(
     client, written, illustrated, a_photograph
 ):
-    """A JPEG in, a PNG on disk — the camera's container decides nothing."""
+    """A JPEG in, a PNG on disk - the camera's container decides nothing."""
     import io
 
     from PIL import Image
@@ -1497,7 +1497,7 @@ def test_a_file_that_is_not_an_image_is_refused_as_a_hero(client, written, illus
 def test_an_uploaded_hero_survives_a_later_recomposite(
     client, written, illustrated, a_photograph
 ):
-    """`POST /image` without `new_hero` reuses the picture — including this one.
+    """`POST /image` without `new_hero` reuses the picture - including this one.
 
     The operator uploaded it precisely because generation was not working; a
     redraw that quietly bought a fresh hero would undo the fix and bill for it.
@@ -1514,7 +1514,7 @@ def test_an_uploaded_hero_survives_a_later_recomposite(
 #
 # Per draft, over the Page's `page_layout.portrait_*`. Null means "whatever the
 # Page says", which is why none of these assert against a number from
-# `layout.yml` — they assert the *relationships* that a clipped or filled ring
+# `layout.yml` - they assert the *relationships* that a clipped or filled ring
 # would break, since a wrong ring still produces a perfectly valid PNG.
 
 
@@ -1539,7 +1539,7 @@ def test_a_border_of_zero_draws_no_ring_rather_than_a_filled_disc(a_photograph):
     """Pillow reads `width=0` as *fill the shape*, not as "draw nothing".
 
     So the unguarded call paints a solid disc of the border colour straight over
-    the picture — the inset survives as a flat coloured circle, which is a valid
+    the picture - the inset survives as a flat coloured circle, which is a valid
     image and an obviously broken card. `0` is the client's own "No border"
     option, so this is the value the feature is most likely to be used with.
     """
@@ -1561,7 +1561,7 @@ def test_a_thick_ring_is_not_clipped_by_the_canvas(a_photograph):
 
     The canvas used to be a constant `ring_pad_px: 3` larger, which was enough
     only for the file's 2px border. At the 48px maximum the overhang is 24px and
-    the outer half of the ring was being cropped away — silently, in a valid
+    the outer half of the ring was being cropped away - silently, in a valid
     PNG. `PortraitLayout.ring_pad` derives the padding instead.
     """
     from app.image import compositor
@@ -1687,7 +1687,7 @@ def test_deleting_a_draft_takes_its_inset_too(client, written, illustrated, a_ph
 
 
 def test_the_circle_straddles_the_seam():
-    """Half on the photograph, half on the panel — the whole point of it.
+    """Half on the photograph, half on the panel - the whole point of it.
 
     Geometry is the old app's (`brand-image-layout.ts:125-140`), so this checks
     the two numbers a port gets wrong: which pixel the disc is centred on, and
@@ -1797,7 +1797,7 @@ def test_a_bigger_size_draws_a_bigger_disc():
 
 def test_source_kind_survives_a_database_round_trip(session):
     """`build_image` asks a *stored* row `kind is not SourceKind.RSS`, and `is
-    not` against a bare string is always true — so the feed-image branch would
+    not` against a bare string is always true - so the feed-image branch would
     refuse every draft, RSS ones included.
 
     Regression: pinning these columns with `sa_type=String` did exactly that,
@@ -1830,7 +1830,7 @@ def test_a_draft_follows_the_pages_template_by_default(client, written, illustra
 
 
 def test_a_draft_can_choose_its_own_card_form(client, written, illustrated):
-    """The choice depends on the picture, not on the brand — a busy photograph
+    """The choice depends on the picture, not on the brand - a busy photograph
     with a face low in the frame is ruined by a panel lying over it."""
     _generate(client)
     before = client.get("/drafts/1").json()
@@ -1844,7 +1844,7 @@ def test_a_draft_can_choose_its_own_card_form(client, written, illustrated):
 
 
 def test_an_unknown_template_is_refused_on_write(client, written, illustrated):
-    """resvg does not fail on a bad one — it draws the wrong card and returns a
+    """resvg does not fail on a bad one - it draws the wrong card and returns a
     perfectly valid PNG, so this is the only place it can be caught."""
     _generate(client)
 
@@ -1862,7 +1862,7 @@ def test_a_no_image_run_draws_nothing_and_warns_about_nothing(client, written):
     assert draft["hero_image_path"] is None
     assert draft["composed_image_path"] is None
     assert draft["warnings"] == [], (
-        "a picture left out on purpose is not a warning — that is what makes it "
+        "a picture left out on purpose is not a warning - that is what makes it "
         "distinguishable from one that failed"
     )
 
@@ -1920,7 +1920,7 @@ def test_a_draft_whose_picture_failed_still_cannot_publish(client, written, illu
 
 
 def test_two_drafts_write_at_once(engine, page, monkeypatch):
-    """Two drafts meet at a Barrier — passes only if they ran concurrently.
+    """Two drafts meet at a Barrier - passes only if they ran concurrently.
 
     The old sequential loop could never satisfy this: the second writer stub
     would arrive to a barrier whose first party had already given up. It is the
@@ -1958,7 +1958,7 @@ def test_two_drafts_write_at_once(engine, page, monkeypatch):
 def test_one_failed_draft_does_not_strand_the_run(engine, page, monkeypatch):
     """A writer failure in one worker leaves the other draft whole.
 
-    Parallel workers must not share a Session — this is that pin. A shared
+    Parallel workers must not share a Session - this is that pin. A shared
     session would leak the failure across rows; separate sessions keep a
     failure on its own row, exactly as the sequential loop did.
     """
@@ -1995,7 +1995,7 @@ def test_drafts_list_returns_a_capped_newest_first_page(client, session, page):
     """`GET /drafts` answers the newest `limit` rows, not every row ever.
 
     The queue re-polls this list every 2s while anything generates, so unbounded
-    meant a payload that grew forever — nothing prunes `draft`. Beyond the cap
+    meant a payload that grew forever - nothing prunes `draft`. Beyond the cap
     the oldest fall off the *queue*, not out of existence: each stays
     addressable by id.
     """

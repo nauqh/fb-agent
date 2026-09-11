@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
  *
  * `page.avatar_image_path` is the wordmark on white, which is what Facebook
  * shows beside the name and what the old app drew here. The *watermark* is not
- * a substitute for it — that is the same wordmark in white ink for stamping
+ * a substitute for it - that is the same wordmark in white ink for stamping
  * onto a photograph, and a circular crop of it is a fragment of a word on a
  * black disc.
  *

@@ -12,13 +12,13 @@ import { cn } from "@/lib/utils";
  *
  * Highlighting used to be a list of chips you typed phrases into, which asked
  * the operator to retype text that was already on screen and to get it exactly
- * right — a phrase off by one character renders nothing. Here you select the
+ * right - a phrase off by one character renders nothing. Here you select the
  * words and press a button.
  *
  * The trick is the old repo's and it is worth keeping: a transparent textarea
  * sits on top of a div that mirrors its text and colours it. Same box metrics
  * on both, so the caret and the colour stay aligned. Colour only, never weight
- * — bold would change the glyph widths and the two layers would drift apart.
+ * - bold would change the glyph widths and the two layers would drift apart.
  */
 
 const BOX =
@@ -38,7 +38,7 @@ export function HookField({
   value: string;
   phrases: string[];
   /** Five fits a hook in the drawer. The layout editor's sample runs longer,
-      and the box does not scroll — text past the last row is simply not there. */
+      and the box does not scroll - text past the last row is simply not there. */
   rows?: number;
   onChange: (value: string) => void;
   onPhrasesChange: (phrases: string[]) => void;
@@ -116,12 +116,12 @@ export function HookField({
           Clear
         </Button>
         <span className="ml-auto text-[11px] text-muted-foreground">
-          {phrases.length} highlighted · 5–8 expected
+          {phrases.length} highlighted · 5-8 expected
         </span>
       </div>
 
       {absent.length > 0 ? (
-        /* Only the model can produce these — you cannot select text that is not
+        /* Only the model can produce these - you cannot select text that is not
            there. Worth saying, because they are invisible: a phrase that does
            not appear simply renders nothing. */
         <p className="text-[11px] text-muted-foreground">

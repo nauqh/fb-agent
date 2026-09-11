@@ -9,7 +9,7 @@ rows).
 The one request-facing shape worth calling out:
 
 - **`POST /youtube/jobs`** returns ids immediately and the worker fills the
-  rows — the operator never waits on the download/trim/concat.
+  rows - the operator never waits on the download/trim/concat.
 
 Publishing used to live here too and was **cut** for v1 (the Q2 scope call):
 no Metricool scheduling, no brands, no Instagram, no `youtube_schedule` table,
@@ -106,7 +106,7 @@ def enqueue_job(body: EnqueueRequest, session: Session = Depends(get_session)):
     """Turn a URL into job row(s) and let the worker have them.
 
     A single video is one job. A channel URL is up to `shorts_limit` jobs,
-    each a ranked Short — or, when `selected_short_ids` is set, exactly the
+    each a ranked Short - or, when `selected_short_ids` is set, exactly the
     picked ones (enriched with rank/view snapshot from the discovery listing,
     so the row keeps a record even after the channel's ranking shifts).
     """
@@ -215,7 +215,7 @@ def get_job(job_id: int, session: Session = Depends(get_session)):
 
 @router.get("/youtube/jobs/{job_id}/download")
 def download_job(job_id: int, session: Session = Depends(get_session)):
-    """The produced mp4, streamed through the API — the `<video>` source and
+    """The produced mp4, streamed through the API - the `<video>` source and
     the download link in one. The browser talks to one origin (the proxy), so
     the bucket never has to be public to this screen.
     """
@@ -238,7 +238,7 @@ def download_job(job_id: int, session: Session = Depends(get_session)):
 
 @router.delete("/youtube/jobs/{job_id}")
 def delete_job(job_id: int, session: Session = Depends(get_session)):
-    """History cleanup. Terminal rows only — deleting a live job would tear the
+    """History cleanup. Terminal rows only - deleting a live job would tear the
     work out from under the worker, and deleting a queued one loses it forever."""
     job = session.get(YoutubeJob, job_id)
     if job is None:
@@ -277,7 +277,7 @@ class VideoOut(BaseModel):
 
 @router.get("/youtube/brands")
 def list_youtube_brands():
-    """The brands an Overview can be about — the Metricool profiles with a
+    """The brands an Overview can be about - the Metricool profiles with a
     YouTube channel connected. Nothing else is a valid target, which is why this
     exists as a read rather than leaving the picker to guess from a Page list.
     """
@@ -296,19 +296,19 @@ def youtube_overview(
     """What the channel put out in the window, best first, plus the window before
     it for the comparison line.
 
-    **`days=0` is the whole catalog** — the channel's videos are a bounded set
+    **`days=0` is the whole catalog** - the channel's videos are a bounded set
     (80 on Bible Focus), so the overview's default is everything, and the window
     pills narrow from there. A window needs a `previous` to compare against; the
     whole catalog has none, so `days=0` returns an empty `previous` and the
     screen shows no delta chip.
 
     Two reads build it. The catalog (`stats/youtube/videos`) returns every video
-    the channel has — the date split happens here on `publishedAt`, since
+    the channel has - the date split happens here on `publishedAt`, since
     Metricool ignores the window. The planner read is joined only to learn each
     video's kind (short vs video), which the stats rows do not carry; kind is a
     property of the post we scheduled, not of the video's analytics.
 
-    A video with no `publishedAt` is in neither window — it has no date for the
+    A video with no `publishedAt` is in neither window - it has no date for the
     comparison to be about, and dropping it beats showing it in every window.
     """
     try:
@@ -412,7 +412,7 @@ def channel_shorts(url: str = Query(...), session: Session = Depends(get_session
 
 @router.get("/youtube/config")
 def youtube_config():
-    """What the tool is configured with, read back from the server — the
+    """What the tool is configured with, read back from the server - the
     same rule `routes/config.py` records about layout.yml: a Settings screen
     showing a hand-kept copy of a config is a screen that can disagree with
     the run it claims to describe.
@@ -457,7 +457,7 @@ class CtaUploadComplete(BaseModel):
 def cta_upload_url():
     """Mint a one-object upload URL for the browser to PUT the clip to.
 
-    The bytes never cross this API, and so never cross Vercel — production's
+    The bytes never cross this API, and so never cross Vercel - production's
     413 came from Vercel's serverless request-body ceiling, which no config
     raises. The API's whole part is this small JSON call and the row that
     follows in `complete`.
@@ -474,7 +474,7 @@ def cta_upload_url():
 def cta_upload_complete(body: CtaUploadComplete, session: Session = Depends(get_session)):
     """A library row for bytes that already landed. Refuses a path the
     upload-url route could not have minted, and a path with no object behind
-    it — the row is what the worker will fetch at job time, and a row over
+    it - the row is what the worker will fetch at job time, and a row over
     nothing fails a Short days later, far from its cause.
     """
     if not re.fullmatch(r"\d{4}-\d{2}/cta-[0-9a-f]{10}\.mp4", body.path):

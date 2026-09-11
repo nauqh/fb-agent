@@ -10,8 +10,8 @@ import { cn } from "@/lib/utils";
  * section at a time in the pane beside it.
  *
  * They were a two-column grid of cards, and the grid was the problem. The cards
- * are wildly unequal — Feeds is six rows, Identity is three lines, Prompts is
- * three 10-row textareas — so every row of the grid was as tall as its taller
+ * are wildly unequal - Feeds is six rows, Identity is three lines, Prompts is
+ * three 10-row textareas - so every row of the grid was as tall as its taller
  * card and the shorter one sat in ~200px of white. Measured on History
  * Retraced at 1600px: Settings ran 2,400px with roughly a third of it empty.
  *
@@ -19,13 +19,13 @@ import { cn } from "@/lib/utils";
  * also the honest reading of what these screens are for. Nobody edits feeds and
  * prompt text in the same sitting; they come here to change one thing.
  *
- * The rail is not just navigation — it is the **status column**. Each section
+ * The rail is not just navigation - it is the **status column**. Each section
  * carries its own count, and a section that is unconfigured says so *in the
  * rail*, so the thing you cannot see from here is never a surprise. That is why
  * `gap` exists and why it is styled loudly.
  *
  * A rail lists only sections of the screen it is on. The two screens briefly
- * cross-linked — Settings' rail naming Global's sections and back — and that is
+ * cross-linked - Settings' rail naming Global's sections and back - and that is
  * gone: a rail entry that navigates away is indistinguishable from one that
  * switches panes until it has already moved you. Settings is one Page, Global is
  * the account, and the rail on each stays inside its own scope.
@@ -38,7 +38,7 @@ export type ConfigSection = {
    * The count or figure that describes this section, right-aligned.
    *
    * `PENDING` while the query behind it is in flight. Undefined means this
-   * section has no figure at all — a different fact, and the rail has to render
+   * section has no figure at all - a different fact, and the rail has to render
    * them differently: a blank where a number is coming reads as "nothing here",
    * which is exactly the wrong answer for the column whose job is to report on
    * sections you cannot see.
@@ -95,16 +95,16 @@ export function ConfigShell({
   const shown = local.find((section) => section.id === active) ?? local[0];
 
   return (
-    // **One scroller, and it is the row — not the rail and not the screen.**
+    // **One scroller, and it is the row - not the rail and not the screen.**
     //
     // Three arrangements have been tried here and each failed differently:
     //
     // - rail and pane each with their own `overflow-y-auto` inside an
     //   `overflow-hidden` shell. Two scrollers side by side, so reaching the
     //   bottom of Prompts depended on which column the pointer was over;
-    // - the whole screen scrolling. The bottom was reachable, but the rail —
+    // - the whole screen scrolling. The bottom was reachable, but the rail -
     //   which is the status column, and the only place a gap in an unopened
-    //   section is visible — scrolled away with it;
+    //   section is visible - scrolled away with it;
     // - this one. The header is outside the scroller so it never moves, the row
     //   below owns the scroll, and the rail is `sticky` within it. The rail
     //   holds still, the pane scrolls under it, and a pane is as tall as it
@@ -138,7 +138,7 @@ export function ConfigShell({
                       // The press is on pointer-*down*, which is the whole
                       // point: feedback that waits for the click has already
                       // lost the feeling of directness. 100ms and a hair under
-                      // 1.0 — enough to feel, not enough to notice.
+                      // 1.0 - enough to feel, not enough to notice.
                       "group flex shrink-0 items-center gap-2 rounded-md px-2.5 py-1.5 text-[13px] whitespace-nowrap transition-[transform,background-color,color] duration-100 active:scale-[0.98] lg:w-full",
                       section.id === shown?.id
                         ? "bg-accent font-medium text-foreground"
@@ -167,7 +167,7 @@ export function ConfigShell({
  * Stand-in for a figure that has not arrived yet.
  *
  * Measured before this existed: on first paint the rail showed Feeds, Prompts
- * and Competitors with no figure at all, for as long as their queries took —
+ * and Competitors with no figure at all, for as long as their queries took -
  * three sections reporting nothing, on the column that exists to report. An
  * en dash at the same width as a one- or two-digit count also stops the row
  * reflowing when the number lands.
@@ -192,7 +192,7 @@ function RailLabel({ section }: { section: ConfigSection }) {
 /**
  * One section in the pane: its title, what it is for, and its figure.
  *
- * The figure goes top-right rather than under the title — pushing the number to
+ * The figure goes top-right rather than under the title - pushing the number to
  * the edge is what lets the eye read six sections' worth of counts down one
  * line, and it is the one thing about a card that a title never tells you.
  */
@@ -256,9 +256,9 @@ export function Block({
  * Something is not set, and here is what that stops.
  *
  * Deliberately not the muted dashed box an empty list usually gets. Every gap
- * this renders has a consequence somewhere else in the app — no publishing
+ * this renders has a consequence somewhere else in the app - no publishing
  * times means "Schedule next available" answers 409, no watermark means a
- * composite with nothing to stamp — and a grey sentence is how those went
+ * composite with nothing to stamp - and a grey sentence is how those went
  * unnoticed long enough to be reported as bugs. The rail carries a triangle
  * for the same reason: from the rail you cannot see the section at all.
  */

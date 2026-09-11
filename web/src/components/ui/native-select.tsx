@@ -2,7 +2,7 @@ import { cn } from "@/lib/utils";
 
 /**
  * A styled native `<select>`. The app has no Radix select; for a handful of
- * fixed options (trim seconds, the CTA pick) the native control is honest —
+ * fixed options (trim seconds, the CTA pick) the native control is honest -
  * it gets keyboard, focus and a usable popup for free, and it matches the
  * input's height and border.
  */

@@ -4,7 +4,7 @@
 # taken for a `card` draft, not just against the template row. See
 # docs/data-model.md#layout-is-config-with-per-page-overrides.
 #
-# This file still has no per-page section, and still should not grow one — but
+# This file still has no per-page section, and still should not grow one - but
 # the reason has changed. It used to be that every Page rendered identically.
 # What overrides it now is a `page_layout` row, holding only what that Page
 # changed, resolved as {**this file, **the row}. So a Page that has changed
@@ -19,7 +19,7 @@ template: card
 
 image:
     width: 896
-    height: 1120 # 4:5 — the tallest ratio Facebook renders in feed
+    height: 1120 # 4:5 - the tallest ratio Facebook renders in feed
     # Corners are square. The old code still computes a radius but the compositor
     # hardcodes `const cornerRadius = 0` (image-composite.ts:313); the preview
     # helper was zeroed to match (brand-image-layout.ts:111). Don't reintroduce it.
@@ -36,7 +36,7 @@ panel:
     opacity: 1.0
 
 text:
-    # Fixed. There is no autofit — `planOverlayLayout` reads `fontSizePx` once
+    # Fixed. There is no autofit - `planOverlayLayout` reads `fontSizePx` once
     # (overlay-layout-plan.ts:248) and the panel grows instead of the type
     # shrinking. The old font_min/font_max columns were never read.
     font_size_px: 36
@@ -48,7 +48,7 @@ text:
     # with the switch and cost nothing to redraw, and the model cannot drift off
     # an instruction it was never given. `text.cased` applies it to the hook
     # *and* to every highlight phrase, because a phrase is matched as an exact
-    # substring — shouting one side and not the other renders no gold at all.
+    # substring - shouting one side and not the other renders no gold at all.
     uppercase: false
     line_height_ratio: 1.26
     align: center
@@ -63,7 +63,7 @@ highlight:
     color: "#F5C542" # gold, for phrases the writer marks verbatim
 
 watermark:
-    # Top-right of the hero, inset by edge_margin — the position was verified
+    # Top-right of the hero, inset by edge_margin - the position was verified
     # against the newest composite in production storage, which prints "History
     # Retraced" as white text there because the stored logo had gone missing.
     # Reads page.watermark_image_path, a committed file under api/assets/, at its
@@ -93,7 +93,7 @@ portrait:
     #
     # Geometry is the old app's (brand-image-layout.ts:125-140 and
     # portrait-inset-shared.ts:5-17), which is where every number below comes
-    # from — the ring is a stroke centred on the circle edge, so it needs 2px of
+    # from - the ring is a stroke centred on the circle edge, so it needs 2px of
     # canvas outside the disc and gets 3.
     #
     # Nothing here generates the picture. The old app offered Upload and
@@ -101,9 +101,9 @@ portrait:
     # that costs nothing and comes from a person. Its *size* is per-draft and
     # lives on the row, because it depends on what is in the picture rather than
     # on the brand.
-    size_px: 140 # DEFAULT_PORTRAIT_SIZE_PX in the old app — the default, not a cap
+    size_px: 140 # DEFAULT_PORTRAIT_SIZE_PX in the old app - the default, not a cap
     min_px: 40 # MIN_INSET_SIZE_PX; below this the disc is a smudge
-    max_width_ratio: 0.45 # MAX_INSET_DIAMETER_RATIO — 403px at 896 wide
+    max_width_ratio: 0.45 # MAX_INSET_DIAMETER_RATIO - 403px at 896 wide
     ring_pad_px: 3
     border_width_px: 2 # the old app's default was 4, which read as a heavy outline
     border_color: "#000000" # reads as a cut-out where it crosses the panel

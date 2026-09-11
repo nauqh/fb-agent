@@ -9,7 +9,7 @@ export const QUEUE_PAGE_SIZE = 10;
 /**
  * Pages the queue, as the old app did.
  *
- * The queue rows are tall — a 120px composite each — so a month of drafts is a
+ * The queue rows are tall - a 120px composite each - so a month of drafts is a
  * very long scroll through a shell that is `h-screen` and does not scroll the
  * page. Ten to a page keeps the whole table on screen, which is also what makes
  * the header row worth having: you can compare Status down a column without the
@@ -39,7 +39,7 @@ export function QueuePagination({
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 border-t bg-muted/20 px-4 py-2.5">
       <p className="text-xs text-muted-foreground tabular-nums">
-        Showing {start}–{end} of {totalItems}
+        Showing {start}-{end} of {totalItems}
       </p>
       <div className="flex items-center gap-1">
         <Button

@@ -22,8 +22,8 @@ import { cn } from "@/lib/utils";
  * A dropdown rather than a row of tabs, which is what the old app used
  * (`facebook-page-single-select.tsx`) and is the shape that survives growth:
  * this is a *scope* control, not navigation between peers, and it sits beside
- * each screen's own tabs — Competitors/Tweets/RSS on Sources, Week/List on
- * Schedule — where a second tab strip reads as another set of them. It also
+ * each screen's own tabs - Competitors/Tweets/RSS on Sources, Week/List on
+ * Schedule - where a second tab strip reads as another set of them. It also
  * costs one control's width at ten Pages as it does at two, which the tabs did
  * not.
  *
@@ -34,7 +34,7 @@ import { cn } from "@/lib/utils";
  *
  * The mark is `rounded-sm`, not the circle `PageAvatar` draws. Facebook crops
  * a page's picture round and the badge follows it, but here the mark is a
- * 20px control affordance rather than an identity beside a name — and The Fact
+ * 20px control affordance rather than an identity beside a name - and The Fact
  * Feed's is a square wordmark whose corners a circular crop eats.
  */
 export function PageSwitcher() {

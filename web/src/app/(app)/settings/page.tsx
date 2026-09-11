@@ -53,7 +53,7 @@ import { cn } from "@/lib/utils";
  * One Page: what it is, and how it writes.
  *
  * Read-only throughout until 2026-08-17, and the reasoning held for what it was
- * aimed at — identity comes from Metricool, layout is `layout.yml`, and the
+ * aimed at - identity comes from Metricool, layout is `layout.yml`, and the
  * prompts are files so they are reviewed in git rather than typed into a box.
  *
  * Two things are editable now, and both are per-Page overrides that inherit
@@ -69,7 +69,7 @@ import { cn } from "@/lib/utils";
  * The globals stay files and stay uneditable here. Every Page reads them, and
  * a textarea on a shared default is what the drift was.
  *
- * **The screen is a rail and a pane** since 2026-08-17, not a grid of cards —
+ * **The screen is a rail and a pane** since 2026-08-17, not a grid of cards -
  * see `config-shell.tsx` for the measurement that killed the grid. The queries
  * all live here rather than in the sections that use them, because the rail
  * shows each section's count and whether it is empty, and a count cannot be
@@ -102,7 +102,7 @@ export default function SettingsScreen() {
   // rows and they are the whole answer: what this Page reads. Metricool is not
   // asked anything until "Assign from the pool" is opened.
   //
-  // Two earlier versions paid a vendor call per Page on every view — first for
+  // Two earlier versions paid a vendor call per Page on every view - first for
   // the whole account pool, then for this Page's own brand set. Both showed a
   // list that is not what the Page reads. The brand set had a real job while a
   // sync only fetched the brand it was fired from, because then an empty set
@@ -129,13 +129,13 @@ export default function SettingsScreen() {
       header={<ScreenHeader title="Settings" />}
       // Three groups rather than one list of six. The sections did not change
       // shape, but "This Page" over all of them was a label that ruled nothing
-      // out — every section on this screen is about this Page. Naming what a
+      // out - every section on this screen is about this Page. Naming what a
       // section *is for* lets the rail be read as three short lists.
       //
       // Grouping rather than merging is the deliberate half. Feeds and
       // Competitors are both sources and the Sources screen tabs them together,
       // but folding them into one pane would cost 1,200px of scroll and two of
-      // the counts below — and the counts are the point of this rail
+      // the counts below - and the counts are the point of this rail
       // (`config-shell.tsx`). A group heading buys the same adjacency for free.
       groups={[
         {
@@ -167,7 +167,7 @@ export default function SettingsScreen() {
               meta: assignments ? `${assigned} read` : PENDING,
               // Triangle when nothing is ticked. Since `_visible_to` reads the
               // tick list and only the tick list, that is a Page whose
-              // Competitors grid is empty — and every other screen renders it
+              // Competitors grid is empty - and every other screen renders it
               // as a quiet week.
               gap: assignments !== null && assigned === 0,
               body: (
@@ -229,7 +229,7 @@ function Identity({ page }: { page: Page }) {
         <Block label="Ids">
           <dl className="space-y-2 text-[13px]">
             <Row label="Facebook">{page.facebook_page_id}</Row>
-            <Row label="Metricool">{page.metricool_blog_id ?? "—"}</Row>
+            <Row label="Metricool">{page.metricool_blog_id ?? "-"}</Row>
           </dl>
         </Block>
 
@@ -340,7 +340,7 @@ function Feeds({
 
           {sources.feeds.length === 0 ? (
             <Gap title="No feeds, so the RSS tab on Sources is empty for this Page.">
-              Nothing is wrong with the fetch — there is nothing configured to
+              Nothing is wrong with the fetch - there is nothing configured to
               fetch. Add a publisher above; it is probed before it is saved.
             </Gap>
           ) : null}
@@ -355,7 +355,7 @@ function Feeds({
  *
  * A button rather than a checkbox because it is the only control in the row and
  * it says what it does. `otherPages` is shown when another Page already reads
- * it — that is the shared pool being visible, and without it the row looks
+ * it - that is the shared pool being visible, and without it the row looks
  * unused when it is not.
  *
  * It used to carry an `assigned` state too, for the brand-set block where a row
@@ -392,7 +392,7 @@ function AssignToggle({
  * What this Page reads. One list, because there is one answer.
  *
  * It has been three lists twice over. Before 2026-09-04 it was the whole
- * account pool with tick buttons; after, three labelled blocks — what this Page
+ * account pool with tick buttons; after, three labelled blocks - what this Page
  * reads, what a Sync from this Page fetches, what else it could read. That
  * middle question was worth a block at the time: a sync fetched only the brand
  * it was fired from, so a Page whose own Metricool set was empty had a Sync
@@ -405,7 +405,7 @@ function AssignToggle({
  * a list of where somebody else's allowance went. That belongs on Global.
  *
  * So: the assigned list, and a picker to add to it. Assignment still replaces
- * the set whole (`setAssignments`) — a tick list is a set, and sending it whole
+ * the set whole (`setAssignments`) - a tick list is a set, and sending it whole
  * is what makes two fast clicks land where the second one aimed.
  */
 function Competitors({
@@ -427,7 +427,7 @@ function Competitors({
   const [poolOpen, setPoolOpen] = useState(false);
 
   /**
-   * Assignment writes replace the set whole — a tick list is a set, and
+   * Assignment writes replace the set whole - a tick list is a set, and
    * sending it whole makes two fast clicks land on the state the second one
    * described. Only a new row's name travels, and only when known: kept rows
    * keep their stored names, and a bare set must not wipe them.
@@ -451,7 +451,7 @@ function Competitors({
    * Untick, with an Undo rather than a confirmation.
    *
    * Both halves are deliberate. A write that says nothing on success is a write
-   * the operator has to verify by looking — these two were silent, and only an
+   * the operator has to verify by looking - these two were silent, and only an
    * error ever reached the screen. And a dialog would be the wrong instrument:
    * unticking destroys nothing, because `set_assignments` keeps a removed row's
    * note and re-ticking restores it (`routes/competitors.py`). Confirming
@@ -477,7 +477,7 @@ function Competitors({
   return (
     <Pane
       title="Competitors this Page reads"
-      hint="This list is the whole of it — the Competitors grid on Sources shows exactly what is ticked here, at every count. The pool is shared, so one competitor can feed several Pages, and which brand it sits under in Metricool does not matter."
+      hint="This list is the whole of it - the Competitors grid on Sources shows exactly what is ticked here, at every count. The pool is shared, so one competitor can feed several Pages, and which brand it sits under in Metricool does not matter."
       meta={assignments ? `${assignments.length} read` : undefined}
       // The one action this section has, in the header rather than under an
       // 800px list. `Pane` has carried an `action` slot beside the count since
@@ -505,11 +505,11 @@ function Competitors({
           {assignedIds.length === 0 ? (
             <Gap title="Nothing is ticked, so this Page reads nothing.">
               Its Competitors grid on Sources is empty, and a Sync will not
-              change that — there is nothing yet for a sync to go and fetch.
+              change that - there is nothing yet for a sync to go and fetch.
               Assign from the pool below.
             </Gap>
           ) : (
-            <Block label={`Reading — ${assignedIds.length} assigned`}>
+            <Block label={`Reading - ${assignedIds.length} assigned`}>
               <div className="grid gap-2 sm:grid-cols-2 2xl:grid-cols-3">
                 {assignments.map((one) => (
                   <div
@@ -523,7 +523,7 @@ function Competitors({
                       className="flex min-w-0 flex-1 items-center gap-2.5"
                     >
                       {/* An assignment stores a name and a note but no picture,
-                          and there is no live list here to take one from — so
+                          and there is no live list here to take one from - so
                           the logo comes from the page id, which is the same
                           value this row already links to. */}
                       <CompetitorMark
@@ -545,7 +545,7 @@ function Competitors({
                     {/* Visible at rest, not revealed on hover. It was
                         `opacity-0 group-hover:opacity-100`, which on a touch
                         screen means the only way to untick a competitor does
-                        not exist — there is no hover to reveal it with. Faint
+                        not exist - there is no hover to reveal it with. Faint
                         is enough to keep it quiet. */}
                     <button
                       type="button"
@@ -583,7 +583,7 @@ function Competitors({
  *
  * The unscoped list costs one Metricool call per Page, which is why it sits
  * behind a click rather than being paid on every Settings view. Candidates are
- * everything not already assigned, deduplicated by Facebook page id — one
+ * everything not already assigned, deduplicated by Facebook page id - one
  * competitor can sit in several brands' sets and would otherwise appear once
  * per host.
  *
@@ -603,7 +603,7 @@ function PoolPicker({
   onAssign: (providerId: string, name: string | null) => void;
   onHide: () => void;
 }) {
-  // Mounting *is* opening — the trigger lives in the pane header now, and this
+  // Mounting *is* opening - the trigger lives in the pane header now, and this
   // renders only once it has been pressed. So the vendor call fires on mount
   // and still never on a plain Settings view.
   const { data: pool, error, loading } = useQuery(() => getCompetitorPages(), []);
@@ -619,7 +619,7 @@ function PoolPicker({
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-3">
         <p className="font-mono text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
-          The pool — not yet assigned here
+          The pool - not yet assigned here
         </p>
         <Button variant="ghost" size="sm" onClick={onHide}>
           Hide
@@ -682,7 +682,7 @@ function PoolPicker({
  *
  * The probe is not decoration. The feed list used to live in
  * `config/sources.yml`, curated "because every candidate has to be probed
- * before it earns a place, which is not a thing to do from a form" — so the
+ * before it earns a place, which is not a thing to do from a form" - so the
  * probing moved into the form rather than being dropped, and its measurements
  * come back in the toast. A feed that does not answer, does not parse, or
  * parses to nothing is refused with a message written to be read here.
@@ -707,7 +707,7 @@ function AddFeed({ pageId }: { pageId: number | null }) {
       // moment the decision is made rather than stored and shown stale later.
       toast.success(
         probe
-          ? `${name.trim()} added — ${probe.items} items, ${probe.with_images} imaged, ${probe.median_summary}-char summaries`
+          ? `${name.trim()} added - ${probe.items} items, ${probe.with_images} imaged, ${probe.median_summary}-char summaries`
           : `${name.trim()} added`,
       );
       setName("");
@@ -787,7 +787,7 @@ function RemoveFeed({ id, name }: { id: number; name: string }) {
  *
  * Policy rather than schedule state, which is the whole reason it can live in
  * our database at all without contradicting ADR-0001: a slot is a standing
- * decision — "we post at 08:00 and 19:00" — that exists whether or not anything
+ * decision - "we post at 08:00 and 19:00" - that exists whether or not anything
  * is queued against it. What is *actually* queued is still read live from
  * Metricool's planner, and "next available" checks these against that.
  *
@@ -927,7 +927,7 @@ const LIMIT_ROWS: { field: LimitField; label: string; group: string }[] = [
 /**
  * What this Page is told to write, and what it is held to. One section.
  *
- * They were two — Writing and Prompts — and were merged onto one screen so the
+ * They were two - Writing and Prompts - and were merged onto one screen so the
  * request and its enforcement sit together: the numbers first because they are
  * five inputs and a Save, the prompt editor below because it is 700px and its
  * own tabs. The pane runs long. That is the cost, and it is cheaper than the
@@ -981,7 +981,7 @@ function Writing({
  * house 1,500. Saved one at a time, the operator would be refused halfway
  * through a change that is valid once finished.
  *
- * An emptied box sends null, never 0 — null is what returns the Page to the
+ * An emptied box sends null, never 0 - null is what returns the Page to the
  * house number, and 0 would be a Page that cannot write anything.
  */
 function WritingLimits({ page }: { page: Page }) {
@@ -1021,7 +1021,7 @@ function WritingLimits({ page }: { page: Page }) {
   }
 
   // Grouped by the thing being measured, so "Overlay" is one box and "First
-  // comment" is four — five identical full-width rows read as five unrelated
+  // comment" is four - five identical full-width rows read as five unrelated
   // settings and took 250px to carry five numbers.
   const groups = [...new Set(LIMIT_ROWS.map((row) => row.group))];
 
@@ -1042,7 +1042,7 @@ function WritingLimits({ page }: { page: Page }) {
                   <Input
                     type="number"
                     inputMode="numeric"
-                    aria-label={`${group} — ${label}`}
+                    aria-label={`${group} - ${label}`}
                     className={cn(
                       "h-7 w-20 border-0 bg-transparent px-1 text-right tabular-nums shadow-none focus-visible:ring-0",
                       // An inherited value is the placeholder, so the box must
@@ -1096,14 +1096,14 @@ const SOURCE_LABEL: Record<PromptFile["source"], string> = {
  * The three prompts, editable per Page (F5).
  *
  * Every Page writes under its own prompt; when a box was never saved, the
- * default in `api/prompts/` is what is sent — that is the whole inheritance,
+ * default in `api/prompts/` is what is sent - that is the whole inheritance,
  * and it is shown only so an operator knows what they are about to replace.
  * Saving text here makes it this Page's own, for this Page only.
  *
  * One prompt at a time since 2026-08-17. Three 10-row textareas stacked made a
  * 1,400px section in which the one being edited was usually off screen.
  *
- * A `Block` inside Writing rather than a `Pane` of its own since 2026-09-06 —
+ * A `Block` inside Writing rather than a `Pane` of its own since 2026-09-06 -
  * see `Writing` for why the two stopped being separate sections.
  */
 function Prompts({
@@ -1113,7 +1113,7 @@ function Prompts({
   pageId: number | null;
   files: PromptFile[] | null;
 }) {
-  // Not seeded from `files` — it arrives a render after this component
+  // Not seeded from `files` - it arrives a render after this component
   // mounts, and a value chosen at mount cannot know the real filenames yet.
   // `active` falls back to the first file whenever `open` names none of them,
   // which covers that gap with no effect needed to correct it later.
@@ -1121,7 +1121,7 @@ function Prompts({
   const active = files?.find((file) => file.filename === open) ?? files?.[0];
 
   return (
-    <Block label="Prompts — what the writer is told">
+    <Block label="Prompts - what the writer is told">
       {files === null ? (
         <Loading label="Loading prompts" className="h-64" />
       ) : (
@@ -1130,7 +1130,7 @@ function Prompts({
             Each Page writes under its own prompt. Where nothing has been
             saved, the default in <code>api/prompts/</code> is used; saving
             here makes it this Page&rsquo;s own. An <strong>empty overlay
-            prompt</strong> means the Page&rsquo;s images carry no text panel —
+            prompt</strong> means the Page&rsquo;s images carry no text panel -
             the picture and the logo only.
           </p>
           {/* The shared pill shell (`ui/tabs.tsx`) rather than a second
@@ -1212,7 +1212,7 @@ function PromptEditor({ pageId, file }: { pageId: number; file: PromptFile }) {
             rather than falling back to the default. */}
         {file.filename === "overlay.txt" && file.source === "page" && file.body.trim() === "" ? (
           <span className="rounded-full border bg-muted/40 px-2 py-0.5 text-[11px] text-muted-foreground">
-            No overlay text — drafts on this Page get the image and logo only
+            No overlay text - drafts on this Page get the image and logo only
           </span>
         ) : null}
       </div>
@@ -1246,7 +1246,7 @@ function PromptEditor({ pageId, file }: { pageId: number; file: PromptFile }) {
             ) : null}
             {/* Only when there is an override to clear. On a default prompt
                 this button would claim to undo something that is not there.
-                Sends null, never "" — on overlay.txt an empty string is the
+                Sends null, never "" - on overlay.txt an empty string is the
                 no-overlay opt-out, and the button's job is the opposite. */}
             {file.source === "page" ? (
               <Button
@@ -1285,12 +1285,12 @@ type TemplateField = (typeof TEMPLATE_FIELDS)[number]["field"];
 
 /**
  * The template library (client request, 2026-08-20; scoped per Page on
- * 2026-09-10 — styles were appearing on every Page and should be Page
+ * 2026-09-10 - styles were appearing on every Page and should be Page
  * specific).
  *
  * Named post styles, picked on the generate screen. **Deltas, never copies**:
  * each textarea starts empty and empty means inherit, the same contract the
- * per-Page prompts above have — a style that restated the whole house prompt
+ * per-Page prompts above have - a style that restated the whole house prompt
  * would be a second copy of it, and copies drifting apart is the measured
  * failure the prompt files were rescued from. The API refuses an all-blank
  * template outright: it would change nothing and only crowd the dropdown.
@@ -1304,7 +1304,7 @@ function PostStyles({
   templates: PromptTemplate[] | null;
   refresh: () => Promise<void>;
 }) {
-  // Which form is open: a template's id, `"new"`, or none. One at a time —
+  // Which form is open: a template's id, `"new"`, or none. One at a time -
   // two editors over the same row would race the last save to the server.
   const [open, setOpen] = useState<number | "new" | null>(null);
 
@@ -1315,7 +1315,7 @@ function PostStyles({
   }
 
   return (
-    <Block label="Post styles — an optional layer on any run">
+    <Block label="Post styles - an optional layer on any run">
       {templates === null ? (
         <Loading label="Loading post styles" className="h-24" />
       ) : (
@@ -1335,7 +1335,7 @@ function PostStyles({
                 <span className="min-w-0 flex-1 truncate font-medium">
                   {template.name}
                 </span>
-                {/* Which layers it actually carries — a style with only an
+                {/* Which layers it actually carries - a style with only an
                     image layer reads very differently from a full rewrite of
                     the post structure, and the row is where that shows. */}
                 <span className="flex shrink-0 items-center gap-1">
@@ -1395,7 +1395,7 @@ function PostStyles({
 
 /**
  * Two-step delete, inline. There is no dialog anywhere in this app and nothing
- * points at a style once it is gone — drafts are unpinned server-side — but a
+ * points at a style once it is gone - drafts are unpinned server-side - but a
  * style is the operator's own writing, so one accidental click should not be
  * the end of it. The armed state says so instead of opening a modal.
  */

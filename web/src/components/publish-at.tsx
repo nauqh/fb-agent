@@ -8,14 +8,14 @@ import { cn } from "@/lib/utils";
 /**
  * When the post should go out, on the Page's clock.
  *
- * The value is a naive stamp read as Asia/Ho_Chi_Minh — `publication_date`
+ * The value is a naive stamp read as Asia/Ho_Chi_Minh - `publication_date`
  * attaches `settings.timezone` to it server-side, and an offset suffix is what
  * Metricool rejects, which a `datetime-local` cannot produce anyway. The floor
  * is the Page's clock for the same reason: the browser's would let an operator
  * in Melbourne pick a time already past in Ho Chi Minh.
  *
  * It is never empty. The picker's own default is the *operating system's* clock
- * and no attribute reaches it — an operator in Melbourne opening it saw their
+ * and no attribute reaches it - an operator in Melbourne opening it saw their
  * own hour, which is not the hour the post goes out. Seeding the field means
  * the number on screen is always the Page's, and the picker opens on it rather
  * than on the machine's. `GMT+7` sits beside it because the field itself cannot
@@ -46,7 +46,7 @@ export function PublishAt({
         value={value}
         min={pageLocalInput()}
         onChange={(event) => onChange(event.target.value)}
-        // 28px, which is what `size="sm"` buttons measure — `h-8` left the
+        // 28px, which is what `size="sm"` buttons measure - `h-8` left the
         // field one notch taller than everything beside it in the footer.
         className="h-7 w-auto text-xs"
       />

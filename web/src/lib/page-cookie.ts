@@ -14,7 +14,7 @@ export const PAGE_COOKIE = "fb_page_id";
  * The cookie's value as a Page id, or null when it is absent or junk.
  *
  * Null means "no choice recorded", which the provider resolves to the first
- * Page rather than to a hardcoded 1 — the ids come from the database and a
+ * Page rather than to a hardcoded 1 - the ids come from the database and a
  * fresh clone need not number them the same way.
  */
 export function parsePageCookie(value: string | undefined): number | null {

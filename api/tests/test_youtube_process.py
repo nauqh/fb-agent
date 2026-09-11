@@ -1,7 +1,7 @@
 """The job processor, offline.
 
-No network and no ffmpeg. The pipeline's two seams — the download and the
-trim/concat — are stubbed at the module boundary (`process._download_source`
+No network and no ffmpeg. The pipeline's two seams - the download and the
+trim/concat - are stubbed at the module boundary (`process._download_source`
 and `ffmpeg.process_video`), so the test proves the *orchestration*: progress
 lands, the CTA is fetched, the final file reaches storage, and a failure marks
 the row `failed` with the message the operator sees. The real yt-dlp/ffmpeg

@@ -1,9 +1,9 @@
-"""Make the file: download, trim, CTA-append, upload — and consume the queue.
+"""Make the file: download, trim, CTA-append, upload - and consume the queue.
 
 This is the worker's heart and the worker's loop in one module. The old tool
 spread it over `processVideoJob.ts`, `ffmpegService.ts`, `videoWorker.ts` and
-`startWorker.ts` (plus a Redis queue); here the *row is the job* — exactly the
-pattern `generate` already set — and a daemon thread in the API process
+`startWorker.ts` (plus a Redis queue); here the *row is the job* - exactly the
+pattern `generate` already set - and a daemon thread in the API process
 replaces BullMQ + Upstash + the VPS worker (five videos a day is a couple of
 minutes of CPU). The in-process thread and the single-writer deploy shape are
 the two halves of one decision; both are commented where they matter.
@@ -11,19 +11,19 @@ the two halves of one decision; both are commented where they matter.
 Progress lands on the row at the old tool's waypoints (20/35/50/90/100), so a
 polling client renders a moving bar and a crashed process leaves a row at the
 waypoint it died at, which the startup sweep finds. A failure belongs on the
-row — the operator sees the message and the loop continues. Same rule
+row - the operator sees the message and the loop continues. Same rule
 `generate` lives by ("an exception here would land in a log nobody reads").
 
 The ffmpeg half is subprocess, not a wrapper: the old tool used
 `fluent-ffmpeg`, a Node wrapper that shells out to the `ffmpeg` *binary*; this
-one calls the same binary with `subprocess.run` and a list of arguments — no
+one calls the same binary with `subprocess.run` and a list of arguments - no
 shell, no string interpolation, and the filtergraph lifted verbatim from
 `ffmpegService.ts` because the geometry was already settled there:
 
 - trim keeps the **first** N seconds (`-t N`), which is the tool's whole
   product: the hook that earned the views, capped at the operator's N.
 - the CTA is scaled and padded to the *source* dimensions (letterbox, centred,
-  `fps=30`), then concatenated after the hook with matching audio — the two
+  `fps=30`), then concatenated after the hook with matching audio - the two
   clips become one file at the hook's resolution.
 - output is H.264/AAC with `+faststart`, re-encoded rather than stream-copied;
   a copy could not join two differently-encoded clips.
@@ -97,7 +97,7 @@ def _ffprobe_binary() -> str:
     found = shutil.which("ffprobe")
     if found is None:
         raise FfmpegError(
-            "ffprobe is not installed. It ships with ffmpeg — install ffmpeg."
+            "ffprobe is not installed. It ships with ffmpeg - install ffmpeg."
         )
     return found
 
@@ -105,7 +105,7 @@ def _ffprobe_binary() -> str:
 def probe_dimensions(video_path: str) -> tuple[int, int]:
     """Width × height of the hook clip, read before the concat filtergraph.
 
-    The CTA is scaled to these — the output must come out at the source's
+    The CTA is scaled to these - the output must come out at the source's
     resolution or the channel's Shorts look off-standard on mobile.
     """
     command = [
@@ -192,7 +192,7 @@ def process_video(
     trimmed_path: str,
     final_path: str,
 ) -> None:
-    """Trim then append — the ordering of the output is the product."""
+    """Trim then append - the ordering of the output is the product."""
     trim_video(raw_path, trimmed_path, trim_seconds)
     concat_with_cta(trimmed_path, cta_path, final_path)
 
@@ -249,7 +249,7 @@ def _run_one(session: Session, job: YoutubeJob) -> None:
             job.trim_duration,
             template.id,
         )
-    except Exception as error:  # noqa: BLE001 — the row is where a failure goes
+    except Exception as error:  # noqa: BLE001 - the row is where a failure goes
         logger.error(
             "youtube job {} failed: {}", job_id, f"{type(error).__name__}: {error}"
         )
@@ -272,7 +272,7 @@ def _download_source(job: YoutubeJob, raw_path: str) -> str | None:
 
     A `channel_short` job downloads the concrete Short its URL resolved to
     (the resolution decides *which* video), while a `direct` job downloads the
-    URL itself. The title comes back from yt-dlp as metadata — the same
+    URL itself. The title comes back from yt-dlp as metadata - the same
     uncensored title the old tool stored and then offered as the schedule
     default.
     """
@@ -330,7 +330,7 @@ def _upload(job: YoutubeJob, session: Session, final_path: str) -> None:
 
 def _progress(session: Session, job: YoutubeJob, step: str, pct: int) -> None:
     """Advance the progress columns only. `status` is owned by the lifecycle:
-    QUEUED at insert, PROCESSING at claim, COMPLETED/FAILED at the end — if
+    QUEUED at insert, PROCESSING at claim, COMPLETED/FAILED at the end - if
     this function set it, the final `_progress(100)` after `_upload` would
     clobber the COMPLETED it just committed (the bug that made the row read
     `processing` forever while the log said completed)."""
@@ -406,16 +406,16 @@ def _claim(session: Session) -> YoutubeJob | None:
 def _one_pass() -> int:
     """Claim and run one job.
 
-    Returns jobs_processed for the log line — logging lives at the boundary of
+    Returns jobs_processed for the log line - logging lives at the boundary of
     a pass, never per step (the loggingsucks.com rule `generate` already
-    quotes). The old tool's second half of every pass — reconciling overdue
-    Metricool schedules — was cut with the publish scope (the `youtube_schedule`
+    quotes). The old tool's second half of every pass - reconciling overdue
+    Metricool schedules - was cut with the publish scope (the `youtube_schedule`
     table and `schedule.py` are gone).
     """
     with Session(get_engine()) as session:
         job = _claim(session)
         # The id is read *inside* the session: `_claim` commits, the `with`
-        # closes, and the returned instance goes detached — touching any
+        # closes, and the returned instance goes detached - touching any
         # attribute after that raises DetachedInstanceError (which is exactly
         # what the first UI-driven run found). The id is all the next step needs.
         job_id = job.id if job is not None else None
@@ -435,14 +435,14 @@ def run_forever() -> None:
             jobs = _one_pass()
             if jobs:
                 logger.info("youtube worker pass: {} job(s)", jobs)
-        except Exception:  # noqa: BLE001 — one bad pass must not kill the loop
+        except Exception:  # noqa: BLE001 - one bad pass must not kill the loop
             logger.exception("youtube worker pass failed")
         time.sleep(POLL_SECONDS)
 
 
 def start() -> threading.Thread | None:
     """Start the worker thread. Called from the app lifespan, and tests disable
-    it by setting `youtube_worker_enabled` false (conftest autouse fixture —
+    it by setting `youtube_worker_enabled` false (conftest autouse fixture -
     the thread must not run against the test database)."""
     if not settings.youtube_worker_enabled:
         logger.info("youtube worker disabled (youtube_worker_enabled=false)")

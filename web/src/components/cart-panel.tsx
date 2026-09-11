@@ -18,17 +18,17 @@ import { Button } from "@/components/ui/button";
  *
  * It was a 320px column beside the grid, which cost the grid 344px of width
  * for a panel that is empty most of the time. As a dock it costs one row of
- * height and the grid gets the full width — three columns at 1440 instead of
+ * height and the grid gets the full width - three columns at 1440 instead of
  * two, and four above 1900.
  *
  * Always on screen, never hidden when empty. Generate is the screen's primary
- * action — the one thing the pinned column got right and a scrolling Cart would
- * lose — and a dock that appeared on the first tick would push the grid up under
+ * action - the one thing the pinned column got right and a scrolling Cart would
+ * lose - and a dock that appeared on the first tick would push the grid up under
  * the cursor that just ticked.
  *
  * It used to navigate to a `/generate` screen instead. That screen showed the
  * same cart again, a Page that could not be changed, and `N sources × 1 page =
- * N drafts` — arithmetic that multiplies by one. It was a confirmation step for
+ * N drafts` - arithmetic that multiplies by one. It was a confirmation step for
  * a decision with a single possible answer, and its stated reason (design.md:
  * seeing *how many* against *which Page* rather than burying it in a picker)
  * was written for the old app's ten brands. With one Page there is nothing to
@@ -36,7 +36,7 @@ import { Button } from "@/components/ui/button";
  *
  * The topic field was the only thing on that screen which existed nowhere else,
  * so it moved into this dock's empty state. It has since moved again, to
- * `/manual`, at the client's request — they want a destination they can grow,
+ * `/manual`, at the client's request - they want a destination they can grow,
  * and a strip in another screen's footer has nowhere to grow. The dock's empty
  * state points at it rather than duplicating it.
  */
@@ -63,7 +63,7 @@ export function CartPanel() {
   /**
    * Use the sources' own pictures instead of buying heroes.
    *
-   * Offered only when the Cart actually holds some — it would be dishonest
+   * Offered only when the Cart actually holds some - it would be dishonest
    * against items with no `image_url`, where every draft would come back
    * carrying a warning instead of a picture.
    *
@@ -76,7 +76,7 @@ export function CartPanel() {
    * hero is bought and nothing is composited.
    *
    * Mutually exclusive with the source picture, and the UI enforces it rather
-   * than letting the server pick a winner — asking for the feed's photograph
+   * than letting the server pick a winner - asking for the feed's photograph
    * and for no photograph is a contradiction, not a preference.
    */
   const [noImage, setNoImage] = useState(false);
@@ -84,7 +84,7 @@ export function CartPanel() {
    * The post style this run writes under, from the library on Settings.
    *
    * Not sticky between runs, like the picture options: a style is a property
-   * of these sources — a meme cart wants Meme, the next may not. Empty string
+   * of these sources - a meme cart wants Meme, the next may not. Empty string
    * is "Page default" and is sent as null rather than omitted, so a run made
    * after a selection is explicitly un-styled rather than by accident.
    */
@@ -131,7 +131,7 @@ export function CartPanel() {
         description: "Progress is on the Review screen.",
       });
       // The queue, not the first draft. A run can produce several, and the one
-      // that happened to be first is not more interesting than the rest — the
+      // that happened to be first is not more interesting than the rest - the
       // list shows all of them filling in, and the drawer would cover it.
       router.push("/review");
     } catch (cause) {
@@ -149,7 +149,7 @@ export function CartPanel() {
   return (
     <aside className="fixed bottom-4 right-4 z-40 flex items-center gap-2.5 rounded-2xl border bg-card px-2.5 py-1.5 shadow-md">
       {cart.count === 0 ? (
-        // The topic box lived here and is on `/manual` now — a move at the
+        // The topic box lived here and is on `/manual` now - a move at the
         // client's request, not a copy, so there is one place to type a topic.
         // The dock keeps its space rather than collapsing: it is the screen's
         // primary action, and a row that appears on the first tick would push
@@ -165,7 +165,7 @@ export function CartPanel() {
         <>
           {/* The ticked items, as chips. A row rather than the column's stacked
               list: the dock is one row tall, and the author is what identifies
-              a Source Item at a glance — the body text needed two lines to say
+              a Source Item at a glance - the body text needed two lines to say
               less. Scrolls sideways rather than wrapping, so the dock's height
               cannot depend on how many are ticked. */}
           <ul className="flex min-w-0 flex-1 items-center gap-1.5">
@@ -199,18 +199,18 @@ export function CartPanel() {
 
           {/* Beside Generate, not in a settings screen: it changes what the
               next click costs, so it belongs where the cost is incurred. The
-              count is the honest part — it says how many of the ticked items
+              count is the honest part - it says how many of the ticked items
               can actually supply one, which is the difference between "free
               heroes" and "some free heroes and some warnings". */}
           {/* The post style. A native select, not the pill Tabs the Settings
               prompts use: the dock is one row and a style is a choice among
-              many, not a toggle. Hidden while empty — a style applies to the
+              many, not a toggle. Hidden while empty - a style applies to the
               run, and with nothing ticked there is no run. */}
           {cart.count > 0 ? (
             <select
               value={styleId}
               onChange={(event) => setStyleId(event.target.value)}
-              title="Write this run under a post style — managed in Settings → Post styles"
+              title="Write this run under a post style - managed in Settings → Post styles"
               className="h-7 max-w-36 shrink-0 truncate rounded-md border bg-card px-1.5 text-xs text-muted-foreground"
             >
               <option value="">Page default</option>
@@ -223,7 +223,7 @@ export function CartPanel() {
           ) : null}
 
           {/* Text only. Beside the other picture option because they answer
-              the same question — where does the image come from — and one of
+              the same question - where does the image come from - and one of
               the answers is "there isn't one". */}
           <label
             className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs text-muted-foreground"

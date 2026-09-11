@@ -10,7 +10,7 @@ import { PageScopeProvider } from "@/lib/page-scope";
  * The signed-in app: rail, Page scope, Cart.
  *
  * A route group rather than a path segment, so every URL is exactly what it was
- * — `/review/12` is still `/review/12`. It exists because `/login` cannot have
+ * - `/review/12` is still `/review/12`. It exists because `/login` cannot have
  * a sidebar, and the sidebar used to live in the root layout, which wraps
  * everything including the login screen.
  */
@@ -23,7 +23,7 @@ export default async function AppLayout({
   //
   // Collapsed is the default, so the test is `!== "0"` rather than `=== "1"`:
   // absent cookie means a rail that has never been touched, and that starts
-  // narrow. Only an explicit "0" — someone having opened it — keeps it wide.
+  // narrow. Only an explicit "0" - someone having opened it - keeps it wide.
   const jar = await cookies();
   const collapsed = jar.get(COLLAPSE_COOKIE)?.value !== "0";
 

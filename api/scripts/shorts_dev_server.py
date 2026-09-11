@@ -1,4 +1,4 @@
-"""Temporary dev server for the Shorts UI — no production database.
+"""Temporary dev server for the Shorts UI - no production database.
 
 The app's real backend is Supabase Postgres and `app/db.py` refuses anything
 else, and touching the production database is off-limits. So this script is
@@ -9,7 +9,7 @@ from the repo root, and run the real app + the real worker against it.
 Nothing writes anywhere but `api/.shorts-dev/` (gitignored). The API key is read
 from `web/.env.local` so the Next proxy's `x-api-key` header authenticates.
 
-ffmpeg is resolved by the app itself — `FFMPEG_PATH` if set, else PATH. If it
+ffmpeg is resolved by the app itself - `FFMPEG_PATH` if set, else PATH. If it
 is on neither, the job fails with `ffmpeg is not installed`; install it
 (`winget install Gyan.FFmpeg`) rather than editing this file.
 
@@ -43,7 +43,7 @@ from app.youtube import storage as ytstore  # noqa: E402
 def _api_key_from_web_env() -> str:
     env_local = ROOT / "web" / ".env.local"
     if not env_local.exists():
-        raise SystemExit("web/.env.local not found — cannot read the API key")
+        raise SystemExit("web/.env.local not found - cannot read the API key")
     match = re.search(r"^API_KEY=(.+)$", env_local.read_text(encoding="utf-8"), re.M)
     if not match:
         raise SystemExit("API_KEY not in web/.env.local")
@@ -55,7 +55,7 @@ def _serve_directory(directory: pathlib.Path) -> int:
 
     Separate from the app on purpose. The real CTA and processed-video URLs are
     external (a public bucket), and the app's key middleware guards every path
-    it owns — the worker's bare `httpx.get` of a CTA clip must not meet that
+    it owns - the worker's bare `httpx.get` of a CTA clip must not meet that
     guard.
 
     Port 0 asks the OS for a free port instead of naming one. Windows lets a
@@ -111,7 +111,7 @@ def main() -> None:
     db_module._engine = engine
     SQLModel.metadata.create_all(engine)  # never alembic
 
-    # The real app's startup migrates via alembic — a no-op here, since the
+    # The real app's startup migrates via alembic - a no-op here, since the
     # shim builds its schema from the models.
     main_module.init_db = lambda: None  # type: ignore[assignment]
 
@@ -145,7 +145,7 @@ def main() -> None:
         # Not fatal: Shorts Settings can upload one, and that is the real path
         # an operator takes. Jobs just cannot run until there is a template.
         print(
-            f"no CTA seeded — {cta_source} is missing. "
+            f"no CTA seeded - {cta_source} is missing. "
             "Upload a clip on /shorts/settings before queueing a job."
         )
 

@@ -79,7 +79,7 @@ def test_install_is_a_no_op_without_the_variable(monkeypatch, tmp_path):
 
 def test_bad_base64_does_not_stop_the_boot(monkeypatch, tmp_path):
     """Cookies are one tool's dependency. A mangled paste must not take the
-    API — drafts, generate, publish — down with it."""
+    API - drafts, generate, publish - down with it."""
     target = tmp_path / "written.txt"
     monkeypatch.setattr(settings, "ytdlp_cookies_b64", "not base64 at all!!")
     monkeypatch.setattr(sources, "COOKIES_FROM_ENV", target)

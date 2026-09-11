@@ -1,15 +1,15 @@
-"""The YouTube tool's overview — what a channel put out and how it landed.
+"""The YouTube tool's overview - what a channel put out and how it landed.
 
 Reads Metricool's video stats, which are a different endpoint from the Facebook
 post stats (`/stats/youtube/videos` rather than `/stats/facebook/posts`) but the
 same bare-list envelope. Two facts about the read shape the screen:
 
 - **It returns the whole channel catalog.** The `start`/`end` window is accepted
-  and ignored — every window we tried against Bible Focus returned the same ~80
+  and ignored - every window we tried against Bible Focus returned the same ~80
   videos, newest 2026-06-16. So the date split happens in the route, on the
   `publishedAt` each row carries, never in the query.
 - **Views are the honest rank, not engagement.** These channels draw near-zero
-  likes/comments/shares (0–13 on real rows) while views span orders of
+  likes/comments/shares (0-13 on real rows) while views span orders of
   magnitude. Ranking by engagement would sort noise; the screen ranks by views
   and carries engagement as secondary figures.
 
@@ -39,7 +39,7 @@ def _headers() -> dict[str, str]:
 
 @dataclass
 class Brand:
-    """A Metricool profile with a YouTube channel connected — the overview's
+    """A Metricool profile with a YouTube channel connected - the overview's
     unit of "brand", the way a Page row is the facebook tool's."""
 
     id: str
@@ -55,7 +55,7 @@ def youtube_brands(client: httpx.Client | None = None) -> list[Brand]:
     and because the profiles endpoint is the one place Metricool says which brand
     owns which channel.
 
-    Verified live: 11 profiles, two with `youtube` set — Bible Focus and
+    Verified live: 11 profiles, two with `youtube` set - Bible Focus and
     BibleFocusIO.
     """
     if not settings.metricool_api_token or not settings.metricool_user_id:
@@ -102,7 +102,7 @@ def youtube_videos(brand_id: str, client: httpx.Client | None = None) -> list[di
     """Every video the channel has, with its metrics.
 
     The response rows carry `publishedAt` as epoch milliseconds and the stats as
-    floats (13.0 views, not 13) — both normalised at the boundary where they are
+    floats (13.0 views, not 13) - both normalised at the boundary where they are
     read, never downstream.
     """
     if not settings.metricool_api_token or not settings.metricool_user_id:
@@ -111,7 +111,7 @@ def youtube_videos(brand_id: str, client: httpx.Client | None = None) -> list[di
     owned = client is None
     client = client or httpx.Client(timeout=60.0)
     try:
-        # `YYYYMMDD`, the same bare form `/stats/facebook/posts` wants — the
+        # `YYYYMMDD`, the same bare form `/stats/facebook/posts` wants - the
         # window is ignored by Metricool, but sending a wide one keeps the call
         # honest if that ever changes.
         start = "20190101"

@@ -31,7 +31,7 @@ export interface PageUpdate {
 
   /**
    * How long this Page writes (C6, C7). **Null clears the override** and
-   * returns the Page to the house numbers in `api/app/writer/validators.py` —
+   * returns the Page to the house numbers in `api/app/writer/validators.py` -
    * so an emptied box must send null, never 0.
    *
    * The API refuses a combination no draft could satisfy (422) rather than
@@ -47,7 +47,7 @@ export interface PageUpdate {
 
 /**
  * No screen calls this. It stays because `watermark_image_path` is the one
- * per-page value that can be wrong, and Phase 4 is the code that reads it — a
+ * per-page value that can be wrong, and Phase 4 is the code that reads it - a
  * Page pointing at a missing logo needs a way back that is not a SQL prompt.
  */
 export async function updatePage(id: number, update: PageUpdate): Promise<Page> {
@@ -59,7 +59,7 @@ export async function updatePage(id: number, update: PageUpdate): Promise<Page> 
  *
  * Eight of the ten Pages have no committed asset and publish unmarked. Their
  * artwork is not in git, so the upload is the only route they have. The API
- * re-encodes to PNG keeping the alpha — the mark is white ink for a
+ * re-encodes to PNG keeping the alpha - the mark is white ink for a
  * photograph, and flattened it is a white wordmark on a white box.
  */
 export async function uploadWatermark(id: number, file: File): Promise<Page> {
@@ -75,7 +75,7 @@ export async function removeWatermark(id: number): Promise<Page> {
  * Where the browser fetches this Page's mark, or null when it has none.
  *
  * Two sources with one answer: an uploaded mark is a public bucket URL, and a
- * committed asset is served by the API's own `/assets` mount — which is behind
+ * committed asset is served by the API's own `/assets` mount - which is behind
  * the API key, and reachable only because `proxy.ts` attaches it to everything
  * under `/api`. A bare `<img src="/assets/...">` would 401.
  */
@@ -87,14 +87,14 @@ export function watermarkUrl(page: Page): string | null {
 /**
  * The prompts as the model is sent them.
  *
- * Served rather than bundled because the bundled copy drifted — it went on
+ * Served rather than bundled because the bundled copy drifted - it went on
  * listing `image_rules.txt` after that file was merged into `image.txt`.
  *
  * `pageId` resolves the overrides. Always pass it. Omitting it renders the
  * global files under a Page's name, which is the same lie the old tool's
  * Settings tab told.
  *
- * Each entry says which of three places its text came from — see
+ * Each entry says which of three places its text came from - see
  * `PromptFile.source`.
  */
 export async function listPromptFiles(pageId?: number): Promise<PromptFile[]> {
@@ -107,18 +107,18 @@ export async function listPromptFiles(pageId?: number): Promise<PromptFile[]> {
  * Give one Page its own text for one prompt. **Blank clears the override.**
  *
  * Per Page only; there is no call that edits a global. The globals are the
- * reviewed default and live in git, and every Page reads them — editing one
+ * reviewed default and live in git, and every Page reads them - editing one
  * from here is what would reopen the drift the files were chosen to prevent.
  *
  * This is stored on the Page row rather than written to
  * `api/prompts/pages/<slug>/`, and that is not a preference: Railway's
  * filesystem is ephemeral, so a written file would vanish on the next
- * redeploy — silently, days later.
+ * redeploy - silently, days later.
  */
 export async function setPromptFile(
   pageId: number,
   filename: string,
-  /** null clears the override — the Page reads the default file again. An
+  /** null clears the override - the Page reads the default file again. An
       empty string on overlay.txt is the no-overlay opt-out, not a clear. */
   body: string | null,
 ): Promise<PromptFile> {
@@ -126,7 +126,7 @@ export async function setPromptFile(
 }
 
 /**
- * When this Page publishes — the times "Schedule next available slot" walks.
+ * When this Page publishes - the times "Schedule next available slot" walks.
  *
  * Policy, not schedule state: a slot is a standing decision that exists whether
  * or not anything is queued against it, which is why it lives here and not in

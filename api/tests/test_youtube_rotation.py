@@ -3,7 +3,7 @@
 `_run` owns a three-client rotation whose entire purpose is surviving a
 per-client refusal, and nothing pinned it. That gap shipped a bug: "The page
 needs to be reloaded" was in neither signal list, so the first client raised
-and the other two were never tried — a rotation that existed and did not run.
+and the other two were never tried - a rotation that existed and did not run.
 
 These tests are about the classification, not about yt-dlp. A message that
 means "this client was refused" must rotate; a message that means "this video
@@ -58,7 +58,7 @@ def test_page_needs_reloading_rotates_every_client(monkeypatch, no_sleep):
     """The regression. Production raised on client one and stopped.
 
     YouTube forces SABR on the web surfaces and the extractor answers with
-    this, but only when cookies are sent — so it appeared the day cookies
+    this, but only when cookies are sent - so it appeared the day cookies
     started working, on `tv_embedded,mweb`, with `android,web` and `ios,mweb`
     never attempted.
     """
@@ -82,7 +82,7 @@ def test_without_a_proxy_the_cookieless_pass_never_runs(monkeypatch, no_sleep):
     """Production did six attempts where four were possible.
 
     Once the clients were exhausted with cookies, the second pass repeated all
-    of them with the cookies removed — from the same datacenter IP, which can
+    of them with the cookies removed - from the same datacenter IP, which can
     only ever answer with the bot-check. It also overwrote `last_error`, so the
     operator was told to re-export a cookies file that was working fine.
     """
@@ -92,7 +92,7 @@ def test_without_a_proxy_the_cookieless_pass_never_runs(monkeypatch, no_sleep):
     assert len(attempts) == len(sources.PLAYER_CLIENTS)
     # Only the cookieless pass sets `cookiefile` to an explicit None; a run with
     # no export configured leaves the key out altogether, so the presence of the
-    # key holding None — not `.get()` returning None — is what identifies it.
+    # key holding None - not `.get()` returning None - is what identifies it.
     assert not any(
         "cookiefile" in options and options["cookiefile"] is None
         for options in attempts
@@ -109,7 +109,7 @@ def test_with_a_proxy_the_cookieless_pass_runs(monkeypatch, no_sleep):
 
 
 def test_bot_signals_reach_the_rotation(monkeypatch, no_sleep):
-    """Every signal in the list must actually rotate — the list is only useful
+    """Every signal in the list must actually rotate - the list is only useful
     if `_run` consults it, and this is the assertion that ties the two."""
     for signal in sources._BOT_SIGNALS:
         attempts = _run_and_count(monkeypatch, f"ERROR: [youtube] x: {signal}")

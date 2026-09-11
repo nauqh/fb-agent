@@ -1,4 +1,4 @@
-"""Measure, wrap, plan the panel. Pure functions — a font file is the only input.
+"""Measure, wrap, plan the panel. Pure functions - a font file is the only input.
 
 The compositor's arithmetic half, split out because it is the half that can be
 tested for nothing. Every number the composite depends on is decided here: how
@@ -6,7 +6,7 @@ many lines the overlay wraps to, how tall the panel grows, and which runs of
 each line render gold.
 
 Ported from the old repo's `overlay-layout-plan.ts` and the segmenter in
-`overlay-text-panel-svg.ts`. The geometry is verified rather than invented — a
+`overlay-text-panel-svg.ts`. The geometry is verified rather than invented - a
 real History Retraced post replays through `layout.yml` to its own 6 lines, 45px
 line height and 300px panel. `tests/test_image_text.py` keeps that post as the
 golden fixture.
@@ -33,8 +33,8 @@ WIDTH_SAFETY = 0.99
 is supplied and the padding is non-zero, which is our case (5px each side). The
 1% absorbs the difference between an advance width and the ink the rasteriser
 actually lays down; without it a line that measures to the pixel can still clip.
-The larger safety factors in that function are for the *estimated* measurer —
-`token.length * fontSize * 0.52` — which we never use, because we measure.
+The larger safety factors in that function are for the *estimated* measurer -
+`token.length * fontSize * 0.52` - which we never use, because we measure.
 """
 
 
@@ -45,12 +45,12 @@ class Measurer:
     glyphs, scale by `font_size / unitsPerEm`.
 
     **Kerning is not optional.** opentype.js applies it by default, and dropping
-    it silently widens capital-heavy text — `AVATAR` measures 10.69px too wide at
+    it silently widens capital-heavy text - `AVATAR` measures 10.69px too wide at
     36px, which is Arial's AV/VA/AT/TA pairs at -152 units over a 2048 em. A
     token measured too wide wraps a line early, which changes the line count,
     which changes the panel height. The error compounds; it does not average out.
 
-    Matches opentype.js to four decimal places on every token tried — see
+    Matches opentype.js to four decimal places on every token tried - see
     `tests/spike_text_render.py`, which stays runnable for exactly that.
     """
 
@@ -93,15 +93,15 @@ _SENTENCE_END = re.compile(r"(?<=[a-z]{2})\.(?=[A-Za-z])")
 
 The port's rule was a bare `\\.([A-Za-z])`, which turns `U.S.` into `U. S.` and
 `e.g.` into `e. g.`. On a history page that is not a hypothetical input. The
-lookbehind still fixes what the rule was written for — a model returning
-`tomb.The` — and declines every abbreviation, which is the only case it got
+lookbehind still fixes what the rule was written for - a model returning
+`tomb.The` - and declines every abbreviation, which is the only case it got
 wrong.
 """
 
 _RULES: tuple[tuple[re.Pattern[str], str], ...] = (
     # No space before closing punctuation.
     (re.compile(r"[ \t]+([,.;:!?\)\]\}])"), r"\1"),
-    # The port also closed the gap *before* an opening quote — its own comment
+    # The port also closed the gap *before* an opening quote - its own comment
     # gives the example `the "Seven` -> `the"Seven`. That is not English, and it
     # showed up on the first real post as `dismissed it as mere"girl talk."`
     # Dropped rather than ported; the rule below still closes the gap after the
@@ -121,7 +121,7 @@ _RULES: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"“[ \t]+(?=[A-Za-z0-9])"), "“"),
     (re.compile(r"‘[ \t]+(?=[A-Za-z0-9])"), "‘"),
     # One space after separating punctuation. The comma rule skips digits so
-    # `2,000-year-old` survives — it is in the sample overlay text.
+    # `2,000-year-old` survives - it is in the sample overlay text.
     (re.compile(r",([^\s\d])"), r", \1"),
     (re.compile(r";([^\s])"), r"; \1"),
     (re.compile(r":([^\s])"), r": \1"),
@@ -134,8 +134,8 @@ def normalise(text: str) -> str:
 
     **Runs before wrapping, unlike the port.** The old repo wrapped the raw text
     and then applied this per line inside `buildTextBlockElement`, so any rule
-    that changes a line's length — `word(` gaining a space, `tomb.The` gaining
-    another — widened a line *after* it had been measured to fit. Normalising
+    that changes a line's length - `word(` gaining a space, `tomb.The` gaining
+    another - widened a line *after* it had been measured to fit. Normalising
     first means the string that is measured is the string that is drawn.
     """
     result = text.replace(" ", " ")  # NBSP, which never wraps and measures apart
@@ -148,7 +148,7 @@ def cased(text: str, layout: Layout | None = None) -> str:
     """The panel's own case. Identity unless the Page draws in capitals.
 
     **Apply it after `normalise`, never before.** `_SENTENCE_END` requires two
-    *lowercase* letters in front of the full stop — that is the acronym guard,
+    *lowercase* letters in front of the full stop - that is the acronym guard,
     the thing that leaves `U.S.A.` alone while putting the missing space into
     `tomb.The`. Uppercase first and the rule can never fire, so those two words
     reach the measurer as one unbroken token and get wrapped as one word.
@@ -157,7 +157,7 @@ def cased(text: str, layout: Layout | None = None) -> str:
     `segment` matches with `re.IGNORECASE` and keeps the matched text verbatim,
     so an as-written phrase still finds its run in a shouted line and the gold
     lands on the capitals. The browser's `splitOnHighlights` is the half that
-    matches exactly — it shouts the phrases with the text, and has to, or every
+    matches exactly - it shouts the phrases with the text, and has to, or every
     highlight silently stops matching there: no error, no gold, a plain white
     panel next to a correct PNG.
     """
@@ -172,7 +172,7 @@ def wrap(text: str, max_width_px: float, font_size_px: float, measurer: Measurer
     """Greedy word wrap on measured advance widths.
 
     A word too wide for the line on its own is broken mid-word rather than
-    allowed to overflow — a single unbroken token is the one case where wrapping
+    allowed to overflow - a single unbroken token is the one case where wrapping
     cannot help, and clipping it would lose text silently.
     """
     words = [word for word in normalise(text).split(" ") if word]
@@ -238,7 +238,7 @@ def segment_lines(lines: list[str], phrases: list[str]) -> list[list[Segment]]:
     This is the difference between a phrase that survives a line break and one
     that vanishes at it. Segmenting each line on its own means `mapped the ocean
     floor` matches nothing once the wrap puts `mapped the` on one line and
-    `ocean floor` on the next — neither half is the phrase, so neither renders
+    `ocean floor` on the next - neither half is the phrase, so neither renders
     gold, and the operator gets a warning about a picture that is otherwise
     fine. It fired on three of six phrases in a real run.
 
@@ -323,7 +323,7 @@ def _merge(segments: list[Segment]) -> list[Segment]:
 
 It reported phrases the wrap had divided, because segmentation ran per line and
 a divided phrase then rendered no gold. It fired on three of six phrases in one
-real run — a warning that common, about a post that was otherwise correct, only
+real run - a warning that common, about a post that was otherwise correct, only
 teaches the operator to skim the box that also carries the rules that matter.
 
 `segment_lines` matches against the whole text instead, so gold now continues
@@ -366,7 +366,7 @@ def plan(text: str, layout: Layout | None = None) -> OverlayPlan:
 
     The panel is a floor that grows, not a fixed band: `panel.ratio` is the
     minimum share of the image it takes and `panel.max_ratio` the most. The font
-    never shrinks to fit — there is no autofit, by design. The hero takes
+    never shrinks to fit - there is no autofit, by design. The hero takes
     whatever height is left, which is why the image-gen prompt hint and this
     number come from the same config.
     """
@@ -378,7 +378,7 @@ def plan(text: str, layout: Layout | None = None) -> OverlayPlan:
     font_size = layout.text.font_size_px
     line_height = round(font_size * layout.text.line_height_ratio)
 
-    # `normalise` first, then the case, then wrap — see `cased` for why that
+    # `normalise` first, then the case, then wrap - see `cased` for why that
     # order is not interchangeable. `wrap` normalises again, which is a no-op on
     # a string that has already been through it.
     lines = wrap(cased(normalise(text), layout), available * WIDTH_SAFETY, font_size, measurer)

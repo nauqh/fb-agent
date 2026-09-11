@@ -29,7 +29,7 @@ import { useQuery } from "@/lib/use-query";
 import { cn } from "@/lib/utils";
 
 /**
- * A hook at the length the writer actually produces — near the 65-word cap.
+ * A hook at the length the writer actually produces - near the 65-word cap.
  *
  * The one-line sample this replaced flattered every setting: at 36px it wrapped
  * to two lines, the panel sat on its `ratio` floor, and nothing about padding,
@@ -45,7 +45,7 @@ const SAMPLE =
 /**
  * Edit one Page's Composed Image, with the card beside it.
  *
- * Same shape as the old app's panel — controls on the left, a sticky preview on
+ * Same shape as the old app's panel - controls on the left, a sticky preview on
  * the right, both driven by the *unsaved* values so a slider moves the card
  * rather than the last save. Its sample text is editable for the same reason:
  * the thing being judged is how a real hook sits in the panel, and a fixed
@@ -54,13 +54,13 @@ const SAMPLE =
  * The preview is drawn in the browser rather than fetched. That is how the
  * queue and the draft sheet already work (`ComposedImage`), and it is why
  * editing shows up as you type instead of after a round trip. It is an
- * approximation of resvg, not resvg — good enough to choose a colour or a size,
+ * approximation of resvg, not resvg - good enough to choose a colour or a size,
  * not proof of the pixels. The published image is still the compositor's.
  *
  * Image dimensions and the font are absent on purpose. 4:5 is the tallest ratio
  * Facebook renders in feed, and a font family that does not match the TTF's
  * name table makes resvg substitute a serif *silently* and still return a valid
- * PNG — neither is a thing to offer in a form.
+ * PNG - neither is a thing to offer in a form.
  */
 export function LayoutEditor() {
   const { page, pageId } = usePageScope();
@@ -121,7 +121,7 @@ export function LayoutEditor() {
         {/* Three sections, named for the three things on the card: the mark
             stamped on the hero, the box it sits above, and the type inside that
             box. Grouped this way rather than by which model field they came
-            from — "Marks" held the highlight colour and the logo, which are the
+            from - "Marks" held the highlight colour and the logo, which are the
             same word and not the same object. The old app's split is the same
             one (`Text overlay typography` carries the font *and* its padding,
             because padding is a property of the text block). */}
@@ -209,7 +209,7 @@ export function LayoutEditor() {
               grows to fit its text, so its floor is a typographic decision made
               once, and an opacity that differs per Page is a way for one brand's
               cards to drift off the house style without anyone choosing it. The
-              API still takes `panel_ratio` and `panel_opacity` — this is a
+              API still takes `panel_ratio` and `panel_opacity` - this is a
               screen that does not offer them, not values that stopped existing. */}
           <Colour
             label="Background"
@@ -222,7 +222,7 @@ export function LayoutEditor() {
         <Group title="Text overlay">
           <Range
             label="Size"
-            hint="Fixed — there is no autofit. The panel grows, the type does not shrink."
+            hint="Fixed - there is no autofit. The panel grows, the type does not shrink."
             value={shown.text.font_size_px}
             min={20}
             max={72}
@@ -234,7 +234,7 @@ export function LayoutEditor() {
           {/* No line-height control. It tracks `layout.yml` for every Page: the
               panel already grows to fit, so the leading is a typographic
               decision made once rather than a knob per Page. The API still
-              takes `text_line_height_ratio` — this is a screen that does not
+              takes `text_line_height_ratio` - this is a screen that does not
               offer it, not a value that stopped existing. */}
           <Choice
             label="Align"
@@ -245,7 +245,7 @@ export function LayoutEditor() {
           />
           {/* Case is a drawing setting, so the hook stays in the case the
               writer produced and every existing draft follows this switch with
-              no regeneration. It applies to the highlight phrases too — both
+              no regeneration. It applies to the highlight phrases too - both
               sides, or an exact-substring match finds nothing and the gold
               disappears. */}
           <Choice
@@ -269,7 +269,7 @@ export function LayoutEditor() {
             onChange={(v) => set("highlight_color", v)}
           />
           {/* The four paddings are cells of the same grid as the rest, not a
-              grid of their own inside one cell — nested, they were half the
+              grid of their own inside one cell - nested, they were half the
               width of every other control and read as a different kind of
               thing. */}
           {(
@@ -363,7 +363,7 @@ function preview(base: ResolvedLayout, draft: LayoutPatch): ResolvedLayout {
   };
 }
 
-/** Short phrases, as `overlay.txt` asks the writer for — not one long clause. */
+/** Short phrases, as `overlay.txt` asks the writer for - not one long clause. */
 const SAMPLE_HIGHLIGHTS = [
   "deadly diphtheria outbreak",
   "a thousand miles away",
@@ -390,7 +390,7 @@ const SAMPLE_HIGHLIGHTS = [
  *   `watermark.max_px` capped at 22% of width, inset by `edge_margin_ratio`,
  *   `top_ratio` down the *hero* rather than the card.
  * - **The font was the app's sans.** The card is drawn in Arial Bold, which is
- *   wider — a hook that fit here could wrap to another line there.
+ *   wider - a hook that fit here could wrap to another line there.
  */
 function Preview({ layout, page }: { layout: ResolvedLayout; page: Page }) {
   const [sample, setSample] = useState(SAMPLE);
@@ -401,14 +401,14 @@ function Preview({ layout, page }: { layout: ResolvedLayout; page: Page }) {
   // The compositor's own second cap, applied to the box the logo fits inside.
   const markBox = Math.min(layout.watermark.max_px, layout.image.width * 0.22);
   // `top_ratio` is a fraction of the hero, and on a full overlay the hero is
-  // the whole card — so the mark hangs from the card's top rather than from the
+  // the whole card - so the mark hangs from the card's top rather than from the
   // bottom of the space above the panel. Same number, different denominator.
   const markTop = full
     ? `${layout.watermark.top_ratio * 1.25 * 100}cqw`
     : `${layout.watermark.top_ratio * 100}%`;
   // The third renderer of the same panel, after the compositor and
-  // `ComposedImage`. It takes the case the same way both of those do — text and
-  // phrases together, in the strings — or the switch beside it reads as a
+  // `ComposedImage`. It takes the case the same way both of those do - text and
+  // phrases together, in the strings - or the switch beside it reads as a
   // control that does nothing, which is what this preview exists to prevent.
   const shout = (value: string) =>
     layout.text.uppercase ? value.toUpperCase() : value;
@@ -418,7 +418,7 @@ function Preview({ layout, page }: { layout: ResolvedLayout; page: Page }) {
     <div className="space-y-2 lg:sticky lg:top-0 lg:self-start">
       {/* `container-type: inline-size` belongs here, on the card, not on the
           text. Putting it on the <p> gave `cqw` no valid container to resolve
-          against — it fell back to the viewport and rendered the hook at about
+          against - it fell back to the viewport and rendered the hook at about
           five times its real size, overflowing the card entirely. */}
       <div
         className="relative w-full overflow-hidden rounded-2xl border bg-muted [container-type:inline-size]"
@@ -433,16 +433,16 @@ function Preview({ layout, page }: { layout: ResolvedLayout; page: Page }) {
             hero's `flex-1` the other, and the card's own light background showed
             through the half-pixel between them as a thin white line above the
             panel. Painting the hero behind everything leaves nothing to show
-            through — the panel simply covers the bottom of it, which is what the
+            through - the panel simply covers the bottom of it, which is what the
             compositor does anyway. */}
         <div className="absolute inset-0 bg-gradient-to-br from-slate-600 to-slate-800" />
 
         <div className="absolute inset-0 flex flex-col">
-          {/* The hero's share of the height. Transparent — the gradient is
-              behind it — and here only to hang the watermark off, whose
+          {/* The hero's share of the height. Transparent - the gradient is
+              behind it - and here only to hang the watermark off, whose
               `top_ratio` is a fraction of the hero rather than of the card. */}
           <div className="relative min-h-0 flex-1">
-            {/* The chip, bottom-left of the hero share — whose bottom edge *is*
+            {/* The chip, bottom-left of the hero share - whose bottom edge *is*
                 the top of the panel, on either template. `cqw` throughout
                 because the container query resolves against the width, and the
                 compositor's gap is a fraction of the height: at 896×1120 a
@@ -459,7 +459,7 @@ function Preview({ layout, page }: { layout: ResolvedLayout; page: Page }) {
                   fontFamily: "Arial, Helvetica, sans-serif",
                   paddingInline: scale(layout.badge.padding_x_px),
                   paddingBlock: scale(layout.badge.padding_y_px),
-                  // Clamped to half the height, as the compositor does — past
+                  // Clamped to half the height, as the compositor does - past
                   // that resvg draws a stadium and this drew a rounded box.
                   borderRadius: scale(
                     Math.min(
@@ -474,8 +474,8 @@ function Preview({ layout, page }: { layout: ResolvedLayout; page: Page }) {
             ) : null}
 
             {!page.watermark_enabled ? null : mark ? (
-              // The mark comes from one of two origins — the public bucket, or
-              // the API's /assets mount through the proxy — and neither is in
+              // The mark comes from one of two origins - the public bucket, or
+              // the API's /assets mount through the proxy - and neither is in
               // next.config.ts's image hosts, so `next/image` cannot load it.
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -492,7 +492,7 @@ function Preview({ layout, page }: { layout: ResolvedLayout; page: Page }) {
             ) : (
               // What the compositor draws when a Page has no mark at all: its
               // name, right-anchored, at 2.2% of width. Not a fallback for a
-              // logo that failed to load — that raises — so seeing this here
+              // logo that failed to load - that raises - so seeing this here
               // means this Page publishes without a wordmark.
               <span
                 className="absolute font-bold text-white/95"
@@ -584,7 +584,7 @@ function Preview({ layout, page }: { layout: ResolvedLayout; page: Page }) {
  * Two sources, and the screen says which is in force. A committed asset under
  * `api/assets/` cannot 404 and needs no upload, which is why the two Pages that
  * have one keep it. The other eight have no artwork in the repo and no way to
- * put it there, so they publish unmarked — this is their route.
+ * put it there, so they publish unmarked - this is their route.
  */
 function Watermark({ page }: { page: Page }) {
   const [busy, setBusy] = useState(false);
@@ -661,7 +661,7 @@ function Watermark({ page }: { page: Page }) {
         <p className="pt-1 text-[0.7rem] text-muted-foreground">
           {page.watermark_enabled
             ? "The image below, or the fallback text where there is no image."
-            : "Off — the photograph publishes clean. Neither image nor text is drawn."}
+            : "Off - the photograph publishes clean. Neither image nor text is drawn."}
         </p>
       </div>
 
@@ -671,7 +671,7 @@ function Watermark({ page }: { page: Page }) {
             margin it has no reason to break at. */}
         <label className="block text-xs">Watermark image</label>
         <div className="flex items-center gap-3">
-          {/* Square, and big enough to read — the compositor fits the mark into
+          {/* Square, and big enough to read - the compositor fits the mark into
               a square box too (`max_px`, capped at 22% of width), so this is
               the shape it is actually judged in. At 56px it was a smudge that
               could not be told apart from the wrong file.
@@ -681,7 +681,7 @@ function Watermark({ page }: { page: Page }) {
               which is the one thing a thumbnail must not be. */}
           <div className="flex size-24 shrink-0 items-center justify-center rounded border bg-slate-700 p-2">
             {url ? (
-              // Same two origins as the preview's mark — see there.
+              // Same two origins as the preview's mark - see there.
               // eslint-disable-next-line @next/next/no-img-element
               <img src={url} alt="" className="max-h-full max-w-full object-contain" />
             ) : (
@@ -717,7 +717,7 @@ function Watermark({ page }: { page: Page }) {
                 ? "An uploaded mark. It wins over any committed asset."
                 : page.watermark_image_path
                   ? "A committed asset in the repo. An upload would override it."
-                  : "No image mark — the fallback text is what gets stamped."}
+                  : "No image mark - the fallback text is what gets stamped."}
             </p>
           </div>
         </div>
@@ -741,7 +741,7 @@ function Watermark({ page }: { page: Page }) {
         <p className="text-[0.7rem] text-muted-foreground">
           {hasImage
             ? "Only drawn if the image beside it is removed."
-            : `Drawn top-right, right now. Blank means this Page's name — “${page.name}”.`}
+            : `Drawn top-right, right now. Blank means this Page's name - “${page.name}”.`}
         </p>
       </div>
     </div>
@@ -802,7 +802,7 @@ function Badge({ page }: { page: Page }) {
  * panel reads (`facebook-prompts-settings-panel.tsx`, `grid gap-4
  * sm:grid-cols-2`). Stacked, sixteen controls made a column tall enough that
  * the sticky preview had scrolled out of the useful range by the padding
- * fields — and padding is the one group you cannot judge without watching the
+ * fields - and padding is the one group you cannot judge without watching the
  * card. A field that needs the width wraps itself in `sm:col-span-2`.
  */
 function Group({ title, children }: { title: string; children: React.ReactNode }) {

@@ -16,8 +16,8 @@ be re-run after connecting a new page.
 `facebook_page_id` is what `publish` targets and what the competitor join reads;
 a Page carrying a fake one would look configured and fail at publish time.
 
-Imported Pages have **no watermark and no avatar**. That is legal — the column
-is nullable and null means "render the page name as text" — but it is a
+Imported Pages have **no watermark and no avatar**. That is legal - the column
+is nullable and null means "render the page name as text" - but it is a
 deliberate gap rather than a finished state: the composite will print the name
 where the logo belongs until someone commits an asset and points the row at it.
 """
@@ -76,7 +76,7 @@ def main() -> None:
             if facebook_page_id in existing:
                 # Re-runnable: an existing Page still takes a logo it is missing,
                 # so this backfills rather than only importing. Nothing else on
-                # the row is touched — name and blog id may have been corrected
+                # the row is touched - name and blog id may have been corrected
                 # by hand, and Metricool is not the authority on those.
                 page = existing[facebook_page_id]
                 if logo and page.avatar_url != logo:

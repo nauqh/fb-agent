@@ -1,17 +1,17 @@
-# Competitor post image as Gemini vision input — decision note
+# Competitor post image as Gemini vision input - decision note
 
-**Status:** shipped 2026-08-20 (`6e654d0`), corrected the same day — see
+**Status:** shipped 2026-08-20 (`6e654d0`), corrected the same day - see
 "What shipped, and where it differed" at the foot. The live vision call is still
 unverified: Gemini answers 429 RESOURCE_EXHAUSTED until AI Studio is topped up.
 
 ## Question
 
 Did the old app use the image from a competitor post as input? Plan: follow the
-old mechanics in the new app (`fb-agent`) — the agent should read the image too.
+old mechanics in the new app (`fb-agent`) - the agent should read the image too.
 
 ## Old app (`D:\Laboratory\social-agent`, branch `feature/migrate-to-new-deployment`)
 
-Yes — but only as **vision input to Gemini**, never as the output image.
+Yes - but only as **vision input to Gemini**, never as the output image.
 
 - `src/services/facebookGenerateGraph.ts:464-467` (`writeThreeDraftsNode`):
   fetches the competitor post's `picture_url`, attaches it as an `inlineData`
@@ -34,9 +34,9 @@ Yes — but only as **vision input to Gemini**, never as the output image.
 - The writer is text-only today: `writer.user_prompt()` builds one string,
   `agent.run_sync(prompt)` (`writer/agent.py:206-265`). Feasibility proven:
   pydantic-ai 2.22 `run_sync` takes `str | Sequence[UserContent]`, and
-  `ImageUrl`/`BinaryContent` are valid parts — `output_type=DraftContent`
+  `ImageUrl`/`BinaryContent` are valid parts - `output_type=DraftContent`
   survives an image part. `usage_limits` exists for cost control.
-- **Existing rule**: a competitor picture may not be *reused* — `hero_from_source`
+- **Existing rule**: a competitor picture may not be *reused* - `hero_from_source`
   is RSS-only (`generate.py:283`), `source_instruction` says "reusing the image a
   rival page shot is lifting". The rule governs the **output** (hero); it never
   governs writer **input**. Reading ≠ reusing.
@@ -51,17 +51,17 @@ Yes — but only as **vision input to Gemini**, never as the output image.
    caption, exactly as the old app did. Input only.
 2. **Visual facts, not style.** The model may extract subject matter the caption
    alone misses (people, setting, products). It must not describe or imitate the
-   rival's composition, colors, or card layout — and **`image_prompt` is guarded
+   rival's composition, colors, or card layout - and **`image_prompt` is guarded
    too**: the model's preferred hero prompt must not ask the hero model to
    reproduce what the competitor image looks like. That is the existing
    off-limits rule, entering through the hero channel.
 3. **Gating: competitor posts only.** TWEET and RSS items also carry images;
-   they stay text-only — matching both the old app's draft path and the plan.
+   they stay text-only - matching both the old app's draft path and the plan.
    Broadening after measurement, not by default.
 4. **Image bytes are copied at first use, not at sync.** `resolve_sources` is
    where a browsed item becomes a row; that is the moment to fetch and hold the
    bytes (repost's `copy_original_image` is nearly the same code). Browsing
-   stays live-only — no mirror, no storing 100s of competitor images nobody
+   stays live-only - no mirror, no storing 100s of competitor images nobody
    ticks. If the copy fails, the run continues text-only **with a warning on
    the draft**, never silent, never a refusal. The old app's silent fallback is
    exactly the failure mode the repost work measured (0/382 links alive).
@@ -75,7 +75,7 @@ Yes — but only as **vision input to Gemini**, never as the output image.
 ## What the image is NOT used for
 
 - Not the draft's output image. Hero stays generated (or RSS-source reuse, the
-  existing rule) — the competitor image is input to the text writer only.
+  existing rule) - the competitor image is input to the text writer only.
 
 ## Implementation sketch
 
@@ -92,13 +92,13 @@ Yes — but only as **vision input to Gemini**, never as the output image.
 
 Decisions 1, 2, 3 and 6 shipped as written. The rest:
 
-- **Decision 4, first half — bytes are fetched in `_run_one`, not copied in
+- **Decision 4, first half - bytes are fetched in `_run_one`, not copied in
   `resolve_sources`, and nothing is persisted.** `resolve_sources` runs at
   `POST /generate` and `_run_one` seconds later on the background task, so the
   fetch is no staler; and nothing downstream needs the bytes a second time,
   because the hero never uses them. Persisting them would have been a column
   and a cleanup path for data with one reader.
-- **Decision 4, second half — "never silent" was broken on arrival and is now
+- **Decision 4, second half - "never silent" was broken on arrival and is now
   fixed.** The warning was given the prefix `"Image: "`, which is
   `IMAGE_WARNING`, which every hero-rebuild path in `routes/drafts.py` strips
   before re-deriving from `build_image` (three call sites). One redraw, crop
@@ -113,10 +113,10 @@ Decisions 1, 2, 3 and 6 shipped as written. The rest:
   `MockTransport`. Two gaps surfaced doing it: `image/jpg` and any
   mixed-case content-type were rejected where the old app's `/i` regex
   accepted them, and a 200 with an **empty body** became
-  `BinaryImage(data=b"")` — which the model rejects, and a model error fails
+  `BinaryImage(data=b"")` - which the model rejects, and a model error fails
   the whole draft, the one outcome decision 4 rules out. The old app checked
   for zero bytes; this now does too.
-- **`rewrite` stays text-only — decided 2026-08-20, not overlooked.** `write`
+- **`rewrite` stays text-only - decided 2026-08-20, not overlooked.** `write`
   takes the image and `writer.rewrite` does not, which looked like a gap until
   the old app was checked: its regenerate sends `buildDraftContext(draft)` and
   has never sent an image (`facebookDraftRegenerateService.ts:60-111`). Only
@@ -125,12 +125,12 @@ Decisions 1, 2, 3 and 6 shipped as written. The rest:
 
   The picture is not lost by leaving it out. `keeping` puts the two fields the
   operator is not replacing into the prompt verbatim, and those were written
-  while the model could see the image — so its contribution to the subject is
+  while the model could see the image - so its contribution to the subject is
   already in front of the call as prose. Against that, a rewrite is
   synchronous and pressed repeatedly, so sending the image would buy a CDN
   fetch and vision tokens per press, and a fetch that failed mid-session would
   need a warning channel on `RewriteProposal` that does not exist (the route
-  writes nothing to the row by design — *Rewrite proposes, Save writes*).
+  writes nothing to the row by design - *Rewrite proposes, Save writes*).
 
 ## Follow-ups
 

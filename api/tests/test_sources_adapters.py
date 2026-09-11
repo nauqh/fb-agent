@@ -1,7 +1,7 @@
 """Normalisation, over recorded payloads. No network.
 
 Each adapter's job is turning one vendor's shape into a `SourceItemBase`, so
-that is what these test — the traps, not the happy path.
+that is what these test - the traps, not the happy path.
 """
 
 from datetime import datetime, timezone
@@ -67,7 +67,7 @@ def test_a_timeout_becomes_a_metricool_error(monkeypatch):
     """The route turns MetricoolError into a 502 and anything else into a 500.
 
     This endpoint moves 1.6MB and takes ~5.5s on a good day, and it does time
-    out in practice — so an unconverted timeout means the operator gets a stack
+    out in practice - so an unconverted timeout means the operator gets a stack
     trace instead of a sentence.
     """
     from app.models import Page
@@ -126,7 +126,7 @@ def test_an_rss_item_carries_its_headline_and_summary(entries):
     item = rss._to_source_item(entries[0], "Smithsonian Magazine")
 
     assert item.kind is SourceKind.RSS
-    # The link, not the guid — the guid here is an opaque internal tag that the
+    # The link, not the guid - the guid here is an opaque internal tag that the
     # operator cannot open and `is_curated_url` cannot check.
     assert item.external_id == "https://www.smithsonianmag.com/history/ocean-floor-180987410/"
     assert item.author == "Smithsonian Magazine"
@@ -172,7 +172,7 @@ def test_only_curated_hosts_pass_the_guard(session, page):
 def test_every_curated_feed_host_is_one_an_item_can_come_from(session, page):
     """The guard compares an *item* URL against *feed* hosts.
 
-    That only holds while each publisher serves both from one host — a feed
+    That only holds while each publisher serves both from one host - a feed
     moved to feedburner would silently start refusing its own items.
     """
     hosts = rss.curated_hosts(session)
@@ -183,7 +183,7 @@ def test_every_curated_feed_host_is_one_an_item_can_come_from(session, page):
 def test_the_host_set_spans_every_page(session, page):
     """`curated_hosts` is the union, deliberately.
 
-    An RSS item is not tied to a Page — only a competitor post is — so the guard
+    An RSS item is not tied to a Page - only a competitor post is - so the guard
     has no Page to check against and the question it answers is "is this one of
     ours". A second Page's feed must therefore pass on the first Page's cart.
     """
@@ -215,7 +215,7 @@ def test_merge_drops_stale_items_and_duplicate_stories():
     merged = rss._merge(
         [
             SourceItemBase(kind=SourceKind.RSS, external_id="a", text="Same story\n\none", published_at=now),
-            # Same story, different URL — routine across these seven feeds.
+            # Same story, different URL - routine across these seven feeds.
             SourceItemBase(kind=SourceKind.RSS, external_id="b", text="Same story\n\ntwo", published_at=now),
             SourceItemBase(kind=SourceKind.RSS, external_id="c", text="Ancient", published_at=old),
         ]

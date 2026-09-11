@@ -1,12 +1,12 @@
 """Getting a Draft out: hand Metricool the words and a link to the picture.
 
-No network. `metricool` takes an `httpx.Client`, so the transport is the seam —
+No network. `metricool` takes an `httpx.Client`, so the transport is the seam -
 these tests drive the real request-building and response-handling code with a
 `MockTransport` underneath, rather than stubbing the functions under test.
 
 The rules being pinned are the ones that cost something to relearn: a
 `publicationDate` carries no offset, `Accept` stays off the normalize GET, and
-a published draft is frozen — which is what allows the post to point at the
+a published draft is frozen - which is what allows the post to point at the
 live composite instead of a copy made for the purpose.
 
 Storing the picture is `test_media.py`. Nothing is uploaded here any more.
@@ -60,7 +60,7 @@ def _jpeg() -> bytes:
     """What a composite is now. Named separately so the fixture is not a lie.
 
     A PNG stored under a `.jpg` name is the exact mismatch `media._content_type`
-    exists to catch, and the local fake does not catch it — so a fixture that
+    exists to catch, and the local fake does not catch it - so a fixture that
     took the shortcut would pass here and be wrong about production.
     """
     buffer = io.BytesIO()
@@ -126,7 +126,7 @@ def test_the_body_says_metricool_owns_publishing():
     assert body["providers"] == [
         {"network": "facebook", "facebookData": {"type": "POST"}}
     ]
-    assert body["media"] == ["https://x/12.jpg"], "a list — the id form needs an id"
+    assert body["media"] == ["https://x/12.jpg"], "a list - the id form needs an id"
 
 
 def test_the_draft_flag_is_what_keeps_a_test_off_the_page(monkeypatch):
@@ -247,7 +247,7 @@ def test_publishing_schedules_against_the_composite_itself(client, ready, publis
 def test_a_chosen_time_reaches_the_scheduler_naive(client, ready, published):
     """The drawer's "Publish at" is the whole of this app's scheduling.
 
-    It arrives as a naive stamp and must stay naive all the way down —
+    It arrives as a naive stamp and must stay naive all the way down -
     `publication_date` attaches `settings.timezone` itself, and an offset
     suffix is what Metricool rejects. A `datetime-local` input cannot produce
     one, so the guard is that nothing in between adds it.
@@ -264,7 +264,7 @@ def test_a_chosen_time_reaches_the_scheduler_naive(client, ready, published):
 
 
 def test_no_time_means_as_soon_as_metricool_will_take_it(client, ready, published):
-    """Omitting it is not "some default hour" — it is `None`, and the sender
+    """Omitting it is not "some default hour" - it is `None`, and the sender
     turns that into now plus `MIN_MINUTES_AHEAD`."""
     client.post(f"/drafts/{ready.id}/publish")
 
@@ -286,7 +286,7 @@ def test_the_caption_is_the_post_the_hook_and_old_hashtags_are_not(
     """The hook is drawn on the image; repeating it prints it twice on one post.
 
     Hashtags were removed on 2026-08-12 (feedback E1, reversed by the client).
-    The column was kept, so 20 of 21 drafts still hold tags — `ready` is one of
+    The column was kept, so 20 of 21 drafts still hold tags - `ready` is one of
     them. They must not reach Facebook: a removal that still publishes tags for
     every draft written before it is not a removal, and the operator asked for
     the stored values to be left alone rather than for the feature to linger.
@@ -355,8 +355,8 @@ def test_a_page_with_no_blog_id_cannot_publish(client, session, page, ready, pub
     assert published["order"] == []
 
 
-# A scheduled draft cannot be **redrawn**. ADR-0001 gave the reason — the
-# planner owns a scheduled post — but the rule went unenforced until the
+# A scheduled draft cannot be **redrawn**. ADR-0001 gave the reason - the
+# planner owns a scheduled post - but the rule went unenforced until the
 # composite became the thing Metricool links to. Facebook fetches that link when
 # the post is due, so any edit that redraws, and any delete, would pull the
 # picture out from under a post that has not gone out yet.
@@ -426,8 +426,8 @@ def test_a_published_draft_cannot_be_deleted(client, ready, published):
 def test_the_screen_can_ask_whether_publish_reaches_an_audience(client, monkeypatch):
     """Rehearsal mode was invisible, and seven real posts paid for it.
 
-    `METRICOOL_PUBLISH_AS_DRAFT` differs between environments on purpose — false
-    on Railway, true on a laptop — and until this endpoint existed no screen
+    `METRICOOL_PUBLISH_AS_DRAFT` differs between environments on purpose - false
+    on Railway, true on a laptop - and until this endpoint existed no screen
     could tell which it was talking to. Both said "Handed to Metricool".
     """
     monkeypatch.setattr(settings, "metricool_publish_as_draft", True)
@@ -465,7 +465,7 @@ def test_publish_mode_is_read_per_request_not_captured_at_import(client, monkeyp
 def test_an_edit_carries_the_post_id_in_its_body():
     """Without it Metricool duplicates instead of replacing.
 
-    The path already names the post, so this looks redundant — right up until
+    The path already names the post, so this looks redundant - right up until
     the planner has two of everything. The old app omits it
     (`metricoolService.ts:622`) and that is exactly what it does.
     """
@@ -538,7 +538,7 @@ def test_a_refused_delete_still_reports_what_metricool_said():
 
 def test_the_time_a_post_is_scheduled_for_survives_metricools_spelling():
     """It answers `Asia/Bangkok` for the `Asia/Ho_Chi_Minh` we sent, and drops
-    the seconds. Same instant, different words — so the wall clock is read and
+    the seconds. Same instant, different words - so the wall clock is read and
     the zone ignored, and the value stays naive so a round trip cannot move it.
     """
     from datetime import datetime
@@ -576,7 +576,7 @@ def resyncs(monkeypatch):
     """Metricool's side of an edit, recorded rather than performed.
 
     `get_post` answers a fixed time so a test can prove an edit did not move the
-    post, and `update` hands back a *different* id every call — which is what the
+    post, and `update` hands back a *different* id every call - which is what the
     real API does, and the thing a Draft has to keep up with.
     """
     calls: dict = {"order": [], "updates": [], "deleted": []}
@@ -622,7 +622,7 @@ def test_a_caption_edit_reaches_metricool_and_the_new_id_is_recorded(
     """The whole of D6's first half: fix a typo without opening the planner.
 
     The id assertion is the load-bearing one. Metricool replaced the post, so a
-    Draft still holding `8891` would be pointing at something it just deleted —
+    Draft still holding `8891` would be pointing at something it just deleted -
     which is precisely the old app's bug.
     """
     client.post(f"/drafts/{ready.id}/publish")
@@ -639,7 +639,7 @@ def test_editing_the_text_does_not_move_the_post(client, ready, published, resyn
     """`update` replaces the whole post, so an edit has to resend the time.
 
     Sending nothing means `publication_date(None)`, which is two minutes from
-    now — a caption fix would quietly reschedule the post to immediately. So the
+    now - a caption fix would quietly reschedule the post to immediately. So the
     time is read off the planner first.
     """
     from datetime import datetime
@@ -689,7 +689,7 @@ def test_unscheduling_takes_the_post_out_and_gives_the_draft_back(
 ):
     """The way back that D6 said did not exist.
 
-    The draft survives — the text and the picture are still good, and the
+    The draft survives - the text and the picture are still good, and the
     complaint was that a mistake could not be undone, not that the work should
     be thrown away.
     """
@@ -709,7 +709,7 @@ def test_unscheduling_lets_the_picture_be_redrawn_again(
     """Clearing the id is what unfreezes the composite, and the order matters.
 
     The post is out of the planner before anything can delete the file it was
-    pointing at — which is the whole reason the freeze existed.
+    pointing at - which is the whole reason the freeze existed.
     """
     client.post(f"/drafts/{ready.id}/publish")
     assert client.post(f"/drafts/{ready.id}/image").status_code == 409
@@ -736,7 +736,7 @@ def test_a_post_metricool_never_named_cannot_be_edited(
     client, ready, session, published, resyncs
 ):
     """`publish` writes "queued" when the id was withheld. It is a marker, not a
-    handle — there is nothing to send, so this has to say so rather than PUT to
+    handle - there is nothing to send, so this has to say so rather than PUT to
     `/posts/queued`."""
     client.post(f"/drafts/{ready.id}/publish")
     draft = session.get(Draft, ready.id)

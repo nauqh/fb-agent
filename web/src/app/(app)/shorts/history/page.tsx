@@ -26,11 +26,11 @@ import { useQuery } from "@/lib/use-query";
 /**
  * Everything this workspace has made, newest first.
  *
- * A list, not a table — the columns fought each other for width and the two
+ * A list, not a table - the columns fought each other for width and the two
  * pieces of text that matter when a job goes wrong (the source URL and the
  * error) kept losing, truncated to slivers. Each row is now three stacked
- * lines: what it is and how it landed, where it came from, and — for a failed
- * job — the whole reason why, wrapped, in the only red on the screen.
+ * lines: what it is and how it landed, where it came from, and - for a failed
+ * job - the whole reason why, wrapped, in the only red on the screen.
  * Completed rows offer the artifact; everything else is a status and a reason.
  */
 export default function HistoryScreen() {
@@ -38,6 +38,7 @@ export default function HistoryScreen() {
     () => listJobs(50),
     [],
     {
+      cacheKey: "shorts-jobs",
       // While anything is in flight the rows can move; once everything is
       // settled a refresh is the only way it changes again.
       intervalMs: 4_000,
@@ -51,7 +52,7 @@ export default function HistoryScreen() {
 
   const [selected, setSelected] = useState<YoutubeJob | null>(null);
 
-  // Delete asks first — the produced mp4 goes with the row and there is no
+  // Delete asks first - the produced mp4 goes with the row and there is no
   // way back (the review queue's rule: reject is undoable, delete is not).
   const [pendingDelete, setPendingDelete] = useState<YoutubeJob | null>(null);
 
@@ -99,7 +100,7 @@ export default function HistoryScreen() {
 
       {/* The artifact, on demand: clicking a completed row opens the video in
           a dialog (the app's lightbox pattern), so history becomes the library
-          of what was made — not a table of filenames. */}
+          of what was made - not a table of filenames. */}
       <VideoDialog job={selected} onClose={() => setSelected(null)} />
 
       <Dialog
@@ -111,7 +112,7 @@ export default function HistoryScreen() {
             Delete “{pendingDelete?.raw_title ?? `Short #${pendingDelete?.id}`}”?
           </DialogTitle>
           <DialogDescription>
-            The produced file is removed with the row. There is no way back —
+            The produced file is removed with the row. There is no way back -
             make it again on Produce if you need it.
           </DialogDescription>
           <DialogFooter className="gap-2">
@@ -135,12 +136,12 @@ export default function HistoryScreen() {
 /**
  * One job, three lines:
  *
- * 1. **Title · status · made · actions** — the scan line. The title opens the
+ * 1. **Title · status · made · actions** - the scan line. The title opens the
  *    video when there is one, so the play affordance lives where the eye
  *    already is.
- * 2. **Source URL · trim · CTA** — the recipe, in mono. The URL is a real
+ * 2. **Source URL · trim · CTA** - the recipe, in mono. The URL is a real
  *    link out to YouTube, truncated but titled in full.
- * 3. **The error, for a failed job** — never truncated. It is the only
+ * 3. **The error, for a failed job** - never truncated. It is the only
  *    record of why the job died.
  */
 function JobRow({
@@ -186,7 +187,7 @@ function JobRow({
           className="hidden w-20 shrink-0 text-right font-mono text-[11px] text-muted-foreground sm:block"
           title={job.finished_at ? fullDate(job.finished_at) : undefined}
         >
-          {job.finished_at ? timeAgo(job.finished_at) : "—"}
+          {job.finished_at ? timeAgo(job.finished_at) : "-"}
         </span>
 
         <div className="flex shrink-0 items-center gap-1">

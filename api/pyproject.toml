@@ -1,7 +1,7 @@
 [project]
 name = "fb-agent-api"
 version = "0.1.0"
-description = "Facebook Agent — draft factory"
+description = "Facebook Agent - draft factory"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi[standard]>=0.115",
@@ -11,7 +11,7 @@ dependencies = [
     "pydantic-settings>=2.6",
     "sqlmodel>=0.0.22",
     # Supabase Postgres. `[binary]` so a deploy needs no libpq and no compiler
-    # — the pure-python build wants both. psycopg 3, not psycopg2: the URL is
+    # - the pure-python build wants both. psycopg 3, not psycopg2: the URL is
     # `postgresql+psycopg://`, and psycopg2 would silently be a different
     # driver behind the same-looking DSN.
     "psycopg[binary]>=3.2",
@@ -23,7 +23,7 @@ dependencies = [
     "pyyaml>=6.0",
     "feedparser>=6.0.14",
     # Windows ships no tz database, so `ZoneInfo("Asia/Ho_Chi_Minh")` raises
-    # there — and the publish path needs it to stamp a naive local time for
+    # there - and the publish path needs it to stamp a naive local time for
     # Metricool. Harmless on Linux, where zoneinfo prefers the system copy.
     "tzdata>=2026.1",
     "alembic>=1.19.1",
@@ -54,14 +54,14 @@ line-length = 88
 # `E4`/`E7`/`E9` + `F` is the classic default. The other three are what this
 # code already assumes: `I` because the editor sorts imports on save, and
 # `BLE`/`E402` because the tree is dotted with `# noqa: BLE001` and
-# `# noqa: E402` — without those rules on, every one of those comments is dead.
+# `# noqa: E402` - without those rules on, every one of those comments is dead.
 # RUF100 is what keeps that honest, by flagging a noqa that no longer suppresses
 # anything.
 select = ["E4", "E7", "E9", "F", "I", "BLE", "RUF100"]
 
 # There was a [tool.ruff.lint.flake8-bugbear] block here configuring
 # extend-immutable-calls. It was removed because `B` is not selected above, so
-# B008 never ran and the setting configured nothing — `ruff check
+# B008 never ran and the setting configured nothing - `ruff check
 # --show-settings` confirmed it was absent from the enabled rules.
 #
 # Add it back with `B`, not before, and include `fastapi.File`: the upload

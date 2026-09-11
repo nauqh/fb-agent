@@ -3,15 +3,15 @@
 Adds the assignment table and the join key it needs on `source_item`.
 
 **Seeds nothing, on purpose.** Every Page starts with zero assignments, and
-`routes/sources._visible_to` falls back to provenance — the Metricool set a Page
-owns — while that is true. So this revision changes no grid: the app behaves
+`routes/sources._visible_to` falls back to provenance - the Metricool set a Page
+owns - while that is true. So this revision changes no grid: the app behaves
 exactly as before until someone assigns a competitor, and the first assignment
 switches that Page over.
 
 Seeding assignments from each Page's current Metricool set was the obvious
 alternative and was rejected. It would need a vendor call from inside a
-migration — credentials, network, and a 502 that leaves the schema half-applied
-— to reproduce a state the fallback already provides for free.
+migration - credentials, network, and a 502 that leaves the schema half-applied
+- to reproduce a state the fallback already provides for free.
 
 `source_item.competitor_page_id` is left null on existing rows for the same
 reason: it is populated from the sync, and a Refresh on the Competitors tab

@@ -2,7 +2,7 @@
  * The one place that knows the API is over HTTP.
  *
  * FastAPI reports every failure as `{"detail": "..."}`, and that string is
- * written to be read by the operator — "Not from a curated feed", "tweet not
+ * written to be read by the operator - "Not from a curated feed", "tweet not
  * available: Could not find post". Surfacing it verbatim is what makes a toast
  * worth reading; collapsing it to "Request failed" throws away the only part
  * that says what to do next.
@@ -21,7 +21,7 @@ const BASE = "/api";
  * leave the queue showing "Pending review" until a reload.
  *
  * It fires here rather than in `api/drafts.ts` so it cannot be forgotten on
- * the next endpoint — the method already says whether a call mutates.
+ * the next endpoint - the method already says whether a call mutates.
  */
 function mutated(method?: string): void {
   if (method && method !== "GET") emit();
@@ -56,7 +56,7 @@ async function detail(response: Response): Promise<string> {
       return body.detail.map((issue: { msg: string }) => issue.msg).join("; ");
     }
   } catch {
-    // Non-JSON body — the status line is all there is.
+    // Non-JSON body - the status line is all there is.
   }
   return `${response.status} ${response.statusText}`;
 }
@@ -67,7 +67,7 @@ export function get<T>(
 ): Promise<T> {
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries(params ?? {})) {
-    // An array becomes the key repeated — `?page_ids=1&page_ids=2` — which is
+    // An array becomes the key repeated - `?page_ids=1&page_ids=2` - which is
     // what FastAPI parses into a `list[int]`. Comma-joining would arrive as the
     // single string "1,2" and fail validation.
     for (const one of Array.isArray(value) ? value : [value]) {
@@ -94,7 +94,7 @@ export function put<T>(path: string, body: unknown): Promise<T> {
 /**
  * A multipart POST. The requests in the app that do not send JSON.
  *
- * `FormData` rather than a typed body on purpose — see the note in `request`
+ * `FormData` rather than a typed body on purpose - see the note in `request`
  * about the `Content-Type` header, which must be left unset so the browser can
  * add the boundary.
  */

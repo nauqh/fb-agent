@@ -29,7 +29,7 @@ def upgrade() -> None:
         sa.Column("template", sqlmodel.sql.sqltypes.AutoString(), nullable=True),
     )
     # Adjusted from autogenerate, which wrote this as a bare `nullable=False`
-    # with no default — the same trap `20974f89ec28` documents. Postgres cannot
+    # with no default - the same trap `20974f89ec28` documents. Postgres cannot
     # add a NOT NULL column with no default to a table that already has rows,
     # and it fails at deploy rather than here.
     #

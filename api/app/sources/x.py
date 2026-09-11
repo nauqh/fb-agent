@@ -36,7 +36,7 @@ def parse_tweet_id(url_or_id: str) -> str:
     match = _TWEET_ID.search(value)
     if not match:
         raise XError(
-            f"That does not look like a tweet URL — expected .../status/<id>, got {url_or_id!r}"
+            f"That does not look like a tweet URL - expected .../status/<id>, got {url_or_id!r}"
         )
     return match.group(1)
 

@@ -11,7 +11,7 @@ place, which is not a thing to do from a form". The probing was the real
 requirement, and it moved into the form rather than being dropped: `POST /feeds`
 runs `rss.probe` and refuses to write a row for a feed that does not answer,
 does not parse, or parses to nothing. The measurements come back with the row so
-the judgement is still made on evidence — it is just made on a screen.
+the judgement is still made on evidence - it is just made on a screen.
 """
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -118,8 +118,8 @@ def add_feed(
 def remove_feed(feed_id: int, session: Session = Depends(get_session)) -> None:
     """Removing a feed changes tomorrow's grid and nothing that already happened.
 
-    Nothing points at a feed — a Source Item carries its publisher as `author`,
-    not a foreign key — so this cannot cascade into published work. That was the
+    Nothing points at a feed - a Source Item carries its publisher as `author`,
+    not a foreign key - so this cannot cascade into published work. That was the
     argument for the shape of the table and this is where it pays off.
     """
     feed = session.get(Feed, feed_id)

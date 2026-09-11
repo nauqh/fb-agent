@@ -17,7 +17,7 @@ in `app/youtube/process.py`. The
 row readable after a channel's ranking shifts.
 
 **No `youtube_schedule` here.** An earlier draft of this revision created one
-and it still exists in the live database, empty and unreferenced — the rebuild
+and it still exists in the live database, empty and unreferenced - the rebuild
 stops at "produce a video", and nothing distributes to Metricool yet. Whoever
 builds that ships the table with the model, in its own revision, and drops the
 orphan. Until then `alembic check` reports it as a removed table; that is this
@@ -64,7 +64,7 @@ def upgrade() -> None:
         sa.Column("raw_title", sa.String(), nullable=True),
         sa.Column("trim_duration", sa.Integer(), nullable=False, server_default=sa.text("3")),
         sa.Column("cta_template_id", sa.Integer(), sa.ForeignKey("cta_template.id"), nullable=False),
-        # VARCHAR enums, per _stored_enum — see head of file.
+        # VARCHAR enums, per _stored_enum - see head of file.
         sa.Column("status", sa.String(length=32), nullable=False, server_default=sa.text("'queued'")),
         sa.Column("progress", sa.Integer(), nullable=False, server_default=sa.text("0")),
         sa.Column("processed_video_path", sa.String(), nullable=True),

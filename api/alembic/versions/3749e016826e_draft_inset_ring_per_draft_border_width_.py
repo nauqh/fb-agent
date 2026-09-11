@@ -3,7 +3,7 @@
 Both nullable, and null is load-bearing rather than "not filled in": it means
 the draft takes the Page's `page_layout.portrait_*`, which is the same contract
 `inset_size_px` beside them already has. So there is no backfill and no server
-default — every existing row keeps rendering exactly as it does today, because
+default - every existing row keeps rendering exactly as it does today, because
 null is what it already resolves through.
 
 Nullable also makes this safe to apply before the code that reads it: the

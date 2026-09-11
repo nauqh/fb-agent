@@ -43,14 +43,14 @@ import { cn } from "@/lib/utils";
  * What belongs to the account rather than to a Page.
  *
  * Split out of Settings because the two answer different questions and mixing
- * them put an account-wide number under a per-Page heading — "48 configured"
+ * them put an account-wide number under a per-Page heading - "48 configured"
  * beside a Page name, when 48 was neither that Page's nor the account's total.
  *
  * Here: the competitor pool and its Metricool budget. On Settings: which of
  * this pool a given Page reads, plus that Page's feeds and watermark.
  *
  * **Prompts left this screen on 2026-08-17.** They were here read-only, under a
- * hint saying they are "edited in your editor" — which stopped being true the
+ * hint saying they are "edited in your editor" - which stopped being true the
  * day Settings grew an editor for them, leaving the same three files described
  * two ways on two screens. They are per-Page, so they live with the Page's other
  * per-Page settings and only there.
@@ -130,8 +130,8 @@ export default function GlobalScreen() {
  * The join is the design. Metricool's segments *are* the pool's brands, so the
  * meter's segments and the filter chips are the same list, and picking a brand
  * both narrows the table and lights the slice of the bar that brand spent. The
- * question this screen exists to answer — "where did the hundred go, and is any
- * of it producing anything" — is then one gesture rather than two screens'
+ * question this screen exists to answer - "where did the hundred go, and is any
+ * of it producing anything" - is then one gesture rather than two screens'
  * worth of arithmetic.
  *
  * 100 is Metricool's published figure for Starter and Advanced alike. Their
@@ -153,7 +153,7 @@ function CompetitorPool({
   error: string | null;
   loading: boolean;
 }) {
-  // Null is "no filter", which is not the same as any page id — hence null
+  // Null is "no filter", which is not the same as any page id - hence null
   // rather than 0, which is a legal id in a table that starts at 1.
   const [brand, setBrand] = useState<number | null>(null);
   const [silentOnly, setSilentOnly] = useState(false);
@@ -167,7 +167,7 @@ function CompetitorPool({
   }
 
   // Keyed by our Page id, because that is what the pool rows carry. The join to
-  // Metricool's profiles is `metricool_blog_id` — exact, unlike matching on the
+  // Metricool's profiles is `metricool_blog_id` - exact, unlike matching on the
   // display name, which is the same string only by convention.
   const blogIdOf = new Map(pages.map((one) => [one.id, one.metricool_blog_id]));
   const selectedBlogId = brand === null ? null : blogIdOf.get(brand) ?? null;
@@ -194,7 +194,7 @@ function CompetitorPool({
     // Deliberately not a red border when the allowance is tight, which is what
     // the budget did as its own card. This card is now the whole screen's
     // subject, and ringing all of it in red says "everything here is wrong"
-    // rather than "you have eight slots left" — the warning belongs on the
+    // rather than "you have eight slots left" - the warning belongs on the
     // figure and on the empty end of the bar, which is where it is.
     <section className="overflow-hidden rounded-2xl border bg-card">
       <div className="p-5 pb-4">
@@ -262,7 +262,7 @@ function CompetitorPool({
 
           {/* Silent is a filter rather than a red number in the corner, because
               it is the only thing on this screen that is actionable per row:
-              these are slots being spent on nothing. It also explains the sort —
+              these are slots being spent on nothing. It also explains the sort -
               the server puts silent sources first, and without this the list
               opens on a dozen rows reading "none" for no visible reason. */}
           {silent > 0 ? (
@@ -310,7 +310,7 @@ function CompetitorPool({
  * four brands out of eleven readable at a glance.
  *
  * Selection dims rather than recolours. The palette is neutral by design, so
- * four brands cannot each have a hue — instead the selected brand's segment
+ * four brands cannot each have a hue - instead the selected brand's segment
  * stays solid and the rest drop back, which reads the same in light and dark
  * and needs no legend swatches to decode.
  */
@@ -323,7 +323,7 @@ function Meter({
   selected: string | null;
   tight: boolean;
 }) {
-  // Brands watching nobody are left out — a zero-width segment is invisible —
+  // Brands watching nobody are left out - a zero-width segment is invisible -
   // but `Unmanaged` still counts them, because "why only four when I have
   // eleven brands?" is the first question the bar otherwise raises.
   const spent = data.profiles.filter((one) => one.competitors > 0);
@@ -342,7 +342,7 @@ function Meter({
         return (
           <div
             key={profile.blog_id}
-            title={`${profile.label} — ${profile.competitors}`}
+            title={`${profile.label} - ${profile.competitors}`}
             style={{ width: `${(profile.competitors / data.limit) * 100}%` }}
             className={cn(
               "h-full transition-colors first:rounded-l-full",
@@ -363,7 +363,7 @@ function Meter({
  * The brands spending the allowance that this app has no Page for.
  *
  * Stated rather than implied. They hold no pool rows, so they can never appear
- * in the table or its chips — but they do spend slots, and that is the half
+ * in the table or its chips - but they do spend slots, and that is the half
  * that surprises: an operator counting only what this app shows would read the
  * remaining figure as much larger than it is.
  */
@@ -385,7 +385,7 @@ function Unmanaged({ data }: { data: Allowance | null }) {
   return parts.length > 0 ? <>{parts.join(" · ")}</> : null;
 }
 
-/** A filter pill. Solid when it is the one in force — the palette has no second
+/** A filter pill. Solid when it is the one in force - the palette has no second
  *  hue to spend on selection, so selection is the inversion. */
 function Chip({
   active,
@@ -441,7 +441,7 @@ function ChipCount({
 /**
  * Add a page to the pool.
  *
- * Metricool has no account-level list — a competitor belongs to a brand — so
+ * Metricool has no account-level list - a competitor belongs to a brand - so
  * this has to name one. It decides only where the allowance is spent, not who
  * reads it: any Page can be assigned the result afterwards.
  */
@@ -516,7 +516,7 @@ const POOL_PAGE_SIZE = 12;
  * The pool itself.
  *
  * A table rather than the card grid Settings uses, because these rows are read
- * as a list — which brand, how many Pages read it, is it producing — and four
+ * as a list - which brand, how many Pages read it, is it producing - and four
  * short columns compare down a column far better than across a card.
  *
  * Silent ones come first from the server: a competitor configured and producing
@@ -563,7 +563,7 @@ function PoolTable({
             <th className="w-20 pb-2 text-right">
               <HeaderHint
                 align="end"
-                hint="How many of this competitor's posts are stored from the last syncs. “none” means it is configured but has published nothing we picked up — a dead source looks identical to an unconfigured one everywhere else."
+                hint="How many of this competitor's posts are stored from the last syncs. “none” means it is configured but has published nothing we picked up - a dead source looks identical to an unconfigured one everywhere else."
               >
                 Posts
               </HeaderHint>
@@ -581,7 +581,7 @@ function PoolTable({
               className="group transition-colors hover:bg-muted/40"
             >
               <td className="py-2 pr-3">
-                {/* The logo is how a competitor is actually recognised — several
+                {/* The logo is how a competitor is actually recognised - several
                     of these are "Historical facts" / "History Addicts" /
                     "History Remembered", which do not tell apart by name. */}
                 <div className="flex min-w-0 items-center gap-2.5">
@@ -631,8 +631,8 @@ function PoolTable({
       </table>
 
       {/* Paged rather than scrolled. Forty-eight rows is three screens, and the
-          reason to look at this table is to compare — which brand, who reads it,
-          is it producing — which a column running off the bottom defeats. The
+          reason to look at this table is to compare - which brand, who reads it,
+          is it producing - which a column running off the bottom defeats. The
           pager hides itself when everything already fits. */}
       <QueuePagination
         totalItems={rows.length}
@@ -678,7 +678,7 @@ function HeaderHint({
 /**
  * Which brand pays for this competitor, and which Pages actually read it.
  *
- * Two columns until now — "In brand" and "Read by" — and each needed a tooltip
+ * Two columns until now - "In brand" and "Read by" - and each needed a tooltip
  * to say how it differed from the other. They are one column here, and the
  * arrow does the explaining: a brand alone means the slot and the reader are
  * the same, `A → B` means B reads what A is paying for. On this account that is
@@ -693,7 +693,7 @@ function HeaderHint({
  * rows were unassigned and 44 of those were being read every day.
  *
  * The fallback is gone, so the flag is too, and unassigned now means exactly
- * nobody — which is what the red below has always claimed.
+ * nobody - which is what the red below has always claimed.
  */
 function ReadBy({
   row,
@@ -739,7 +739,7 @@ function Crosses({ from, children }: { from: string; children: React.ReactNode }
   );
 }
 
-/** Frees a slot in Metricool. Assignments naming it are left alone — re-adding
+/** Frees a slot in Metricool. Assignments naming it are left alone - re-adding
  *  the same page should bring them back rather than need re-ticking. */
 function RemoveFromPool({
   id,
@@ -761,7 +761,7 @@ function RemoveFromPool({
       await removeFromPool(id, pageId);
       toast.success(
         assigned > 0
-          ? `${name} removed — ${assigned} page assignment${assigned === 1 ? "" : "s"} kept`
+          ? `${name} removed - ${assigned} page assignment${assigned === 1 ? "" : "s"} kept`
           : `${name} removed`,
       );
       emit();

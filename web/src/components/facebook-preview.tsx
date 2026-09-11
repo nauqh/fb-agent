@@ -9,13 +9,13 @@ import { PageAvatar } from "@/components/page-badge";
  * The draft as Facebook will show it: the feed post, then the first comment.
  *
  * Ported in shape from the old repo's `FacebookPostPreview`, with one change
- * that matters. There it was a tab of its own — you left the editor to look at
+ * that matters. There it was a tab of its own - you left the editor to look at
  * it, so it only ever showed text you had already finished writing. Here it
  * sits beside the fields and re-renders as they change, which is the only
  * reason a preview is worth having.
  *
  * The caption and the first comment are separate cards because they are
- * separate posts. The body is a *comment* the page leaves on its own post —
+ * separate posts. The body is a *comment* the page leaves on its own post -
  * that is the whole format, and a preview that ran them together would hide the
  * one structural thing an operator needs to check.
  */
@@ -45,8 +45,8 @@ export function FacebookPreview({
   firstComment: string;
 }) {
   return (
-    /* Side by side once there is room. They are read that way — you see the
-       post, then you open the comment — and stacking a 1,800-character body
+    /* Side by side once there is room. They are read that way - you see the
+       post, then you open the comment - and stacking a 1,800-character body
        under the feed card pushed the card off the top of the screen. */
     <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
       <Card title="Feed post">

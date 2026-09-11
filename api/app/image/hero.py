@@ -1,7 +1,7 @@
 """The generated background. The only part of the composite that costs money.
 
 One call to Gemini's image model per hero. Everything else in `image/` is
-arithmetic and rasterising, and can be re-run for free — which is why
+arithmetic and rasterising, and can be re-run for free - which is why
 `hero_image_path` and `composed_image_path` are separate columns. Editing the
 overlay re-composites; it does not re-buy the picture.
 """
@@ -24,14 +24,14 @@ from app.writer import prompts
 NO_TEXT_REMINDER = (
     "\n\nREMINDER: Your output must be a photograph with ZERO readable text, "
     "ZERO hashtags, ZERO headline typography, ZERO black bars, and ZERO "
-    "post-card layout. Text overlay is composited in post-processing — not by you."
+    "post-card layout. Text overlay is composited in post-processing - not by you."
 )
 """Appended to every hero prompt, on top of the exclusions in `image.txt`.
 
 Verbatim from `GEMINI_HERO_NO_TEXT_SUFFIX` (`image-prompt.ts:72`). Saying it
 twice is not an oversight: the style block goes in as a system instruction and
 this rides on the prompt itself, and the one thing that ruins a hero beyond
-saving is typography baked into the photograph — the panel is composited over
+saving is typography baked into the photograph - the panel is composited over
 it, so a headline in the picture is a headline on the post.
 """
 
@@ -48,7 +48,7 @@ SUPPORTED_RATIOS: dict[str, float] = {
 }
 """What the API accepts. It takes a *ratio*, never a size.
 
-A request for 4:5 came back 928×1152 — the right shape, not the asked-for
+A request for 4:5 came back 928×1152 - the right shape, not the asked-for
 pixels. So the hero is always cover-cropped to fit, and the only thing worth
 asking for is the ratio closest to the box it has to fill.
 """
@@ -62,7 +62,7 @@ FETCH_TIMEOUT = 30.0
 
 MAX_FETCH_BYTES = 16 * 1024 * 1024
 """Bounded because the body is read into memory, and the URL is a publisher's
-rather than ours — a feed can point at a 40MB press original."""
+rather than ours - a feed can point at a 40MB press original."""
 
 
 def from_url(url: str, client: httpx.Client | None = None) -> bytes:
@@ -73,7 +73,7 @@ def from_url(url: str, client: httpx.Client | None = None) -> bytes:
     the rights are whatever the publisher already had.
 
     **Re-encoded and stored, never hot-linked.** Metricool keeps a *link* to
-    what we publish and Facebook fetches it when the post is due, days later —
+    what we publish and Facebook fetches it when the post is due, days later -
     the trap `CLAUDE.md` records for our own bucket applies twice over to
     somebody else's CDN, which can rotate a URL or drop the file with no notice.
     Decoding here also means a feed serving an HTML error page is a failure at
@@ -102,7 +102,7 @@ def from_url(url: str, client: httpx.Client | None = None) -> bytes:
     try:
         picture = Image.open(io.BytesIO(response.content))
         picture.load()
-    except Exception as error:  # noqa: BLE001 — any decode failure is the same answer
+    except Exception as error:  # noqa: BLE001 - any decode failure is the same answer
         raise HeroError(
             f"the feed's image is not one Pillow can read ({error}): {url}"
         ) from error
@@ -135,7 +135,7 @@ ladder still has to fit inside a run the operator is watching: worst case is
 
 
 def _backoff(attempt: int) -> float:
-    """1s, then 2s. Exponential, but starting low — this clears fast or not at all."""
+    """1s, then 2s. Exponential, but starting low - this clears fast or not at all."""
     return float(2**attempt)
 
 
@@ -143,7 +143,7 @@ def aspect_ratio_for(width: int, height: int) -> str:
     """The supported ratio nearest the hero box, so the crop throws away least.
 
     The box is not the image: the panel grows with the text, so an 896×1120 post
-    with a 300px panel leaves an 896×820 hero — 1.09, nearer square than the 4:5
+    with a 300px panel leaves an 896×820 hero - 1.09, nearer square than the 4:5
     of the finished picture. Asking for 4:5 there and cropping to fit would
     discard about a quarter of what was paid for.
     """
@@ -162,7 +162,7 @@ def generate(
     """Image bytes for `prompt`, shaped for the hero box, and the model that drew it.
 
     **`prompt` is the subject, not the brief.** The brief is `prompts/image.txt`
-    — photorealism, mid-shot composition, the card's layers, the exclusions —
+    - photorealism, mid-shot composition, the card's layers, the exclusions -
     and it is read here rather than passed in, because it was passed in nowhere:
     this function took only the writer's per-draft sentence, so every hero this
     repo has ever drawn was ordered without any of the brand's photography rules.
@@ -172,7 +172,7 @@ def generate(
     these comparable.
 
     **`page_name` picks the brief.** Without it every Page is drawn under
-    History Retraced's — reenactment, torchlight, period-accurate dress — which
+    History Retraced's - reenactment, torchlight, period-accurate dress - which
     is what "the BBTT posts look a bit old, with sepia tone" was. The old tool
     reached the same place by a different route: those Pages stored no image
     prompt and no brand key, and its null-brand fallback was History Retraced
@@ -186,7 +186,7 @@ def generate(
 
     **A refusal and an outage are not the same failure, and only one is billed.**
     This used to retry neither, on the reasoning that "a second attempt is a
-    second charge". That holds for a refusal — the model answered, the answer was
+    second charge". That holds for a refusal - the model answered, the answer was
     a well-formed empty response, and Google charged for it. It is simply false
     for a 503: the request never reached a model, so nothing was generated and
     nothing was billed. Retrying it is free, and not retrying it killed runs
@@ -194,7 +194,7 @@ def generate(
 
     So the ladder is: retry the same model while it is *unavailable*, step to the
     next model when it stays that way, and give up instantly on anything else. A
-    refusal ends the whole thing on the spot — a second model refuses the same
+    refusal ends the whole thing on the spot - a second model refuses the same
     prompt for the same reason, and charges again to do it.
     """
     layout = layout or default_layout
@@ -220,7 +220,7 @@ def generate(
                 response = client.models.generate_content(
                     model=model, contents=contents, config=config
                 )
-            except Exception as error:  # noqa: BLE001 — reported on the row, not raised at the caller
+            except Exception as error:  # noqa: BLE001 - reported on the row, not raised at the caller
                 # Includes 404 "no longer available", which is how a pinned
                 # fallback rots. Not transient, so it surfaces immediately
                 # instead of being spent as three attempts and a step sideways.
@@ -236,7 +236,7 @@ def generate(
                     return Hero(part.inline_data.data, model)
 
             raise HeroError(
-                "the model returned no image. Usually a refusal — the prompt names a "
+                "the model returned no image. Usually a refusal - the prompt names a "
                 f"real person, or depicts something the safety filters block: {prompt[:120]!r}"
             )
 

@@ -1,6 +1,6 @@
 """Where processed videos and uploaded CTA clips live: their own Supabase bucket.
 
-The image MediaStore (`app/media.py`) is image-only — the bucket it talks to
+The image MediaStore (`app/media.py`) is image-only - the bucket it talks to
 (`SUPABASE_BUCKET`) accepts exactly `image/png` and `image/jpeg`, which is the
 whole contract those files have. Videos are a different kind of file with a
 different size ceiling, so they get their own bucket
@@ -9,12 +9,12 @@ different size ceiling, so they get their own bucket
 The shape is otherwise the image store's, deliberately: same relative-path
 storage, same month prefix, same retry-on-blip, same "public means public to
 whoever holds the link". That last one is the same load-bearing rule as the
-images — Metricool stores the *URL* and YouTube/Instagram fetch the file when
+images - Metricool stores the *URL* and YouTube/Instagram fetch the file when
 the post is due, possibly days later. A signed URL would expire first, which is
 exactly what killed the old app's videos (the images doc records the same
 failure).
 
-The bucket must accept `video/mp4` — see `supabase/buckets.sql` for the
+The bucket must accept `video/mp4` - see `supabase/buckets.sql` for the
 committed bucket rows (applied by hand, like the media bucket).
 """
 
@@ -50,7 +50,7 @@ class SupabaseYoutubeStore:
     `save` is the one extra step over the image store: it rejects content that
     is not an mp4 *before* the http call, because a JPEG written under a `.mp4`
     name uploads happily and is then served as `video/mp4`, which some fetchers
-    will not decode — the mismatch surfaces as a broken reel days later.
+    will not decode - the mismatch surfaces as a broken reel days later.
     """
 
     def __init__(self, client: httpx.Client | None = None) -> None:
@@ -77,7 +77,7 @@ class SupabaseYoutubeStore:
         self._call("DELETE", stored, missing_ok=True)
 
     def exists(self, stored: str) -> bool:
-        """Whether the object is in the bucket. A HEAD, not a GET — the caller
+        """Whether the object is in the bucket. A HEAD, not a GET - the caller
         only wants the answer, and a processed video is megabytes."""
         try:
             self._call("HEAD", stored)
@@ -95,8 +95,8 @@ class SupabaseYoutubeStore:
         small JSON call: mint a token for a path it chose.
 
         The mint is `POST /object/upload/sign/{bucket}/{path}` with the service
-        key; the browser consumes the returned relative URL — **resolved
-        against `/storage/v1`, not the project root** — with `PUT` and the
+        key; the browser consumes the returned relative URL - **resolved
+        against `/storage/v1`, not the project root** - with `PUT` and the
         token as its Bearer. Both were found by experiment, not docs: the
         storage server re-signs instead of storing if the request arrives as
         POST, and every wrong shape answers 404 "Bucket not found" because
@@ -110,7 +110,7 @@ class SupabaseYoutubeStore:
         if not settings.supabase_url or not settings.supabase_service_key:
             raise YoutubeStoreError(
                 "Supabase is not configured. Set SUPABASE_URL and "
-                "SUPABASE_SERVICE_KEY — there is nowhere else for videos to go."
+                "SUPABASE_SERVICE_KEY - there is nowhere else for videos to go."
             )
         root = settings.supabase_url.rstrip("/")
         owned = self._client is None
@@ -154,7 +154,7 @@ class SupabaseYoutubeStore:
         if not settings.supabase_url or not settings.supabase_service_key:
             raise YoutubeStoreError(
                 "Supabase is not configured. Set SUPABASE_URL and "
-                "SUPABASE_SERVICE_KEY — there is nowhere else for videos to go."
+                "SUPABASE_SERVICE_KEY - there is nowhere else for videos to go."
             )
         root = settings.supabase_url.rstrip("/")
         url = f"{root}/storage/v1/object/{settings.supabase_youtube_bucket}/{stored}"
@@ -184,7 +184,7 @@ class DirectoryYoutubeStore:
 
     Lives beside the real store rather than in the suite because the Shorts dev
     server (`scripts/shorts_dev_server.py`) needs exactly this and cannot import
-    a conftest — it was copy-pasted into three files before it moved here.
+    a conftest - it was copy-pasted into three files before it moved here.
 
     `base_url` is what separates the two callers. The suite wants a URL that is
     never fetched (`https://bucket.example/...`, the default); the dev server
@@ -225,7 +225,7 @@ class DirectoryYoutubeStore:
 def _attempt(
     client: httpx.Client, method: str, url: str, headers: dict, kwargs: dict
 ) -> httpx.Response:
-    """Retry a blip, never a refusal — the image store's rule, repeated.
+    """Retry a blip, never a refusal - the image store's rule, repeated.
 
     A dropped connection is worth another go; a 4xx is an answer and repeating
     it three times only delays the error. 5xx retries with the transport errors:

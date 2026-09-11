@@ -24,15 +24,15 @@ import { useQuery } from "@/lib/use-query";
 import { cn } from "@/lib/utils";
 
 /**
- * How a channel's videos did — the Shorts workspace's Overview.
+ * How a channel's videos did - the Shorts workspace's Overview.
  *
- * The same three-part skeleton as the Facebook Overview — translucent chrome
+ * The same three-part skeleton as the Facebook Overview - translucent chrome
  * with a scroll fade, a one-line summary with a comparison, and a ranked table
- * whose rows open in place — with the point of view changed for what YouTube
+ * whose rows open in place - with the point of view changed for what YouTube
  * actually reports:
  *
  * - **Views are the rank, not engagement.** These channels draw near-zero
- *   likes/comments/shares (0–13 on real rows) while views span orders of
+ *   likes/comments/shares (0-13 on real rows) while views span orders of
  *   magnitude; ranking by engagement would sort noise. So the bar measures
  *   views, and engagement rides as secondary figures in the panel.
  * - **The thumbnail is real.** Facebook's composite thumbnails are smudges at
@@ -59,13 +59,13 @@ export default function YoutubeOverviewScreen() {
   const selectedBrand =
     brands?.find((brand) => brand.id === brandId) ?? brands?.[0] ?? null;
 
-  // All / 7 / 30 / 60. All is 0 and is the default — the catalog is bounded,
+  // All / 7 / 30 / 60. All is 0 and is the default - the catalog is bounded,
   // and windows on a dormant channel are empty.
   const [days, setDays] = useState(0);
   const { data, error, loading, refresh } = useQuery(
     () => getYoutubeOverview(selectedBrand!.id, days),
     [selectedBrand?.id, days],
-    { enabled: !!selectedBrand },
+    { enabled: !!selectedBrand, cacheKey: "shorts-overview" },
   );
 
   // Keep `days` sticky when the brand changes, but land on the first brand
@@ -82,7 +82,7 @@ export default function YoutubeOverviewScreen() {
       />
 
       {/* The brand + window chrome. A translucent layer rather than an
-          opaque strip — rows fade out beneath it at the scroller's top edge
+          opaque strip - rows fade out beneath it at the scroller's top edge
           (see `ScrollFade`) instead of meeting a hard bar. `md` blur, not
           `xl`: a backdrop filter repaints continuously while the table
           scrolls under it and the cost scales with the radius. */}
@@ -99,7 +99,7 @@ export default function YoutubeOverviewScreen() {
           <div className="flex flex-wrap items-center gap-3">
             {/* The brand scope control. Hidden below one brand, and a native
                 select rather than a fancy dropdown because it is a scope
-                control over fixed options — the Page switcher's reasoning. */}
+                control over fixed options - the Page switcher's reasoning. */}
             {(brands ?? []).length > 1 ? (
               <NativeSelect
                 value={selectedBrand?.id ?? ""}
@@ -144,7 +144,7 @@ export default function YoutubeOverviewScreen() {
 }
 
 /**
- * A scroller whose top edge fades its content out — the Overview's chrome
+ * A scroller whose top edge fades its content out - the Overview's chrome
  * layer is translucent, and where content passes under it it dissolves rather
  * than meeting a hard bar. The mask is opacity on a layer (compositor-only)
  * rather than a `mask-image` that snaps.
@@ -194,7 +194,7 @@ function ScrollFade({
  * totals card costs ~500px before the first post for three numbers; the
  * figures carry weight, the words between them stay muted, and the comparison
  * delta is the part an operator can act on. Only a windowed read has a
- * `previous` — the whole catalog has nothing behind it, so the delta is
+ * `previous` - the whole catalog has nothing behind it, so the delta is
  * absent rather than shown as zero.
  */
 function VideoTable({
@@ -382,7 +382,7 @@ function VideoRow({
           {rank}
         </span>
 
-        {/* The thumbnail — real at this size, unlike a Facebook composite. */}
+        {/* The thumbnail - real at this size, unlike a Facebook composite. */}
         <Thumbnail src={video.thumbnail_url} className="hidden w-24 shrink-0 lg:block" />
 
         {/* Title + kind chip. The title IS the row's text; kind is an
@@ -403,16 +403,16 @@ function VideoRow({
           ) : null}
         </span>
 
-        {/* Watch seconds — the retention signal. Seconds are honest at any
+        {/* Watch seconds - the retention signal. Seconds are honest at any
             magnitude (a short's 30s IS a full watch), so no bar, just the
             figure. */}
         <span className={cn(NUMBER_RIGHT, "w-16 hidden sm:block lg:block")}>
           <span className="font-mono text-[11px] text-muted-foreground tabular-nums">
-            {video.avg_watch_s != null ? `${Math.round(video.avg_watch_s)}s` : "—"}
+            {video.avg_watch_s != null ? `${Math.round(video.avg_watch_s)}s` : "-"}
           </span>
         </span>
 
-        {/* Views with a bar against the window's best — the "fall-off at a
+        {/* Views with a bar against the window's best - the "fall-off at a
             glance" the Facebook overview uses for engagement, applied to the
             number the list is actually sorted by. */}
         <span className="flex w-32 shrink-0 items-center justify-end gap-3">
@@ -491,7 +491,7 @@ function VideoDetail({ video }: { video: YoutubeVideo }) {
           </p>
         </div>
 
-        {/* The breakdown as a stat grid — the number carries the weight, the
+        {/* The breakdown as a stat grid - the number carries the weight, the
             word beneath it does not, the same Figure rule as the summary. */}
         <dl className="flex flex-wrap gap-x-8 gap-y-3">
           <Stat value={metric(video.views)} label="Views" />
@@ -530,7 +530,7 @@ function Stat({ value, label }: { value: string; label: string }) {
   );
 }
 
-/** The video's frame, or a stand-in. 16:9 — YouTube frames are widescreen,
+/** The video's frame, or a stand-in. 16:9 - YouTube frames are widescreen,
  *  unlike the Facebook composites' 4:5. */
 function Thumbnail({ src, className }: { src: string | null; className?: string }) {
   if (!src) {

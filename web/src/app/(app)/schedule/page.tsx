@@ -5,7 +5,7 @@ import { ScreenHeader } from "@/components/screen";
  * What is going out, and what already went.
  *
  * Read-only, and it will stay that way. Rescheduling and cancelling happen in
- * Metricool's planner because that is where the schedule *is* — see ADR-0001,
+ * Metricool's planner because that is where the schedule *is* - see ADR-0001,
  * and the 0 rows the old system's mirror held in production.
  */
 export default function ScheduleScreen() {

@@ -8,7 +8,7 @@
  * from a client module gets a *client reference proxy* rather than the value.
  * `cookies().get(COLLAPSE_COOKIE)` was therefore looking up `undefined` and
  * quietly returning `false` on every request, so the rail always rendered
- * expanded and snapped shut after hydration — the exact flash the cookie was
+ * expanded and snapped shut after hydration - the exact flash the cookie was
  * there to prevent. Nothing warns; the string simply is not there.
  */
 export const COLLAPSE_COOKIE = "fb_sidebar_collapsed";

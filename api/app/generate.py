@@ -5,11 +5,11 @@ is a Source Item read, `summarize` is deleted (it mapped each post to itself
 without calling a model), `validateAll` moved inside the writer, and `saveBatch`
 is a transaction. What is left is this file.
 
-**This is the only thing that writes a Source Item.** Browsing does not write —
+**This is the only thing that writes a Source Item.** Browsing does not write -
 the Cart carries items, and they become rows here, when something actually uses
 them. See docs/plan.md, "Ticking stops writing".
 
-Logging lives at the two boundaries of a run — queued and finished — never per
+Logging lives at the two boundaries of a run - queued and finished - never per
 step. That is the loggingsucks.com rule: a line for what changed and what it
 cost, not ten narrating the attempt. The cost that matters here is wall time,
 the writer is billed by the request, and a run's own row already records the
@@ -79,7 +79,7 @@ def competitor_image(
     **Vision input, and only for a competitor post.** The old app sent these to
     Gemini alongside the caption; the note `docs/competitor-image-input.md`
     records the shape. Gated by `kind` so a tweet's or an RSS image never rides
-    in — they stay text-only. A fetch that fails returns None rather than
+    in - they stay text-only. A fetch that fails returns None rather than
     raising: `_run_one` turns that into a warning and the draft proceeds on
     text alone, never a refusal and never a silent loss.
 
@@ -89,7 +89,7 @@ def competitor_image(
 
     **An empty body is a failure, not an image.** A CDN that answers 200 with
     zero bytes and an image content-type used to become `BinaryImage(data=b"")`,
-    which the model rejects — and a model error here fails the whole draft,
+    which the model rejects - and a model error here fails the whole draft,
     which is the one outcome the note rules out. The old app checked this too.
 
     `client` is the test seam, same shape as `hero.from_url`: without one the
@@ -126,7 +126,7 @@ def resolve_sources(session: Session, items: list[SourceItemBase]) -> list[Sourc
       so there is no server-side copy to compare against; without the check this
       accepts arbitrary text and hands it to the writer.
     - **Tweet** by value. The same trust level as RSS but with no host allowlist
-      to check — a tweet id is not a domain. Re-reading it would double a paid
+      to check - a tweet id is not a domain. Re-reading it would double a paid
       X call for a body we just showed the operator.
     - **Competitor post** by reference only. The Metricool sync owns those rows,
       and there is no equivalent of `is_curated_url` for a Facebook post, so a
@@ -155,7 +155,7 @@ def resolve_sources(session: Session, items: list[SourceItemBase]) -> list[Sourc
         if item.kind == SourceKind.COMPETITOR_POST:
             raise GenerateError(
                 f"Unknown competitor post {item.external_id!r}. Sync the "
-                f"Competitors tab first — the sync owns those rows."
+                f"Competitors tab first - the sync owns those rows."
             )
         if item.kind == SourceKind.RSS and not rss.is_curated_url(item.url, hosts):
             raise GenerateError(f"Not from a curated feed: {item.url}")
@@ -179,7 +179,7 @@ def start_run(
 ) -> list[int]:
     """Insert one placeholder Draft per (source × page) and return the ids.
 
-    Returns immediately. The row *is* the job record — that is why `Draft`
+    Returns immediately. The row *is* the job record - that is why `Draft`
     carries progress columns and why there is no queue and no event table.
     """
     if not page_ids:
@@ -236,19 +236,19 @@ def start_run(
 def run_drafts(draft_ids: list[int]) -> None:
     """Fill the placeholder rows in. Runs as a BackgroundTask, off the request.
 
-    Drafts are independent — the only thing two of them share is the database —
+    Drafts are independent - the only thing two of them share is the database -
     so they are written `settings.generate_concurrency` at a time instead of one
     after another. A draft is wall time spent waiting on the writer and image
     models, and waiting overlaps; a dozen-draft run lands at roughly the slowest
     three drafts rather than the sum of twelve. The bound is the vendors' rate
-    limits, not the CPU — three concurrent Gemini call chains is what the
+    limits, not the CPU - three concurrent Gemini call chains is what the
     account comfortably allows, and GENERATE_CONCURRENCY moves it without code.
 
     Each worker gets its own `Session`. A Session is not thread-safe, which is
     the whole reason this used to be sequential; the pool in `db.py` (5 + 5)
     already had room for the extra connections.
 
-    Never raises. A failure belongs on the row, where the operator can see it —
+    Never raises. A failure belongs on the row, where the operator can see it -
     an exception here would land in a log nobody reads while the Draft sat at
     `generating` forever.
     """
@@ -260,8 +260,8 @@ def run_drafts(draft_ids: list[int]) -> None:
 def _run_one_isolated(draft_id: int) -> None:
     """One draft, one session. The unit `run_drafts` puts on a worker thread.
 
-    Anything that escapes `_run_one` — only a database failure before its try,
-    which is where its own error handling starts — is logged and dropped: the
+    Anything that escapes `_run_one` - only a database failure before its try,
+    which is where its own error handling starts - is logged and dropped: the
     row keeps `generating` until the startup sweep does for it, exactly as the
     old single-threaded failure would have. A future whose exception is never
     retrieved is silent by default, so this catch is not decoration.
@@ -269,7 +269,7 @@ def _run_one_isolated(draft_id: int) -> None:
     try:
         with Session(get_engine()) as session:
             _run_one(session, draft_id)
-    except Exception:  # noqa: BLE001 — never escapes; run_drafts cannot raise
+    except Exception:  # noqa: BLE001 - never escapes; run_drafts cannot raise
         logger.exception("draft {} failed before its own error handling", draft_id)
 
 
@@ -289,8 +289,8 @@ def _run_one(session: Session, draft_id: int) -> None:
         )
 
         _progress(session, draft, "writing the post", 20)
-        # Vision input is competitor-only, and the seam must gate here — not
-        # inside `competitor_image` — or a stub that always returns an image
+        # Vision input is competitor-only, and the seam must gate here - not
+        # inside `competitor_image` - or a stub that always returns an image
         # would leak tweets and RSS items in. A competitor with a picture that
         # cannot be read becomes a warning and a text-only run, never a refusal.
         image = (
@@ -341,8 +341,8 @@ def _run_one(session: Session, draft_id: int) -> None:
         draft.warnings += validators.advise(content.first_comment)
         draft.warnings += _highlight_warnings(content)
 
-        # Deliberately still `generating`. Setting `review` here — before the
-        # hero exists — put a finished-looking row in the queue with a blank
+        # Deliberately still `generating`. Setting `review` here - before the
+        # hero exists - put a finished-looking row in the queue with a blank
         # thumbnail, and stopped the client polling, because it polls only while
         # something is `generating`. The picture then landed twenty seconds
         # later with nothing left to fetch it, so it never appeared until the
@@ -367,7 +367,7 @@ def _run_one(session: Session, draft_id: int) -> None:
             page.name if page else draft_id,
         )
 
-    except Exception as error:  # noqa: BLE001 — the row is where a failure goes
+    except Exception as error:  # noqa: BLE001 - the row is where a failure goes
         logger.error(
             "draft {} failed: {}", draft_id, f"{type(error).__name__}: {error}"
         )
@@ -402,7 +402,7 @@ def build_image(session: Session, draft: Draft, page: Page) -> list[str]:
     The paths are stored separately on purpose. Re-compositing after an overlay
     edit reuses `hero_image_path`, so editing the text is free and only a
     genuinely new picture is charged for. `inset_image_path` is free either way
-    — it is an upload, not a generation.
+    - it is an upload, not a generation.
     """
     if draft.no_image:
         # Asked for on purpose, so it is not a warning. A draft with no picture
@@ -413,7 +413,7 @@ def build_image(session: Session, draft: Draft, page: Page) -> list[str]:
     try:
         # This Page's layout, not the file's: `layout.yml` is the default and a
         # `page_layout` row is what one Page changed. Resolved once and passed
-        # to both halves — the plan decides how tall the panel is, the composite
+        # to both halves - the plan decides how tall the panel is, the composite
         # draws it, and the two disagreeing is a card whose text does not fit
         # the space it was measured for.
         layout = layout_for.resolve_draft(session, page.id, draft.template)
@@ -428,7 +428,7 @@ def build_image(session: Session, draft: Draft, page: Page) -> list[str]:
             image_bytes = media.store.read(draft.hero_image_path)
         elif draft.hero_from_source:
             # The publisher's own photograph. Free, and the rights are whatever
-            # the feed already carried — which is the whole reason this is worth
+            # the feed already carried - which is the whole reason this is worth
             # having beside a model that cannot browse.
             #
             # A missing url is a warning rather than a fallback to Gemini: the
@@ -489,7 +489,7 @@ def build_image(session: Session, draft: Draft, page: Page) -> list[str]:
             )
 
         # The mark and the text that stands in for it are one decision, so the
-        # Page answers both at once — including "neither", when it is opted out.
+        # Page answers both at once - including "neither", when it is opted out.
         mark, mark_text = page.watermark()
         composed = compositor.compose(
             image_bytes,
@@ -510,15 +510,15 @@ def build_image(session: Session, draft: Draft, page: Page) -> list[str]:
         session.add(draft)
         session.commit()
 
-        # Only after the row points at the new file. The other order — delete,
-        # then save — turns a failed upload into a draft with no picture at all.
+        # Only after the row points at the new file. The other order - delete,
+        # then save - turns a failed upload into a draft with no picture at all.
         # This way the worst case is one file nobody reads.
         if superseded and superseded != draft.composed_image_path:
             _discard(superseded)
 
         return warnings
 
-    except Exception as error:  # noqa: BLE001 — a warning, not a dead draft
+    except Exception as error:  # noqa: BLE001 - a warning, not a dead draft
         return [f"{IMAGE_WARNING}{type(error).__name__}: {error}"[:300]]
 
 
@@ -534,7 +534,7 @@ def _discard(stored: str) -> None:
     (`routes/drafts._editable`): Metricool holds a link to the composite and
     Facebook has not fetched it yet.
 
-    The path comes from the row and is used verbatim. No prefix, no pattern — a
+    The path comes from the row and is used verbatim. No prefix, no pattern - a
     `ls | grep | rm` in this repo once swept up an image the operator had
     uploaded, and object storage has no undo.
 
@@ -544,7 +544,7 @@ def _discard(stored: str) -> None:
     """
     try:
         media.store.delete(stored)
-    except Exception:  # noqa: BLE001 — a leaked file, not a broken draft
+    except Exception:  # noqa: BLE001 - a leaked file, not a broken draft
         pass
 
 
@@ -570,7 +570,7 @@ def _highlight_warnings(content) -> list[str]:
     """Highlighting is a substring match, so a phrase off by one renders no gold.
 
     Caught here rather than in `validators.check` because it is a rule about the
-    *compositor*, not about the brand — see design.md on `overlay.txt` being a
+    *compositor*, not about the brand - see design.md on `overlay.txt` being a
     contract with the renderer. A no-overlay draft (null hook) has no panel and
     no gold, so there is nothing to warn about.
     """

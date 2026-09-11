@@ -1,7 +1,7 @@
 """The writer: one agent, typed output, brand rules enforced inside.
 
 Callers ask for a draft and get a brand-compliant draft, or an explanation.
-They never see a retry. That is the depth that matters most here — the old
+They never see a retry. That is the depth that matters most here - the old
 system exposed every intermediate state of a six-node graph, and its brand
 rules ran afterwards as warnings nobody had to act on.
 """
@@ -25,7 +25,7 @@ MAX_RETRIES = 2
 """Two, then the residue becomes a Warning on the Draft.
 
 The happy path still costs one call. If the retry rate climbs past ~20% the
-rule is wrong, not the model — see plan.md's risk table.
+rule is wrong, not the model - see plan.md's risk table.
 """
 
 
@@ -35,14 +35,14 @@ class DraftContent(BaseModel):
     There used to be an `overlay_text` beside `hook`, described as "the hook
     unless there is reason to differ". There never was a reason: both prompts
     gave them the same rules, and the model returned the same string twice. What
-    the split actually bought was a hole — `validators.check` ran on `hook` while
+    the split actually bought was a hole - `validators.check` ran on `hook` while
     the compositor drew `overlay_text`, so the panel text was the one thing on
     the post no rule guarded. One field, validated, drawn.
     """
 
     # These say what each field *is*, and leave the numbers to the prompt.
     #
-    # They used to restate them — "Under 65 words", "5-8 short substrings" — and
+    # They used to restate them - "Under 65 words", "5-8 short substrings" - and
     # that was survivable while one prompt served every Page. It stops being
     # survivable the moment a Page has its own: Fitness Recipes asks for a
     # 35-word hook and 1-3 highlights, so a description carrying the old numbers
@@ -52,7 +52,7 @@ class DraftContent(BaseModel):
         default=None,
         description=(
             "The text drawn on the image panel. No questions. Return null ONLY "
-            "when the instructions say this post has NO overlay text — then the "
+            "when the instructions say this post has NO overlay text - then the "
             "image carries no text panel at all. For any post with an overlay, "
             "this is required."
         ),
@@ -63,9 +63,9 @@ class DraftContent(BaseModel):
         description=(
             "The main body, as paragraphs separated by a blank line. Length and "
             "paragraph count are stated in the prompt. Leave it out (null) ONLY "
-            "when the instruction says the source is a minimal post — a meme, "
+            "when the instruction says the source is a minimal post - a meme, "
             "quote, recipe card or motivational image with little or no caption "
-            "text — and the post must mirror that shape. For a minimal post an "
+            "text - and the post must mirror that shape. For a minimal post an "
             "empty first comment is the format, not an omission to fix."
         ),
     )
@@ -75,7 +75,7 @@ class DraftContent(BaseModel):
     image_prompt: str = Field(
         description=(
             "A photorealistic hero prompt for this story. For a competitor post, "
-            "depict the theme of their image — same subject, scene and mood — "
+            "depict the theme of their image - same subject, scene and mood - "
             "composed fresh; never their actual photograph."
         )
     )
@@ -87,7 +87,7 @@ def _instructions(page: Page, layout: Layout, template=None) -> str:
     The last part is the one that cannot be got wrong. `source_instruction`
     decides how the Source Item is read, and every kind now binds the subject:
     telling the model otherwise produces confident, well-formed output about the
-    wrong story that nothing downstream catches — which is exactly what the
+    wrong story that nothing downstream catches - which is exactly what the
     competitor-post branch used to do.
 
     The sentence naming the page used to be the *whole* per-Page dimension of
@@ -97,13 +97,13 @@ def _instructions(page: Page, layout: Layout, template=None) -> str:
 
     **The lengths are stated only when the Page has changed one.** The prompts
     already carry the house numbers in prose, so repeating them would be a
-    second copy to drift — the exact failure `prompts.py` is written against. A
+    second copy to drift - the exact failure `prompts.py` is written against. A
     Page that has asked for 30 words gets a line saying so, and it goes last, so
     it wins over whatever the inherited prose says.
 
     **A post template layers last of all**, for the same reason the lengths do:
-    last wins. It carries only its delta — the fields the style actually
-    changes — and says it outranks, which is the same mechanism the minimal-post
+    last wins. It carries only its delta - the fields the style actually
+    changes - and says it outranks, which is the same mechanism the minimal-post
     instruction uses and the one that has survived contact with the model. The
     template's text is a delta by construction (see `models.PromptTemplate`),
     so there is no second copy of the house prose here to drift.
@@ -122,7 +122,7 @@ def _instructions(page: Page, layout: Layout, template=None) -> str:
             f"- The hook must be at most {limits.hook_max_words} words.\n"
             f"- The first comment must be between {limits.body_min_chars:,} and "
             f"{limits.body_max_chars:,} characters.\n"
-            f"- The first comment must be {low}–{high} paragraphs."
+            f"- The first comment must be {low}-{high} paragraphs."
         )
     no_overlay = not prompts.overlay_prompt(layout, page.name, page).strip()
     if template is not None:
@@ -145,10 +145,10 @@ def _instructions(page: Page, layout: Layout, template=None) -> str:
             )
     if no_overlay:
         # Last, so last wins over the structure above (client, 2026-09-11: an
-        # emptied overlay prompt means the post carries no text panel — the
+        # emptied overlay prompt means the post carries no text panel - the
         # image and the logo only).
         parts.append(
-            "NO OVERLAY TEXT. This post carries no text panel on the image — "
+            "NO OVERLAY TEXT. This post carries no text panel on the image - "
             "the picture and the page logo are the whole visual. Return null "
             "for `hook` and an empty list for `highlight_phrases`. Ignore any "
             "instruction above that asks for hook or panel text; the caption "
@@ -161,7 +161,7 @@ def source_instruction(kind: SourceKind) -> str:
     """How to read the Source Item. Derived from `kind`, never stored.
 
     **Every kind binds the subject.** A competitor post used to be the exception
-    — "a STYLE sample, choose your own subject" — and that is the flow the client
+    - "a STYLE sample, choose your own subject" - and that is the flow the client
     reported as broken on 2026-08-18: they ticked competitor posts, the run
     reported success, and the drafts were about something else entirely. Nothing
     had failed. The prompt said to do that.
@@ -169,19 +169,19 @@ def source_instruction(kind: SourceKind) -> str:
     The exception was inherited from the old app's *comment*
     (`facebookGenerateGraph.ts:389`) rather than its prompt. The prompt one line
     below that comment says "Write ONE original Facebook post **inspired by** this
-    competitor post" and then pastes the post — vague enough that the model
+    competitor post" and then pastes the post - vague enough that the model
     stayed on the subject, which is the behaviour the client has been using for
     months and the one they expect.
 
     Competitor posts keep a sentence of their own because the risk is real and
     different: their post is the whole finished artefact, so "same story" has to
-    be said alongside "not their words". An RSS item has no such pull — nobody
+    be said alongside "not their words". An RSS item has no such pull - nobody
     republishes a Smithsonian article verbatim by accident.
 
     Their *picture* is still off-limits as a file, and that rule did not move:
     see `generate.build_image`, where `hero_from_source` stays RSS-only. But the
     line used to forbid imitating anything the image looked like, which for a
-    meme or a recipe card forbade the theme itself — the one thing a recreation
+    meme or a recipe card forbade the theme itself - the one thing a recreation
     is of. The distinction now drawn is theme versus artefact: depict what
     their picture depicts, freshly composed in the page's style; never their
     photograph, crop, baked-in text or card.
@@ -189,24 +189,24 @@ def source_instruction(kind: SourceKind) -> str:
     if kind is SourceKind.COMPETITOR_POST:
         return (
             "The source below is a competitor's post about a real story. Write "
-            "about that SAME story — the same subject, people and events. Do not "
+            "about that SAME story - the same subject, people and events. Do not "
             "invent a different subject. Do not reuse their wording or their "
             "opening: the story is shared, the writing is ours.\n"
             "Their post's SHAPE is part of the brief. Match it:\n"
-            "- A full post — an image with a substantial caption — gets the "
+            "- A full post - an image with a substantial caption - gets the "
             "standard structure defined above: hook, recap, first comment.\n"
-            "- A minimal post — a meme, a quote, a recipe card, a motivational "
-            "image with little or no caption text — gets the same minimal shape: "
+            "- A minimal post - a meme, a quote, a recipe card, a motivational "
+            "image with little or no caption text - gets the same minimal shape: "
             "the hook carries the message their image carries, adapted into our "
             "voice and never their exact words; the caption is a few short plain "
             "lines with no emoji list and no invented points; and the first "
             "comment is left out entirely (null). This outranks the structure "
-            "defined above. Do not pad a minimal post into an essay — that is "
+            "defined above. Do not pad a minimal post into an essay - that is "
             "recreating something the source never was.\n"
             "An image of the post may accompany it; read it for the subject, its "
             "details, which shape it is, and the THEME it depicts. The image "
-            "prompt must describe a fresh photograph of that same theme — the "
-            "same subject, activity, scene and mood their picture shows — "
+            "prompt must describe a fresh photograph of that same theme - the "
+            "same subject, activity, scene and mood their picture shows - "
             "composed in this page's own photographic style, never their actual "
             "photograph, their exact composition or crop, any text baked into "
             "their image, or their card design and branding. Recreating the "
@@ -258,7 +258,7 @@ def build_agent(page: Page, model: object | None = None) -> Agent:
     return agent
 
 
-"""The chain is `settings.text_fallback_chain` — deployment config, like the
+"""The chain is `settings.text_fallback_chain` - deployment config, like the
 image one beside it, because model ids rot and a rotted id should be an env
 change rather than a release. The evidence for what is in it is on the setting.
 """
@@ -323,12 +323,12 @@ def write(
     """A brand-compliant draft, or an explanation. Never a retry.
 
     `image` is the competitor post's own picture, fetched by `generate` and
-    sent alongside the text so the model can read it — never a style sample.
+    sent alongside the text so the model can read it - never a style sample.
     `template` is the run's post style row, layered last in the instructions;
     None is the normal case.
 
     Two different retries live here and they are not the same thing.
-    `ModelRetry` corrects a draft that broke a brand rule — that is the writer
+    `ModelRetry` corrects a draft that broke a brand rule - that is the writer
     doing its job. This loop reacts to the model being *unavailable*, which is
     not about the draft at all, and steps down the fallback chain rather than
     asking the same overloaded model again.
@@ -348,7 +348,7 @@ def write(
 def _run(page: Page, prompt, validator, model=None, template=None):
     """Ask the model, stepping down the fallback chain while it is unavailable.
 
-    Extracted so `rewrite` cannot grow a second copy of the ladder — the two
+    Extracted so `rewrite` cannot grow a second copy of the ladder - the two
     differ only in what they ask for and which rules they hold the answer to.
 
     A caller passing `model` gets exactly that model and no fallback: tests
@@ -358,7 +358,7 @@ def _run(page: Page, prompt, validator, model=None, template=None):
         # Built here rather than through `build_agent`, which attaches the
         # whole-draft validator and offers no way to detach it. This used to
         # call it and then rebuild when the validator differed, testing
-        # `validator is not _validate` — an identity check that stopped meaning
+        # `validator is not _validate` - an identity check that stopped meaning
         # anything once the validators became per-Page closures. Constructing
         # with the validator the caller asked for is what both branches wanted.
         agent = Agent(
@@ -383,7 +383,7 @@ def _run(page: Page, prompt, validator, model=None, template=None):
             )
             agent.output_validator(validator)
             return agent.run_sync(prompt)
-        except Exception as error:  # noqa: BLE001 — re-raised below if not transient
+        except Exception as error:  # noqa: BLE001 - re-raised below if not transient
             if not is_transient(error):
                 raise
             last = error
@@ -397,7 +397,7 @@ REGENERATABLE = ("hook", "caption", "first_comment")
 
 `highlight_phrases` is not on the list and cannot be: it is defined as verbatim
 substrings *of the hook*, so it has no meaning apart from one. It rides along
-when the hook is rewritten — see `rewrite`.
+when the hook is rewritten - see `rewrite`.
 
 `image_prompt` is not here either. Re-rolling it changes nothing on its own; the
 picture is bought by `POST /drafts/{id}/image?new_hero=true`, and the prompt is
@@ -409,7 +409,7 @@ def _field_rules(field: str, limits: validators.Limits | None = None):
     """The blocking rules that apply to **one** field, as an output validator.
 
     The whole-draft validator cannot be reused here. It checks all three fields,
-    and on a rewrite the other two come from the row unchanged — so a draft that
+    and on a rewrite the other two come from the row unchanged - so a draft that
     was written by hand, or predates a rule, would fail validation on text the
     operator explicitly asked to keep. The model would then spend its retries
     fixing fields nobody asked about, and the run could exhaust them and die
@@ -464,7 +464,7 @@ def rewrite_prompt(
     """The original brief, plus what is being kept and what to replace.
 
     **The kept fields are in the prompt, and that is the whole point.** A caption
-    regenerated in isolation is a caption for a different post — it would not
+    regenerated in isolation is a caption for a different post - it would not
     open on the hook that is drawn on the picture above it, and the operator
     would be handed two halves that do not meet. Showing the model what stays is
     what makes the new field fit the old ones.
@@ -473,7 +473,7 @@ def rewrite_prompt(
     novelty rather than joining it. The two contradict each other: "produce a
     genuinely different one" answers *this is not the post I want*, while "make
     it longer" answers *this is the post I want, said better*. The client's first
-    real use was a hook that was too short — no rule anywhere sets a minimum, so
+    real use was a hook that was too short - no rule anywhere sets a minimum, so
     every unargued retry was an equally valid short hook and the button could
     only re-roll, never steer.
     """
@@ -492,7 +492,7 @@ def rewrite_prompt(
             "",
             f"Rewrite ONLY the {named}, following this instruction from the "
             "operator. It is about this post specifically and outranks any "
-            "preference for a fresh angle — if it asks for a change to what is "
+            "preference for a fresh angle - if it asks for a change to what is "
             "there now, keep the rest of that field:",
             instruction.strip(),
             "",
@@ -501,7 +501,7 @@ def rewrite_prompt(
     else:
         parts += [
             "",
-            f"Rewrite ONLY the {named}. Produce a genuinely different one — a "
+            f"Rewrite ONLY the {named}. Produce a genuinely different one - a "
             "new angle or a new opening, not a reworded copy of what is there "
             "now. It must still fit the kept fields above.",
         ]
@@ -522,17 +522,17 @@ def rewrite(
 
     Returns the whole `DraftContent`; the caller takes the field it asked for.
     The model has to return every field because that is the output schema, and
-    narrowing the schema per field would be three more types for no gain — what
+    narrowing the schema per field would be three more types for no gain - what
     matters is that only the requested one is written back to the row.
 
     The exception is the hook, whose `highlight_phrases` must travel with it.
     They are verbatim substrings of the hook, so phrases chosen for the old one
-    match nothing in the new one and render no gold at all — a silent failure
+    match nothing in the new one and render no gold at all - a silent failure
     that looks like the highlight feature being broken.
 
     `template` is the draft's post style (see `write`). A rewrite in a different
     voice than the draft was written in is how a meme field gets regenerated as
-    an essay — the stored id, not the operator's current dropdown, decides.
+    an essay - the stored id, not the operator's current dropdown, decides.
 
     `instruction` steers one rewrite and is **not** stored on the Draft and
     **not** turned into a validator: it describes an action, not the post, and a

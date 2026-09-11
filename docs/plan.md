@@ -16,7 +16,7 @@ the plumbing."
 
 ---
 
-## Phase 0 — Skeleton, and the one spike
+## Phase 0 - Skeleton, and the one spike
 
 **Goal:** the app boots, and the riskiest assumption is proven or dead.
 
@@ -29,11 +29,11 @@ the plumbing."
   secrets and `GEMINI_TEXT_MODEL` / `GEMINI_IMAGE_MODEL`.
 - `GET /health` returns db + config state.
 
-**The spike — `resvg-py` on Windows.** Render one line of text from
+**The spike - `resvg-py` on Windows.** Render one line of text from
 `Arial-Bold.ttf` and measure a token with `fontTools`. Compare the advance width
 against what `opentype.js` produces for the same string in the old repo.
 
-> `resvg-py` is at **0.3.3** — pre-1.0, thin usage. This is the plan's single
+> `resvg-py` is at **0.3.3** - pre-1.0, thin usage. This is the plan's single
 > largest technical risk. Kill criteria: it cannot load a local TTF, it cannot
 > run on Windows, or measured widths diverge from `opentype.js` by more than a
 > pixel or two per token.
@@ -44,11 +44,11 @@ against what `opentype.js` produces for the same string in the old repo.
 **Done when:** `uv run fastapi dev` serves `/health`, and a PNG of correctly
 measured text exists on disk.
 
-### Outcome — passed, with two traps found
+### Outcome - passed, with two traps found
 
 `resvg-py` 0.3.3 loads a local TTF on Windows and rasterises correctly. Phase 4
 stands as designed; no fallback needed. `fontTools` reproduces `opentype.js` to
-four decimal places on every token tried — **once kerning is applied**. Both
+four decimal places on every token tried - **once kerning is applied**. Both
 traps are written up in [design.md](design.md#compositor--the-largest-implementation-four-arguments):
 kerning is mandatory, and resvg substitutes a system font silently when the
 `font-family` does not match the TTF's name table (`Arial` + `bold`, not
@@ -58,9 +58,9 @@ kerning is mandatory, and resvg substitutes a system font silently when the
 
 ---
 
-## Phase 1 — Pages and Settings
+## Phase 1 - Pages and Settings
 
-**Goal:** the one Page — History Retraced — exists as a row, with its prompts on
+**Goal:** the one Page - History Retraced - exists as a row, with its prompts on
 disk, visible in a browser.
 
 - `page` table, seeded by `scripts/seed_page.py`: four constants, read from the
@@ -80,26 +80,26 @@ disk, visible in a browser.
 it. The screen shipped with an editable `daily_quota`; the Quota was cut
 entirely on 2026-08-06, and Settings is read-only throughout as a result.
 
-**Status:** done. Backend, and `web/` on the real API — `GET /prompts` was
+**Status:** done. Backend, and `web/` on the real API - `GET /prompts` was
 added so Settings reads the files rather than a bundled copy, which had already
 drifted to a file that no longer existed.
 
 `getQuotaUsage` was the one thing left on the fixture store, counting approved
-Drafts until `GET /drafts` arrived in Phase 3. It never made that move — the
+Drafts until `GET /drafts` arrived in Phase 3. It never made that move - the
 Quota was cut on 2026-08-06 and the function went with it, so nothing in `web/`
 reads a fixture any more.
 
 ---
 
-## Phase 2 — Sources and the Cart
+## Phase 2 - Sources and the Cart
 
 **Goal:** browse all three source kinds, tick items, see rows appear.
 
 - `source_item` table with `UNIQUE (kind, external_id)`.
-- `sources/metricool.py` — competitors and their posts, per page, lookback-windowed.
+- `sources/metricool.py` - competitors and their posts, per page, lookback-windowed.
   Writes on arrival.
-- `sources/rss.py` — the Page's curated feeds, from `config/sources.yml`.
-- `sources/x.py` — one tweet from a pasted URL via `api.x.com/2`.
+- `sources/rss.py` - the Page's curated feeds, from `config/sources.yml`.
+- `sources/x.py` - one tweet from a pasted URL via `api.x.com/2`.
 - `GET /sources/competitors|rss|tweet`, `POST /sources`.
 - **Sources** screen: three tabs, the Cart as client-side ids.
 
@@ -109,16 +109,16 @@ rows only on `POST /sources`. Competitor posts are the exception.
 **Done when:** ticking one item of each kind produces exactly three rows with
 the right `kind`, `author`, and `synced_for_page_id`; re-ticking produces none.
 
-### Outcome — passed, with three vendor traps found
+### Outcome - passed, with three vendor traps found
 
 Verified against the live APIs, not fixtures: 22 competitors and 500 posts for
 History Retraced, all seven feeds answering, 50 RSS items, 0 failures.
 
 - **Metricool's `creationDate.dateTime` is naive local time in the account's own
-  zone** — Europe/Madrid here, whatever the `timezone` parameter says. Read as
+  zone** - Europe/Madrid here, whatever the `timezone` parameter says. Read as
   UTC it puts every competitor post two hours out, which is invisible until the grid
   sorts wrongly. `created` is epoch ms; use that.
-- **Feed `<title>`s read badly as a byline** — "History | smithsonianmag.com",
+- **Feed `<title>`s read badly as a byline** - "History | smithsonianmag.com",
   "Archaeology News -- ScienceDaily". `author` is what the card shows and what
   reaches the writer, so publishers are named beside the URL in `CURATED_FEEDS`.
 - **x.com answers 200 with an `errors` array** for a deleted or missing tweet,
@@ -128,7 +128,7 @@ History Retraced, all seven feeds answering, 50 RSS items, 0 failures.
 The tab is live, so the client posts the item body back rather than an id the
 server can look up; without the check the endpoint accepts arbitrary text and
 hands it to the writer. This was `isCuratedFeedUrl` in the old repo and it is
-the one guard worth carrying over — it is what keeps "fully curated" a property
+the one guard worth carrying over - it is what keeps "fully curated" a property
 rather than an intention.
 
 `GET /sources?ids=` was not in the design and had to be added: the Cart holds
@@ -138,13 +138,13 @@ ids and something has to turn them back into rows.
 `oe` parameter is about four days out, while the window is seven, so an
 `image_url` frozen at first sync dies while the post is still on screen. Proven,
 not inferred: four production rows from the old system, synced 2026-07-27 with
-`oe` of 2026-07-31, all return **403** today — every competitor image in the old
+`oe` of 2026-07-31, all return **403** today - every competitor image in the old
 app is currently broken, and it renders them with no `onError`.
 
 `_upsert` therefore refreshes `image_url` and the three metrics on a competitor
 sync, and only there. `text` stays frozen: the metrics and the CDN URL are the
 vendor's, the words are what the operator chose, and a Draft's provenance must
-not drift. `POST /sources` refreshes nothing — the client is handing back a body
+not drift. `POST /sources` refreshes nothing - the client is handing back a body
 it was shown, not a fresh read, so it must not be able to rewrite a row.
 
 Commit `db1dfba` recorded it as unknown whether Metricool re-signs or serves a
@@ -155,7 +155,7 @@ Refreshing on sync is therefore sufficient for the grid.
 
 Feeds and windows moved out of `sources/rss.py` into
 [`config/sources.yml`](../api/config/sources.yml), keyed by `page.name`, ahead of
-page two — the old repo's own comment predicted this, warning that appending to
+page two - the old repo's own comment predicted this, warning that appending to
 one flat list would put hot tub news on a history grid. `article` became `rss`
 and `rival_post` became `competitor_post`, the latter because Metricool's API
 already says competitor and translating at every boundary buys nothing.
@@ -166,20 +166,20 @@ fixtures until Phase 3.
 
 ---
 
-## Phase 3 — Writer, end to end, no images
+## Phase 3 - Writer, end to end, no images
 
 **Goal:** a real Draft, written by the real agent, reviewed in the browser.
 
-- `writer/agent.py` — one Pydantic AI agent over `GoogleModel`, typed
+- `writer/agent.py` - one Pydantic AI agent over `GoogleModel`, typed
   `DraftContent` output.
-- `writer/prompts.py` — loads `prompts/*.txt` and substitutes the layout tokens
+- `writer/prompts.py` - loads `prompts/*.txt` and substitutes the layout tokens
   (already built); add the style-vs-factual instruction, chosen from `kind`.
-- `writer/validators.py` — the seven brand rules as `@agent.output_validator`
+- `writer/validators.py` - the seven brand rules as `@agent.output_validator`
   raising `ModelRetry`, capped at two retries; residue lands in
   `draft.warnings`.
-- `generate.py` — the run. `POST /generate` inserts `status='generating'` rows
+- `generate.py` - the run. `POST /generate` inserts `status='generating'` rows
   and returns ids; a `BackgroundTask` fills them; progress columns advance.
-- **The Cart stops writing. `POST /generate` becomes the only write point** —
+- **The Cart stops writing. `POST /generate` becomes the only write point** -
   see below. `GET /sources?ids=` and the client's `savedIds` map both go away.
 - **Generate** and **Review** screens, text only, polling `GET /drafts/{id}`.
 
@@ -193,7 +193,7 @@ This is the phase that decides whether the rebuild is worth finishing.
 ### Ticking stops writing
 
 Today a tick on an RSS item or a tweet is a `POST /sources`. Untick only drops
-the id from the Cart — there is no `DELETE`, so the row survives with nothing
+the id from the Cart - there is no `DELETE`, so the row survives with nothing
 referencing it. Tick ten, untick nine, generate one, and nine permanent orphans
 remain: the junk accumulation "browsing does not write" exists to prevent,
 arriving slowly instead of quickly. The comment defending it claimed "a Draft
@@ -216,7 +216,7 @@ and the curated-feed guard moves to generate, beside everything else it protects
 
 The asymmetry stays visible in the type, because it is real: **a body may be
 sent only for a kind the client is allowed to create.** RSS items and tweets go
-by value and are validated on arrival. Competitor posts go by id — the sync owns
+by value and are validated on arrival. Competitor posts go by id - the sync owns
 them, and there is no equivalent of `is_curated_url` for a Facebook post, so
 accepting a competitor body would accept arbitrary text.
 
@@ -226,7 +226,7 @@ it now is free; patching it today with a `DELETE /sources/{id}` route, its
 foreign-key guard, its tests and its docs would mean building all of that a week
 before deleting it.
 
-### But competitor posts stay stored — reversed 2026-08-06
+### But competitor posts stay stored - reversed 2026-08-06
 
 This section used to say the opposite: that once the Cart stopped writing,
 competitor posts were the last write-on-browse and should go read-through, with
@@ -234,21 +234,21 @@ competitor posts were the last write-on-browse and should go read-through, with
 withdrawn. **The sync keeps writing them.**
 
 It was withdrawn because it contradicted the section immediately above it, which
-had been true all along and was not noticed: *"Competitor posts go by id — the
+had been true all along and was not noticed: *"Competitor posts go by id - the
 sync owns them, and there is no equivalent of `is_curated_url` for a Facebook
 post."* Going by id **requires the row to exist**. Both paragraphs were written
 in the same sitting and cannot both hold.
 
 Removing the storage means removing the check with it, and the replacement is
 worse. Confirming a competitor `external_id` would mean a Metricool call at the
-front of `POST /generate` — an operation already 60s deep in paid model calls —
+front of `POST /generate` - an operation already 60s deep in paid model calls -
 against an API that timed out and 502'd twice during Phase 3 alone. A cart of
 three competitor posts would fail for a reason having nothing to do with the
 posts, the writer, or anything the operator can act on. That is a new failure
 mode bought with nothing.
 
 And the rule was being applied past its purpose. "Browsing does not write" exists
-to stop the table filling with items nobody looked twice at — the RSS grid is 50
+to stop the table filling with items nobody looked twice at - the RSS grid is 50
 items a refresh, unbounded over a week of idle scrolling. Competitor posts are
 not that shape:
 
@@ -265,7 +265,7 @@ exception. `_upsert`, `VOLATILE` and `synced_for_page_id` all stay.
 **Done when:** browsing the RSS and Tweets tabs, in any order, writes zero rows;
 the Competitors tab writes only when it syncs.
 
-### Outcome — passed, once the rules stopped fighting the prompt
+### Outcome - passed, once the rules stopped fighting the prompt
 
 Both done-when checks hold. Ticking ten RSS items, unticking nine and generating
 leaves **one** row. A cart of three sources yields three drafts.
@@ -274,24 +274,24 @@ The three-source run failed the first four times it was tried, and every failure
 was the same shape: **a rule the prompt never asked for.**
 
 - **The paragraph rule was enforced and never stated.** `validators` demanded
-  2–3 paragraphs; nothing in `system.txt` or the output schema mentioned
-  paragraphs at all. The model wrote 4–5 and was rejected on the first attempt
+  2-3 paragraphs; nothing in `system.txt` or the output schema mentioned
+  paragraphs at all. The model wrote 4-5 and was rejected on the first attempt
   of *every* run. The old repo asked for it three times over
   (`hr-tff.ts:22`, `draft-schema.ts:28`, `facebookGenerateGraph.ts:377`); the
   check was ported and the instruction was not.
 - **The length rule disagreed with itself.** The prompt said "ideally between
-  1,800 to 1,900 characters max" — read as a preference — while the validator
+  1,800 to 1,900 characters max" - read as a preference - while the validator
   hard-failed at 2,100. Bodies came back at 2,325 and 2,117.
 - **`birth_death_years` could not be satisfied at all.** Two ways: its regex
-  wanted `\d{4}`, so `Wu Zetian (624 – 705 AD)` counted as *no years found* and
+  wanted `\d{4}`, so `Wu Zetian (624 - 705 AD)` counted as *no years found* and
   every pre-1000 subject was unwritable on a history page; and a story naming no
-  people — an Atlas Obscura piece on the Zantigo taco chain — can never produce
+  people - an Atlas Obscura piece on the Zantigo taco chain - can never produce
   them. In both cases the writer resubmitted correct text until the retries ran
   out and the run died.
 
 Fixed: the prompt states the paragraph and length rules directly, the regex
 takes three-digit years and an AD/BC/BCE/CE suffix, and `birth_death_years`
-moved out of `check` into `advise` — a Warning, which is how the old repo had it
+moved out of `check` into `advise` - a Warning, which is how the old repo had it
 (`validation.ts:100`, "may be missing"). Same seven blocking rules afterwards:
 **zero retries, and the run went from 352s to 90s.**
 
@@ -301,19 +301,19 @@ The lesson is a constraint on the design, not a one-off fix:
 > verify it in its own output. Everything else is a Warning.
 
 That is what separates `check` from `advise`. Moving a rule from warning to
-blocker raises the bar on its precision — a loose warning is noise, a loose
-blocker is a dead run — and every rule in `check` is now a count the model can
+blocker raises the bar on its precision - a loose warning is noise, a loose
+blocker is a dead run - and every rule in `check` is now a count the model can
 do itself.
 
 Three more traps, found by running it rather than reasoning about it:
 
 - **`gemini-2.0-flash` answers 404 "no longer available"**, and was the last
   link of the fallback chain. It is still returned by `models.list()`, so the
-  listing is not evidence — each link is now verified by generating from it.
+  listing is not evidence - each link is now verified by generating from it.
   Same rot the old repo hit on the image side (`376afdc`).
 
-  The conclusion drawn here at the time — end the chain on the
-  `gemini-flash-latest` alias, which cannot rot — was retired by measurement in
+  The conclusion drawn here at the time - end the chain on the
+  `gemini-flash-latest` alias, which cannot rot - was retired by measurement in
   `b971556`: the alias points at a busy model and answers 503 on a real call, so
   it cannot serve the failure a fallback is for. Both links are pinned now. See
   [decisions.md](decisions.md) for the table.
@@ -322,7 +322,7 @@ Three more traps, found by running it rather than reasoning about it:
   have moved a run onto a different model for a reason that had nothing to do
   with availability. Codes are now matched as codes.
 - **A failed run was given `status='review'`.** Empty rows sat in the queue
-  looking ready, their only tell an `error` column nothing rendered — five of
+  looking ready, their only tell an `error` column nothing rendered - five of
   nine drafts in the local database were failures parked in the review queue.
   `DraftStatus.FAILED` is its own state; approving one is a 409, rejecting it
   still works.
@@ -334,21 +334,21 @@ No migration was needed for that: SQLModel stores `status` as a plain
 
 ---
 
-## Phase 4 — Images
+## Phase 4 - Images
 
 **Goal:** the Composed Image, at 896×1120.
 
-- `image/hero.py` — `google-genai`, image output, size from `layout.yml`.
-- `image/text.py` — measure, wrap, plan panel height. Pure functions, unit
+- `image/hero.py` - `google-genai`, image output, size from `layout.yml`.
+- `image/text.py` - measure, wrap, plan panel height. Pure functions, unit
   tested. Panel grows from `ratio` toward `max_ratio`; the font never shrinks.
-- `image/compositor.py` — hero + black panel + gold highlights + watermark.
+- `image/compositor.py` - hero + black panel + gold highlights + watermark.
   A configured watermark file that does not load must **raise**; the text
   fallback is only for a Page with no logo at all. The old code returned `null`
   there, which is how History Retraced lost its logo unnoticed for weeks.
-- `media.py` — `LocalMediaStore`, static `/media` mount.
+- `media.py` - `LocalMediaStore`, static `/media` mount.
 - `hero_image_path` and `composed_image_path` stored separately from the start.
 - **Download a ticked Source Item's picture into `MediaStore`.** Deferred to
-  here because it cannot be finished earlier — see below.
+  here because it cannot be finished earlier - see below.
 
 ### The competitor image, and why it waits for `MediaStore`
 
@@ -357,7 +357,7 @@ Measured in Phase 2, recorded so it is not re-derived:
 - Metricool serves **one** post image and it is a **130×130 thumbnail**
   (467 of 482 posts). No second image, no HD field. The URL signature covers the
   size parameter, so `s480`/`s720`/`p720` and dropping `stp` all return 403.
-- A real image exists only on the Facebook post page, as its `og:image` —
+- A real image exists only on the Facebook post page, as its `og:image` -
   **600×750**, readable without auth on an ordinary User-Agent. But it is one
   page fetch per post: **~54s and ~24 MB for a 60-post grid load**, and 1 in 5
   posts (video, some link posts) carries no `og:image` at all. So it is a
@@ -368,7 +368,7 @@ Measured in Phase 2, recorded so it is not re-derived:
 
 The grid needs none of this and is already correct: the sync re-signs every URL
 on each read, and the card renders at 64px so a 130px source is not upscaled.
-What breaks without the download is a **ticked** post — it falls out of the
+What breaks without the download is a **ticked** post - it falls out of the
 7-day sync window, nothing refreshes it, and its picture 403s while attached to
 a Draft.
 
@@ -384,12 +384,12 @@ text through `layout.yml` reproduces its 6 line breaks word for word, its 45px
 line height, its 300px panel and its 820px hero. Keep that post as the golden
 fixture rather than inventing one.
 
-### Outcome — one trap, and it was a rule applied too widely
+### Outcome - one trap, and it was a rule applied too widely
 
 - **`gemini-3.1-flash-image` answered 503 "high demand" and the run was over.**
   The hero step deliberately retried nothing, on the reasoning that "a second
-  attempt is a second charge". That reasoning is sound for a *refusal* — the call
-  completed, returned a well-formed empty response, and was billed — and false
+  attempt is a second charge". That reasoning is sound for a *refusal* - the call
+  completed, returned a well-formed empty response, and was billed - and false
   for a 503, which never reached a model and cost nothing. One rule had been
   written for both failures because both arrive as an exception.
 
@@ -397,33 +397,33 @@ fixture rather than inventing one.
   chain **cannot end on an alias**: Google publishes `gemini-flash-latest` for
   text but no `-latest` for any image model, so every link is a pinned version
   that will rot the way `gemini-2.0-flash` did above. And a fallback is
-  **reported** — a backup image model draws in a different style, so the swap
+  **reported** - a backup image model draws in a different style, so the swap
   becomes a Draft warning instead of silent brand drift. `is_transient` now lives
   in `app/transient.py`, shared, rather than copied per call site.
 
 ---
 
-## Phase 5 — Review actions
+## Phase 5 - Review actions
 
 **Goal:** the operator loop closes.
 
 - `PATCH /drafts/{id}` for text edits, `POST .../approve`, `.../reject`.
-- `POST /drafts/{id}/regenerate-image` — recomposites from the stored hero, so
+- `POST /drafts/{id}/regenerate-image` - recomposites from the stored hero, so
   an overlay edit does not re-pay for image generation.
 - Startup sweep marking stranded `generating` rows as `error`. Safe only because
-  there is exactly one writer process — note that in the code.
+  there is exactly one writer process - note that in the code.
 
 **Done when:** sources → generate → edit → approve runs unassisted, and killing
 the server mid-run leaves an `error` row rather than a stuck one.
 
 ---
 
-## Phase 6 — Cutover
+## Phase 6 - Cutover
 
 **Goal:** stop using the old agent.
 
 - Run both against the same sources for a week. Compare drafts by hand.
-- Move History Retraced over. Leave the 464 historical drafts behind — 237 are
+- Move History Retraced over. Leave the 464 historical drafts behind - 237 are
   published and Metricool holds that record.
 - Old repo goes read-only. It stays deployed until v2 exists, because it is
   still the only thing that can push to Metricool.
@@ -450,7 +450,7 @@ Metricool push, the calendar, hosted media storage, multi-tenancy, the
 kind. See [decisions.md](decisions.md#deferred-to-v2).
 
 **Everything on that list except multi-tenancy and a scheduler has since been
-built** — between 2026-08-09 and 08-17, driven by the client's feedback rather
+built** - between 2026-08-09 and 08-17, driven by the client's feedback rather
 than by this plan. Metricool push and the Schedule screen, Supabase Storage,
 `page_layout.template` and `page.badge_text`, and the `saved_post` table.
 Multi-tenancy stays out for good (ADR-0002). A scheduler of any kind stays out

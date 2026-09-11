@@ -26,7 +26,7 @@ def upgrade() -> None:
 
     `server_default` is the adjustment autogenerate asks for and does not make:
     it emitted a NOT NULL column with no default, which cannot be added to a
-    table that already has ten rows — Postgres has nothing to put in them and
+    table that already has ten rows - Postgres has nothing to put in them and
     the migration aborts. The default is the *existing* behaviour, so every Page
     keeps its mark and only a deliberate switch turns one off.
 

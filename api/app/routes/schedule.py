@@ -4,8 +4,8 @@
 system mirrored every scheduled post into `facebook_schedules`, with a five-value
 status enum, a due-post cron and a stale-`PROCESSING` recovery path; production
 held 0 rows against 237 approved drafts. Posts are scheduled, moved and
-cancelled in Metricool's planner — including by hand, in Metricool's own UI, by
-somebody who has never heard of this app — so a local copy could only ever
+cancelled in Metricool's planner - including by hand, in Metricool's own UI, by
+somebody who has never heard of this app - so a local copy could only ever
 disagree with the truth.
 
 The cost is stated plainly in the ADR: this screen needs a network call and is
@@ -32,7 +32,7 @@ router = APIRouter(tags=["schedule"])
 class ScheduledPost(BaseModel):
     """One row of Metricool's planner, flattened.
 
-    Deliberately not a `Draft`. Most of these were never drafts of ours — 302 of
+    Deliberately not a `Draft`. Most of these were never drafts of ours - 302 of
     them were queued by the old system, which is still the thing publishing
     History Retraced. Mapping them onto our own model would invent fields
     (`hook`, `highlight_phrases`) that do not exist for a post somebody wrote in
@@ -51,7 +51,7 @@ class ScheduledPost(BaseModel):
     image_url: str | None = None
     network: str = "facebook"
     status: str
-    """`PUBLISHED`, `PENDING`, `ERROR` — Metricool's word, not ours."""
+    """`PUBLISHED`, `PENDING`, `ERROR` - Metricool's word, not ours."""
 
     public_url: str | None = None
     is_draft: bool = False
@@ -87,7 +87,7 @@ class NextSlot(BaseModel):
     """The next configured time with nothing already queued against it."""
 
     when: str
-    """Naive local time, `YYYY-MM-DDTHH:MM:SS`, in the Page's zone — the same
+    """Naive local time, `YYYY-MM-DDTHH:MM:SS`, in the Page's zone - the same
     shape `POST /drafts/{id}/publish` takes and the planner stores."""
 
     label: str
@@ -112,7 +112,7 @@ def next_slot(
 
     Walks forward from now through the Page's configured slots and returns the
     first that Metricool's planner has nothing at. **The planner is the only
-    thing consulted about what is taken** (ADR-0001) — there is no local mirror
+    thing consulted about what is taken** (ADR-0001) - there is no local mirror
     to disagree with, and a post somebody scheduled by hand in Metricool's own
     UI counts exactly as much as one of ours.
 
@@ -122,7 +122,7 @@ def next_slot(
     hand can land a second off; and rather than a wider window, because two
     slots an hour apart must not shadow each other.
 
-    Times are naive local throughout — `publicationDate.dateTime` is naive local
+    Times are naive local throughout - `publicationDate.dateTime` is naive local
     and an offset suffix is rejected, which is the trap `CLAUDE.md` records.
     """
     page = session.get(Page, page_id)
@@ -225,7 +225,7 @@ def get_schedule(
     # The Page's clock, not the server's. `list_scheduled` sends these as naive
     # local times *and* tells Metricool the timezone is `Asia/Ho_Chi_Minh`, so a
     # bare `datetime.now()` labels the server's wall clock as Vietnamese and
-    # shifts the whole window by the offset — 7h on Railway, which runs UTC, and
+    # shifts the whole window by the offset - 7h on Railway, which runs UTC, and
     # 3h on the operator's own laptop in Melbourne. Posts near either edge of
     # the window simply go missing. `next_slot` above has always done this
     # correctly; this call did not.

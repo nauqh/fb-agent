@@ -8,12 +8,12 @@ import { cn } from "@/lib/utils";
  * A competitor's logo, wherever one is listed.
  *
  * Shared so that every list of competitors shows the same thing. A row of names
- * alone is unreadable at twenty-plus entries — the logo is how an operator finds
+ * alone is unreadable at twenty-plus entries - the logo is how an operator finds
  * the one they mean, and several of these pages have near-identical names
  * ("Historical facts", "History Addicts", "History Remembered").
  *
  * The picture is Facebook's CDN, signed and expiring in about four days. Safe to
- * render only because the competitor list is never stored — the server re-reads
+ * render only because the competitor list is never stored - the server re-reads
  * it live on every request, so the URL reaching the browser is minutes old.
  * `onError` still matters: an expired or blocked URL must degrade to the initial
  * rather than to a broken-image icon, which is what a stale one looks like.

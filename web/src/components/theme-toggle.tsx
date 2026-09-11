@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
  * The active theme lives in localStorage, which the server cannot see, so a
  * component that renders `theme === "dark" ? <Moon/> : <Sun/>` renders the
  * wrong branch on the server and hydrates into a mismatch. The usual fix is a
- * `mounted` flag set in an effect — that is a set-state-in-effect, which this
+ * `mounted` flag set in an effect - that is a set-state-in-effect, which this
  * codebase lints against, and it also blanks the control for a frame.
  *
  * So both icons and both labels are always rendered, and `dark:` decides which
@@ -52,7 +52,7 @@ export function ThemeToggle({ collapsed }: { collapsed: boolean }) {
         <Moon className="hidden size-4 dark:block" />
       </span>
 
-      {/* Faded, not `hidden` — same reasoning as the nav labels: `hidden` is
+      {/* Faded, not `hidden` - same reasoning as the nav labels: `hidden` is
           instant and leaves the rail shrinking around empty space. */}
       <span
         className={cn(

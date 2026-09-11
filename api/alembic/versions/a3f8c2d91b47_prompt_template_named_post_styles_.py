@@ -2,8 +2,8 @@
 
 The client's request (2026-08-20): on the prompts screen, create named prompt
 templates, each with its own system/overlay/image text, and pick one on the
-generate screen. The table stores **deltas only** — every prompt column is
-nullable and blank inherits the Page's chain — because full copies are the
+generate screen. The table stores **deltas only** - every prompt column is
+nullable and blank inherits the Page's chain - because full copies are the
 measured drift failure this repo's prompt layout was built against.
 
 `draft.prompt_template_id` records the style a draft was generated under so a
@@ -11,7 +11,7 @@ regenerate or hero rebuild uses the same voice rather than the operator's
 current dropdown.
 
 Hand-written like the rest: the live database is the only Postgres and the
-shape is small (see 77c12e0f0a01 for the convention). No `created_at` —
+shape is small (see 77c12e0f0a01 for the convention). No `created_at` -
 nothing displays or sorts on it.
 
 Revision ID: a3f8c2d91b47
@@ -33,7 +33,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     # The live database already carries an empty `prompt_template` table from an
-    # earlier session — the same orphan situation 77c12e0f0a01 documents for
+    # earlier session - the same orphan situation 77c12e0f0a01 documents for
     # `youtube_schedule`, but here the shape is exactly what this feature needs
     # (name VARCHAR, the three prompts TEXT), so it is adopted rather than
     # dropped. Guarded so the same revision still builds a fresh database.

@@ -1,10 +1,10 @@
 Gold Standard Structure and Format for health, fitness and recipe posts consisting of 3 distinct parts and an Image prompt at the end.
 
-Accuracy — applies to all four parts below, and outranks them.
+Accuracy - applies to all four parts below, and outranks them.
 * Every figure, study finding, nutrition number and quotation must be one you are confident is correct. If you are not confident, leave it out.
 * Never invent a specific in order to satisfy a format rule. The research openings in part 1 are the ones that invite this: only open with "RESEARCH SUGGESTS" or "STUDIES HAVE FOUND" when there is real research behind the claim, and pick a different opening when there is not.
 * Do not add a detail the source material does not support. Vivid specifics that cannot be traced back to the source are the failure to watch for.
-* A weaker true claim beats a stronger one you cannot stand behind — "may help" is better than a confident "will".
+* A weaker true claim beats a stronger one you cannot stand behind - "may help" is better than a confident "will".
 * Never give medical advice or state a health outcome as guaranteed.
 
 1. The Hook: this is the text appeared on the image
@@ -25,7 +25,7 @@ Accuracy — applies to all four parts below, and outranks them.
  * Exactly 5 points. If the post is about a recipe or preparing a dish, then no limit on the number of the points.
 
 3. The Main Body: this is the First Comment under the post
-* Purpose: A readable "mini article" — the why, the how, the practical application, the limitations and an example — extending what the hook and recap introduced.
+* Purpose: A readable "mini article" - the why, the how, the practical application, the limitations and an example - extending what the hook and recap introduced.
 * Rules: Go straight to the main content. No preamble, no restating the hook.
  * Highly scannable, concise, and tightly paced.
  * Exactly 2 or 3 paragraphs, separated by a blank line.

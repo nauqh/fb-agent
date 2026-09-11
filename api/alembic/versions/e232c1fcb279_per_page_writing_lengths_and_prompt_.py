@@ -28,7 +28,7 @@ def upgrade() -> None:
     convenient: it means "inherit". The lengths fall back to the house numbers
     in `writer/validators.py`, and the prompts to `prompts/pages/<slug>/x.txt`
     or the global file. Defaulting any of them would copy today's value onto
-    every Page, and a copied default cannot be told from a chosen one — which
+    every Page, and a copied default cannot be told from a chosen one - which
     is the drift these columns are shaped to avoid.
 
     The three prompt columns are `TEXT`, not autogenerate's unbounded
@@ -46,7 +46,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """Downgrade schema. Drops any prompt an operator has written — it lives
+    """Downgrade schema. Drops any prompt an operator has written - it lives
     nowhere else, unlike the files, which are in git."""
     op.drop_column('page', 'image_prompt')
     op.drop_column('page', 'overlay_prompt')

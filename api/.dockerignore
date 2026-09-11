@@ -6,7 +6,7 @@ __pycache__/
 *.pyc
 
 # Never in an image. Neither is committed, but the build context is a directory
-# on a laptop, not a git checkout — .dockerignore is what actually keeps them out.
+# on a laptop, not a git checkout - .dockerignore is what actually keeps them out.
 .env
 .env.*
 *.db

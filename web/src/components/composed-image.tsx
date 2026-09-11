@@ -15,8 +15,8 @@ import { cn } from "@/lib/utils";
  * expensive half and it is already on disk; the panel is text on a black
  * rectangle and the browser can lay it out as fast as you type. Compositing on
  * the server is then only about producing the file that gets published, not
- * about seeing what you just changed. The old app worked exactly this way —
- * `<img>` of the hero with `OverlayTextPanelPreview` over it — and this repo
+ * about seeing what you just changed. The old app worked exactly this way -
+ * `<img>` of the hero with `OverlayTextPanelPreview` over it - and this repo
  * lost the behaviour by accident: the component was written before
  * `google-genai` existed, so it had no hero to show and drew a gradient, and
  * once real heroes arrived the callers quietly switched to the baked PNG
@@ -24,7 +24,7 @@ import { cn } from "@/lib/utils";
  *
  * **Every value comes from the Page's resolved layout.** It used to come from
  * `LAYOUT` in `lib/fixtures/pages.ts`, a hand-kept copy of `layout.yml` with no
- * per-Page anything in it — and the panel's own padding and type size were not
+ * per-Page anything in it - and the panel's own padding and type size were not
  * even that, but two literals (`padding: "6% 4%"`, `clamp(10px, 4.1cqw, 19px)`)
  * that happened to look about right. So the four padding sliders and the text
  * size on Global moved the card on Global and moved nothing on the screen the
@@ -62,7 +62,7 @@ export function ComposedImage({
   className,
 }: {
   /**
-   * The Page's resolved layout — `layout.yml` with that Page's overrides laid
+   * The Page's resolved layout - `layout.yml` with that Page's overrides laid
    * over it, exactly what `layout_for.resolve` hands the compositor. Required
    * rather than defaulted: a default here is a second copy of the file, which
    * is the thing that drifted.
@@ -86,14 +86,14 @@ export function ComposedImage({
   insetSizePx?: number | null;
   /**
    * Its centre as fractions of the card. Null on either axis means the default
-   * for that axis, which is the seam — and the seam is a flexbox edge here, not
+   * for that axis, which is the seam - and the seam is a flexbox edge here, not
    * a number, so a defaulted disc is rendered inside the hero and a placed one
    * against the card.
    */
   insetXRatio?: number | null;
   insetYRatio?: number | null;
   /**
-   * The draft's own ring. Null on either takes the Page's layout — and null is
+   * The draft's own ring. Null on either takes the Page's layout - and null is
    * not `0`: `0` is a draft that has chosen to have no ring.
    */
   insetBorderWidthPx?: number | null;
@@ -121,7 +121,7 @@ export function ComposedImage({
 
   const hue = (seed * 47) % 360;
   const full = layout.template === "full_overlay";
-  /** The no-overlay card (client, 2026-09-11): no panel, no badge, no gold —
+  /** The no-overlay card (client, 2026-09-11): no panel, no badge, no gold -
       the hero is full bleed and the logo is the only overlay. Matches the
       compositor's `plan=None`, so the preview beside the PNG stays honest. */
   const noPanel = !(overlayText ?? "").trim();
@@ -133,13 +133,13 @@ export function ComposedImage({
    * The disc, and the two places it can live.
    *
    * `inset_y_ratio` null means the seam, and the seam is a flexbox edge rather
-   * than a number here — the panel sizes itself to its text, so nothing in this
+   * than a number here - the panel sizes itself to its text, so nothing in this
    * component knows where it falls. So a defaulted disc renders *inside* the
    * hero, where `bottom-0` is the seam by construction, and a placed one renders
    * against the card at a percentage. Same split per axis as `inset_centre` on
    * the server, so a half-set position looks the same in both.
    */
-  // `??`, never `||` — `0` is a real choice here ("no ring") and `||` would
+  // `??`, never `||` - `0` is a real choice here ("no ring") and `||` would
   // send it back to the Page's width, which is the one value it is trying not
   // to be.
   const border = Math.max(
@@ -153,8 +153,8 @@ export function ComposedImage({
       className="absolute z-10 aspect-square rounded-full"
       style={{
         width: scale(width),
-        // Zero border width is a legitimate setting — "no border" is the
-        // client's own first option — and it has to render as a disc with no
+        // Zero border width is a legitimate setting - "no border" is the
+        // client's own first option - and it has to render as a disc with no
         // ring rather than as a hairline, so the padding is scaled from the
         // value rather than assumed to be non-zero.
         backgroundColor: borderColor,
@@ -190,7 +190,7 @@ export function ComposedImage({
     <div
       className={cn(
         // Container query unit `cqw` is what keeps the type scaling with the
-        // card instead of the viewport — the panel must look the same in the
+        // card instead of the viewport - the panel must look the same in the
         // 180px list thumbnail and the 380px detail view.
         "@container relative flex flex-col overflow-hidden rounded-2xl border bg-black",
         className,
@@ -200,7 +200,7 @@ export function ComposedImage({
       {/* On a full overlay the photograph *is* the card and the panel lies over
           its bottom, so the hero is painted behind everything and the flex
           column above it only positions the panel. On a card the hero occupies
-          its own box and is cropped to it — which is what the compositor does,
+          its own box and is cropped to it - which is what the compositor does,
           and why this is not simply full-bleed in both cases: the crop differs. */}
       {full || noPanel ? (
         <div className="absolute inset-0" style={heroSrc ? undefined : gradient}>
@@ -214,7 +214,7 @@ export function ComposedImage({
       >
         {full || noPanel ? null : heroImage}
 
-        {/* The headline chip, bottom-left of the hero share — whose bottom edge
+        {/* The headline chip, bottom-left of the hero share - whose bottom edge
             *is* the top of the panel, on either template. `cqw` throughout
             because the container query resolves against the width and the
             compositor's gap is a fraction of the height: at 896×1120 a share of
@@ -232,7 +232,7 @@ export function ComposedImage({
               fontFamily: "Arial, Helvetica, sans-serif",
               paddingInline: scale(layout.badge.padding_x_px),
               paddingBlock: scale(layout.badge.padding_y_px),
-              // Clamped to half the height, as the compositor does — past that
+              // Clamped to half the height, as the compositor does - past that
               // resvg draws a stadium and this drew a rounded box.
               borderRadius: scale(
                 Math.min(
@@ -254,7 +254,7 @@ export function ComposedImage({
       </div>
 
       {/* Panel. `min-height` is the floor from `panel.ratio`; the content pushes
-          it taller, up to `panel.max_ratio` — the same cap the compositor
+          it taller, up to `panel.max_ratio` - the same cap the compositor
           applies, without which the panel grows past the top of the card. A
           no-overlay draft draws none at all. */}
       {!noPanel ? (
@@ -325,7 +325,7 @@ export function ComposedImage({
  *
  * Three outcomes rather than the two this used to draw. It previously took a
  * bare `watermark_image_path` and printed a red "no watermark asset" box when
- * it was null — which is the *normal* state for eight of the ten Pages, none of
+ * it was null - which is the *normal* state for eight of the ten Pages, none of
  * which has artwork committed to the repo. They publish either an uploaded mark
  * or their name as text, and the preview called both of them broken.
  *
@@ -358,8 +358,8 @@ function Watermark({
 
   if (mark) {
     return (
-      // Two possible origins — the public bucket, or the API's `/assets` mount
-      // through the proxy — and neither is in `next.config.ts`'s image hosts,
+      // Two possible origins - the public bucket, or the API's `/assets` mount
+      // through the proxy - and neither is in `next.config.ts`'s image hosts,
       // so `next/image` cannot load it.
       // eslint-disable-next-line @next/next/no-img-element
       <img
@@ -373,7 +373,7 @@ function Watermark({
 
   // What the compositor draws when a Page has no image mark: its own text, or
   // failing that its name, right-anchored at 2.2% of width. Not a fallback for
-  // a mark that failed to load — that raises — so this is a Page that publishes
+  // a mark that failed to load - that raises - so this is a Page that publishes
   // a wordmark rather than a logo.
   return (
     <span
@@ -421,7 +421,7 @@ interface Segment {
  *
  * A Highlight Phrase is defined as an *exact substring* of the panel text,
  * copied verbatim by the writer. Anything that does not literally appear is
- * dropped rather than fuzzily matched — the same silence the compositor gives
+ * dropped rather than fuzzily matched - the same silence the compositor gives
  * it, so a bad phrase is visible here as a missing gold word rather than
  * papered over.
  */

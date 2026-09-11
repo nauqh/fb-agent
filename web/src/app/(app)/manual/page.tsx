@@ -27,7 +27,7 @@ import { useQuery } from "@/lib/use-query";
  * width that the hand-written form actually needs for its live card.
  *
  * **Write it yourself** is the old app's manual mode, restored at the client's
- * request — "Create a draft for {page} without calling Gemini". Hook, caption,
+ * request - "Create a draft for {page} without calling Gemini". Hook, caption,
  * first comment, and an optional picture that becomes the hero.
  *
  * **From a topic** is the strip that used to sit in the Sources dock. It does
@@ -39,7 +39,7 @@ export default function ManualScreen() {
     <div className="flex min-h-0 flex-1 flex-col">
       <ScreenHeader
         title="Manual"
-        hint="Start a post with no source behind it — write it yourself, or from a topic."
+        hint="Start a post with no source behind it - write it yourself, or from a topic."
       />
 
       <Tabs defaultValue="write" className="flex min-h-0 flex-1 flex-col gap-6">
@@ -64,7 +64,7 @@ export default function ManualScreen() {
 /**
  * The old app's manual draft: every field typed, nothing generated.
  *
- * Laid out like the review drawer — card on the left, copy on the right — for
+ * Laid out like the review drawer - card on the left, copy on the right - for
  * the reason the drawer has it that way: the hook is *drawn on the picture*, so
  * typing it without seeing where it lands is guesswork. The old app had no
  * preview here and its manual drafts were the ones that came out wrong.
@@ -91,7 +91,7 @@ function WriteItYourself() {
   const ready = Boolean(hook.trim() || caption.trim() || firstComment.trim());
 
   // The object URL outlives the render that made it, so it is revoked on
-  // replace and on unmount — otherwise every re-pick leaks one for the life of
+  // replace and on unmount - otherwise every re-pick leaks one for the life of
   // the page.
   useEffect(() => {
     return () => {
@@ -134,7 +134,7 @@ function WriteItYourself() {
   return (
     // Bounded rather than let loose across the shell's 1600px. These are three
     // textareas, and a text field the width of the screen reads as a document
-    // editor — the same reason the topic tab is capped.
+    // editor - the same reason the topic tab is capped.
     <form
       onSubmit={submit}
       className="grid max-w-5xl gap-8 lg:grid-cols-[340px_minmax(0,1fr)]"
@@ -193,7 +193,7 @@ function WriteItYourself() {
         <p className="text-[11px] leading-relaxed text-muted-foreground">
           {file
             ? "Your picture is the hero. The panel, the overlay and the watermark are drawn over it."
-            : "Optional. Without one there is no card to publish yet — the gradient above is a placeholder, not the post."}
+            : "Optional. Without one there is no card to publish yet - the gradient above is a placeholder, not the post."}
         </p>
       </div>
 
@@ -212,12 +212,12 @@ function WriteItYourself() {
             placeholder="Scroll-stopping opening line…"
             className="text-sm"
           />
-          {/* The rule the writer is held to, stated rather than enforced — a
+          {/* The rule the writer is held to, stated rather than enforced - a
               person typing here has decided, and the server records it as a
               warning instead of refusing the draft. */}
           <p className="text-[11px] text-muted-foreground">
             Drawn on the panel. Under 65 words and no questions, by the brand
-            rules — broken here, it is recorded as a warning rather than refused.
+            rules - broken here, it is recorded as a warning rather than refused.
           </p>
         </div>
 
@@ -311,7 +311,7 @@ function FromATopic() {
         <p className="text-xs leading-relaxed text-muted-foreground">
           The writer produces the whole post and buys a hero for it. Nothing binds
           the story except the topic itself, so it works from what the model
-          already knows rather than from an article — otherwise it is the same
+          already knows rather than from an article - otherwise it is the same
           run as any other: the same prompts, the same brand rules, the same card.
         </p>
       </div>
@@ -325,7 +325,7 @@ function FromATopic() {
           onChange={(event) => setNoImage(event.target.checked)}
           className="size-3.5 cursor-pointer accent-primary"
         />
-        No image — text only, and nothing to pay for
+        No image - text only, and nothing to pay for
       </label>
 
       <Button

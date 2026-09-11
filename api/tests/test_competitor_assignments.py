@@ -1,8 +1,8 @@
 """Which Competitors feed which Pages.
 
 The rule these pin down is not obvious from either table: **assignment decides,
-and nothing else does**. `synced_for_page_id` is provenance — which Page's
-Metricool set a post arrived through — and it no longer grants any Page the
+and nothing else does**. `synced_for_page_id` is provenance - which Page's
+Metricool set a post arrived through - and it no longer grants any Page the
 right to read anything.
 
 It exists because of a limit outside this codebase. Metricool allows 100
@@ -81,7 +81,7 @@ def test_without_assignments_a_page_reads_nothing(client, session, page):
 
 def test_an_assignment_lets_a_page_read_another_pages_competitor(client, session, page):
     """The whole point. The competitor is configured under the *other* Page in
-    Metricool — because that is where the allowance had room — and this Page
+    Metricool - because that is where the allowance had room - and this Page
     reads it anyway."""
     other = _two_pages(session)
     session.add(_post("b", OTHER, other.id, 2))
@@ -190,8 +190,8 @@ def test_assignments_for_an_unknown_page_are_404(client):
 def test_a_note_records_why_and_survives_a_retick(client, page):
     """The table has no history, so the reasoning lives on the row.
 
-    Keeping this mapping in a config file was considered for exactly that — a
-    commit message saying why a Page reads a competitor — and rejected because
+    Keeping this mapping in a config file was considered for exactly that - a
+    commit message saying why a Page reads a competitor - and rejected because
     it would put the change behind a deploy. This is the compensation, and it is
     worthless if the next save wipes it: a screen that submits the tick list
     without the notes must not erase them.
@@ -205,7 +205,7 @@ def test_a_note_records_why_and_survives_a_retick(client, page):
         },
     )
 
-    # A later save carrying only the ticks — which is what a checkbox list sends.
+    # A later save carrying only the ticks - which is what a checkbox list sends.
     body = client.put(
         "/competitors/assignments",
         params={"page_id": page.id},

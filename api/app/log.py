@@ -2,7 +2,7 @@
 
 One logger, one sink, one format going to stderr (Railway captures it). No JSON,
 no files, no per-module loggers. uvicorn keeps its own default lines; this only
-covers what the app itself says — an outcome and, usually, how long it took.
+covers what the app itself says - an outcome and, usually, how long it took.
 That follows https://loggingsucks.com : log the thing that changed, once, at
 the end, not every step towards it.
 """
@@ -39,7 +39,7 @@ def _uvicorn_level() -> None:
     """Raise uvicorn's verbosity to match ours.
 
     uvicorn prints an access line per request at INFO by default, which is
-    exactly the noise DEBUG turns on — but it has no idea it is part of this
+    exactly the noise DEBUG turns on - but it has no idea it is part of this
     app's log. Gate the two loggers it owns (startup/error, access) on
     `LOG_LEVEL` so DEBUG shows every request and INFO keeps a quiet stream of
     app outcomes only.

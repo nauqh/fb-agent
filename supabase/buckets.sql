@@ -26,7 +26,7 @@ values
   -- hence its own bucket (see `api/app/youtube/storage.py`).
   --
   -- 50MB, not the API's old 200MB: this Supabase project refuses a
-  -- `file_size_limit` above 50MB (EntityTooLarge on create/update — measured
+  -- `file_size_limit` above 50MB (EntityTooLarge on create/update - measured
   -- 2026-09-04: 64MB rejected, 50MB accepted). The route's MAX_UPLOAD_BYTES
   -- matches, so an oversized clip is refused with a readable 400 rather than
   -- surfacing as a Supabase error behind the API.
@@ -44,7 +44,7 @@ set
 -- signed for 24h (`social-agent/src/lib/facebook/metricool-media.ts:17`) and 0
 -- of its 105 published posts still have a working image.
 --
--- Public here means "public to whoever holds the link", not browsable — buckets
+-- Public here means "public to whoever holds the link", not browsable - buckets
 -- do not list, and `media.filename` appends 6 random hex characters.
 
 -- 10MB is a backstop, not the limit that should ever fire. `MAX_INSET_BYTES`
@@ -57,6 +57,6 @@ set
 -- No RLS policies, deliberately. The old app's per-user folder policies
 -- (`social-agent/supabase/migrations/20260603000000_facebook_media_storage.sql`)
 -- exist because it had Supabase Auth and multiple users. This app has one
--- operator, writes server-side with the service key — which bypasses RLS — and
+-- operator, writes server-side with the service key - which bypasses RLS - and
 -- reads through the public URL, which a public bucket serves without a policy.
 -- Copying them would add rules that never evaluate.

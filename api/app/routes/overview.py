@@ -1,7 +1,7 @@
 """Post performance, and the posts worth keeping.
 
 Two halves that look alike and are not. **Performance is read live from
-Metricool** and stored nowhere — the same reasoning as the schedule screen
+Metricool** and stored nowhere - the same reasoning as the schedule screen
 (ADR-0001): their stats are the truth, they move every day as Facebook counts
 catch up, and a local copy could only ever be stale. **A saved post is a
 decision** and needs a row, because Metricool's stats call takes a date range
@@ -98,7 +98,7 @@ def performance(
     160,282.
 
     30 days by default. An earlier version used 90 on the theory that their lag
-    made shorter windows read as a dead Page; measured, that is false — over 7
+    made shorter windows read as a dead Page; measured, that is false - over 7
     days only 1 post of 28 had no reactions, and over 30 it was 1 of 219. The
     belief came from the sorting bug above, where the unsorted first row
     happened to be a recent zero.
@@ -133,7 +133,7 @@ def performance(
 class SaveRequest(BaseModel):
     """What the screen sends to keep a post. The metrics come with it.
 
-    Sent by the client rather than re-fetched, because they are a *snapshot* —
+    Sent by the client rather than re-fetched, because they are a *snapshot* -
     what this post scored when it was saved. Re-reading them later would need
     the post to still be inside a window it has by definition left.
     """
@@ -206,7 +206,7 @@ def reuse_saved(
 ) -> list[int]:
     """Write the saved post's story again, from scratch.
 
-    The point of keeping a top performer — "save the top-performing posts for
+    The point of keeping a top performer - "save the top-performing posts for
     future reference/reuse". The operator confirmed the reading: **the same
     story, written fresh**, not a copy and not a style sample. Their own data
     already shows them doing it by hand; the best post in the 90-day window
@@ -215,7 +215,7 @@ def reuse_saved(
     It runs as a **topic** rather than a Source Item, which is what makes the
     subject bind without the writer treating our own prose as an article to
     summarise. `start_run` takes it from there, so this is the ordinary generate
-    path — same prompts, same brand rules, same card — and answers 202 with ids
+    path - same prompts, same brand rules, same card - and answers 202 with ids
     to poll like every other run.
 
     The stored text is the *published caption*, which is the fullest description
@@ -248,16 +248,16 @@ def repost_saved(saved_id: int, session: Session = Depends(get_session)) -> Draf
     """Put the original post back in the queue, caption and picture as published.
 
     The client's ask, verbatim: "would it be easy to include a button to just
-    repost the original?" — distinct from **Write again**, which sends the story
+    repost the original?" - distinct from **Write again**, which sends the story
     back through the writer for a fresh hook, caption and image. This one copies
-    what went out. The whole difficulty — finding the original in the planner and
-    copying its picture into our bucket — lives in `app.publish.repost`;
+    what went out. The whole difficulty - finding the original in the planner and
+    copying its picture into our bucket - lives in `app.publish.repost`;
     everything here is row lookup, shaping and HTTP statuses.
 
     **It creates a Draft rather than publishing.** Every other route to an
     audience in this app goes through Review and one of the three publish
     buttons, and a button that reached Facebook directly would be the only
-    exception — on a post whose image may have expired since it was saved. So
+    exception - on a post whose image may have expired since it was saved. So
     the repost lands in the queue at `review`, and the operator publishes it the
     way they publish everything else.
 
@@ -267,7 +267,7 @@ def repost_saved(saved_id: int, session: Session = Depends(get_session)) -> Draf
 
     **The picture and the first comment come from the planner, not from the
     saved row.** The saved row holds what the stats call returns, and that is a
-    130×163 thumbnail with no first comment anywhere on it — see
+    130×163 thumbnail with no first comment anywhere on it - see
     `repost.original_for` for the measurements. Reposting from the saved row
     alone published a pixelated image and dropped the first comment silently,
     which is two ways of not being the post it claims to be repeating.
@@ -313,7 +313,7 @@ def repost_saved(saved_id: int, session: Session = Depends(get_session)) -> Draf
 
     draft = Draft(
         page_id=row.page_id,
-        # The published caption verbatim — `_post_text` sends `caption` and
+        # The published caption verbatim - `_post_text` sends `caption` and
         # `first_comment`, so what went out last time is what goes out again.
         caption=caption,
         first_comment=first_comment,
@@ -322,7 +322,7 @@ def repost_saved(saved_id: int, session: Session = Depends(get_session)) -> Draf
         progress_pct=100,
         # Named so the queue says what this row is. There is no Source Item and
         # no hook: the hook was drawn into the picture that is being reused.
-        topic=f"Repost — {caption[:60]}",
+        topic=f"Repost - {caption[:60]}",
         warnings=[
             "A repost: the caption, first comment and picture are the ones "
             "already published. Redrawing the image would replace it with a new "
@@ -331,7 +331,7 @@ def repost_saved(saved_id: int, session: Session = Depends(get_session)) -> Draf
     )
     session.add(draft)
     # The id is wanted for the filename and nothing else. Flushed rather than
-    # committed so that a failed copy below rolls the row back — a draft with a
+    # committed so that a failed copy below rolls the row back - a draft with a
     # caption and no picture is worse than no draft, because it looks publishable.
     session.flush()
 

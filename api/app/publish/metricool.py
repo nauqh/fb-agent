@@ -1,7 +1,7 @@
 """Handing a post to Metricool's planner.
 
 Two calls: normalize the image URL, then schedule. Metricool owns everything
-after that — it publishes to Facebook and posts the first comment itself
+after that - it publishes to Facebook and posts the first comment itself
 (`autoPublish: true`, `firstCommentText`), so this repo never touches the Graph
 API and never has to come back to finish the job.
 
@@ -48,7 +48,7 @@ def _headers(json_body: bool = False) -> dict[str, str]:
     """No `Accept` unless a JSON body is going out.
 
     Sending `Accept: application/json` on the GET answers **500 "No acceptable
-    representation"** — normalize returns a bare URL as text/plain and content
+    representation"** - normalize returns a bare URL as text/plain and content
     negotiation fails. Found by watching it fail against the live API; the old
     client omits the header on GET for the same reason
     (`metricoolService.ts:72`).
@@ -68,7 +68,7 @@ def normalize_image(url: str, blog_id: str, client: httpx.Client | None = None) 
     valid mediaId"; tested against the live API with both a JPEG and a PNG, it
     echoed each URL back unchanged and returned no id at all. So the bucket URL
     is what ends up in the post, and it has to still resolve when Facebook
-    fetches it at publish time — which is why the bucket is public and unsigned.
+    fetches it at publish time - which is why the bucket is public and unsigned.
 
     It is still called, because their own troubleshooting page says a post
     scheduled without normalizing first silently loses its media.
@@ -104,7 +104,7 @@ def publication_date(when: datetime | None = None) -> str:
 
     It takes the timezone as a separate field and **rejects an offset suffix**,
     so this must not be an ISO instant. The same trap on the read side is
-    already recorded in plan.md:116 — Metricool's `creationDate.dateTime` is
+    already recorded in plan.md:116 - Metricool's `creationDate.dateTime` is
     naive local time in the account's own timezone, not UTC.
     """
     zone = ZoneInfo(settings.timezone)
@@ -129,7 +129,7 @@ def build_body(
 
     `media` is a **list**, not `{"mediaId": ...}`. Metricool's docs recommend the
     id form, but the id only exists when normalize re-hosts the file, which it
-    does not do for ours — and the old client carried a comment saying Facebook
+    does not do for ours - and the old client carried a comment saying Facebook
     photo posts are more reliable with URL arrays either way.
 
     `autoPublish` and `firstCommentText` are what make Metricool the publisher
@@ -148,7 +148,7 @@ def build_body(
     }
     # Omitted rather than sent empty for a text-only post. `"media": []` and
     # `"media": [null]` are both a media field Metricool then has to interpret,
-    # and the type stays `POST` either way — a Facebook status update is a post
+    # and the type stays `POST` either way - a Facebook status update is a post
     # with no attachment, not a different kind of publication.
     if image_url:
         body["media"] = [image_url]
@@ -211,7 +211,7 @@ def get_post(
 
     Needed because `update` replaces the whole post: a caller editing only the
     caption still has to send a publication date, and sending nothing means
-    `publication_date(None)` — two minutes from now. A text edit would silently
+    `publication_date(None)` - two minutes from now. A text edit would silently
     reschedule the post to immediately. This is where the existing time comes
     from, and reading it rather than storing it is ADR-0001: the planner is the
     schedule, and a local copy could only be wrong.
@@ -255,7 +255,7 @@ def scheduled_at(post: dict) -> datetime | None:
 
     Metricool answers the timezone as `Asia/Bangkok` where we sent
     `Asia/Ho_Chi_Minh`, and rounds the seconds off. Same instant, different
-    spelling — which is why this reads the wall-clock string and ignores the
+    spelling - which is why this reads the wall-clock string and ignores the
     zone rather than trying to reconcile the two.
     """
     when = (post.get("publicationDate") or {}).get("dateTime")
@@ -272,7 +272,7 @@ def _post_id(payload: object) -> str | None:
 
     The old client searched `data`, `result`, `response`, `payload` and `post`
     before giving up and matching against recent planner posts by text prefix
-    and scheduled time. The nesting is real; the fuzzy matching is not ported —
+    and scheduled time. The nesting is real; the fuzzy matching is not ported -
     guessing which planner row is ours from a 64-character prefix is a way to
     write the wrong id onto a Draft, and a missing id is the more honest answer.
     """
@@ -311,7 +311,7 @@ def schedule(
 ) -> str | None:
     """Queue the post. Returns Metricool's id for it, if it gave one.
 
-    `None` is not a failure — the call succeeded and the post is in the planner;
+    `None` is not a failure - the call succeeded and the post is in the planner;
     Metricool simply did not name it in the response. The Draft records what it
     can and the planner remains the source of truth either way (ADR-0001).
     """
@@ -366,7 +366,7 @@ def update(
     | without `id` | **old survives**, second post created | changes |
 
     So `id` in the body is the difference between replacing a post and
-    duplicating it, and it is in the body here for that reason alone — the path
+    duplicating it, and it is in the body here for that reason alone - the path
     already carries it, and sending it twice looks redundant right up until the
     planner has two of everything.
 
@@ -378,7 +378,7 @@ def update(
 
     Delete-then-schedule was the obvious alternative and is worse: between the
     two calls the post does not exist, and a failure in the second loses it
-    outright. One PUT has no such window — Metricool does the swap or does not.
+    outright. One PUT has no such window - Metricool does the swap or does not.
     """
     if not settings.metricool_api_token or not settings.metricool_user_id:
         raise PublishError("Metricool is not configured (token and user id)")
@@ -417,7 +417,7 @@ def update(
         # deleted, so not knowing the new one strands the Draft.
         raise PublishError(
             "Metricool accepted the edit but did not name the new post. The old "
-            f"post {post_id} no longer exists — check the planner."
+            f"post {post_id} no longer exists - check the planner."
         )
     return new_id
 
@@ -425,7 +425,7 @@ def update(
 def delete(blog_id: str, post_id: str, client: httpx.Client | None = None) -> None:
     """Remove a post from the planner. Idempotent.
 
-    A 404 is success, not failure — measured: the first delete answers 200
+    A 404 is success, not failure - measured: the first delete answers 200
     `{"data": true}` and a repeat answers 404 `Post id '...' does not exist`.
     Retrying a delete that already worked is the common case (a timeout that
     actually landed), and treating that as an error would strand the Draft in

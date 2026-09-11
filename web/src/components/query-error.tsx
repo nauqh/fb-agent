@@ -7,14 +7,14 @@ import { Button } from "@/components/ui/button";
 /**
  * What a failed read looks like.
  *
- * `useQuery` catches, leaves `data` null and sets `error` — so a screen that
+ * `useQuery` catches, leaves `data` null and sets `error` - so a screen that
  * destructures only `{ data }` renders an empty list and says nothing. That is
  * the worst possible outcome here, because empty is *also* what a quiet week
  * looks like, and the two are indistinguishable on screen.
  *
  * It is not hypothetical. Metricool returned a 502 on 2026-08-04 and the
  * Competitors tab showed an empty grid with no explanation. The API had already
- * done its part — `GET /sources/competitors` answers 502 with a sentence
+ * done its part - `GET /sources/competitors` answers 502 with a sentence
  * written for the operator ("Metricool /posts did not answer: ReadTimeout")
  * precisely so this cannot be misread. The client was dropping it.
  *

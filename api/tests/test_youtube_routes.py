@@ -1,7 +1,7 @@
 """The youtube routes, offline.
 
-The two routes that never touch the network — enqueueing a single video and
-the job list — are exercised here against the test client. Scheduling and the
+The two routes that never touch the network - enqueueing a single video and
+the job list - are exercised here against the test client. Scheduling and the
 channel picker would need Metricool/YouTube stubs; those live in the module
 tests (schedule body shape, reconcile fold), which is where the logic is.
 """

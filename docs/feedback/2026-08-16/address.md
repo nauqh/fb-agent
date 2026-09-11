@@ -1,11 +1,11 @@
-# What Was Addressed — 2026-08-16 Feedback
+# What Was Addressed - 2026-08-16 Feedback
 
 Written as items ship. The request is `feedback.md`, the reading of the code is
 `comprehension.md`, and the evidence for each change is its commit message.
 
 ---
 
-## G1 — Reactions by default, newest kept beside it ✅
+## G1 - Reactions by default, newest kept beside it ✅
 
 **Shipped 2026-08-16.** `GET /sources/competitors` takes `sort=reactions|newest`,
 defaulting to reactions, and the Competitors tab has a two-word toggle.
@@ -21,7 +21,7 @@ Retraced's real 1,244-row pool through the running API:
 The old grid reached back two days and topped out at 2,031 reactions while the
 same week held one at 42,738. It was showing the weakest posts in the pool.
 
-`fetch_competitor_posts` had **always** sorted by reactions before returning —
+`fetch_competitor_posts` had **always** sorted by reactions before returning -
 the grid read was the only thing discarding that order, and Metricool's own
 Competitors tab ranks the same way. So this restored an order that already
 existed rather than inventing one.
@@ -31,12 +31,12 @@ part.** The previous newest-first order was a decision, not an oversight, and
 its reason still holds: reactions is a *stable* ranking and nothing prunes
 `source_item`, so ranking the whole table and taking 60 pins the top of the grid
 to whatever went viral weeks ago and a genuinely new post can never enter it.
-Measured on the same pool — **42 of the top 60 unwindowed were already older
+Measured on the same pool - **42 of the top 60 unwindowed were already older
 than the window, against 0 windowed.**
 
 **The window anchors to the newest post in scope, not to `now()`.** The obvious
 version subtracts the window from the clock, and that answers with an *empty
-grid* for any Page nobody has synced this week — trading a stale ranking for no
+grid* for any Page nobody has synced this week - trading a stale ranking for no
 ranking at all. An unexplained empty grid is the failure this module already
 guards against twice, and it would have hit hardest on the six Pages that have
 no competitors. Anchored to the data, the answer is always "the best of the most
@@ -48,12 +48,12 @@ suite runs after that.
 
 **Newest stays unwindowed.** Recency *is* the ranking there, so the newest 60 of
 a growing pool are recent by construction. A row the reactions window hides is
-still reachable by switching to newest — pinned, because hiding a row from one
+still reachable by switching to newest - pinned, because hiding a row from one
 order must not be mistaken for dropping it from the table.
 
 **Two small things that were not obvious:**
 
-- The hint above the grid moves with the choice — "best of the last 7 days
+- The hint above the grid moves with the choice - "best of the last 7 days
   first" against "newest first". The window is not independent of the sort, so a
   static sentence would be wrong half the time.
 - The choice is component state, not a URL parameter. It is a way of reading one
@@ -68,14 +68,14 @@ press, and the two orders open on 97.1K and 3 reactions.
 Suite is **385** (was 382). `tsc` and `eslint src` clean.
 
 **What this does not do.** It does not help the six Pages with no competitors
-configured — their grid is empty in either order, which is `G2(a)`. And it does
+configured - their grid is empty in either order, which is `G2(a)`. And it does
 not fix the used-marker blindness: a fixed 60-row window over a growing pool
 still hides most of them, which is `G2(b)` and was always the same problem in a
 different shirt.
 
 ---
 
-## G2(c) — the drawer names the source ✅
+## G2(c) - the drawer names the source ✅
 
 **Shipped 2026-08-16.** `GET /sources/items/{id}`, and a line under the Page name
 in the review drawer: kind, competitor, age, the first two lines of their post,
@@ -84,13 +84,13 @@ and **Open** straight to it.
 **Nothing was missing from the data.** 35 of the 38 drafts carry a
 `source_item_id`, it has been in every Draft response since the first day, and no
 screen turned it into a sentence. That is the whole of the client's "I have no
-idea which source or which competitor posts the tool gens content from" — half of
+idea which source or which competitor posts the tool gens content from" - half of
 it, anyway; the other half is G2(a) and G2(b).
 
 **A second request rather than a field on the Draft.** Every route that returns a
 Draft returns the table class directly, so the alternatives were a wrapper model
-on all ten of them — where the field comes back null from each mutation route and
-the line blinks out the moment you press Save — or a `Relationship`, which
+on all ten of them - where the field comes back null from each mutation route and
+the line blinks out the moment you press Save - or a `Relationship`, which
 SQLModel does not serialise on a `table=True` model at all. One extra GET when a
 drawer opens is cheaper than either.
 
@@ -106,26 +106,26 @@ to be the same two words in both places.
 **Driven in a browser.** Draft 55 opens on "Competitor post · Ancient Files · 2
 days ago" over their text, with a working Open link; the request goes out as
 `200 /sources/items/2468`. A topic draft has no Source Item and says so rather
-than leaving the space blank — the absence is the answer there.
+than leaving the space blank - the absence is the answer there.
 
 Suite is **389** (was 387). `tsc` and `eslint src` clean.
 
 **Worth knowing, and visible for the first time because of this.** A competitor
-post is borrowed for *tone*, not for its facts — `SourceKind.is_factual` is false
+post is borrowed for *tone*, not for its facts - `SourceKind.is_factual` is false
 for that kind, so the subject does not bind. Draft 55's hook is about Semmelweis
 while its source is about Heinrich Hertz, and that is the system working. It now
 looks like a mismatch on screen, and may well be the next thing they ask about.
 
 ---
 
-## G2(a) — an empty grid now says why ✅
+## G2(a) - an empty grid now says why ✅
 
 **Shipped 2026-08-17.** `GET /sources/competitors/reach`, and an empty state on
 the Competitors tab that reads it.
 
 The grid rendered an empty `<div>`. That is the same picture for "nobody is
 configured", "nothing has been synced" and "quiet week", and the operator's next
-move is different for each — so the empty state tells them apart. Measured across
+move is different for each - so the empty state tells them apart. Measured across
 every Page, today:
 
 | Page | assigned | own set | visible |
@@ -151,15 +151,15 @@ find.** One assignment, zero visible posts, and **430 posts sitting in its own
 Metricool set, hidden**. A Page reads its own set only until its first assignment
 lands; after that it reads exactly what is ticked. That is `_visible_to` working
 as designed, and on screen it is indistinguishable from an empty week. The empty
-state now names the number being hidden and gives the two ways out — tick
+state now names the number being hidden and gives the two ways out - tick
 competitors that post, or untick everything to go back to the whole set.
 
 This also revises a number from `comprehension.md`. **Bodybuilding Tips N Tricks
-is no longer empty** — 2 assignments, 1 visible post. So "six Pages have zero
+is no longer empty** - 2 assignments, 1 visible post. So "six Pages have zero
 competitors" is now five, and one of the two Pages that round 4 was about has
 been fixed since.
 
-**The counts are local — no Metricool call.** This is read at the moment the
+**The counts are local - no Metricool call.** This is read at the moment the
 operator is already looking at an empty screen, and answering "why is this empty"
 with a 5.5s vendor round trip that has 502'd twice is the wrong trade. It costs
 one distinction (configured but silent, against not configured); `assigned`
@@ -167,7 +167,7 @@ recovers most of it, because assignment is a local fact. Fetched only when the
 grid is empty, so the ordinary path pays nothing.
 
 If the counts fail, the state degrades to a plain "No competitor posts to show"
-rather than rendering nothing. Not hypothetical — that is exactly what the screen
+rather than rendering nothing. Not hypothetical - that is exactly what the screen
 did mid-verification when the new route 404'd against a server `--reload` had not
 picked it up on, and the blank grid came straight back.
 
@@ -178,10 +178,10 @@ Suite is **390** (was 389). `tsc` and `eslint src` clean.
 
 ---
 
-## G2(b) — the used count is no longer hidden by the window ✅
+## G2(b) - the used count is no longer hidden by the window ✅
 
 **Shipped 2026-08-17.** The hint above the grid now carries the number the
-60-row window is hiding: *"3 sources have been generated from — none of them is
+60-row window is hiding: *"3 sources have been generated from - none of them is
 marked below."*
 
 The `used` marker was never wrong. It is computed over the rows the grid
@@ -205,7 +205,7 @@ true was invisible. The fix is to say it.
 
 **The count comes from the Pages' own drafts, not from the visible pool.** The
 first version intersected the two and answered **0** for Bodybuilding Tips N
-Tricks — its three used sources are no longer visible to it at all — so the
+Tricks - its three used sources are no longer visible to it at all - so the
 number went silent in precisely the case it exists for. Caught in the browser
 rather than by the suite, because no fixture had that state; one does now.
 
@@ -214,28 +214,28 @@ is what the marker means. History Retraced reads 30 against 31 drafts for that
 reason.
 
 `/sources/competitors/reach` is read on every grid load now instead of only when
-the grid is empty — the number is needed precisely when there *are* rows. Still
+the grid is empty - the number is needed precisely when there *are* rows. Still
 local, still no Metricool call.
 
 Suite is **391** (was 390). `tsc` and `eslint src` clean.
 
 ---
 
-## G4 — Save stays explicit, but dismissal no longer eats the text ✅
+## G4 - Save stays explicit, but dismissal no longer eats the text ✅
 
 **Shipped 2026-08-17.** Closing the drawer with unsaved edits now asks *"Discard
-unsaved changes?"* — **Keep editing** or **Discard**. Only when there is
+unsaved changes?"* - **Keep editing** or **Discard**. Only when there is
 something to lose.
 
 **The question had two readings and only one of them was about clicks.** Read as
 "the extra click annoys me", the answer is a reply. Read as "I lost text", there
-was a real hole — and the measurement says it was the second.
+was a real hole - and the measurement says it was the second.
 
 Verified before changing anything, on draft 57: typing into the caption enabled
 **Save changes**, Escape closed the drawer with no prompt, and reopening showed
 the caption back at its original 747 characters. Approve, Reject and the inset
 upload each carry an explicit `if (dirty && form) await updateDraft(...)` with a
-comment saying why. Plain dismissal — Escape, the backdrop, the back button — was
+comment saying why. Plain dismissal - Escape, the backdrop, the back button - was
 the one path nobody had covered.
 
 **It asks rather than saves, and that is the answer to what they asked.**
@@ -254,7 +254,7 @@ silent loss for a silent write. Asking loses neither.
 | discard | closes, caption back to 701 chars |
 | save, then escape | no prompt, and the text persisted |
 
-Draft 57 turned out to be locked — it is in Metricool, and `PATCH` answers 409
+Draft 57 turned out to be locked - it is in Metricool, and `PATCH` answers 409
 with an explanation rather than writing. Correct behaviour, and worth knowing:
 it is why the first attempt at this looked like a broken save.
 
@@ -267,7 +267,7 @@ No API change, so the suite is unchanged at **391**. `tsc` and `eslint src` clea
 Nothing. All four items are addressed in code.
 
 `G3` and `G4` are both **undeployed**, along with everything else on `main`.
-Neither should be reported to the client before it ships — that was round 2's
+Neither should be reported to the client before it ships - that was round 2's
 mistake with the publish flag.
 
 Two things in this round are the client's to decide, not ours to build:

@@ -62,7 +62,7 @@ import {
  * The queue: one table, one row per draft, click a row to open it.
  *
  * A table rather than cards, which is what the old app used and is the right
- * shape for the job — the columns line up, so you scan *down* Status or Created
+ * shape for the job - the columns line up, so you scan *down* Status or Created
  * instead of hunting for them inside each tile. Cards spread eight drafts over a
  * screen that a table fits in a third of.
  *
@@ -81,10 +81,12 @@ export function ReviewList() {
    * `generating` rows are folded into every filter.
    *
    * A run in flight is not "needs review" yet, but hiding it means pressing
-   * Generate appears to do nothing — the queue has to show the work arriving.
+   * Generate appears to do nothing - the queue has to show the work arriving.
    */
   const { data: drafts, refresh } = useQuery(() => listDrafts({ page_id: pageId! }), [pageId], {
     enabled: pageId !== null,
+    // Back from a draft's drawer, the queue is there on the first frame.
+    cacheKey: "review-drafts",
     intervalMs: 2_000,
     // Only while something is in flight. With a settled queue the store
     // notification is enough, and a timer that never stops keeps the page
@@ -117,7 +119,7 @@ export function ReviewList() {
    * Rejecting the last draft on the last page would otherwise strand the queue
    * on a page that no longer exists.
    *
-   * Adjusted during render rather than in an effect — the same correction
+   * Adjusted during render rather than in an effect - the same correction
    * `use-query.ts` makes when its key changes, and for the same reason. React
    * re-runs the component before committing, so the clamp costs no extra
    * paint, where an effect sets state *after* one and lands a second render.
@@ -131,7 +133,7 @@ export function ReviewList() {
 
   return (
     // Not `flex-1`: the shell is `h-screen` and does not scroll the page, so a
-    // `flex-1` list sized itself to the viewport and never overflowed — while
+    // `flex-1` list sized itself to the viewport and never overflowed - while
     // the bordered container's `overflow-hidden` quietly clipped every row past
     // the fold. Nothing scrolled and nothing said so. Sized to its content, the
     // layout's own `overflow-y-auto` has something to scroll.
@@ -140,7 +142,7 @@ export function ReviewList() {
           under a two-draft queue, which read as something failing to load. */}
       <div className="overflow-hidden rounded-2xl border">
         {!drafts ? (
-          // `!drafts`, not `loading && !drafts` — that test drew a header row
+          // `!drafts`, not `loading && !drafts` - that test drew a header row
           // over nothing while the Page scope resolved. `use-query.ts` reports
           // `loading` honestly now and would do here too; this stays because
           // "no rows to draw" is the condition this branch is actually about.
@@ -166,7 +168,7 @@ export function ReviewList() {
               </tr>
             </thead>
             {/*
-              A `tbody` per day, which is what the element is for — a table may
+              A `tbody` per day, which is what the element is for - a table may
               hold several, and each gets its own heading row without breaking
               the column alignment that makes this a table rather than cards.
 
@@ -484,8 +486,8 @@ function RowMenu({
       >
         <PublishAt value={when} onChange={setWhen} />
 
-        {/* Before the press. The row menu is the fast path — the drawer at
-            least shows the post first — so this is the one that most needs to
+        {/* Before the press. The row menu is the fast path - the drawer at
+            least shows the post first - so this is the one that most needs to
             say what the button does. */}
         {rehearsal ? (
           <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
@@ -547,18 +549,18 @@ const STATUS: Record<string, { label: string; tone: StatusTone }> = {
  * `metricool_post_id` outranks `status`, because pushing does not move it.
  *
  * Approve is queue movement only (round 1's D1), so a draft handed to Metricool
- * keeps whatever status it had — and every one of them so far was pushed
+ * keeps whatever status it had - and every one of them so far was pushed
  * straight from `review`. Read live on 2026-08-16: fourteen drafts carry a post
  * id, five of them are `PUBLISHED` on Facebook, and all fourteen were rendering
  * a blue **Pending review** pill on this screen. The row menu had it right all
- * along — it disables everything and says "In Metricool" — but the badge is
+ * along - it disables everything and says "In Metricool" - but the badge is
  * what you read when you scan the column.
  *
  * "In Metricool" and not "Published", because the row cannot tell. A post id
  * means handed over, and the planner decides what became of it: seven of those
  * fourteen are still `draft=True` with a publication date three days past, and
  * will never go out. `PUBLISHED` / `Draft` / `Error` are the Schedule screen's
- * to say — it reads the planner, this screen reads a column.
+ * to say - it reads the planner, this screen reads a column.
  */
 function StatusBadge({ draft }: { draft: Draft }) {
   const { label, tone } = draft.metricool_post_id

@@ -6,7 +6,7 @@ import type { Draft } from "@/lib/types";
  * Post performance, and the posts kept from it.
  *
  * Two halves that look alike and are not. Performance is read live from
- * Metricool and stored nowhere — their numbers move every day as Facebook's
+ * Metricool and stored nowhere - their numbers move every day as Facebook's
  * counts catch up, and a local copy could only be stale. A saved post is a
  * decision, and needs a row precisely because Metricool's stats take a date
  * range: an old post is in no read at all.
@@ -22,7 +22,7 @@ export interface PostStats {
   shares: number;
   clicks: number;
   impressions: number;
-  /** reactions + comments + shares, computed on the server — Metricool's own
+  /** reactions + comments + shares, computed on the server - Metricool's own
    *  `engagement` field is null on every row. */
   engagement: number;
   saved: boolean;
@@ -44,7 +44,7 @@ export interface SavedPost {
   created_at: string;
 }
 
-/** The raw read. Not exported — `getPerformanceWindow` is the way in, and a
+/** The raw read. Not exported - `getPerformanceWindow` is the way in, and a
  *  caller reaching past it would get a window with no baseline to compare. */
 async function getPerformance(pageId: number, days: number): Promise<PostStats[]> {
   return get<PostStats[]>("/overview/performance", { page_id: pageId, days });
@@ -52,7 +52,7 @@ async function getPerformance(pageId: number, days: number): Promise<PostStats[]
 
 /** A window of published posts, and the window immediately before it. */
 export interface PerformanceWindow {
-  /** Inside the window, best first — the server's sort, preserved. */
+  /** Inside the window, best first - the server's sort, preserved. */
   posts: PostStats[];
   /** The `days` before that, for a comparison. Empty on a young Page. */
   previous: PostStats[];
@@ -61,15 +61,15 @@ export interface PerformanceWindow {
 /**
  * The window and its predecessor, from one read.
  *
- * The totals mean nothing without a baseline — "3.2M reach" is neither good nor
- * bad on its own — and Metricool's stats call takes a *number of days back*
+ * The totals mean nothing without a baseline - "3.2M reach" is neither good nor
+ * bad on its own - and Metricool's stats call takes a *number of days back*
  * rather than a range, so the previous window cannot be asked for separately:
  * `days=60` already contains the last 30. Reading `days * 2` and cutting at the
  * boundary is the only route to both halves, and it costs a doubled payload (a
  * 60-day window becomes ~870 rows on History Retraced).
  *
  * **The boundary is fixed here, at fetch time, not wherever the result is
- * rendered.** `Date.now()` during a render is impure — React's lint rule says
+ * rendered.** `Date.now()` during a render is impure - React's lint rule says
  * so and it is right: an unrelated re-render would silently move the cutoff and
  * a post could cross it between two paints.
  *
@@ -97,7 +97,7 @@ export async function listSaved(pageId: number): Promise<SavedPost[]> {
 }
 
 /**
- * Keep a post. The metrics travel with it deliberately — they are a snapshot of
+ * Keep a post. The metrics travel with it deliberately - they are a snapshot of
  * what it scored when saved, not a live figure, and re-reading them later would
  * need the post to still be inside a window it has by definition left.
  */
@@ -119,7 +119,7 @@ export async function savePost(pageId: number, post_: PostStats): Promise<SavedP
 /**
  * Write this saved post's story again, from scratch.
  *
- * The same story, not a copy and not a style sample — it runs as a topic, so
+ * The same story, not a copy and not a style sample - it runs as a topic, so
  * the subject binds without the writer treating our own prose as an article to
  * summarise. Answers with draft ids to poll, like any other run.
  */
@@ -128,7 +128,7 @@ export async function reuseSaved(savedId: number): Promise<number[]> {
 }
 
 /**
- * Put the original back in the queue — same caption, same picture.
+ * Put the original back in the queue - same caption, same picture.
  *
  * Distinct from `reuseSaved`, which writes the story again from scratch. This
  * answers 201 with the Draft it made rather than 202 with ids to poll: nothing

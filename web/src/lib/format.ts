@@ -1,5 +1,5 @@
 /**
- * Timestamps render in the Page's zone, not the browser's — an operator
+ * Timestamps render in the Page's zone, not the browser's - an operator
  * elsewhere must read the same clock the posting schedule is written against.
  */
 export const PAGE_TIMEZONE = "Asia/Ho_Chi_Minh";
@@ -16,7 +16,7 @@ const stamp = new Intl.DateTimeFormat("en-GB", {
  * The columns are `timestamp without time zone`, so the API returns
  * `2026-08-06T15:22:48`
  * with no offset and `new Date()` reads it as *local* time. Everything the API
- * writes is UTC, so say so — without this a draft made a minute ago showed as
+ * writes is UTC, so say so - without this a draft made a minute ago showed as
  * "10 hours ago" on a UTC+7 machine.
  */
 export function asUtc(iso: string): Date {
@@ -26,7 +26,7 @@ export function asUtc(iso: string): Date {
 /**
  * Now, as `<input type="datetime-local">` spells it, in the *Page's* zone.
  *
- * The input has no timezone of its own — it hands back a naive
+ * The input has no timezone of its own - it hands back a naive
  * `2026-08-14T18:00`, and the API reads that as the Page's local time
  * (`publish/metricool.py:119` attaches `settings.timezone` to a naive value).
  * So the field's floor has to be the Page's clock too. Using the browser's
@@ -75,7 +75,7 @@ export function pageLocalSoon(): string {
  */
 
 export function timeAgo(iso: string | null): string {
-  if (!iso) return "—";
+  if (!iso) return "-";
   const seconds = (Date.now() - asUtc(iso).getTime()) / 1000;
   const units: [Intl.RelativeTimeFormatUnit, number][] = [
     ["minute", 60],
@@ -94,15 +94,15 @@ export function timeAgo(iso: string | null): string {
  *
  * `timeAgo` is for the grid, where "2 days ago" is the only thing being asked.
  * This is for the detail view, where an operator deciding whether a story is
- * stale needs the actual instant — and needs it in the same zone the posting
+ * stale needs the actual instant - and needs it in the same zone the posting
  * schedule is written against.
  */
 export function fullDate(iso: string | null): string {
-  return iso ? stamp.format(asUtc(iso)) : "—";
+  return iso ? stamp.format(asUtc(iso)) : "-";
 }
 
 export function metric(value: number | null): string {
-  return value === null ? "—" : compact.format(value);
+  return value === null ? "-" : compact.format(value);
 }
 
 export function chars(value: string | null | undefined): string {
@@ -121,7 +121,7 @@ export function words(value: string | null | undefined): number {
  * a hook and a recap run together. A row given the whole thing shows a long
  * grey line truncated mid-word, which names nothing.
  *
- * The line comes first because a published caption really does have one —
+ * The line comes first because a published caption really does have one -
  * measured on History Retraced's five best posts of the last 30 days, the first
  * line is 30 to 60 characters and is exactly the title ("The Battle of Athens:
  * When WWII Veterans Fought for the Vote"). Splitting on sentences instead ran
@@ -129,7 +129,7 @@ export function words(value: string | null | undefined): number {
  * so the "first sentence" swallowed the opening of the recap too.
  *
  * The sentence split stays as the fallback, for a hook straight out of the
- * writer — 0 of 47 stored hooks contain a newline, so that is the path Review
+ * writer - 0 of 47 stored hooks contain a newline, so that is the path Review
  * takes. Its lookbehind keeps the terminator attached and splits on the space
  * after it, so "St. Louis" survives.
  *
@@ -177,7 +177,7 @@ const timeStamp = new Intl.DateTimeFormat("en-GB", {
 });
 
 /**
- * `2026-08-08` in the Page's zone — the key rows are grouped by.
+ * `2026-08-08` in the Page's zone - the key rows are grouped by.
  *
  * The zone matters more here than anywhere else on the screen. Grouping on the
  * browser's day would put a draft made at 06:00 in Ho Chi Minh City under the
@@ -189,7 +189,7 @@ export function dayKey(iso: string): string {
 }
 
 /**
- * What day it is *on the Page's clock* — `2026-08-11`.
+ * What day it is *on the Page's clock* - `2026-08-11`.
  *
  * Not `new Date().toISOString().slice(0, 10)` and not the browser's date
  * either. Metricool's planner stamps are naive local time in the Page's zone,
@@ -223,5 +223,5 @@ export function dayHeading(iso: string): string {
 
 /** `14:30`. For a row whose date is already stated by its group heading. */
 export function timeOfDay(iso: string | null): string {
-  return iso ? timeStamp.format(asUtc(iso)) : "—";
+  return iso ? timeStamp.format(asUtc(iso)) : "-";
 }

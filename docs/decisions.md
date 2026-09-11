@@ -18,18 +18,18 @@ Three decisions were significant enough to get their own ADR:
 ## v1 is one page, History Retraced
 
 Decided 2026-08-03, after Phase 1's backend landed. The other nine pages are
-dropped — not deactivated, not seeded — and come back as inserts when they are
+dropped - not deactivated, not seeded - and come back as inserts when they are
 wanted. `is_active` goes with them: one page means the flag is never false.
 
 This also ends the Supabase dependency. With prompts extracted to files and the
 layout to `layout.yml`, the entire migration is three constants
 (`name`, `facebook_page_id`, `metricool_blog_id`), so
-`scripts/seed_pages.py` — which read production Supabase and Metricool at
-runtime — collapses to `scripts/seed_page.py`, and `SUPABASE_URL` /
+`scripts/seed_pages.py` - which read production Supabase and Metricool at
+runtime - collapses to `scripts/seed_page.py`, and `SUPABASE_URL` /
 `SUPABASE_SERVICE_ROLE_KEY` leave `.env`.
 
 **Superseded 2026-08-11 onwards: all ten pages are seeded.** The decision is
-kept because it was right about the mechanism — each of the other nine was an
+kept because it was right about the mechanism - each of the other nine was an
 insert, exactly as predicted, with no schema change and no query rewritten.
 What it did not predict is how much of "the layout" turned out to be History
 Retraced's taste rather than the house style; the columns and the `page_layout`
@@ -43,7 +43,7 @@ table that grew back are catalogued in
 
 The prompts are the product, and they are the most-edited thing in the system.
 In a database column they were invisible to git, unreviewable, and un-revertable
-— and they had already rotted: the stored copies still described a 75% hero and
+- and they had already rotted: the stored copies still described a 75% hero and
 a circular logo long after the code moved to a growing panel and a natural-aspect
 logo. History Retraced's overlay prompt carried that stale block a second time.
 
@@ -53,7 +53,7 @@ rather than `str.format`, so a stray brace in a prompt cannot raise mid-generati
 
 **Qualified 2026-08-17: the columns are back, as overrides only.** The house
 prompts are still files, still in git, still not editable from the screen. What
-a Page may store is its *own* text, null until somebody writes it — and a column
+a Page may store is its *own* text, null until somebody writes it - and a column
 that is null until then cannot drift from a global it does not contain, which is
 the failure this decision was made against. The forcing reason is deployment,
 not preference: Railway's filesystem is ephemeral, so a Settings editor that
@@ -72,8 +72,8 @@ move off local file storage (see [Deferred](#deferred-to-v2)).
 **Superseded: it publishes.** The Metricool write path shipped 2026-08-14 and
 production has posted to Facebook since. Seven screens now, Overview and
 Schedule among them, and a queued post can be edited, moved or cancelled from
-the Review drawer (D6, 2026-08-17). The deferral's accepted risk — "the riskiest
-integration ships unproven" — was paid in full: most of the integration traps
+the Review drawer (D6, 2026-08-17). The deferral's accepted risk - "the riskiest
+integration ships unproven" - was paid in full: most of the integration traps
 listed in `CLAUDE.md` were found after this, and the largest of them is that
 Metricool has no in-place update at all.
 
@@ -92,7 +92,7 @@ Metricool has no in-place update at all.
 
 Models carried over: text `gemini-3.5-flash`, hero image `gemini-2.5-flash-image`.
 The old system stored `model_id` per Page and then set all ten rows to the same
-value, so it becomes env (`GEMINI_TEXT_MODEL`, `GEMINI_IMAGE_MODEL`) — note
+value, so it becomes env (`GEMINI_TEXT_MODEL`, `GEMINI_IMAGE_MODEL`) - note
 these did already override the *code* defaults, so the code default is the value
 that must not be trusted.
 
@@ -111,14 +111,14 @@ candidate on the live key while the configured model was returning 503:
 | model | answered |
 | --- | --- |
 | `gemini-3.6-flash` | a full structured rewrite |
-| `gemini-3.5-flash` | 503 — the configured model |
+| `gemini-3.5-flash` | 503 - the configured model |
 | `gemini-3.7-flash` | 503 |
 | `gemini-2.5-flash`, `-pro` | 404 "no longer available to new users" |
 | `gemini-flash-latest` | pinged fine, then 503 on a real rewrite a minute later |
 
 So the chain is `gemini-3.5-flash` then `gemini-3.6-flash`, both pinned. The old
-rule — *a fallback must be an alias, because Google repoints an alias while a
-pinned version expires silently* — is true about rot and useless about load: an
+rule - *a fallback must be an alias, because Google repoints an alias while a
+pinned version expires silently* - is true about rot and useless about load: an
 alias onto a busy model cannot answer the one failure a fallback exists for.
 See [design.md](design.md#configuration) on why every image link is pinned.
 
@@ -129,7 +129,7 @@ assumed.
 
 **Cron, BullMQ, Redis, the worker process, the Hetzner VPS.** The Facebook
 generate queue is gated behind `FACEBOOK_GENERATE_ASYNC=1`, commented out in
-both `.env.local:80` and `.env.local.example:72` — the default path was already
+both `.env.local:80` and `.env.local.example:72` - the default path was already
 Next's `after()`. `processPendingFirstComments()` is a stub returning `[]`
 (`facebookPublishService.ts:638`). Metricool receives `autoPublish: true` and
 `firstCommentText` (`metricoolService.ts:306,540`), so it owns publishing and
@@ -140,25 +140,25 @@ the first comment. Status sync was already pull-on-read, not scheduled
 page list comes from Metricool (`facebookPagesService.ts:4`). Graph survived
 only in `api/facebook/connection` and the OAuth callback.
 
-**Postiz**, entirely — Metricool is the sole publish provider.
+**Postiz**, entirely - Metricool is the sole publish provider.
 
-**`facebook_schedules`** — see ADR-0001.
+**`facebook_schedules`** - see ADR-0001.
 
 **Overview + Library + `facebook_saved_viral_posts`.** The "recycle our own
-winners" feature — a fourth source outside the three in scope. Removing it also
+winners" feature - a fourth source outside the three in scope. Removing it also
 deletes the `savedViralPostIds` branch threaded through the whole generate
 pipeline.
 
-**`brand_key` and the brand/page duality** — see ADR-0003.
+**`brand_key` and the brand/page duality** - see ADR-0003.
 
 **The `full_overlay` layout.** Every overlay setting existed twice, once per
-layout — ~26 columns. Production over 464 drafts: `card` 411, `full_overlay` 53.
+layout - ~26 columns. Production over 464 drafts: `card` 411, `full_overlay` 53.
 Over the last 14 days: **64 `card`, 1 `full_overlay`.** The layout was
 effectively abandoned. Keeping one form deletes the doubled columns,
 `template-layout-prompts.ts`, `resolveImageGenSystemPromptForLayout`, and the
 layout picker.
 
-**Supabase auth, RLS, `user_id`** — see ADR-0002.
+**Supabase auth, RLS, `user_id`** - see ADR-0002.
 
 **LangGraph.** Six nodes, linear, zero conditional edges
 (`facebookGenerateGraph.ts:743`); `summarizeNode` no longer calls a model at all,
@@ -171,25 +171,25 @@ call per Source Item. One `async def` covers it.
 problem; the code structure was.
 
 **The compositor**, as a hero image plus text panel, highlight phrases and
-watermark — no headline badge, which went with the `full_overlay` layout that
-was its only caller. Ported to `resvg-py` + `fontTools` + Pillow — the old code
+watermark - no headline badge, which went with the `full_overlay` layout that
+was its only caller. Ported to `resvg-py` + `fontTools` + Pillow - the old code
 already rasterised via resvg rather than sharp (`composite-font.ts:24`) and
 measured via `opentype.js` advance widths (`overlay-text-measure.server.ts:19`),
 both of which have exact Python equivalents reading the same `Arial-Bold.ttf`.
-**Pixel parity is not required** — the layout engine is re-curated to one good
+**Pixel parity is not required** - the layout engine is re-curated to one good
 form rather than ported line by line.
 
 **Placeholder rows + polling** for generation progress, matching current
 behaviour.
 
-**The prompts.** These are the product. System ~1.7–2.4k chars, image-gen
-~2.3–2.7k, overlay ~1.5k, per Page.
+**The prompts.** These are the product. System ~1.7-2.4k chars, image-gen
+~2.3-2.7k, overlay ~1.5k, per Page.
 
 ## Enforced, not merely checked
 
-`validation.ts` encodes real brand rules — hook ≤65 words, no question mark in
-the hook, ≤5 recap lines each starting with an emoji, first comment 2–3
-paragraphs, body 1500–2100 chars, birth/death years present, no meta-phrases —
+`validation.ts` encodes real brand rules - hook ≤65 words, no question mark in
+the hook, ≤5 recap lines each starting with an emoji, first comment 2-3
+paragraphs, body 1500-2100 chars, birth/death years present, no meta-phrases -
 and today they produce warnings nobody acts on. In the rebuild each becomes a
 Pydantic AI `@agent.output_validator` raising `ModelRetry` with the specific
 failure, capped at two retries. Same call count in the happy path.
@@ -198,14 +198,14 @@ failure, capped at two retries. Same call count in the happy path.
 
 `page`, `source_item`, `draft`. Down from eight tables plus a 54-column
 templates table. A `competitor` table, a `page_competitor` join, a `feed` table, a
-`generation_event` table and a cart table were each designed and then rejected —
+`generation_event` table and a cart table were each designed and then rejected -
 [data-model.md](data-model.md#what-was-considered-and-rejected) records why, and
 the production evidence that settled each one.
 
 **Superseded: it is eight tables.** `page_layout`, `feed`, `page_competitor`,
 `page_time_slot` and `saved_post` all landed between 2026-08-10 and 08-16. Two
 of them are on the rejected list above, and the reversals are argued where the
-rejections are — a `feed` table because the API now runs from a container image
+rejections are - a `feed` table because the API now runs from a container image
 with no writable config file, and `page_competitor` because Metricool caps an
 account at 100 competitors in total, which is a constraint the original
 measurement never looked at. `competitor`, `generation_event` and the cart table
@@ -218,12 +218,12 @@ only place a *default* lives, but a Page overrides it through `page_layout`, and
 the `full_overlay` layout and the headline badge came back with it. What holds
 is the image size and the font: one shape, 896×1120, for every Page. The
 reversal is argued in
-[data-model.md](data-model.md#layout-is-config-with-per-page-overrides) — the
+[data-model.md](data-model.md#layout-is-config-with-per-page-overrides) - the
 short version is that this was decided when there was one Page, and ten Pages
 with unrelated beats is evidence rather than drift.
 
-There is no per-page styling. Every layout constant — image size, font size,
-panel geometry, colours, badge, paddings — moves to
+There is no per-page styling. Every layout constant - image size, font size,
+panel geometry, colours, badge, paddings - moves to
 [`api/config/layout.yml`](../api/config/layout.yml), taking **History Retraced's
 values as the standard**. `PAGE` falls from 29 columns to 12. Model ids stay in
 env, not the file: they are deployment config and get retired upstream.
@@ -231,13 +231,13 @@ env, not the file: they are deployment config and get retired upstream.
 Ten of those columns had already collapsed on their own: across all ten page
 rows the four paddings, `panel_color`, `text_align` and `model_id` each held
 exactly one distinct value, `brand_watermark_text` was byte-identical to
-`page_name` in 10/10, and font min/size/max were equal in 10/10 — there is no
+`page_name` in 10/10, and font min/size/max were equal in 10/10 - there is no
 autofit, `planOverlayLayout` reads the size once and grows the panel instead.
 
 The headline badge is gone rather than standardised: it renders only under
 `if (isFullOverlay && label)`, so cutting the `full_overlay` layout cut the
 badge. Hot Tub Timeout's `BEST TUB EVER` goes with it. Rounded corners were
-already dead in production — the compositor hardcodes a zero radius.
+already dead in production - the compositor hardcodes a zero radius.
 
 Values were checked against the composite path a `card` draft actually takes,
 not only against the template row. Two per-draft overrides exist in
@@ -245,7 +245,7 @@ not only against the template row. Two per-draft overrides exist in
 **399 leave both null**, so the code fallbacks `#ffffff` and `#F5C542` are what
 production renders, and they become the config values.
 
-Only `watermark_image_path` stays per-page — a per-page asset. The prompts were
+Only `watermark_image_path` stays per-page - a per-page asset. The prompts were
 the second until they became files, and `daily_quota` was the third until the
 Quota was cut on 2026-08-06. Details and the full before/after table are in
 [data-model.md](data-model.md#layout-is-config-with-per-page-overrides).
@@ -256,12 +256,12 @@ There is effectively nothing to migrate. `scripts/seed_page.py` inserts four
 constants for History Retraced; the prompts were lifted into `api/prompts/` once,
 by hand, and are now source files. The other 49 template columns are dropped.
 Competitors re-sync from Metricool. Source Items are transient by nature. The 464
-drafts stay behind — 237 are already published and Metricool holds that record.
+drafts stay behind - 237 are already published and Metricool holds that record.
 
 **The watermark becomes a committed file.** In the current Supabase project every
 watermark path 404s; the bucket was cleared to 8 recent draft jpgs. The old
 compositor reads the logo back by storage key and treats a failed download as
-"no logo", so output silently degraded to the page name in text — no error, no
+"no logo", so output silently degraded to the page name in text - no error, no
 log, posts kept shipping. The genuine assets were recovered from the *previous*
 Supabase project, which still holds 1491 objects.
 
@@ -274,7 +274,7 @@ clone is complete. A missing file should be an error, never a quiet fallback.
 
 Decided 2026-08-08. `run_drafts` loops its ids sequentially, so two ticked
 sources cost ~260s for work that is two independent ~130s calls. It becomes a
-`ThreadPoolExecutor` with a **session per draft** — SQLAlchemy Sessions are not
+`ThreadPoolExecutor` with a **session per draft** - SQLAlchemy Sessions are not
 thread-safe, and `_run_one` commits five times per draft. Concurrency is a
 setting, defaulting to **3**.
 
@@ -283,18 +283,18 @@ Three things make this cheap rather than a rewrite:
 **The path is already exercised.** Two Generate clicks today spawn two
 `run_drafts` in FastAPI's threadpool, each with its own Session. Threads off the
 main loop, `run_sync` inside them, and concurrent SQLite writes are all live in
-production already — this only does inside one run what two clicks already do.
+production already - this only does inside one run what two clicks already do.
 
 **SQLite needs one line.** Every `_progress` commits, and the default rollback
 journal admits one writer, so the rest meet `database is locked` and lean on
-`busy_timeout`. `PRAGMA journal_mode=WAL` in `_configure_sqlite` — the one line
+`busy_timeout`. `PRAGMA journal_mode=WAL` in `_configure_sqlite` - the one line
 db.py's own docstring predicted. Commits are milliseconds against drafts that
 take minutes, so contention after that is noise. Still safe for
 `sweep_stranded`, which needs one *process*, not one thread.
 
 **The cap is about Gemini, not threads.** Each draft is a text call plus an
 image call, and the writer's fallback chain steps *models* on a transient error
-without ever backing off — so a 429 burns the chain and fails the draft rather
+without ever backing off - so a 429 burns the chain and fails the draft rather
 than waiting. Three is a rate-limit budget. Going wider means adding backoff
 first.
 
@@ -313,7 +313,7 @@ first.
 are only ever seen locally in v1.
 
 **All three shipped, 2026-08-09 to 08-17**, and the first line above turned out
-to understate the problem. Metricool does not merely fetch the image URL — it
+to understate the problem. Metricool does not merely fetch the image URL - it
 **never re-hosts it**, whatever their help centre says about the normalize
 endpoint, so the file must still resolve when Facebook comes for it days later.
 That is why the bucket is public and why the old app's signed URLs left 0 of 105

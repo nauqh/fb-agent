@@ -1,5 +1,5 @@
 <!--
-  Favicon / app icon. Self-coloured rather than `currentColor` — a favicon has
+  Favicon / app icon. Self-coloured rather than `currentColor` - a favicon has
   no CSS context to inherit from, and the tab strip is #dee1e6 light / #35363a
   dark, so the mark rides on its own tile instead of trusting the background.
 

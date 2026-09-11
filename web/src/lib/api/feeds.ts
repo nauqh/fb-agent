@@ -12,7 +12,7 @@ export interface Feed {
   page_id: number;
   name: string;
   url: string;
-  /** Why this feed earns its place — item count, summary length, images. */
+  /** Why this feed earns its place - item count, summary length, images. */
   note: string | null;
   created_at: string;
 }
@@ -32,7 +32,7 @@ export async function getFeeds(pageId: number): Promise<Feed[]> {
 
 /**
  * Add a feed. The server probes it first and refuses one that does not answer,
- * does not parse, or parses to nothing — so a 422 here is the feed's fault and
+ * does not parse, or parses to nothing - so a 422 here is the feed's fault and
  * its message is written to be shown as-is.
  */
 export async function addFeed(input: {
@@ -44,7 +44,7 @@ export async function addFeed(input: {
   return post<{ feed: Feed; probe: FeedProbe | null }>("/feeds", input);
 }
 
-/** Changes tomorrow's grid and nothing already published — no row points at a feed. */
+/** Changes tomorrow's grid and nothing already published - no row points at a feed. */
 export async function removeFeed(feedId: number): Promise<void> {
   await del(`/feeds/${feedId}`);
 }

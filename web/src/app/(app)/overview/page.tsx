@@ -45,12 +45,12 @@ import { cn } from "@/lib/utils";
 /**
  * How the Page's published posts did, and the ones worth keeping.
  *
- * The client asked for both together — "see post performance there and save the
- * top-performing posts for future reference/reuse" — and they are two tabs
+ * The client asked for both together - "see post performance there and save the
+ * top-performing posts for future reference/reuse" - and they are two tabs
  * rather than two screens because the second is made entirely out of the first.
  *
  * **Performance is read live and stored nowhere.** Metricool's numbers move
- * every day as Facebook's counts catch up, so a cached copy is a wrong copy —
+ * every day as Facebook's counts catch up, so a cached copy is a wrong copy -
  * the same reasoning the Schedule screen follows for the planner. The saved
  * half is the opposite and needs a row, because their stats call takes a date
  * range: an old post appears in no read at all.
@@ -62,7 +62,7 @@ import { cn } from "@/lib/utils";
  * selected post's five figures a hundred pixels above the same five figures in
  * the row it came from. An Overview is opened for the posts. So the totals
  * collapsed to one line of text, the strip is gone, and the detail it carried
- * now opens **inside the row it belongs to** — the panel grows out of its own
+ * now opens **inside the row it belongs to** - the panel grows out of its own
  * source rather than appearing in a separate surface across the page.
  */
 export default function OverviewScreen() {
@@ -70,12 +70,14 @@ export default function OverviewScreen() {
   // The window: 7/30/60, defaulting to 30 (why, measured, is on the pill
   // below). The query is hoisted to this level so the summary line can render
   // before any tab is open. It answers with the window *and the one before it*
-  // — `getPerformanceWindow` sets out why that takes one doubled read.
+  // - `getPerformanceWindow` sets out why that takes one doubled read.
   const [days, setDays] = useState(30);
   const { data, error, loading, refresh } = useQuery(
     () => getPerformanceWindow(pageId!, days),
     [pageId, days],
-    { enabled: pageId !== null },
+    // The slowest read in the app - cached so a revisit or a Page round-trip
+    // paints the last window instead of "Reading Metricool" again.
+    { enabled: pageId !== null, cacheKey: "overview-performance" },
   );
 
   // Which tab is open, held here rather than left to `defaultValue`, because
@@ -97,7 +99,7 @@ export default function OverviewScreen() {
         className="flex min-h-0 flex-1 flex-col gap-3"
       >
         {/* The chrome: tab switcher, then the window pill. It is a translucent
-            layer rather than an opaque strip — the rows fade out underneath it
+            layer rather than an opaque strip - the rows fade out underneath it
             at the scroller's top edge (see `ScrollFade`) instead of meeting a
             hard bar. `-mr-3 pr-3` extends it across the scroller's right gutter
             so nothing bleeds through the gap.
@@ -110,7 +112,7 @@ export default function OverviewScreen() {
             // `md` (12px), not `xl` (24px). A backdrop filter repaints
             // continuously while the table scrolls under it, the cost scales
             // with the radius, and Safari feels it worst. On a 40px strip the
-            // extra 12px was not visible — it was only expensive.
+            // extra 12px was not visible - it was only expensive.
             "bg-background/75 backdrop-blur-md backdrop-saturate-150",
             "[@media(prefers-reduced-transparency:reduce)]:bg-background [@media(prefers-reduced-transparency:reduce)]:backdrop-blur-none",
           )}
@@ -123,7 +125,7 @@ export default function OverviewScreen() {
 
             {/* 7 / 30 / 60, and 30 by default. An earlier version defaulted to
                 90 on the theory that Metricool's lag made shorter windows read
-                as a dead Page — measured against History Retraced, that is
+                as a dead Page - measured against History Retraced, that is
                 false: even over 7 days only 1 post of 28 has no reactions yet,
                 and over 30 it is 1 of 219. 90 days is 657 rows, which is a
                 scroll rather than an overview.
@@ -150,7 +152,7 @@ export default function OverviewScreen() {
 
         {/* A flex *column*, not a plain block. `ScrollFade` inside is
             `min-h-0 flex-1 overflow-y-auto`, and both of those size against a
-            flex parent — without this the scroller had no height to be bounded
+            flex parent - without this the scroller had no height to be bounded
             by, grew to its content, and the page could not be scrolled at all
             past the tenth row. */}
         <TabsContent
@@ -177,12 +179,12 @@ export default function OverviewScreen() {
  * A scroller whose top edge fades its content out, and only once scrolled.
  *
  * The alternative is a 1px divider under the chrome, or an opaque bar the rows
- * disappear behind — both read as two separate screens stacked. This is the
+ * disappear behind - both read as two separate screens stacked. This is the
  * scroll edge effect: where content passes under floating chrome it dissolves,
  * and where there is nothing overlapping (scroll position 0) the mask is not
  * applied at all, so the first row is not permanently half-faded.
  *
- * The listener is `passive` and writes a boolean, not a scroll offset — the
+ * The listener is `passive` and writes a boolean, not a scroll offset - the
  * mask is on or off, so re-rendering on every pixel would buy nothing.
  */
 function ScrollFade({
@@ -207,7 +209,7 @@ function ScrollFade({
   return (
     // **The scroller is not the layout box.** The caller's `flex flex-col`
     // used to land on this element, which made the table card a flex *item* of
-    // the scroll container — and a flex item shrinks before it overflows. The
+    // the scroll container - and a flex item shrinks before it overflows. The
     // card was squeezed to the viewport, clipped its own last rows behind its
     // `overflow-hidden`, and `scrollHeight` stayed exactly equal to
     // `clientHeight`, so there was nothing to scroll and no way to reach row
@@ -249,8 +251,8 @@ function ScrollFade({
  * Published posts, best first.
  *
  * The sort is the server's. Metricool accepts a `sortcolumn` and does not
- * honour it — asking for reactions returned a zero-reaction post first while
- * the same window held one with 160,282 — so ordering by their response would
+ * honour it - asking for reactions returned a zero-reaction post first while
+ * the same window held one with 160,282 - so ordering by their response would
  * be arbitrary.
  *
  * Two regions, not four:
@@ -263,8 +265,8 @@ function ScrollFade({
  *   full breakdown and the actions.
  *
  * The detail used to live in a lead strip above the list. It moved into the row
- * because the strip repeated the row it was describing — the same five figures
- * twice, a hundred pixels apart — and because a panel that grows out of the row
+ * because the strip repeated the row it was describing - the same five figures
+ * twice, a hundred pixels apart - and because a panel that grows out of the row
  * you clicked says which post it belongs to without a rank badge to connect
  * them.
  */
@@ -283,7 +285,7 @@ function Performance({
 }) {
   const { pageId } = usePageScope();
   const [busy, setBusy] = useState<string | null>(null);
-  // The *pagination* page. The Page is `pageId` — the same collision of names
+  // The *pagination* page. The Page is `pageId` - the same collision of names
   // the Review queue has, and named the same way.
   const [page, setPage] = useState(1);
   // Which row is open, or none. Nothing is expanded on arrival: the table is
@@ -292,7 +294,7 @@ function Performance({
   // Reset the pager and any open row when the window changes: page 12 of a
   // 60-day window is nowhere in a 7-day one, and the clamp on its own would
   // land on that window's last page rather than its best posts. Done during
-  // render, not in an effect — same reasoning as the page clamp below.
+  // render, not in an effect - same reasoning as the page clamp below.
   const [lastDays, setLastDays] = useState(days);
   if (lastDays !== days) {
     setLastDays(days);
@@ -312,7 +314,7 @@ function Performance({
     safePage * QUEUE_PAGE_SIZE,
   );
 
-  // Clamped during render rather than in an effect — `review-list.tsx` sets out
+  // Clamped during render rather than in an effect - `review-list.tsx` sets out
   // why. Here it also covers the window shrinking under the stored page.
   if (page > totalPages) setPage(totalPages);
 
@@ -394,7 +396,7 @@ function Performance({
  *
  * This was a bordered card of three cells. On screen it was a 1300px box
  * holding three six-character numbers, ninety pixels tall, directly above a
- * second card and a third — three framed surfaces stacked, where the frames
+ * second card and a third - three framed surfaces stacked, where the frames
  * were doing work that spacing and type weight do better. It is now a sentence:
  * the figures carry weight, the words between them stay muted, and the whole
  * thing costs one line.
@@ -404,7 +406,7 @@ function Performance({
  * previous window comes out of the same read (see `OverviewScreen`) and the
  * delta is on engagement, because engagement is what the list is sorted by and
  * three arrows on one line would be noise. It is absent, rather than shown as
- * zero, when there is no previous window to compare against — a Page in its
+ * zero, when there is no previous window to compare against - a Page in its
  * first month has nothing behind it, and "0%" would be a claim rather than an
  * absence.
  */
@@ -439,7 +441,7 @@ function Summary({
           title={`${metric(was)} engagement over the ${days} days before this window.`}
           // The same chip whichever way it points, and the arrow is the only
           // thing that says which. A window that engaged less is not an error,
-          // and `destructive` red on this screen already means Remove — a red
+          // and `destructive` red on this screen already means Remove - a red
           // -41% read as something having gone wrong rather than as a quieter
           // month.
           className="inline-flex items-center gap-1 rounded-full bg-foreground/[0.06] px-2 py-0.5 text-xs font-medium text-foreground tabular-nums"
@@ -477,13 +479,13 @@ function Figure({ value, label }: { value: string; label: string }) {
 /**
  * The table's column labels.
  *
- * `lg` only — the columns they name drop below it, where they would crowd the
+ * `lg` only - the columns they name drop below it, where they would crowd the
  * headline. `aria-hidden` because the digits read fine without the labels in a
  * screen reader, which already gets them as part of a row's meaning.
  *
  * Every column that carries a number is named. The previous version left the
- * boldest figure in each row — engagement, the one the whole list is ordered
- * by — with no label at all, sitting between a column called REACH and an
+ * boldest figure in each row - engagement, the one the whole list is ordered
+ * by - with no label at all, sitting between a column called REACH and an
  * unlabelled date.
  */
 /**
@@ -501,7 +503,7 @@ const ROW_PADDING = "gap-5 px-5 py-3";
 /** One right-aligned figure column. Fixed so the digits line up down the page. */
 const NUMBER_COLUMN = "w-16 shrink-0 text-right";
 
-/** A column label. Furniture, not data — mono, muted, and the same everywhere. */
+/** A column label. Furniture, not data - mono, muted, and the same everywhere. */
 const LABEL =
   "font-mono text-[10px] tracking-[0.12em] text-muted-foreground uppercase";
 
@@ -531,7 +533,7 @@ function TableHead() {
  * underneath it that grows out of it.
  *
  * **`grid-template-rows: 0fr → 1fr`, not a height.** The panel's height is not
- * known — a caption is one line or four — and animating to `auto` is not
+ * known - a caption is one line or four - and animating to `auto` is not
  * something CSS can do. The grid track can, and it interpolates from whatever
  * value is on screen, so a row toggled mid-animation reverses from where it
  * actually is rather than jumping to the end of the outgoing one.
@@ -570,7 +572,7 @@ function ExpandingRow({
           // every `hover:` utility inside `@media (hover: hover)`, so a tap on
           // a touch device does not leave the row lit. Hand-writing that media
           // query as an arbitrary variant is redundant, and the obvious
-          // spelling of it is a build error — joining the two feature queries
+          // spelling of it is a build error - joining the two feature queries
           // without a space around `and` produces an at-rule PostCSS rejects,
           // and the *entire* stylesheet then fails to compile: every screen in
           // the app renders unstyled, not just this row.
@@ -593,7 +595,7 @@ function ExpandingRow({
           className={cn(
             "size-4 shrink-0 text-muted-foreground",
             // 200ms: it is a 16px glyph, and the small-element band is
-            // 125–200. It still reads as turning with the panel because both
+            // 125-200. It still reads as turning with the panel because both
             // ride the same curve.
             "transition-transform duration-200 ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none",
             open && "rotate-90",
@@ -617,7 +619,7 @@ function ExpandingRow({
 
             **`inert` while closed, and it is not decoration.** `overflow-
             hidden` clips the panel to nothing on screen but leaves its buttons
-            in the document at full size — Playwright found this by resolving a
+            in the document at full size - Playwright found this by resolving a
             collapsed row's Save button as visible and then failing to click it,
             because the row's own button was what actually sat at those
             coordinates. A keyboard user would have hit the same thing without
@@ -658,12 +660,12 @@ function ExpandingRow({
  * 7.2K / 7.1K / 6.3K / 5K / 4.4K makes the reader parse five numbers to see a
  * shape; the bars show the fall-off at a glance and cost no vertical space. It
  * sits immediately left of the figure it encodes rather than out at the start
- * of the row, because a measure and its scale belong next to each other — put
+ * of the row, because a measure and its scale belong next to each other - put
  * the bar by the headline and the eye has to travel the width of the table to
  * find out what it is measuring.
  *
- * The 36px thumbnail is gone. At that size the composite — dark photograph with
- * small painted text — is a grey smudge that identifies nothing; the headline
+ * The 36px thumbnail is gone. At that size the composite - dark photograph with
+ * small painted text - is a grey smudge that identifies nothing; the headline
  * does that work. The picture is in the panel below, at the size it was made
  * for.
  */
@@ -698,7 +700,7 @@ function PostRow({
         <>
           {/* Rank, not a bullet: the list is sorted, so its position is
               information. The top three read in gold, the one warm accent the
-              app owns — it is the same yellow painted into the published
+              app owns - it is the same yellow painted into the published
               images, so "top of the Page" and "the post itself" share one
               colour. */}
           <span
@@ -710,7 +712,7 @@ function PostRow({
             {rank}
           </span>
 
-          {/* The headline, not the whole caption — the caption is the headline
+          {/* The headline, not the whole caption - the caption is the headline
               and the recap run together, and truncating that names nothing.
               Same treatment the Review queue gives a draft, same helper. */}
           <span className="min-w-0 flex-1 truncate text-sm font-medium">
@@ -725,7 +727,7 @@ function PostRow({
           {/* The bar and its figure as one cell, matching the header's `w-40`.
               The bar is neutral rather than gold: the *length* carries the
               meaning here, and gold already means two other things on this
-              screen. 96px and a fill at 60% — the first cut was 64px at 35%,
+              screen. 96px and a fill at 60% - the first cut was 64px at 35%,
               which on screen was a pale dash whose whole dynamic range across a
               page was about twenty pixels. */}
           <span className="flex w-40 shrink-0 items-center justify-end gap-3">
@@ -814,7 +816,7 @@ function PostRow({
  * The panel under an opened row: the picture, the caption, the breakdown, the
  * actions.
  *
- * Shared by both tables — a saved post and a live one differ in their numbers'
+ * Shared by both tables - a saved post and a live one differ in their numbers'
  * provenance and in what you can do with them, not in how they read.
  *
  * **The breakdown is a line of text, not a row of tiles.** The tiles were a
@@ -867,7 +869,7 @@ function PostDetail({
       )}
     >
       {/* The picture at the size it exists at. Measured 2026-08-18 on History
-          Retraced: the file the CDN serves is 130x163 and there is no other —
+          Retraced: the file the CDN serves is 130x163 and there is no other -
           Metricool's `fullPicture` is null on every row and the signed URL
           answers 403 to any edit of its `stp` size directive. So the column is
           112px, comfortably under native, and never a hero. */}
@@ -877,12 +879,12 @@ function PostDetail({
         {/* **The caption from the top, not a headline and then a recap.** The
             panel used to repeat the row's headline as its own heading, which
             for a short title was the same words twice thirty pixels apart. The
-            whole caption instead resolves the row's truncation — the first
-            sentence is where the row's "…" cut off — and reads as one piece of
+            whole caption instead resolves the row's truncation - the first
+            sentence is where the row's "…" cut off - and reads as one piece of
             prose rather than a title bar over a body. Four lines, because the
             rest is one click away on Open. */}
         {/* `max-w-prose` because the panel is as wide as the table and the
-            table is very wide. Left to fill it, the caption ran about 1080px —
+            table is very wide. Left to fill it, the caption ran about 1080px -
             roughly 170 characters a line, far past the point where the eye
             reliably finds the start of the next one. */}
         <p className="line-clamp-6 max-w-prose text-[13px] leading-relaxed text-muted-foreground">
@@ -914,7 +916,7 @@ function PostDetail({
 
         {/* Said out loud rather than left as a tooltip. The breakdown it
             qualifies is `lg:hidden`, so hanging the caveat on that element's
-            `title` hid it exactly where the numbers are most visible — and a
+            `title` hid it exactly where the numbers are most visible - and a
             saved post's figures being frozen is the one thing about this tab
             that is not guessable from looking at it. */}
         {statsHint ? (
@@ -939,13 +941,13 @@ function Breakdown({ value, label }: { value: number; label: string }) {
 /**
  * The post's picture, or a stand-in.
  *
- * Facebook's CDN URLs are signed and expire — the same trap the competitor
- * pictures document — so a missing thumbnail is the expected end state rather
+ * Facebook's CDN URLs are signed and expire - the same trap the competitor
+ * pictures document - so a missing thumbnail is the expected end state rather
  * than a fault. The row carries its numbers either way.
  *
  * **4:5 is measured rather than chosen.** The composite is 4:5, so that is the
  * box shape: `object-cover` on a square cut the top and bottom off every
- * thumbnail — exactly where the hook text is painted.
+ * thumbnail - exactly where the hook text is painted.
  */
 function Thumbnail({ src, className }: { src: string | null; className?: string }) {
   if (!src) {
@@ -961,7 +963,7 @@ function Thumbnail({ src, className }: { src: string | null; className?: string 
     );
   }
   // A Facebook CDN URL, not in `next.config.ts`'s image hosts, and expected to
-  // expire — `next/image` can do nothing useful with either fact.
+  // expire - `next/image` can do nothing useful with either fact.
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
@@ -981,18 +983,18 @@ function Saved() {
   const { data, error, loading, refresh } = useQuery(
     () => listSaved(pageId!),
     [pageId],
-    { enabled: pageId !== null },
+    { enabled: pageId !== null, cacheKey: "overview-saved" },
   );
 
   const router = useRouter();
   const [busy, setBusy] = useState<number | null>(null);
   // The pagination page, as in Performance and the Review queue.
   const [page, setPage] = useState(1);
-  // Which row is open, or none — the Performance table's twin.
+  // Which row is open, or none - the Performance table's twin.
   const [openId, setOpenId] = useState<number | null>(null);
 
   /**
-   * Write this one again. The saved post stays — reuse is not a move, and the
+   * Write this one again. The saved post stays - reuse is not a move, and the
    * reference is the thing being kept.
    */
   async function reuse(saved: SavedPost) {
@@ -1011,7 +1013,7 @@ function Saved() {
   }
 
   /**
-   * Put the original back in the queue — same caption, same picture.
+   * Put the original back in the queue - same caption, same picture.
    *
    * It lands at `review` rather than going straight out, which is the whole
    * shape of the feature: publishing is its own decision everywhere else in
@@ -1024,9 +1026,9 @@ function Saved() {
     try {
       const draft = await repostSaved(saved.id);
       toast.success("Queued the original.", {
-        description: "Publish it from Review — nothing has gone out yet.",
-        // `/review/{id}`, not `/review?draft={id}`. The drawer is a *route* —
-        // being on `/review/12` is what open means (`draft-sheet.tsx`) — so the
+        description: "Publish it from Review - nothing has gone out yet.",
+        // `/review/{id}`, not `/review?draft={id}`. The drawer is a *route* -
+        // being on `/review/12` is what open means (`draft-sheet.tsx`) - so the
         // query string matched nothing, opened nothing, and dropped the
         // operator on the bare queue wondering where their repost went.
         action: { label: "Review", onClick: () => router.push(`/review/${draft.id}`) },
@@ -1076,13 +1078,13 @@ function Saved() {
 
   // Removing the last saved post on the last page would otherwise strand the
   // list on a page that no longer exists. Clamped during render, not in an
-  // effect — `review-list.tsx` sets out why.
+  // effect - `review-list.tsx` sets out why.
   if (page > totalPages) setPage(totalPages);
 
   return (
     // No standing paragraph above the list. It explained Repost and Write
     // again, which are two labelled buttons carrying that same sentence as
-    // their tooltip, and warned that the stats are a snapshot — now the tooltip
+    // their tooltip, and warned that the stats are a snapshot - now the tooltip
     // on the breakdown line that the warning is about.
     <ScrollFade className="flex flex-col gap-3">
       <div className="overflow-hidden rounded-xl border bg-card">
@@ -1129,7 +1131,7 @@ function Saved() {
 }
 
 /**
- * A row of the saved table — the Performance row without its ranking, since
+ * A row of the saved table - the Performance row without its ranking, since
  * this list is ordered by when a post was kept rather than by how it did.
  */
 function SavedRow({
@@ -1169,7 +1171,7 @@ function SavedRow({
           <span className={cn(column, "w-16")}>{metric(saved.impressions)}</span>
           {/* The client's ask: "there needs to be a visible date showing how
               many days ago it was posted last." Relative, because that is the
-              question — whether it is far enough back to run again — and the
+              question - whether it is far enough back to run again - and the
               exact stamp is in the panel below rather than a second line nobody
               reads. */}
           <span
@@ -1206,7 +1208,7 @@ function SavedRow({
                 size="sm"
                 disabled={busy}
                 onClick={onRepost}
-                title="Queue the original again — same caption, same picture. It lands in Review to publish."
+                title="Queue the original again - same caption, same picture. It lands in Review to publish."
               >
                 {busy ? (
                   <Loader2 className="size-3.5 animate-spin [animation-duration:600ms]" />
@@ -1220,7 +1222,7 @@ function SavedRow({
                 size="sm"
                 disabled={busy}
                 onClick={onReuse}
-                title="Write this story again — a fresh hook, caption, first comment and image."
+                title="Write this story again - a fresh hook, caption, first comment and image."
               >
                 <Sparkles className="size-3.5" />
                 Write again

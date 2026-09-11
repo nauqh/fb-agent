@@ -6,7 +6,7 @@ the bucket are config, so moving either is an env change rather than an UPDATE
 across every row. `public_url` turns a stored path into the link the browser and
 Facebook fetch.
 
-There is one implementation, and the Protocol stays anyway — the test suite
+There is one implementation, and the Protocol stays anyway - the test suite
 substitutes a filesystem-backed fake (`tests/conftest.py`), which is what keeps
 244 tests offline and fast instead of mocking HTTP to write a file.
 
@@ -39,7 +39,7 @@ ATTEMPTS = 3
 BACKOFF_SECONDS = 0.5
 
 CONTENT_TYPES = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg"}
-"""Exactly what the bucket accepts — see `allowed_mime_types` in `supabase/buckets.sql`."""
+"""Exactly what the bucket accepts - see `allowed_mime_types` in `supabase/buckets.sql`."""
 
 
 class MediaError(RuntimeError):
@@ -54,7 +54,7 @@ class MediaStore(Protocol):
     """Everything the app does to an image, and nothing it does not.
 
     `read` and `delete` are on here because four call sites used to reach past
-    this Protocol for `path()` and touch the filesystem themselves — the hero
+    this Protocol for `path()` and touch the filesystem themselves - the hero
     and inset reads in `generate`, the composite read in `publish`, and the
     unlink in `delete_draft`. A seam every caller steps around is not a seam,
     and it was exactly what would have had to be rewritten to move off disk.
@@ -91,7 +91,7 @@ class SupabaseMediaStore:
     files by hand is otherwise a scroll through everything ever written.
 
     Dev and production use **different buckets**, and that is not tidiness. The
-    two have separate databases, so both hand out draft id 1, 2, 3 — one bucket
+    two have separate databases, so both hand out draft id 1, 2, 3 - one bucket
     would mean a laptop test overwriting the picture a scheduled post points at.
 
     Config is read per call rather than at construction: `store` is built at
@@ -130,7 +130,7 @@ class SupabaseMediaStore:
         if not settings.supabase_url or not settings.supabase_service_key:
             raise MediaError(
                 "Supabase is not configured. Set SUPABASE_URL and "
-                "SUPABASE_SERVICE_KEY — there is nowhere else for images to go."
+                "SUPABASE_SERVICE_KEY - there is nowhere else for images to go."
             )
 
         root = settings.supabase_url.rstrip("/")
@@ -138,7 +138,7 @@ class SupabaseMediaStore:
         headers = {"Authorization": f"Bearer {settings.supabase_service_key}"}
         headers.update(kwargs.pop("headers", {}))
 
-        # Shared, not per call — see `app.http`. A constructor-passed client
+        # Shared, not per call - see `app.http`. A constructor-passed client
         # (the test seam) still wins and is still never closed here.
         client = self._client or http_shared(TIMEOUT)
         response = _attempt(client, method, url, headers, kwargs)
@@ -163,9 +163,9 @@ def _attempt(
     three kinds of file cannot simply be made again: the hero was paid for, and
     the inset is a file a person picked off their own machine.
 
-    A dropped connection or a timeout is worth another go. A 4xx is an answer —
+    A dropped connection or a timeout is worth another go. A 4xx is an answer -
     a bad key, a file over the bucket's size limit, a mime type it will not take
-    — and repeating it three times only delays the error by a second and a half.
+    - and repeating it three times only delays the error by a second and a half.
     5xx retries with the transport errors: it is the same "not now".
     """
     last: Exception | None = None
@@ -224,7 +224,7 @@ def watermark_source(upload_path: str | None, asset_path: str | None) -> str | b
     """The mark to stamp on this Page's cards. An upload wins over the asset.
 
     The upload is fetched here rather than inside the compositor, which draws
-    and does no IO — `store.read` raises loudly on a miss, and the caller turns
+    and does no IO - `store.read` raises loudly on a miss, and the caller turns
     that into a failed draft with a sentence in it. That is the whole difference
     from the old system, which hosted its watermarks, swallowed the `NoSuchKey`
     when the bucket was cleared, and printed the page name as text for months.
@@ -238,13 +238,13 @@ def watermark_source(upload_path: str | None, asset_path: str | None) -> str | b
 
 
 def filename(draft_id: int, kind: str, extension: str) -> str:
-    """`42-hero-20260806T141230-a3f9c1.png` — draft first, so a listing sorts usefully.
+    """`42-hero-20260806T141230-a3f9c1.png` - draft first, so a listing sorts usefully.
 
     Timestamped rather than overwritten: regenerating a hero for a draft whose
     composite is already approved must not silently change the approved picture.
 
     `extension` has no default. It used to be `"png"`, which stopped being safe
-    once composites became JPEG — a caller that forgot the argument would write
+    once composites became JPEG - a caller that forgot the argument would write
     JPEG bytes under a `.png` name, and `_content_type` would then label them
     `image/png`.
     """

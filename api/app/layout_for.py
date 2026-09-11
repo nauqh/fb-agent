@@ -2,7 +2,7 @@
 
 `config/layout.yml` is the default and stays in git, where a change to it is a
 diff. A `page_layout` row holds only what one Page changed, and resolution is
-`{**yaml, **row}` field by field — so a value nobody has touched keeps tracking
+`{**yaml, **row}` field by field - so a value nobody has touched keeps tracking
 the file, and resetting a Page is deleting its row rather than writing the
 current defaults back into it.
 
@@ -38,7 +38,7 @@ def as_overrides(row: PageLayout | None) -> dict:
     """A `page_layout` row in the shape of `layout.yml`, nulls included.
 
     The flat column names exist because a nullable float is a column and a
-    nullable nested object is not — `panel.opacity` has to be storable on its
+    nullable nested object is not - `panel.opacity` has to be storable on its
     own, without `panel.color` coming with it. This is the one place the two
     shapes are related, so a column added to the model has exactly one other
     line to change.
@@ -108,7 +108,7 @@ def resolve(session: Session, page_id: int | None) -> Layout:
     """The layout to render this Page with. `None` gives the file's defaults.
 
     Validated through the same `Layout` model the file is, so a stored value
-    that cannot make a layout fails here rather than inside resvg — which does
+    that cannot make a layout fails here rather than inside resvg - which does
     not fail, it renders something wrong and returns a valid PNG.
     """
     if page_id is None:

@@ -4,7 +4,7 @@ The feeds are `feed` rows, added and removed from Settings; how wide a window
 they are read through is still [`config/sources.yml`](../../config/sources.yml).
 They used to both be that file, "curated rather than managed in a UI, because
 every candidate has to be probed before it earns a place, which is not a thing
-to do from a form". The probing was the real requirement and it survived — it
+to do from a form". The probing was the real requirement and it survived - it
 moved into the form. `probe` below is what `POST /feeds` runs before it will
 write a row, so a feed still earns its place by answering, and now it does so
 where the operator can see the answer.
@@ -124,7 +124,7 @@ def _to_source_item(entry, publisher: str | None) -> SourceItemBase | None:
     return SourceItemBase(
         kind=SourceKind.RSS,
         # The link, not the feed's guid. It is what the operator can open, and
-        # what `is_curated_url` is checked against on the way back in — a guid
+        # what `is_curated_url` is checked against on the way back in - a guid
         # is often an opaque internal id that answers neither.
         external_id=link,
         author=publisher,
@@ -147,7 +147,7 @@ def _fetch_one(client: httpx.Client, feed: Feed) -> list[SourceItemBase]:
 def fetch_rss(feeds: list[Feed], timeout: float = 10.0) -> RssFeed:
     """Every feed given, merged, deduplicated, newest first.
 
-    Feeds break often — dead paths, 403s and hangs are all routine — so a
+    Feeds break often - dead paths, 403s and hangs are all routine - so a
     failing feed is collected rather than raised, and never sinks the batch.
 
     Takes the rows rather than a page name and looking them up, which is what it
@@ -155,7 +155,7 @@ def fetch_rss(feeds: list[Feed], timeout: float = 10.0) -> RssFeed:
     query in here would make every test of the merge need a database.
     """
     # `max_workers` must be positive, so an empty list is not merely a fast path
-    # — `ThreadPoolExecutor(max_workers=0)` raises. This became reachable the
+    # - `ThreadPoolExecutor(max_workers=0)` raises. This became reachable the
     # moment feeds got a delete button; before that a Page either had a list in
     # the file or raised on the way in.
     if not feeds:
@@ -172,7 +172,7 @@ def fetch_rss(feeds: list[Feed], timeout: float = 10.0) -> RssFeed:
                 headers={"User-Agent": USER_AGENT},
             ) as client:
                 return feed, _fetch_one(client, feed)
-        except Exception as error:  # noqa: BLE001 — one bad feed must not sink the rest
+        except Exception as error:  # noqa: BLE001 - one bad feed must not sink the rest
             return feed, error
 
     with ThreadPoolExecutor(max_workers=len(feeds)) as pool:
@@ -226,7 +226,7 @@ def curated_hosts(session: Session) -> set[str]:
     (only a competitor post is) and the caller has none to check against. The
     question it answers is "is this one of ours".
 
-    One query, called once per request rather than once per item — see
+    One query, called once per request rather than once per item - see
     `generate.resolve_sources`, which carries a whole cart through this.
     """
     return {
@@ -239,7 +239,7 @@ def is_curated_url(url: str | None, hosts: set[str]) -> bool:
     """Whether a posted item actually came from a configured feed.
 
     The RSS tab is live, so the client posts the item body back when one is
-    ticked — the server holds no copy to compare against. Without this check
+    ticked - the server holds no copy to compare against. Without this check
     `POST /generate` accepts arbitrary text and hands it to the writer, and
     "fully curated" is an intention rather than a property.
 
@@ -255,8 +255,8 @@ class Probe:
     """What a feed answered when asked, before it is allowed to become a row.
 
     The measurements are the ones `config/sources.yml` used to carry in a
-    comment above each entry — item count, summary length, whether items are
-    imaged — because those are what decided whether a candidate earned a place.
+    comment above each entry - item count, summary length, whether items are
+    imaged - because those are what decided whether a candidate earned a place.
     Returning them from the add form is what keeps that judgement possible now
     that the judgement is made on a screen.
     """
@@ -265,7 +265,7 @@ class Probe:
     with_images: int
 
     median_summary: int
-    """Median length of the text a writer would actually receive — title and
+    """Median length of the text a writer would actually receive - title and
     summary together, boilerplate already stripped, which is the thing being
     judged rather than whatever the `<description>` element happens to hold."""
 
@@ -284,7 +284,7 @@ def probe(url: str, timeout: float = 10.0) -> Probe:
 
     Raises:
         ValueError: it did not answer, did not parse, or parsed to nothing.
-            The message is the operator's — it goes straight into the toast
+            The message is the operator's - it goes straight into the toast
             under the add form.
     """
     try:
@@ -293,7 +293,7 @@ def probe(url: str, timeout: float = 10.0) -> Probe:
         ) as client:
             response = client.get(url)
             response.raise_for_status()
-    except Exception as error:  # noqa: BLE001 — every failure here is the same answer
+    except Exception as error:  # noqa: BLE001 - every failure here is the same answer
         raise ValueError(f"{url} did not answer: {_describe(error)}") from error
 
     parsed = feedparser.parse(response.content)
@@ -303,7 +303,7 @@ def probe(url: str, timeout: float = 10.0) -> Probe:
         if item is not None
     ]
     if not items:
-        # A 200 that parses to nothing is the common shape of a wrong URL — an
+        # A 200 that parses to nothing is the common shape of a wrong URL - an
         # HTML page where a feed was expected answers exactly like this.
         raise ValueError(
             f"{url} answered, but no items parsed out of it. "

@@ -2,14 +2,14 @@
  * The operator's session: one signed cookie, no store.
  *
  * ADR-0002 settled that there is one operator and no tenancy, so there is
- * nothing to look a session *up* in — no users table, no session table, no auth
+ * nothing to look a session *up* in - no users table, no session table, no auth
  * provider. What is left is proving that whoever holds this cookie typed the
  * password at some point, and that is a signature over an expiry.
  *
  * The API key is a different thing and stays where it is. It guards FastAPI
  * from anything that reaches it directly and never enters a browser
  * (`proxy.ts`). This guards the *web app*, which until now was open to anyone
- * who found the URL — and which holds the key, so an open UI handed out the
+ * who found the URL - and which holds the key, so an open UI handed out the
  * API too.
  *
  * Web Crypto rather than `node:crypto`, because `proxy.ts` runs on the Edge
@@ -47,7 +47,7 @@ function hex(buffer: ArrayBuffer): string {
  * `<expires-at>.<signature>`.
  *
  * The expiry is inside the signed payload as well as on the cookie, so an
- * operator editing `Max-Age` in devtools does not extend anything — the server
+ * operator editing `Max-Age` in devtools does not extend anything - the server
  * reads the value, not the browser's opinion of it.
  */
 export async function issueSession(now: number = Date.now()): Promise<string> {

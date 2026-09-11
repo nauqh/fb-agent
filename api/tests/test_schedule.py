@@ -40,7 +40,7 @@ PLANNER_ROW = {
 
 
 def test_the_planner_window_goes_out_as_naive_local_times():
-    """`20260801` answers 400 — the format is spelled out in the error."""
+    """`20260801` answers 400 - the format is spelled out in the error."""
     seen = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -150,7 +150,7 @@ def test_the_next_slot_is_the_first_configured_time_still_free(
 
     assert answer["label"] in {"08:00", "13:30", "19:00"}
     assert answer["taken"] == 0
-    # Naive local, no offset suffix — the shape publish takes and the planner
+    # Naive local, no offset suffix - the shape publish takes and the planner
     # stores. An offset here is rejected by Metricool.
     assert "+" not in answer["when"] and answer["when"].count(":") == 2
 
@@ -158,7 +158,7 @@ def test_the_next_slot_is_the_first_configured_time_still_free(
 def test_a_slot_the_planner_already_has_a_post_at_is_skipped(
     client, page, monkeypatch
 ):
-    """Including a post nobody here created — the planner is the only authority."""
+    """Including a post nobody here created - the planner is the only authority."""
     _slots(client, (8, 0), (19, 0))
     # Stubbed *before* the first read: without this the call leaves the building
     # and answers 401 from the real Metricool.
@@ -179,7 +179,7 @@ def test_a_post_a_second_off_the_slot_still_occupies_it(client, page, monkeypatc
     _at(client, monkeypatch)
     first = _next(client)
 
-    # Same minute, 42 seconds in — `YYYY-MM-DDTHH:MM:` is 17 characters.
+    # Same minute, 42 seconds in - `YYYY-MM-DDTHH:MM:` is 17 characters.
     _at(client, monkeypatch, first["when"][:17] + "42")
 
     assert _next(client)["when"] != first["when"]
@@ -226,7 +226,7 @@ def test_the_schedule_window_is_on_the_pages_clock_not_the_servers(
 ):
     """`list_scheduled` sends naive local times and tells Metricool they are
     `Asia/Ho_Chi_Minh`, so a bare `datetime.now()` labels the *server's* wall
-    clock as Vietnamese and shifts the window by the offset — 7h on Railway
+    clock as Vietnamese and shifts the window by the offset - 7h on Railway
     (UTC), 3h on the operator's laptop (Melbourne). Posts near either edge go
     missing, silently.
     """
@@ -245,6 +245,6 @@ def test_the_schedule_window_is_on_the_pages_clock_not_the_servers(
     expected = datetime.now(ZoneInfo(settings.timezone)).replace(tzinfo=None)
     drift = abs((seen["start"] - expected).total_seconds())
     assert drift < 120, (
-        f"the window starts {drift / 3600:.1f}h from the Page's clock — it is on "
+        f"the window starts {drift / 3600:.1f}h from the Page's clock - it is on "
         "the server's"
     )

@@ -59,7 +59,7 @@ def transport(monkeypatch):
     """Swap the SDK client for a script of outcomes, and take the sleeping out.
 
     `_backoff` returning zero keeps the suite fast without pretending the waits
-    are not there — the retry count is what these tests are about.
+    are not there - the retry count is what these tests are about.
     """
     monkeypatch.setattr(settings, "gemini_api_key", "test-key")
     monkeypatch.setattr(settings, "gemini_image_model", "primary-image")
@@ -164,7 +164,7 @@ def test_the_brand_photography_rules_are_sent_with_every_hero(transport):
     `generate` took only the writer's one-line subject and sent exactly that, so
     every hero was ordered without photorealism, without the mid-shot rule,
     without the "keep the top-right clear" instruction the watermark depends on,
-    and without the exclusions — `prompts.image_prompt()` had no callers at all.
+    and without the exclusions - `prompts.image_prompt()` had no callers at all.
     Nothing failed; the pictures were just quietly off-brand, which is the kind
     of defect a comparison against the old system would have blamed on the model.
     """
@@ -185,7 +185,7 @@ def test_a_page_with_its_own_brief_is_not_drawn_under_history_retraceds(transpor
     """C5, end to end. `page_name` is what stops every hero being a history photo.
 
     Without it this call sends `prompts/image.txt`, whose first line names
-    History Retraced and whose style block asks for reenactment and torchlight —
+    History Retraced and whose style block asks for reenactment and torchlight -
     which is what the client saw on Bodybuilding Tips and called sepia.
     """
     models = transport(_drawn())

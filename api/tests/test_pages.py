@@ -4,7 +4,7 @@ Eight of the ten Pages have no committed asset and publish with nothing stamped
 on them, because "commit a PNG under `api/assets/`" is a rule only someone with
 the repo can follow. The upload is their route.
 
-Hosting a watermark is what failed in the old system — the bucket was cleared
+Hosting a watermark is what failed in the old system - the bucket was cleared
 and every key started returning `NoSuchKey`, and the compositor swallowed it and
 printed the page name as text for months. The difference here is that ours
 raises, which `test_a_watermark_that_will_not_load_is_an_error` pins.
@@ -21,7 +21,7 @@ from app.models import Page
 
 
 def _transparent_mark() -> bytes:
-    """White ink on nothing — the shape a real wordmark has."""
+    """White ink on nothing - the shape a real wordmark has."""
     image = Image.new("RGBA", (400, 120), (255, 255, 255, 0))
     image.paste((255, 255, 255, 255), (10, 10, 390, 110))
     buffer = io.BytesIO()
@@ -68,7 +68,7 @@ def test_the_upload_wins_over_the_committed_asset(client, session, page):
     assert isinstance(source, bytes), "the committed path was drawn instead"
 
     # And it is a mark the compositor can actually open, rather than bytes that
-    # merely arrived — the old failure was a source that resolved and did not.
+    # merely arrived - the old failure was a source that resolved and did not.
     assert compositor._watermark(source, 138) is not None
 
 
@@ -117,7 +117,7 @@ def test_a_page_with_no_mark_gets_its_name_instead_of_nothing(page):
     """The fallback, and the one case the old compositor was right about.
 
     It is reached only when nothing is configured. A path that will not load
-    raises instead — see the module docstring — which is what stops this branch
+    raises instead - see the module docstring - which is what stops this branch
     from being cover for a mark that has gone missing.
     """
     from app.image import text as overlay
@@ -158,7 +158,7 @@ def _hero() -> bytes:
 def test_switching_the_watermark_off_silences_the_text_as_well(client, session, page):
     """Off means a clean photograph, not "no logo but still the name".
 
-    The two are one decision — `Page.watermark()` answers both — because a
+    The two are one decision - `Page.watermark()` answers both - because a
     half-off switch that kept printing the page name is the version an operator
     would report as broken.
     """
@@ -232,7 +232,7 @@ def test_a_page_can_be_given_its_own_lengths(client, page):
 def test_lengths_no_draft_could_satisfy_are_refused_before_they_are_saved(client, page):
     """C7 as the client wrote it: a 1,500 ceiling against the 1,500 house floor.
 
-    Saved, this does not produce short posts — it produces dead runs, because
+    Saved, this does not produce short posts - it produces dead runs, because
     every draft fails one end, burns both retries and ends at `Exceeded maximum
     output retries`. The model cannot report that as a settings problem, so the
     route has to.

@@ -12,7 +12,7 @@ database that already has feeds should not resurrect a feed the operator
 deleted, which is exactly what a re-runnable seeder would do.
 
 Idempotent: the insert skips any (page, url) already present, so a re-run adds
-nothing. Pages are matched by name — unique, and the only stable handle a YAML
+nothing. Pages are matched by name - unique, and the only stable handle a YAML
 file had.
 
 Revision ID: 103581b4d2f1
@@ -60,7 +60,7 @@ def upgrade() -> None:
 
 # The feed list as `config/sources.yml` carried it, probed 2026-07-31 (history)
 # and 2026-08-09 (news). The feeds that were probed and *rejected* stayed in
-# sources.yml as a comment — a row can only record a feed that exists, and the
+# sources.yml as a comment - a row can only record a feed that exists, and the
 # rejections are the other half of the same evidence.
 SEED: dict[str, list[tuple[str, str, str | None]]] = {
     "History Retraced": [
@@ -82,7 +82,7 @@ SEED: dict[str, list[tuple[str, str, str | None]]] = {
         (
             "Atlas Obscura",
             "https://www.atlasobscura.com/feeds/latest",
-            "1882-char bodies — by a wide margin the richest source in this list.",
+            "1882-char bodies - by a wide margin the richest source in this list.",
         ),
         (
             "The History Blog",
@@ -100,7 +100,7 @@ SEED: dict[str, list[tuple[str, str, str | None]]] = {
         (
             "Axios",
             "https://api.axios.com/feed/",
-            "100 items and 3356-char bodies — by a wide margin the richest source "
+            "100 items and 3356-char bodies - by a wide margin the richest source "
             "in either list. It surfaces rarely (1-2 of 50) because it publishes "
             "in bursts rather than continuously, and is kept for what it carries "
             "when it does.",
@@ -114,19 +114,19 @@ SEED: dict[str, list[tuple[str, str, str | None]]] = {
             "BBC News",
             "https://feeds.bbci.co.uk/news/world/rss.xml",
             "Thin at 114 chars, but the freshest of all of them and every item "
-            "imaged — it is what puts a breaking story on the grid first.",
+            "imaged - it is what puts a breaking story on the grid first.",
         ),
         (
             "France 24",
             "https://www.france24.com/en/rss",
-            "382-char summaries, fully imaged, and not an Anglosphere desk — it "
+            "382-char summaries, fully imaged, and not an Anglosphere desk - it "
             "carries stories the other four do not run.",
         ),
         (
             "The Hill",
             "https://thehill.com/news/feed/",
             "Only 15 items, but 357-char summaries and the US politics beat this "
-            "page actually posts — the midterm-money and Senate-vote lane.",
+            "page actually posts - the midterm-money and Senate-vote lane.",
         ),
     ],
 }

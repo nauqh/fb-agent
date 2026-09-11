@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
  * The history here is worth keeping, because two obvious designs have already
  * failed. A flat 600 fill with white type was simply the colour it claimed to
  * be, but a queue is mostly one status, so a column of solid slabs became the
- * texture of the whole screen. A plain tint on its own went the other way — an
+ * texture of the whole screen. A plain tint on its own went the other way - an
  * alpha wash and a pale 50/800 pair both read as *nearly* a colour rather than
  * as green.
  *
@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
  * Colour is spent only where it earns attention. `approved` and `published` are
  * the end states worth seeing; `failed` and `error` lost work; `review` is the
  * one row that is *waiting on the operator*, which is the whole point of the
- * queue. `rejected` and `draft` stay grey, because they are settled — nothing
+ * queue. `rejected` and `draft` stay grey, because they are settled - nothing
  * is owed on them.
  *
  * Pending review and Rejected shared the grey until it was pointed out that
@@ -40,7 +40,7 @@ const TONE: Record<StatusTone, { pill: string; dot: string }> = {
    * Blue, not amber. Amber is a hair from the gold `busy` already wears, and
    * "waiting for you" sitting next to "working on it" in the same queue has to
    * be told apart at a glance. Blue is also the one hue here that carries no
-   * verdict — this row is neither good news nor bad, only unread.
+   * verdict - this row is neither good news nor bad, only unread.
    */
   waiting: {
     pill: "border-blue-600/25 bg-blue-500/10 text-blue-700 dark:text-blue-400",

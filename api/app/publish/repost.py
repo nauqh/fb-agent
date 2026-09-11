@@ -2,7 +2,7 @@
 
 Distinct from **Write again**, which sends the saved post's story back through
 the writer for a fresh hook, caption and picture. A Repost copies what was
-published — the caption, the first comment and the picture, as they went out —
+published - the caption, the first comment and the picture, as they went out -
 and lands in the Review queue as a Draft with no hook and no hero, because the
 hook was drawn into the picture that is being reused.
 
@@ -13,16 +13,16 @@ The whole difficulty is the picture, in two separate steps:
    planner row for the same post carries the 896×1120 file *we* handed
    Metricool at publish time and the `firstCommentText` the stats call does not
    expose at all. So the real content is looked up in the planner, and matching
-   is by caption and time because the two systems share no id — measured on
+   is by caption and time because the two systems share no id - measured on
    2026-08-19: 596 of 633 stats posts matched exactly one planner row, 30
    matched more than one (resolved by nearest publication time), 7 matched none.
 
 2. **Copying the image into our bucket.** Metricool stores a *link* and
-   Facebook fetches it when the post is due, days later — so handing them the
+   Facebook fetches it when the post is due, days later - so handing them the
    URL we found publishes whatever it resolves to *then*. The old app's URLs
    were signed and have expired: of the media links in this account's planner,
    315 point at `chonkycatlabs.com` and 67 at its Vercel host, and both answer
-   403 today — 0 of 382 still working. Copying the bytes makes the URL *ours*,
+   403 today - 0 of 382 still working. Copying the bytes makes the URL *ours*,
    in a public bucket, with no expiry: the same reasoning as `hero.from_url`.
 
 A copy that cannot be made is a **refusal**, not a degraded repost. The
@@ -62,7 +62,7 @@ PLANNER_WINDOW = timedelta(days=2)
 The planner is keyed by *scheduled* time and the stats row by when Facebook says
 it went out; they agree to the minute on the posts measured, but a post moved by
 hand in Metricool's UI would not. Two days is generous enough for that and
-narrow enough that the read stays small — the alternative, asking for the whole
+narrow enough that the read stays small - the alternative, asking for the whole
 history, is 2,197 rows to find one.
 """
 
@@ -89,7 +89,7 @@ def original_for(page: Page, row: SavedPost) -> dict | None:
     Measured on 2026-08-19 against History Retraced:
 
     - `SavedPost.picture_url` comes from the stats call, and it is a *thumbnail*
-      — the URL carries `stp=dst-jpg_p130x130_tt6` and answers a **130×163**
+      - the URL carries `stp=dst-jpg_p130x130_tt6` and answers a **130×163**
       JPEG. Reposting it publishes that. Its `fullPicture` sibling is empty on
       all 633 posts in the window, and rewriting the size in the URL, or
       dropping it, answers 403: the URL is signed over its parameters.
@@ -103,14 +103,14 @@ def original_for(page: Page, row: SavedPost) -> dict | None:
 
     **Matching is by caption and time, because there is no shared id.** The
     planner's `providers[].id` and the stats row's `postId` are different id
-    spaces — 2,102 against 633 with a zero-length intersection, so joining on
+    spaces - 2,102 against 633 with a zero-length intersection, so joining on
     them silently matches nothing. On caption, 596 of 633 stats posts match
     exactly one planner row and every one of those carries media; 30 match more
     than one, which is what a caption published twice looks like and is resolved
     here by taking the nearest publication time; 7 match none.
 
     Returns `None` for "checked and it is not there" *and* for "could not
-    check" — a planner that is unreachable reads as no original, because the
+    check" - a planner that is unreachable reads as no original, because the
     caller's next move is the same either way, and distinguishing would turn
     "we could not look" into a different error from "we looked and there is
     nothing".
@@ -119,7 +119,7 @@ def original_for(page: Page, row: SavedPost) -> dict | None:
         return None
 
     when = row.published_at
-    # Naive local, like every other date sent to Metricool — an offset suffix is
+    # Naive local, like every other date sent to Metricool - an offset suffix is
     # rejected outright (see `publish.metricool.publication_date`).
     if when.tzinfo is not None:
         when = when.astimezone(timezone.utc).replace(tzinfo=None)
@@ -160,7 +160,7 @@ def copy_original_image(source_url: str, draft_id: int) -> str:
 
     **This is the whole difficulty of reposting, and it is not optional.**
     Metricool stores a *link* to what we publish and Facebook fetches it when
-    the post is due, days later — so handing them the URL we found publishes
+    the post is due, days later - so handing them the URL we found publishes
     whatever that URL resolves to *then*, not now. The old app's URLs were
     signed and have expired: of the media links in this account's planner, 315
     point at `chonkycatlabs.com` and 67 at its Vercel host, and both answer 403
@@ -168,7 +168,7 @@ def copy_original_image(source_url: str, draft_id: int) -> str:
     thumbnails and the old app's 105 dead published images document.
 
     Copying it here makes the URL we hand Metricool *ours*, in a public bucket,
-    with no expiry — the same reasoning and nearly the same code as
+    with no expiry - the same reasoning and nearly the same code as
     `hero.from_url`, which fetches a feed's photograph rather than hot-linking
     it for exactly this reason.
 
@@ -191,7 +191,7 @@ def copy_original_image(source_url: str, draft_id: int) -> str:
         # The expected end state, not a bug: the old app's links are signed and
         # have already rotted. Every one of them is a post we cannot repost.
         raise RepostError(
-            f"The original image has expired — its host answered "
+            f"The original image has expired - its host answered "
             f"{response.status_code}. Posts published by the old tool kept "
             "their images behind links that have since lapsed. \u201cWrite "
             "again\u201d will write the story fresh with a new picture."

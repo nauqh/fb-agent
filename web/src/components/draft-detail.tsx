@@ -70,7 +70,7 @@ interface Form {
   inset_x_ratio: number | null;
   inset_y_ratio: number | null;
   /**
-   * The ring. Null is "the Page's", `0` is "no ring" — two different answers,
+   * The ring. Null is "the Page's", `0` is "no ring" - two different answers,
    * which is why the controls below have an explicit way back to null rather
    * than treating the Page's current value as the off position.
    */
@@ -95,7 +95,7 @@ export function DraftDetail({
    * A ref rather than an `onDirtyChange` callback: the drawer only needs the
    * answer at the moment it is dismissed, and a callback would re-render the
    * sheet on every keystroke to keep a copy of something it does not draw.
-   * Written in an effect, never during render — the rule `use-query.ts` states
+   * Written in an effect, never during render - the rule `use-query.ts` states
    * for its own ref, and for the same reason.
    */
   dirtyRef?: React.RefObject<boolean>;
@@ -114,13 +114,15 @@ export function DraftDetail({
   const filePicker = useRef<HTMLInputElement>(null);
   const heroPicker = useRef<HTMLInputElement>(null);
 
-  const { data: pages } = useQuery(() => listPages(), []);
+  // Shares the "pages" cache entry with `page-scope.tsx` - same loader, same
+  // shape. Its Page dropdown needs the same list the scope already resolves.
+  const { data: pages } = useQuery(() => listPages(), [], { cacheKey: "pages" });
 
   /**
    * The poll.
    *
    * `GET /drafts/{id}` is the poll target and the client hits it until status
-   * leaves `generating`. Once the row settles the interval stops — there is
+   * leaves `generating`. Once the row settles the interval stops - there is
    * nothing left to watch, and a Draft under edit should not be re-read from
    * under the operator.
    */
@@ -136,8 +138,8 @@ export function DraftDetail({
    *
    * Fetched rather than taken from a constant. `ComposedImage` used to read a
    * hand-kept copy of `layout.yml` with no per-Page values in it, so every
-   * override on Global — the four paddings, the type size, the panel colour,
-   * the template — moved the card on Global and moved nothing here.
+   * override on Global - the four paddings, the type size, the panel colour,
+   * the template - moved the card on Global and moved nothing here.
    *
    * Keyed on the *draft's* Page, not the switcher's. The drawer can be opened
    * from a queue that was scoped when it loaded, and drawing one Page's draft
@@ -152,7 +154,7 @@ export function DraftDetail({
 
   /**
    * Seed the editor when a different Draft is selected, or when this one
-   * finishes generating and has content for the first time — and never in
+   * finishes generating and has content for the first time - and never in
    * between, because the poll keeps returning the row while it is being edited.
    *
    * Keyed and adjusted during render rather than synced in an effect: an effect
@@ -170,13 +172,13 @@ export function DraftDetail({
   /**
    * A rewrite came back. It goes in the boxes, not in the database.
    *
-   * **Rewrite proposes, Save writes, Revert undoes** — the same three words that
+   * **Rewrite proposes, Save writes, Revert undoes** - the same three words that
    * describe typing in the box by hand, which is the point. The old shape had
    * the server write the field and the screen re-read it, and the screen did not
    * re-read it: the editor re-seeds on a key change and the key is the draft's
    * id, so a rewrite left `form` holding the pre-rewrite text over a row that
-   * had moved. Both halves of the screen showed the old text — the preview draws
-   * `form.hook ?? draft.hook` — while the toast said it had been rewritten, the
+   * had moved. Both halves of the screen showed the old text - the preview draws
+   * `form.hook ?? draft.hook` - while the toast said it had been rewritten, the
    * draft went dirty against text nobody typed, and pressing the **Save changes**
    * that appeared wrote the old text back over the new. Every press was a paid
    * Gemini call undone by the one visible affordance after it (client feedback
@@ -210,7 +212,7 @@ export function DraftDetail({
   /**
    * Tell the drawer, so dismissing it can ask before throwing the text away.
    *
-   * Approve, Reject and the inset upload all save first — each says so in a
+   * Approve, Reject and the inset upload all save first - each says so in a
    * comment above its own `if (dirty && form) await updateDraft(...)`. Closing
    * the drawer was the one path that did not, and it discarded silently:
    * verified in a browser on draft 57, where typing enabled **Save changes**,
@@ -219,7 +221,7 @@ export function DraftDetail({
    * client's "auto save when edit the text directly?" (2026-08-16, G4).
    *
    * The save stays explicit rather than automatic, because auto-saving on close
-   * would commit a Gemini rewrite the operator closed the drawer to escape —
+   * would commit a Gemini rewrite the operator closed the drawer to escape -
    * which is what their own round-2 A2 asked us to make impossible.
    */
   useEffect(() => {
@@ -227,12 +229,12 @@ export function DraftDetail({
   }, [dirty, dirtyRef]);
 
   /**
-   * Drag the circle, or click anywhere on the card to put it there — the same
+   * Drag the circle, or click anywhere on the card to put it there - the same
    * gesture the old app had (`circular-inset-dialog.tsx:360-372`), where a press
    * both moves the inset and begins the drag.
    *
-   * **On `window`, not on the card.** The obvious version — `onPointerMove` on
-   * the card, with `setPointerCapture` — receives exactly one move and then goes
+   * **On `window`, not on the card.** The obvious version - `onPointerMove` on
+   * the card, with `setPointerCapture` - receives exactly one move and then goes
    * silent, verified with a counter in the handler: the press lands, the first
    * move lands, and every move after it stops reaching the element even though
    * the pointer never leaves it and capture reports as held. Listening on the
@@ -253,7 +255,7 @@ export function DraftDetail({
       if (!box) return;
       // Updated from the previous state rather than from `form` in scope, so
       // the listeners do not have to be torn down and rebuilt on every frame of
-      // the drag — and cannot write back a form from before it started.
+      // the drag - and cannot write back a form from before it started.
       setEditor((prev) =>
         prev.form
           ? {
@@ -307,13 +309,13 @@ export function DraftDetail({
     }
   }
 
-  /** Reject: the one decision that is not publishing. Approve is gone — see
+  /** Reject: the one decision that is not publishing. Approve is gone - see
    *  the footer for why. */
   async function reject() {
     setDeciding(true);
     try {
       // A decision closes the drawer, and the form goes with it. Anything typed
-      // and not saved would be silently discarded — including a highlight,
+      // and not saved would be silently discarded - including a highlight,
       // which is the one edit whose whole feedback is the picture and so is the
       // easiest to believe is already stored. Rejecting saves too: it is
       // reversible, and a draft that comes back should come back as it looked.
@@ -333,7 +335,7 @@ export function DraftDetail({
       });
 
       // Back to the queue, never on to the next draft. Deciding one thing
-      // should not open another — the row leaving the list is the feedback, and
+      // should not open another - the row leaving the list is the feedback, and
       // the operator picks what to look at next.
       if (onDecided) onDecided();
       else router.push("/review");
@@ -349,7 +351,7 @@ export function DraftDetail({
    *
    * Redrawing the panel is free and now happens on save; buying a hero is a
    * `google-genai` call, so it stays a button the operator presses on purpose.
-   * The inset below it is free — an upload, not a generation.
+   * The inset below it is free - an upload, not a generation.
    */
   async function redoImage(kind: "hero") {
     setImageWork(kind);
@@ -357,7 +359,7 @@ export function DraftDetail({
       // Saves first, and that is what makes the prompt box above it work: the
       // server draws from `draft.image_prompt` on the **row**, so an edited
       // prompt that is still only in the form buys another picture of the old
-      // one — at full price, with nothing on screen explaining why the wording
+      // one - at full price, with nothing on screen explaining why the wording
       // had no effect.
       if (dirty && form) await updateDraft(draftId, form);
 
@@ -376,7 +378,7 @@ export function DraftDetail({
    * Put a picture in the circle, or take it out. `null` removes.
    *
    * Immediate rather than staged into the form like the slider is, because a
-   * `File` is not something the form can hold and save later — and the server
+   * `File` is not something the form can hold and save later - and the server
    * redraws the card in the same call, so the picture beside this button is
    * correct the moment it returns. `refresh` is what pulls the new row: the
    * poll has already stopped by the time a draft is reviewable.
@@ -387,7 +389,7 @@ export function DraftDetail({
       // Save first, and this is the fix for a bug that survived the rewrite.
       // The server redraws the card from the **row**; the preview above draws
       // from the form. So uploading with an unsaved highlight baked the *old*
-      // gold into the PNG while the preview kept showing the new gold — two
+      // gold into the PNG while the preview kept showing the new gold - two
       // pictures that disagree, with nothing on screen saying so. Publish then
       // ships the PNG. Intermittent in exactly the way it was reported: it
       // depended on whether a Save happened to land before the upload.
@@ -407,7 +409,7 @@ export function DraftDetail({
   /**
    * Use the operator's own photograph instead of a generated one.
    *
-   * The escape hatch for a subject the model will not draw — the client's case
+   * The escape hatch for a subject the model will not draw - the client's case
    * was exercise photographs, where each re-roll costs a generation and returns
    * another impossible pose. Free, and the card is still drawn on top, so this
    * changes the picture and nothing else about the post.
@@ -443,7 +445,7 @@ export function DraftDetail({
    * `composed_image_path` and sets no hook and no hero, because the hook was
    * baked into that picture when it first went out. The live preview below
    * needs both, so it drew a placeholder gradient and the words "No overlay
-   * text" over a draft whose picture was sitting in the bucket the whole time —
+   * text" over a draft whose picture was sitting in the bucket the whole time -
    * and the Repost toast links here, so that was the first thing anyone saw.
    * The queue thumbnail and publish were always right.
    *
@@ -457,7 +459,7 @@ export function DraftDetail({
    *
    * Showing the composited file is what made an edit require a round trip: the
    * PNG cannot know about a highlight you added a second ago. Drawing the panel
-   * here instead makes it instant, and costs nothing — the hero is the
+   * here instead makes it instant, and costs nothing - the hero is the
    * expensive half and it is already on disk.
    *
    * The server bakes the same thing into the PNG when the draft is saved.
@@ -505,14 +507,14 @@ export function DraftDetail({
     />
   );
 
-  // No bottom padding of its own — the drawer supplies it. This carried
+  // No bottom padding of its own - the drawer supplies it. This carried
   // `pb-16` from when the detail was a full page needing clearance above the
   // viewport edge, which inside the drawer was just dead space under Approve.
   return (
     <div className="space-y-6">
       {/* Just what the draft is. The status pill, the topic and the age all
           lived here and all of them are already in the row you clicked to get
-          here — repeating them costs a line and tells you nothing new.
+          here - repeating them costs a line and tells you nothing new.
           `pr-10` keeps the heading clear of the drawer's close button. */}
       <h2 className="pr-10 text-base font-medium">{page?.name}</h2>
 
@@ -529,7 +531,7 @@ export function DraftDetail({
       ) : null}
 
       {/* A repost puts one line in `warnings` explaining that its picture is
-          the published one — see `routes/overview.repost_saved`. That is a note
+          the published one - see `routes/overview.repost_saved`. That is a note
           about what the draft *is*, and reading it under "rules still failing"
           made a working repost look like a broken draft. Same strip, honest
           heading: nothing about a repost has failed. */}
@@ -543,7 +545,7 @@ export function DraftDetail({
           </p>
           <ul className="space-y-1 text-xs text-muted-foreground">
             {draft.warnings.map((warning) => (
-              <li key={warning}>— {warning}</li>
+              <li key={warning}>- {warning}</li>
             ))}
           </ul>
         </div>
@@ -603,20 +605,20 @@ export function DraftDetail({
                 </span>
               </div>
               {/* The picture above is always current, so nothing here is about
-                  what you are looking at — only about whether the *file* on
+                  what you are looking at - only about whether the *file* on
                   disk matches it yet. Except on a repost, where the file *is*
                   what you are looking at and none of the editing below reaches
-                  it — said here rather than left to be discovered by typing a
+                  it - said here rather than left to be discovered by typing a
                   hook and watching nothing happen. */}
               {published ? (
                 <p className="text-[11px] text-muted-foreground">
                   This is the picture that was published, reused as it is.
-                  Editing the hook will not change it — write the story again
+                  Editing the hook will not change it - write the story again
                   from Overview if you want a new card.
                 </p>
               ) : !draft.hero_image_path ? (
                 <p className="text-[11px] text-muted-foreground">
-                  No hero yet — the background is a placeholder.
+                  No hero yet - the background is a placeholder.
                 </p>
               ) : dirty || !draft.composed_image_path ? (
                 <p className="text-[11px] text-muted-foreground">
@@ -625,11 +627,11 @@ export function DraftDetail({
               ) : null}
           {/* Recomposite used to sit here. Saving now redraws the panel
               server-side, so the button only ever repeated what Save had
-              already done — and left the PNG stale for anyone who did not
+              already done - and left the PNG stale for anyone who did not
               know to press it.
 
               Gone entirely on a repost. `build_image` bails on a draft with no
-              hook, so the press spent nothing and did nothing — but it is the
+              hook, so the press spent nothing and did nothing - but it is the
               one button that *can* spend money, and offering it beside a
               picture it cannot touch is the wrong thing to leave clickable. */}
           {published ? null : (
@@ -640,7 +642,7 @@ export function DraftDetail({
             disabled={imageWork !== null}
             onClick={() => void redoImage("hero")}
             // The one button that spends money. Said on hover rather than in a
-            // paragraph under it — the warning belongs on the trigger.
+            // paragraph under it - the warning belongs on the trigger.
             title="Buys a new image from Gemini."
           >
             {imageWork === "hero" ? (
@@ -656,14 +658,14 @@ export function DraftDetail({
 
               **Say it differently, or stop asking.** Re-rolling an unchanged
               prompt is the same request at full price, and for some subjects it
-              never converges — the client's report was exercise photographs
+              never converges - the client's report was exercise photographs
               coming back with twisted bodies and the wrong movement however
               many times they pressed. The prompt is the lever on the next
               attempt; the upload is the way to stop attempting.
 
               Editable here rather than in Settings because this is one draft's
-              picture. The Page's `image_prompt` — the systematic fix, and the
-              right place for "this Page is about exercise form" — is on the
+              picture. The Page's `image_prompt` - the systematic fix, and the
+              right place for "this Page is about exercise form" - is on the
               Settings screen and applies to every draft after it. */}
           {form && !published ? (
             <div className="space-y-2 rounded-2xl border p-3">
@@ -722,7 +724,7 @@ export function DraftDetail({
           ) : null}
           {/* Which of the two forms this card is drawn in. Under the picture
               because that is the only place the difference is visible: the
-              choice depends on the photograph, not on the brand — a busy shot
+              choice depends on the photograph, not on the brand - a busy shot
               with a face low in the frame is ruined by a panel lying over it,
               and the same panel is the making of a wide landscape.
 
@@ -883,7 +885,7 @@ export function DraftDetail({
                     was published with is part of the picture being reused, and
                     this field only ever reaches the panel the compositor draws.
                     Left editable it was an empty box with a Rewrite button, a
-                    word count and a 65-word limit, all of which do nothing —
+                    word count and a 65-word limit, all of which do nothing -
                     reported as "the image and hook are blank". */}
                 {published ? (
                   <Field label="Overlay" hint="part of the picture">
@@ -952,7 +954,7 @@ export function DraftDetail({
                       onProposal={applyProposal}
                     />
                   }
-                  hint={`${chars(form.first_comment)} · 1,500–2,100`}
+                  hint={`${chars(form.first_comment)} · 1,500-2,100`}
                   flagged={form.first_comment.length < 1500 || form.first_comment.length > 2100}
                 >
                   <Textarea
@@ -1010,7 +1012,7 @@ export function DraftDetail({
 
         {/* Reject, then the three ways to publish. **Approve is gone**: it set
             a status that took the row out of the queue and did nothing else,
-            was reversible, and was never required by publish — a step with no
+            was reversible, and was never required by publish - a step with no
             consequence in front of the one step that cannot be taken back. The
             client asked whether it was needed; it was not.
 
@@ -1045,7 +1047,7 @@ export function DraftDetail({
           )}
           {failed ? (
             <p className="text-xs text-muted-foreground">
-              Failed — there is nothing to publish.
+              Failed - there is nothing to publish.
             </p>
           ) : (
             <PublishAction draft={draft} onPublished={refresh} />
@@ -1062,13 +1064,13 @@ export function DraftDetail({
  * The queue's row menu has always had this; the drawer is where the operator
  * actually reads the post, and having to close it and find the row again to
  * send what they just read was a step with no purpose. The old app offered both
- * for the same reason — `draft-review-row.tsx:1000` in the row menu and `:1390`
+ * for the same reason - `draft-review-row.tsx:1000` in the row menu and `:1390`
  * in the sheet footer, from one handler.
  *
  * Shown for a decided draft too, unlike Reject and Approve. Approved *is* the
  * state a draft is published from, and the server never required it
  * (`routes/drafts.py:361` refuses only a republish, a FAILED row, and one with
- * no composite) — the disabled conditions here are those three and nothing
+ * no composite) - the disabled conditions here are those three and nothing
  * more, so the button is never offered for a call that would 409.
  *//**
  * The three ways a draft leaves the queue: now, at a time, or at the next free
@@ -1076,14 +1078,14 @@ export function DraftDetail({
  *
  * **Approve is gone, and the client was right about why.** It set
  * `status = approved`, which took the row out of the Review queue and did
- * nothing else — reversible by `unapprove`, and never required by publish,
+ * nothing else - reversible by `unapprove`, and never required by publish,
  * which refuses only a republish, a FAILED draft and one with no composite. So
  * it was a queue movement with no consequence sitting in front of the action
  * that has every consequence. These three replace it.
  *
  * "Schedule next available" asks the server, which walks this Page's configured
  * times against Metricool's planner. That read is the only authority on what is
- * taken (ADR-0001) — a post scheduled by hand in Metricool's own UI occupies a
+ * taken (ADR-0001) - a post scheduled by hand in Metricool's own UI occupies a
  * slot exactly as much as one of ours.
  *
  * All three land in the same confirmation, because the irreversible part is
@@ -1102,7 +1104,7 @@ function PublishAction({
   const [when, setWhen] = useState(pageLocalSoon);
   const [slot, setSlot] = useState<NextSlot | null>(null);
   const [finding, setFinding] = useState(false);
-  // Whether this deployment publishes for real. Undefined until it answers —
+  // Whether this deployment publishes for real. Undefined until it answers -
   // treated as "no claim" below rather than as either mode, because guessing
   // wrong in the reassuring direction is the bug this is here to fix.
   const { data: mode } = useQuery(() => publishMode(), []);
@@ -1113,7 +1115,7 @@ function PublishAction({
 
   const blocked = draft.status === "failed" || !draft.composed_image_path;
 
-  /** `undefined` means "as soon as Metricool will take it" — Publish now. */
+  /** `undefined` means "as soon as Metricool will take it" - Publish now. */
   async function publish(at: string | undefined) {
     setBusy(true);
     try {
@@ -1158,7 +1160,7 @@ function PublishAction({
     <>
       <PublishAt value={when} onChange={setWhen} />
 
-      {/* Schedule — the time beside it is the one that goes out. */}
+      {/* Schedule - the time beside it is the one that goes out. */}
       <Button
         variant="outline"
         size="sm"
@@ -1232,7 +1234,7 @@ function PublishAction({
         {mode?.rehearsal ? (
           <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
             Rehearsal mode. This lands in the planner as a draft and will not
-            reach the page — the time above is when it would have gone out.
+            reach the page - the time above is when it would have gone out.
           </p>
         ) : null}
       </PublishDialog>
@@ -1243,10 +1245,10 @@ function PublishAction({
 /**
  * What can still be done to a post that is already in Metricool.
  *
- * This used to be the sentence "In Metricool — change it in the planner." The
+ * This used to be the sentence "In Metricool - change it in the planner." The
  * client's D6 feedback is that the old tool let them fix a typo, move the time
  * and cancel the post without leaving the app, and that losing all three was
- * the regression — so the sentence is now three controls.
+ * the regression - so the sentence is now three controls.
  *
  * What is *not* here is the picture. While a draft is in Metricool the
  * composite cannot be redrawn, because Metricool holds a link to that exact
@@ -1345,7 +1347,7 @@ const MAX_INSET_BORDER_PX = 48;
  * The ring around the disc: how thick, and what colour.
  *
  * Per draft, over the Page's defaults on Global, because the right ring depends
- * on the picture inside the circle rather than on the brand — a dark portrait
+ * on the picture inside the circle rather than on the brand - a dark portrait
  * wants a light ring to lift it off the panel, a bright one usually wants none.
  * The old app had both here for the same reason
  * (`circular-inset-dialog.tsx:608-680`).
@@ -1353,8 +1355,8 @@ const MAX_INSET_BORDER_PX = 48;
  * **Null and zero are different answers, and the UI has to keep them apart.**
  * Null means "whatever the Page is set to" and follows it when that changes;
  * zero means this draft has chosen to have no ring. So the slider cannot be the
- * only control — sliding to 0 would be indistinguishable from inheriting a Page
- * whose default happens to be 0 — hence the explicit "Use the Page's" reset,
+ * only control - sliding to 0 would be indistinguishable from inheriting a Page
+ * whose default happens to be 0 - hence the explicit "Use the Page's" reset,
  * which is the only way back to null once either has been touched.
  */
 function InsetRing({
@@ -1462,15 +1464,15 @@ function InsetRing({
  * (`regenerate-field-control.tsx`).
  *
  * **The box is always visible, not behind a toggle.** The client asked for it in
- * as many words — *"should there be a textbox for me to input how I want it to
- * be changed"* — after pressing the unargued button on a hook that was too short
+ * as many words - *"should there be a textbox for me to input how I want it to
+ * be changed"* - after pressing the unargued button on a hook that was too short
  * and getting another short hook. Nothing in `validators.py` sets a minimum
  * length, so the button alone can only re-roll, never steer; a control hidden
  * behind a chevron would leave them pressing the same button. Empty is the
  * common case and is still one click.
  *
  * **Writes nothing.** It used to save the whole form first, because the server
- * read the kept fields off the row — so pressing Rewrite on the hook silently
+ * read the kept fields off the row - so pressing Rewrite on the hook silently
  * committed an unsaved caption. The kept fields are sent from the form now, and
  * the result comes back as a proposal for the editor to hold.
  */
@@ -1485,21 +1487,21 @@ function Regenerate({
   field: RegeneratableField;
   label: string;
   form: Form | null;
-  /** Put the writer's text in the boxes. Saving it is the operator's press —
+  /** Put the writer's text in the boxes. Saving it is the operator's press -
    *  see `applyProposal`. */
   onProposal: (proposal: RewriteProposal) => void;
 }) {
   const [busy, setBusy] = useState(false);
   // Kept after a press, not cleared: "make it longer" is usually said twice, and
   // the box is on screen, so nothing is being reused invisibly. It is never sent
-  // to the row — an instruction describes an action, not the post.
+  // to the row - an instruction describes an action, not the post.
   const [instruction, setInstruction] = useState("");
 
   async function run() {
     setBusy(true);
     try {
       // What the new field has to fit is what is on screen, so the kept fields
-      // are sent from the form — unsaved edits included. This is what lets the
+      // are sent from the form - unsaved edits included. This is what lets the
       // press write nothing at all: the server used to read them off the row,
       // which is why the screen had to save first.
       const proposal = await regenerateField(draftId, field, {
@@ -1510,7 +1512,7 @@ function Regenerate({
       });
       onProposal(proposal);
       toast.success(`New ${label.toLowerCase()}.`, {
-        description: "Not saved yet — Save changes keeps it, Revert throws it away.",
+        description: "Not saved yet - Save changes keeps it, Revert throws it away.",
       });
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : "Could not rewrite that");
@@ -1561,7 +1563,7 @@ function Regenerate({
  *
  * Client feedback G2 (2026-08-16): *"I have no idea which source or which
  * competitor posts the tool gens content from."* Nothing was missing from the
- * data — 35 of the 38 drafts in the database carry a `source_item_id`, and it
+ * data - 35 of the 38 drafts in the database carry a `source_item_id`, and it
  * has been on the wire since the first day. It was missing from every screen.
  *
  * **In the drawer, not on the queue row.** `useQuery` re-runs on every store
@@ -1569,8 +1571,8 @@ function Regenerate({
  * queue of any length. The drawer is also where the question is actually asked,
  * with the copy it produced next to it.
  *
- * Named the way the grid named it — same label, same glyph, imported rather than
- * restated — because the operator is being asked to recognise a card they ticked.
+ * Named the way the grid named it - same label, same glyph, imported rather than
+ * restated - because the operator is being asked to recognise a card they ticked.
  */
 function SourceLine({ draft }: { draft: Draft }) {
   const { data: source, error } = useQuery(
@@ -1580,11 +1582,11 @@ function SourceLine({ draft }: { draft: Draft }) {
   );
 
   // A topic run has no Source Item and never had one. Said out loud, because the
-  // absence is the answer here — silence looks identical to the row not loading.
+  // absence is the answer here - silence looks identical to the row not loading.
   if (draft.source_item_id === null) {
     return (
       <p className="text-xs text-muted-foreground">
-        {draft.topic ? `Written from a topic — “${draft.topic}”` : "No source recorded."}
+        {draft.topic ? `Written from a topic - “${draft.topic}”` : "No source recorded."}
       </p>
     );
   }
@@ -1688,7 +1690,7 @@ function Field({
       </div>
       {/* Its own row, between the label and the box it rewrites. It used to be a
           word inside the `<Label>`, which left nowhere for the prompt input to
-          go — and an `<input>` inside a `<label>` steals the click that should
+          go - and an `<input>` inside a `<label>` steals the click that should
           focus the field. */}
       {regenerate}
       {children}

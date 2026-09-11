@@ -7,7 +7,7 @@ opentype.js and the same `Arial-Bold.ttf`. Every line break, panel height and
 gold run in it is the TypeScript implementation's answer, not one we chose.
 
 That is what makes the port checkable. The measurement half was already proven
-in Phase 0 — `fontTools` reproduces `getAdvanceWidth` to four decimal places —
+in Phase 0 - `fontTools` reproduces `getAdvanceWidth` to four decimal places -
 but a matching measurer still wraps differently if the safety factor, the space
 handling or the panel arithmetic is off by a hair, and the symptom is a picture
 that is subtly wrong rather than a test that fails.
@@ -164,7 +164,7 @@ def test_no_line_exceeds_the_measured_width():
 def test_punctuation_spacing_is_fixed_before_the_text_is_measured():
     """The port normalised each line *after* wrapping it.
 
-    Any rule that lengthens a line — `tomb.The` gaining a space — then widened a
+    Any rule that lengthens a line - `tomb.The` gaining a space - then widened a
     line that had already been measured to fit. Measuring the normalised string
     is what keeps the drawn text and the measured text the same string.
     """
@@ -241,7 +241,7 @@ def test_a_phrase_split_by_the_wrap_still_renders_gold():
 
     Segmentation ran per line, so a phrase the wrap divided matched neither
     half and rendered nothing. It fired on three of six phrases in one real
-    run — common enough to train the operator to skim a box that also carries
+    run - common enough to train the operator to skim a box that also carries
     the rules that matter.
     """
     case = next(c for c in CASES if c["name"] == "tharp")
@@ -260,7 +260,7 @@ def test_a_phrase_split_by_the_wrap_still_renders_gold():
 
 
 def test_a_phrase_absent_from_the_text_still_renders_nothing():
-    """No rendering trick fixes an invented phrase — that stays `generate.py`'s warning."""
+    """No rendering trick fixes an invented phrase - that stays `generate.py`'s warning."""
     case = next(c for c in CASES if c["name"] == "tharp")
     coloured = overlay.segment_lines(case["lines"], ["Ada Lovelace"])
 
@@ -285,7 +285,7 @@ def test_whole_line_colouring_agrees_with_the_old_per_line_result(case):
 def test_a_quoted_phrase_keeps_the_space_in_front_of_it():
     """Caught on the first real post: `dismissed it as mere"girl talk."`
 
-    The port closed the gap before an opening quote as well as after it — its
+    The port closed the gap before an opening quote as well as after it - its
     own comment gives `the "Seven` -> `the"Seven`. Only the second half was
     ever right, so only the second half is here.
     """
@@ -303,7 +303,7 @@ def test_a_quoted_phrase_keeps_the_space_in_front_of_it():
 SHOUTING = layout.model_validate(
     {**layout.model_dump(), "text": {**layout.text.model_dump(), "uppercase": True}}
 )
-"""`layout.yml` with `text.uppercase` on — what a Page that set it resolves to."""
+"""`layout.yml` with `text.uppercase` on - what a Page that set it resolves to."""
 
 
 def test_the_default_layout_draws_the_hook_as_it_was_written():
@@ -316,7 +316,7 @@ def test_capitals_are_applied_after_the_sentence_spacing_rule():
     """The trap: `_SENTENCE_END` needs two *lowercase* letters before the stop.
 
     Uppercase first and the rule can never fire, so `tomb.The` reaches the
-    measurer as one unbroken token — wrapped as a single word, and drawn without
+    measurer as one unbroken token - wrapped as a single word, and drawn without
     the space the mixed-case card has. `plan` normalises, then shouts.
     """
     lines = overlay.plan("a sealed tomb.The pharaoh", SHOUTING).lines
@@ -332,8 +332,8 @@ def test_the_gold_lands_on_a_shouted_panel_without_shouting_the_phrases():
     matches them case-insensitively and keeps the line's own casing, so they
     find their runs in a shouted panel and the gold comes back in capitals.
 
-    The browser is the half that cannot do this — `splitOnHighlights` matches
-    exactly — which is why the case transform there is applied to the text *and*
+    The browser is the half that cannot do this - `splitOnHighlights` matches
+    exactly - which is why the case transform there is applied to the text *and*
     the phrases, and why this test exists to say the two are not the same
     problem.
     """
@@ -347,7 +347,7 @@ def test_the_gold_lands_on_a_shouted_panel_without_shouting_the_phrases():
 
 
 def test_capitals_are_wider_and_the_panel_grows_to_take_them():
-    """Measured, not assumed — it is what decides how much hero is left.
+    """Measured, not assumed - it is what decides how much hero is left.
 
     Same hook, same font size: capitals wrap to more lines, and the panel is a
     floor that grows, so the hero shrinks by exactly that much.

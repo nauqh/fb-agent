@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 /**
  * An indeterminate progress bar. No percentage, on purpose.
  *
- * A Metricool sync is one opaque request — 1.6MB and ~5.5s on a good day, with
+ * A Metricool sync is one opaque request - 1.6MB and ~5.5s on a good day, with
  * nothing reported in between. A bar that eased to 90% and then sat there would
  * be inventing a number the server never sent, and it lies loudest exactly when
  * the vendor is slow and the operator most wants to know what is happening.

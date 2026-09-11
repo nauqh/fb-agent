@@ -19,7 +19,7 @@ const nextConfig: NextConfig = {
   },
   experimental: {
     // Next's default is 1MB for request bodies that flow through the proxy
-    // (src/proxy.ts), and everything above that comes back 413 from Next —
+    // (src/proxy.ts), and everything above that comes back 413 from Next -
     // not from FastAPI, whose own cap is 200MB. CTA clips are videos.
     proxyClientMaxBodySize: "200mb",
   },

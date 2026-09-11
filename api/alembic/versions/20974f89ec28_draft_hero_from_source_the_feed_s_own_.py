@@ -33,7 +33,7 @@ def upgrade() -> None:
     error is at deploy time, on the one command a deploy cannot skip.
 
     So the column arrives with a server default, which backfills every existing
-    row to `false` — the right answer, since every draft that already exists was
+    row to `false` - the right answer, since every draft that already exists was
     drawn by the model rather than from a feed.
 
     The default is then **dropped**. It exists only to make the backfill legal;

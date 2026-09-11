@@ -6,7 +6,7 @@ import { SESSION_COOKIE, isValidSession } from "@/lib/auth";
  * Two jobs: keep strangers out, and add the API key to what gets through.
  *
  * `proxy.ts`, not `middleware.ts`: Next 16 renamed the file convention, and a
- * `middleware.ts` is not picked up — it fails silently, as an app that serves
+ * `middleware.ts` is not picked up - it fails silently, as an app that serves
  * fine while every API call comes back 401.
  *
  * The key half is the one the browser must never see. `lib/api/client.ts`
@@ -20,8 +20,8 @@ import { SESSION_COOKIE, isValidSession } from "@/lib/auth";
  * key to every visitor and undo the whole arrangement.
  *
  * A missing `API_KEY` sends an empty header rather than throwing. The API
- * refuses an empty key, so the failure is 401s on every call — noisy, and
- * traceable to a missing variable — instead of a dev server that will not boot.
+ * refuses an empty key, so the failure is 401s on every call - noisy, and
+ * traceable to a missing variable - instead of a dev server that will not boot.
  *
  * The session half is why the matcher is no longer `/api/:path*` alone. That
  * matcher meant the *web app* was open to anyone who found the URL, and since
@@ -69,7 +69,7 @@ export const config = {
    * Everything except Next's own assets and the favicon.
    *
    * `_next/static` and `_next/image` are excluded because they are served to a
-   * signed-out browser by definition — the login page is built from them, and
+   * signed-out browser by definition - the login page is built from them, and
    * redirecting them produces a page with no styles and no bundle. The same
    * trap `CLAUDE.md` records for `allowedDevOrigins`, arrived at from the other
    * direction.

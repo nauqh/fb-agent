@@ -6,7 +6,7 @@ import { SESSION_COOKIE, SESSION_MAX_AGE, issueSession, matches } from "@/lib/au
  * `/auth/login`, not `/api/auth/login`.
  *
  * `next.config.ts` rewrites every `/api/*` path to FastAPI, so a route handler
- * under `/api` would never run — the request would be proxied to Python, which
+ * under `/api` would never run - the request would be proxied to Python, which
  * has no such endpoint, and the login form would get a 404 from a file that is
  * plainly there.
  *

@@ -13,7 +13,7 @@ import type { ScheduledPost } from "@/lib/types";
  * The reading view: what each post actually says.
  *
  * The week grid answers "which slot is empty". This answers "what went out",
- * and the first version answered it badly — a fixed 48px thumbnail that is
+ * and the first version answered it badly - a fixed 48px thumbnail that is
  * permanently blank for every historical post (their image links expire two
  * hours after publish), beside two truncated lines of a 720-character caption
  * that begins with a title and continues as emoji bullet points.
@@ -21,7 +21,7 @@ import type { ScheduledPost } from "@/lib/types";
  * Metricool stores the caption as one string, but it is not unstructured: line
  * one is the title, the blank-line-separated paragraphs after it are the recap
  * points, and the hashtags sit at the end. Parsing that back out is what makes
- * a row scannable — the title alone identifies a post far better than the first
+ * a row scannable - the title alone identifies a post far better than the first
  * ninety characters of its opening bullet.
  */
 export function ScheduleList({ posts }: { posts: ScheduledPost[] }) {
@@ -107,7 +107,7 @@ function Row({ post }: { post: ScheduledPost }) {
 
           {post.first_comment ? (
             // Whether the body actually went out with it. The first comment is
-            // where the story lives, and Metricool posts it separately — a post
+            // where the story lives, and Metricool posts it separately - a post
             // that lost it is a post with a recap and no article.
             <span className="inline-flex items-center gap-1" title={post.first_comment}>
               <MessageSquareText className="size-3" />
@@ -148,7 +148,7 @@ function Row({ post }: { post: ScheduledPost }) {
  * The caption, split back into the shape the writer produced.
  *
  * Title on line one, recap points as the paragraphs after it, hashtags last.
- * Anything that does not fit that shape still renders — an unrecognised caption
+ * Anything that does not fit that shape still renders - an unrecognised caption
  * becomes its own title and no points, which is the honest degradation.
  */
 function parse(text: string): { title: string; points: string[]; tags: string[] } {
@@ -172,7 +172,7 @@ function parse(text: string): { title: string; points: string[]; tags: string[] 
 /**
  * Shown only when there is actually a picture to show.
  *
- * Every historical post here has a dead image link — the old system signed them
+ * Every historical post here has a dead image link - the old system signed them
  * with `publishAt + 2h` expiry, and 0 of 105 in a fortnight's window still
  * resolve. A placeholder icon on every single row is noise pretending to be
  * information, so a failed load collapses the space instead.
@@ -208,7 +208,7 @@ function PostStatus({ status }: { status: string }) {
   return <StatusPill tone={tone} label={label} />;
 }
 
-/** Keyed by the date part of the naive local stamp — no timezone maths. */
+/** Keyed by the date part of the naive local stamp - no timezone maths. */
 function groupByDay(posts: ScheduledPost[]): [string, ScheduledPost[]][] {
   const days = new Map<string, ScheduledPost[]>();
   for (const post of posts) {

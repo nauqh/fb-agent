@@ -5,7 +5,7 @@ import { del, get, patch } from "./client";
  *
  * `config/layout.yml` holds the defaults and stays in git; a `page_layout` row
  * holds only what this Page changed. `overridden` names the columns that row
- * actually sets, which is what lets the screen mark a changed field — derived
+ * actually sets, which is what lets the screen mark a changed field - derived
  * from the row rather than by diffing against the defaults, because a Page that
  * deliberately sets a value *to* today's default has still overridden it and
  * would stop tracking the file if the file changed.
@@ -30,7 +30,7 @@ export interface ResolvedLayout {
     color: string;
     /**
      * Draw the panel in capitals. Applied to the hook and to every highlight
-     * phrase, in both renderers — see `composed-image.tsx`.
+     * phrase, in both renderers - see `composed-image.tsx`.
      */
     uppercase: boolean;
     padding: {
@@ -91,7 +91,7 @@ export interface LayoutPatch {
   badge_font_size_px?: number | null;
   /**
    * The circular inset's defaults. **No screen offers these**, as with
-   * `line_height_ratio` above — the inset is chosen per draft in the review
+   * `line_height_ratio` above - the inset is chosen per draft in the review
    * drawer, where the picture it rings is actually on screen, and a Page-wide
    * default for it was a control nobody wanted. The API still takes them, and
    * a draft that sets none of its own resolves through `layout.yml`.

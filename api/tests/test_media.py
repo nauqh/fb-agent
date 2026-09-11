@@ -5,7 +5,7 @@ these drive the real request building and the real retry loop.
 
 What is pinned here is what the move off local disk actually changed: a write
 can now fail, and the difference between a failure worth retrying and one that
-is an answer. The rest — the URL shape, the content type — is pinned because
+is an answer. The rest - the URL shape, the content type - is pinned because
 getting it wrong produces a file that uploads fine and is unreadable later.
 """
 

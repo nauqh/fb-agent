@@ -1,13 +1,13 @@
 """Competitor posts, from Metricool's competitor analytics.
 
 The one source kind written on arrival. Competitors are configured in Metricool, not
-here, so there is nothing live to browse and nothing to tick — a sync either
+here, so there is nothing live to browse and nothing to tick - a sync either
 found posts or it did not (see data-model.md, "What was considered and
 rejected", for why there is no `competitor` table).
 
 One endpoint does the work. `/v2/analytics/competitors/facebook/posts` is
 already scoped to a blog's competitor set, so a single call returns every
-competitor's posts for one of our Pages — the old client fetched the same payload and
+competitor's posts for one of our Pages - the old client fetched the same payload and
 then filtered it down to one competitor at a time, because its UI browsed them
 individually (`metricoolService.ts:1046`). Ours does not, so it keeps them all.
 """
@@ -25,7 +25,7 @@ BASE = "https://app.metricool.com/api"
 exposing it would offer an edit that cannot safely be made."""
 
 FETCH_LIMIT = 500
-"""What we ask Metricool for — the window, not the grid. Bounds the request
+"""What we ask Metricool for - the window, not the grid. Bounds the request
 rather than the display, so it belongs with the code that makes the request."""
 
 
@@ -63,7 +63,7 @@ def _get(client: httpx.Client, path: str, blog_id: str, days: int) -> list[dict]
         # A timeout or a refused connection is still "the sync failed", and the
         # route turns MetricoolError into a 502. Without this it escapes as an
         # unhandled ReadTimeout and the operator gets a 500 stack trace instead
-        # of a sentence. This endpoint does time out in practice — it moves
+        # of a sentence. This endpoint does time out in practice - it moves
         # 1.6MB and takes ~5.5s on a good day.
         raise MetricoolError(
             f"Metricool {path or '/'} did not answer: {type(error).__name__}"
@@ -81,7 +81,7 @@ def _published_at(row: dict) -> datetime | None:
     """From `created`, the epoch, never from `creationDate`.
 
     `creationDate.dateTime` is a *naive* local timestamp in whatever zone the
-    Metricool account reports — Europe/Madrid on this one, regardless of the
+    Metricool account reports - Europe/Madrid on this one, regardless of the
     `timezone` parameter we send. Reading it as UTC puts every competitor post two
     hours out, which is invisible until the grid sorts wrongly. `created` is
     epoch milliseconds and has no such ambiguity.
@@ -139,7 +139,7 @@ def fetch_competitor_posts(
         _to_source_item(row, page.id)
         for row in rows
         # A post with no text is nothing to borrow a voice from, and postId is
-        # the dedup key — without it the row cannot be stored at all.
+        # the dedup key - without it the row cannot be stored at all.
         if (row.get("text") or "").strip() and row.get("postId")
     ]
     items.sort(key=lambda item: item.reactions or 0, reverse=True)
@@ -149,7 +149,7 @@ def fetch_competitor_posts(
 def fetch_competitors(page: Page, timeout: float = 20.0) -> list[dict]:
     """The competitor list itself. Read live, never stored (ADR-0001's logic).
 
-    Not on the HTTP surface — the Sources screen shows posts, not pages. It is
+    Not on the HTTP surface - the Sources screen shows posts, not pages. It is
     here because it is the one call that answers "is this Page's Metricool
     competitor set actually configured", which is otherwise indistinguishable
     from a quiet week.
@@ -162,14 +162,14 @@ def fetch_competitors(page: Page, timeout: float = 20.0) -> list[dict]:
 
     return [
         {
-            # Metricool's own row id, which is what DELETE takes — *not* the
+            # Metricool's own row id, which is what DELETE takes - *not* the
             # providerId, which is Facebook's. Confirmed by adding a page and
             # removing it: `competitorId=342033` worked, the providerId did not.
             "id": row.get("id"),
             "provider_id": str(row.get("providerId") or ""),
             "name": row.get("displayName") or row.get("screenName") or "Competitor",
             "followers": row.get("followers"),
-            # Facebook's CDN, signed and expiring — the `oe` parameter runs
+            # Facebook's CDN, signed and expiring - the `oe` parameter runs
             # about four days out. Safe to hand to the browser only because
             # this list is read live on every request and never stored, which
             # is exactly the opposite of what `routes/sources.VOLATILE` exists
@@ -184,13 +184,13 @@ def fetch_competitors(page: Page, timeout: float = 20.0) -> list[dict]:
 def add_competitor(page: Page, facebook_page_id: str, timeout: float = 20.0) -> None:
     """Add a Facebook page to this Metricool profile's competitor set.
 
-    Their list stays authoritative — this drives it rather than keeping a copy
+    Their list stays authoritative - this drives it rather than keeping a copy
     beside it, which is what `CONTEXT.md` means by the list being configured in
     Metricool and never stored here.
 
     Verified against the live account: `POST` with `id` set to the Facebook page
     id answers `{"data": true}` and the page appears in the next `GET`. `PUT` is
-    not supported at all, so there is no edit — remove and re-add.
+    not supported at all, so there is no edit - remove and re-add.
 
     Remember the ceiling. A Metricool account may hold **100 competitors in
     total**, across every profile, which is the whole reason competitors are a
@@ -262,7 +262,7 @@ class Allowance:
     **The limit is per account, not per profile**, which is the fact the whole
     shared-pool design rests on. Counting only the profiles this app manages
     would understate it badly: measured on this account, 92 of 100 were in use
-    and 44 of those sat on profiles with no Page here at all — so an operator
+    and 44 of those sat on profiles with no Page here at all - so an operator
     reading "48 configured" would think they had 52 slots and actually have 8.
     """
 
@@ -276,7 +276,7 @@ class Allowance:
 
 
 COMPETITOR_LIMIT = 100
-"""Metricool's cap, per account. Not discoverable from their API — it is a plan
+"""Metricool's cap, per account. Not discoverable from their API - it is a plan
 limit, and the only way it announces itself is a refusal on the 101st add."""
 
 
@@ -299,7 +299,7 @@ def fetch_profiles(timeout: float = 30.0) -> list[dict]:
 def fetch_allowance(managed_blog_ids: set[str], timeout: float = 40.0) -> Allowance:
     """Count competitors across every profile on the account.
 
-    One request per profile — eleven on this account — because there is no
+    One request per profile - eleven on this account - because there is no
     endpoint that answers the total. Slow enough to be worth knowing about
     (several seconds), which is why it is its own call rather than folded into
     the competitor list.
@@ -362,7 +362,7 @@ def page_posts(blog_id: str, days: int = 30, timeout: float = 60.0) -> list[dict
     Sorting is done by the caller, on the numbers that came back.
 
     `days` is the caller's. Metricool's stats lag Facebook by about a day, so
-    the very newest posts can carry zeros — but measured against History
+    the very newest posts can carry zeros - but measured against History
     Retraced that is a rounding error, not a reason to widen the window: 1 post
     of 28 over 7 days, 1 of 219 over 30, 4 of 657 over 90.
     """

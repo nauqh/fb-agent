@@ -10,8 +10,8 @@ import { cn } from "@/lib/utils";
 /**
  * A panel that slides in from the right and covers most of the screen height.
  *
- * The same Radix dialog `ui/dialog.tsx` uses — focus trapping, Escape and
- * scroll locking come with it — anchored to the right edge rather than centred.
+ * The same Radix dialog `ui/dialog.tsx` uses - focus trapping, Escape and
+ * scroll locking come with it - anchored to the right edge rather than centred.
  *
  * Inset top and bottom to 90vh instead of running edge to edge, so the queue
  * stays visible above and below it and the drawer reads as sitting *over* the

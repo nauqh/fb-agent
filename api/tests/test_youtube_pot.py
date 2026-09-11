@@ -31,7 +31,7 @@ def test_pot_server_url_reaches_the_extractor_args(monkeypatch):
 
 
 def test_unset_pot_server_stays_out_of_the_args(monkeypatch):
-    """Unset means today's behavior exactly — no arg, no warnings changed."""
+    """Unset means today's behavior exactly - no arg, no warnings changed."""
     monkeypatch.setattr(settings, "ytdlp_pot_server_url", "")
     options = sources._base_options(
         "mweb", use_cookies=True, channel_tab=False
@@ -59,8 +59,8 @@ def test_pot_and_cookies_are_layers_not_alternatives(monkeypatch, tmp_path):
 
 def test_the_plugin_shipped_into_the_environment():
     """`uv sync --frozen` in the container installs from the lock; if the
-    plugin ever drops out of it, downloads still "work" — tokenless, warning
-    once, hollow fallbacks — and nothing in the API surface would say so.
+    plugin ever drops out of it, downloads still "work" - tokenless, warning
+    once, hollow fallbacks - and nothing in the API surface would say so.
     Import it and check it registered with yt-dlp's provider framework."""
     import yt_dlp_plugins.extractor.getpot_bgutil_http as plugin  # noqa: F401
     from yt_dlp.extractor.youtube.pot._registry import _pot_providers

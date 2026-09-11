@@ -1,7 +1,7 @@
 """Which Competitors feed which Pages.
 
 The assignment only. The competitor *list* stays Metricool's and is still never
-stored (`CONTEXT.md`) — `GET /sources/competitors/pages` reads it live. What is
+stored (`CONTEXT.md`) - `GET /sources/competitors/pages` reads it live. What is
 stored here is a decision Metricool has no way to express: one competitor
 serving several of your Pages.
 
@@ -11,7 +11,7 @@ same twenty sources would need those twenty added five times, spending the whole
 allowance on twenty distinct sources. So a competitor is added once, under
 whichever Page has room, and assigned here to every Page that should read it.
 
-Assignment decides and nothing else does, at every count — a Page with none
+Assignment decides and nothing else does, at every count - a Page with none
 reads nothing. It used to fall back to the competitor set it owns in Metricool;
 see `routes/sources._visible_to`, which is where that rule lives and why it went.
 """
@@ -38,13 +38,13 @@ class AssignmentIn(BaseModel):
     competitor_page_ids: list[str]
     names: dict[str, str] = {}
     """Display names by id, for showing an assignment Metricool no longer lists.
-    Optional — a missing name renders as the id, which is ugly but not wrong."""
+    Optional - a missing name renders as the id, which is ugly but not wrong."""
 
     notes: dict[str, str] = {}
     """Why this Page reads each competitor, by id. Optional.
 
-    A table has no `git log`, and keeping this mapping in a config file — which
-    would have had one — was rejected because it would put the change behind a
+    A table has no `git log`, and keeping this mapping in a config file - which
+    would have had one - was rejected because it would put the change behind a
     deploy. This is where the reasoning goes instead. An id absent from here
     keeps whatever note it already had rather than losing it, so sending a bare
     set of ids cannot silently erase them.
@@ -75,7 +75,7 @@ def set_assignments(
 
     Replace rather than merge, for the reason `AssignmentIn` gives. Removing the
     last one leaves the Page reading nothing, which is a real state and not an
-    error — it is what every Page starts in, and the Sources empty state names
+    error - it is what every Page starts in, and the Sources empty state names
     it rather than letting it look like a quiet week.
     """
     if session.get(Page, page_id) is None:
@@ -124,7 +124,7 @@ class PoolEntryIn(BaseModel):
     page_id: int
     """Which Metricool profile to add it under.
 
-    Only decides where the allowance is spent, not who may read it — any Page can
+    Only decides where the allowance is spent, not who may read it - any Page can
     be assigned the result. It has to be named because Metricool's competitor
     sets belong to a profile; there is no account-level list to add to.
     """
@@ -142,7 +142,7 @@ def add_to_pool(
 
     Writes to Metricool rather than storing anything here: their list stays the
     one that exists, and this drives it. Nothing about the competitor is kept
-    locally — `GET /sources/competitors/pages` re-reads it live.
+    locally - `GET /sources/competitors/pages` re-reads it live.
 
     The account ceiling is 100 competitors in total. Metricool enforces it and
     the error is passed through, since a limit refusal is exactly the thing an
@@ -159,7 +159,7 @@ def add_to_pool(
         raise HTTPException(
             status_code=422,
             detail=(
-                "That needs to be the numeric Facebook page id — the digits, not "
+                "That needs to be the numeric Facebook page id - the digits, not "
                 "a URL or an @name."
             ),
         )
@@ -182,7 +182,7 @@ def remove_from_pool(
 
     Assignments naming it are left alone rather than cleaned up. They match no
     posts once the competitor is gone, and deleting them would silently discard
-    the operator's decision — re-adding the same page should bring it back, not
+    the operator's decision - re-adding the same page should bring it back, not
     require re-ticking every Page.
     """
     page = session.get(Page, page_id)
@@ -218,7 +218,7 @@ def get_allowance(session: Session = Depends(get_session)) -> AllowanceOut:
     Not just the ones with a Page here, and that is the point. Measured while
     this was written: 92 of 100 in use, 44 of them on profiles this app does not
     manage. An operator counting only what this app shows would have believed
-    they had 52 slots free when they had 8 — and the failure mode is discovering
+    they had 52 slots free when they had 8 - and the failure mode is discovering
     it as a refusal on the add form.
 
     Costs one request per profile, so it is deliberately a separate call rather

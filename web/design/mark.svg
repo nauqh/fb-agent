@@ -1,10 +1,10 @@
 <!--
-  fb-agent mark — the Composed Image itself: a 4:5 card, the hero above, the
+  fb-agent mark - the Composed Image itself: a 4:5 card, the hero above, the
   text panel below the divider, and the gold Highlight Phrase inside it.
 
   An outline at lucide's geometry (24 viewBox, stroke-width 2), because the mark
   sits beside lucide icons in the rail and a solid card reads as a blob next to
-  1.5px strokes. `web/design/icon.svg` — the favicon — stays solid: a tab strip has
+  1.5px strokes. `web/design/icon.svg` - the favicon - stays solid: a tab strip has
   no stroked icons to match, and mass is what survives 16px there.
 
   Inherits `currentColor` so it survives a dark theme; the gold is fixed to

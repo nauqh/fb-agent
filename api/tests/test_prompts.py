@@ -1,6 +1,6 @@
 """Per-Page prompt files: `prompts/pages/<slug>/` overriding `prompts/*.txt`.
 
-These read the committed prompts rather than fixtures. That is deliberate — the
+These read the committed prompts rather than fixtures. That is deliberate - the
 defect being guarded is not "the resolver has a bug", it is "a Page is quietly
 sent History Retraced's brief", which only the real files can show.
 """
@@ -37,7 +37,7 @@ def test_the_two_fitness_pages_have_all_three_prompts_of_their_own(page_name):
     """All three, or none. A directory holding two of them is the worst case.
 
     It looks configured, it reads as configured on the Settings screen for the
-    files that are there, and the third silently comes from History Retraced —
+    files that are there, and the third silently comes from History Retraced -
     which is precisely the failure the client lived with for six weeks in the
     old tool.
     """
@@ -70,7 +70,7 @@ def test_the_hero_brief_is_bright_and_modern_not_a_history_photograph(page_name)
 
     assert "BRIGHT lighting" in asked_for
     assert "magazine" in asked_for.lower()
-    # And the card contract survives the rewrite — this is the half that is not
+    # And the card contract survives the rewrite - this is the half that is not
     # taste, and dropping it is how a hero comes back with text baked in.
     assert "top-right" in brief
     assert "zero text" in brief
@@ -114,7 +114,7 @@ def test_no_page_prompt_asks_the_model_to_type_in_capitals():
     """C4 is a drawing setting, and the prompt must not fight it.
 
     The client's own Fitness Recipes prompt in the old tool said "Written in all
-    CAPITAL LETTERS", and their drafts came out mixed case anyway — an
+    CAPITAL LETTERS", and their drafts came out mixed case anyway - an
     instruction the model drifts off. The capitals are applied by
     `image.text.cased` at draw time now, so asking again would only put capitals
     into the stored hook the operator has to read and edit.
@@ -126,7 +126,7 @@ def test_no_page_prompt_asks_the_model_to_type_in_capitals():
 
 
 def test_the_screen_says_which_files_the_page_is_actually_sent(client, session):
-    """`GET /prompts?page_id=` — the window has to report the override.
+    """`GET /prompts?page_id=` - the window has to report the override.
 
     Showing a Page the global body, unmarked, is the same defect as the old
     tool's Settings tab: it told the client they had a prompt of their own when
@@ -171,7 +171,7 @@ def test_the_history_page_is_untouched(client, page: Page, session: Session):
 #   - only *overrides* are stored, so nothing holds a copy of text it did not
 #     change, and the drift the file layout was chosen against needs copies;
 #   - Railway's filesystem is ephemeral, so a screen that wrote a file would
-#     lose the edit on the next redeploy — which is the shape of the client's
+#     lose the edit on the next redeploy - which is the shape of the client's
 #     F5 complaint, believing for six weeks in prompts that did not exist.
 
 
@@ -200,7 +200,7 @@ def test_a_page_with_no_stored_text_still_reads_its_file():
 
 
 def test_an_emptied_textarea_clears_the_override_rather_than_silencing_the_model():
-    """`""` stored would send the model no system prompt at all — a Page with no
+    """`""` stored would send the model no system prompt at all - a Page with no
     voice, failing in a way that looks like the model misbehaving."""
     page = Page(name=BODYBUILDING, facebook_page_id="1", system_prompt="   ")
 
@@ -240,7 +240,7 @@ def test_only_the_three_known_prompts_can_be_stored_on_a_page():
 
 def test_an_emptied_overlay_is_the_no_overlay_opt_out_not_a_clear():
     """The client's 2026-09-11 rule: an overlay prompt emptied in Settings means
-    the Page's images carry no text panel — not "inherit the default". System
+    the Page's images carry no text panel - not "inherit the default". System
     and image keep the old contract; the two states have to stay distinct."""
     page = Page(name=BODYBUILDING, facebook_page_id="1", overlay_prompt="   ")
 
@@ -251,7 +251,7 @@ def test_an_emptied_overlay_is_the_no_overlay_opt_out_not_a_clear():
 
 
 def test_saving_an_empty_overlay_persists_the_opt_out(client, session):
-    """Through the route, not just the helper — `set_prompt` used to turn every
+    """Through the route, not just the helper - `set_prompt` used to turn every
     empty body into `None`, which would have made the opt-out unreachable."""
     page = Page(name=BODYBUILDING, facebook_page_id="1")
     session.add(page)
@@ -274,7 +274,7 @@ def test_saving_an_empty_overlay_persists_the_opt_out(client, session):
     assert cleared["source"] == "page" and cleared["body"].strip()
 
     # The screen's "Use the default" sends null, which is the only road back to
-    # inherit — a non-null "" is the opt-out and must not restore the file.
+    # inherit - a non-null "" is the opt-out and must not restore the file.
     restored = client.put(f"/prompts/{page.id}/overlay.txt", json={"body": None})
     assert restored.status_code == 200
     session.refresh(page)

@@ -14,7 +14,7 @@ import { useQuery } from "@/lib/use-query";
 
 /**
  * The Shorts tool's window onto its own configuration. Read-only, matching the
- * incumbent Settings screen's tone — the numbers that matter here are "is it
+ * incumbent Settings screen's tone - the numbers that matter here are "is it
  * configured at all", which is presence, not values.
  */
 export default function ShortsSettingsScreen() {
@@ -68,7 +68,7 @@ export default function ShortsSettingsScreen() {
             <Loading label="Loading clips" className="h-32" />
           ) : templates.length === 0 ? (
             <p className="max-w-xl rounded-2xl border border-dashed p-8 text-center text-sm text-muted-foreground">
-              No clips yet. Add one on Produce — it&rsquo;s the clip appended to every video.
+              No clips yet. Add one on Produce - it&rsquo;s the clip appended to every video.
             </p>
           ) : (
             <div className="max-w-xl rounded-2xl border bg-card">

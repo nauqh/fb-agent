@@ -7,7 +7,7 @@ go, and only what survives the retries reaches the operator as a Warning.
 
 That is the whole difference. A warning that appears after the fact is a note
 about a post somebody still has to fix; a retry is a post that comes back
-correct. See design.md, "Writer — validation moves inside the interface".
+correct. See design.md, "Writer - validation moves inside the interface".
 
 Pure on purpose. Each rule takes strings and returns a reason or `None`, so
 they are tested directly rather than through an agent, and the retry wiring in
@@ -21,7 +21,7 @@ HOOK_MAX_WORDS = 65
 RECAP_MAX_POINTS = 5
 BODY_MIN_CHARS = 1_500
 BODY_MAX_CHARS = 2_100
-"""The prompt asks for 1,800–1,900; this is the band that triggers a retry.
+"""The prompt asks for 1,800-1,900; this is the band that triggers a retry.
 
 Deliberately wider than the prompt's target. Retrying a 1,750-character body
 that reads well costs a model call to move it inside a range the operator
@@ -36,7 +36,7 @@ class Limits:
     """The lengths one Page writes to. The constants above are the house set.
 
     A value object rather than more parameters because the four numbers travel
-    together everywhere — the writer needs them to build the prompt, the check
+    together everywhere - the writer needs them to build the prompt, the check
     needs them to judge the result, and a rule that judged against different
     numbers than the prompt asked for is the C7 trap in a new place.
 
@@ -54,7 +54,7 @@ class Limits:
         """Resolve a Page's overrides over the house numbers. Null inherits.
 
         Takes the Page rather than living on it so that `validators` stays free
-        of the models — the rules are pure functions and tested as such, which
+        of the models - the rules are pure functions and tested as such, which
         is the property the module docstring is about.
         """
         low, high = FIRST_COMMENT_PARAGRAPHS
@@ -85,20 +85,20 @@ class Limits:
             )
         low, high = self.paragraphs
         if low > high:
-            return f"The paragraph range is backwards: {low}–{high}."
+            return f"The paragraph range is backwards: {low}-{high}."
         if self.hook_max_words < 5:
             return f"A {self.hook_max_words}-word hook is not writable."
         return None
 
 META_PHRASES = ("look back", "as of today", "as we look back")
-"""Verbatim from the old repo, minus "2026 look back" — a special case of
+"""Verbatim from the old repo, minus "2026 look back" - a special case of
 "look back" that would have dated itself anyway."""
 
 _EMOJI_START = re.compile(r"^[\s•\-*]*[\U0001F000-\U0001FAFF☀-➿⬀-⯿]")
 
 _ERA = r"(?:AD|BC|BCE|CE)"
 _YEAR = rf"(?:\d{{1,4}}\s*{_ERA}|\d{{3,4}})"
-"""A year is 3–4 digits, or 1–4 digits when an era marker settles it.
+"""A year is 3-4 digits, or 1-4 digits when an era marker settles it.
 
 The era is what makes `(69 BC - 30 BC)` safe to accept while `(2 - 3 hours)` is
 still not a lifespan.
@@ -110,15 +110,15 @@ _BIRTH_DEATH = re.compile(
 """Ported from `validation.ts:41`, then widened, because it had to be right here.
 
 The original matched `\\d{4}` with no era suffix. In the old repo that was a
-*warning* — "may be missing birth/death years" — so a false negative was noise.
+*warning* - "may be missing birth/death years" - so a false negative was noise.
 Here the rule raises `ModelRetry`, and a false negative is unsatisfiable: the
-writer produced `Wu Zetian (624 – 705 AD)`, was told no years were found,
+writer produced `Wu Zetian (624 - 705 AD)`, was told no years were found,
 resubmitted the same correct text twice, and the run died at
 `Exceeded maximum output retries`. Every pre-1000 subject on a *history* page
 was unwritable.
 
 So: three-digit years, and an optional AD/BC/BCE/CE inside the parentheses.
-Moving a rule from warning to blocker raises the bar on its precision — a loose
+Moving a rule from warning to blocker raises the bar on its precision - a loose
 warning is noise, a loose blocker is a dead run.
 """
 
@@ -172,7 +172,7 @@ def first_comment_paragraphs(
     low, high = (limits or Limits()).paragraphs
     count = len(_paragraphs(first_comment))
     if not low <= count <= high:
-        return f"The first comment has {count} paragraphs; it needs {low}–{high}."
+        return f"The first comment has {count} paragraphs; it needs {low}-{high}."
     return None
 
 
@@ -224,16 +224,16 @@ def check(
 ) -> list[str]:
     """The blocking rules, in reading order. Empty means the draft is compliant.
 
-    All of them are reported at once rather than the first — a retry costs a
+    All of them are reported at once rather than the first - a retry costs a
     model call either way, so it should carry everything that needs fixing.
 
     Every rule here is one the model can *act on and verify*: a word count, an
     emoji, a paragraph break, a character count, a banned phrase. That is the
     admission price for blocking, because a rule that raises `ModelRetry` and
-    cannot be satisfied does not warn — it kills the run at
+    cannot be satisfied does not warn - it kills the run at
     `Exceeded maximum output retries`. See `advise` for the rest.
 
-    A blank first comment is not a broken draft — it is a minimal post (see
+    A blank first comment is not a broken draft - it is a minimal post (see
     `source_instruction`): image plus a short caption, no body. The essay rules
     cannot judge a shape with no essay in it, so only the hook, the caption's
     line count and the meta-phrase ban are enforced; the emoji rule is a
@@ -272,18 +272,18 @@ def advise(first_comment: str | None) -> list[str]:
     """Rules that inform the operator but must never block the writer.
 
     `birth_death_years` is here because it cannot be made precise. It asks for
-    something no regex can confirm — that *every person named* carries years —
+    something no regex can confirm - that *every person named* carries years -
     and it fires just as loudly on a story that names no people at all. That is
     not hypothetical: an Atlas Obscura piece about the Zantigo taco chain
     mentions no person, so the rule could not be satisfied by any rewrite, and
     the writer spent both retries resubmitting a correct draft before the run
     died. It is genuinely useful as a nudge and useless as a gate, which is what
-    a Warning is for — and how the old repo had it (`validation.ts:100`, "may be
+    a Warning is for - and how the old repo had it (`validation.ts:100`, "may be
     missing").
 
     A blank first comment is a minimal post, not a body missing its years, and
     the rule would fire on every meme and quote the writer is now allowed to
-    make — so it stays quiet there.
+    make - so it stays quiet there.
     """
     if not (first_comment or "").strip():
         return []

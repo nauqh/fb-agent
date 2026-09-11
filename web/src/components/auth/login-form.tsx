@@ -18,7 +18,7 @@ import { Label } from "@/components/ui/label";
 export function LoginForm() {
   const router = useRouter();
   const parameters = useSearchParams();
-  // Only a path, never an absolute URL — `?next=https://elsewhere` would
+  // Only a path, never an absolute URL - `?next=https://elsewhere` would
   // otherwise make this an open redirect for anyone who can get the operator
   // to click a link.
   const raw = parameters.get("next") ?? "/";

@@ -17,7 +17,7 @@ const CLOSE_MS = 300;
  * Open is a route rather than a piece of state: being on `/review/12` *is* the
  * draft being open. That keeps every link deep-linkable, keeps the back button
  * meaning "close", and lets approving navigate to the next draft by pushing a
- * URL — which is what it already did when this was a pane.
+ * URL - which is what it already did when this was a pane.
  *
  * The one thing a route cannot do on its own is animate *out*. Navigating away
  * unmounts this component immediately, so Radix never gets to run the closing
@@ -38,7 +38,7 @@ export function DraftSheet({ draftId }: { draftId: number }) {
   const [confirming, setConfirming] = useState(false);
 
   /** Slide out, then navigate. Shared so a decision closes the same way a
-   *  dismissal does — approving used to jump straight to the next draft's URL,
+   *  dismissal does - approving used to jump straight to the next draft's URL,
    *  which swapped the contents underneath an open drawer. */
   function close() {
     if (closing) return;
@@ -50,7 +50,7 @@ export function DraftSheet({ draftId }: { draftId: number }) {
    * Dismissal, guarded.
    *
    * Escape, the backdrop and the back button all landed here and closed
-   * immediately, and the form went with the drawer — verified on draft 57:
+   * immediately, and the form went with the drawer - verified on draft 57:
    * typing enabled **Save changes**, Escape closed with no prompt, and
    * reopening showed the caption back at its original 747 characters. Approve,
    * Reject and the inset upload had each been given an explicit

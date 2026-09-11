@@ -3,8 +3,8 @@
 Every style is one Page's (client, 2026-09-11): History Retraced was offered
 Bodybuilding's "Workout Infographic" through the null-global contract, so null
 is no longer a legal state. The one legacy row is assigned to the Page its
-content was written for — its image brief is a muscular-male fitness
-infographic — before the column tightens, because SET NOT NULL against a null
+content was written for - its image brief is a muscular-male fitness
+infographic - before the column tightens, because SET NOT NULL against a null
 row would fail.
 
 Revision ID: 4c88d1d59926

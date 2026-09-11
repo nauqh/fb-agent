@@ -24,7 +24,7 @@ import { useQuery } from "@/lib/use-query";
  *
  * The Pages are fetched **here and once**. Four components used to call
  * `listPages()` for themselves and take `pages[0]`, which was correct only
- * while there was one row — with two, `[0]` means "whichever sorts first by
+ * while there was one row - with two, `[0]` means "whichever sorts first by
  * name", so inserting a Page called Bible Focus would have moved every screen
  * onto it without one line changing.
  */
@@ -39,7 +39,7 @@ interface PageScopeValue {
    *
    * Screens pass this straight into their queries *and* their dep arrays. It
    * is deliberately null rather than a guessed 1 during the first render, so a
-   * query cannot fire against the wrong Page and then correct itself — the
+   * query cannot fire against the wrong Page and then correct itself - the
    * screens gate on `enabled` instead.
    */
   pageId: number | null;
@@ -58,18 +58,21 @@ export function PageScopeProvider({
 }) {
   const [selected, setSelected] = useState<number | null>(defaultPageId);
 
-  const { data: pages } = useQuery(() => listPages(), []);
+  // Cached with `draft-detail.tsx`'s identical read: the Page id gates every
+  // screen's queries, so this fetch landing late is a spinner on *every*
+  // screen, not just its own.
+  const { data: pages } = useQuery(() => listPages(), [], { cacheKey: "pages" });
 
   const select = useCallback((id: number) => {
     setSelected(id);
-    // A year, path-wide, matching the sidebar's cookie. No `secure` — this is
+    // A year, path-wide, matching the sidebar's cookie. No `secure` - this is
     // served over http on the laptop.
     document.cookie = `${PAGE_COOKIE}=${id}; path=/; max-age=31536000; samesite=lax`;
   }, []);
 
   const value = useMemo<PageScopeValue>(() => {
     const all = pages ?? [];
-    // The cookie can name a Page that no longer exists — the database is
+    // The cookie can name a Page that no longer exists - the database is
     // delete-and-reseed by convention, so ids do move. Falling back to the
     // first Page is what keeps a stale cookie from emptying every screen.
     const page = all.find((candidate) => candidate.id === selected) ?? all[0] ?? null;

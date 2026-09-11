@@ -2,11 +2,11 @@
 
 `alembic.ini` ships a `sqlalchemy.url` line by default; ours is blank on purpose.
 The connection string carries a password, and a second place to write it down is
-a second place to leak it — `.env` is gitignored, `alembic.ini` is not.
+a second place to leak it - `.env` is gitignored, `alembic.ini` is not.
 
 `ALEMBIC_URL` overrides it, for the one job that cannot use the real database:
 autogenerating a baseline. Autogenerate diffs the models against whatever it is
-pointed at, so run against Supabase — which already has the tables — it produces
+pointed at, so run against Supabase - which already has the tables - it produces
 an empty migration. Pointing it at a throwaway file gives the real `create_table`
 calls, and `alembic stamp head` then tells the live database it is already there.
 """
@@ -24,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from sqlmodel import SQLModel
 
-from app import models  # noqa: F401  — registers the tables on the metadata
+from app import models  # noqa: F401  - registers the tables on the metadata
 from app.settings import settings
 
 config = context.config

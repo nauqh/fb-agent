@@ -15,7 +15,7 @@ from app.models import Draft, PromptTemplate
 
 @pytest.fixture
 def written(monkeypatch):
-    """Stub the writer, as `test_generate` does — the CRUD is not about runs."""
+    """Stub the writer, as `test_generate` does - the CRUD is not about runs."""
 
     class Result:
         output = generate.writer.DraftContent(

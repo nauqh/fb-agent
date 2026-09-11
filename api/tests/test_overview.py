@@ -2,7 +2,7 @@
 
 The two halves are tested differently on purpose. Performance is a read of
 somebody else's service, so the transport is stubbed and what is asserted is the
-*shaping* — the sort, the computed engagement, the epoch conversion. Saved posts
+*shaping* - the sort, the computed engagement, the epoch conversion. Saved posts
 are ours, so they are asserted against the database.
 """
 
@@ -16,7 +16,7 @@ from app.sources import metricool
 def _row(post_id: str, reactions=0, comments=0, shares=0, created=1786468297000, **extra):
     """A Metricool `/stats/facebook/posts` row, in the shape the live API sends.
 
-    `engagement` is null here because it is null on every real row we have seen —
+    `engagement` is null here because it is null on every real row we have seen -
     which is why the code computes its own rather than reading it.
     """
     return {
@@ -71,7 +71,7 @@ def stats(monkeypatch):
 
 
 def test_posts_come_back_best_first(client, page, stats):
-    """Metricool's own `sortcolumn` is accepted and ignored — asking for
+    """Metricool's own `sortcolumn` is accepted and ignored - asking for
     reactions returned a zero-reaction post first while the window held one
     with 160,282. So the order has to be ours."""
     stats([
@@ -125,7 +125,7 @@ def test_a_post_can_be_saved_and_says_so_next_time(client, page, stats):
 
 def test_the_metrics_are_a_snapshot_not_a_live_figure(client, page, session, stats):
     """A saved post outlives the window it was found in, so its numbers cannot
-    be re-read — they are what it scored when it was kept."""
+    be re-read - they are what it scored when it was kept."""
     client.post(
         "/overview/saved",
         json={"page_id": 1, "post_id": "a", "text": "t", "reactions": 99, "shares": 4},
@@ -146,7 +146,7 @@ def test_saving_the_same_post_twice_is_refused(client, page):
 
 def test_a_saved_post_survives_falling_out_of_the_window(client, page, stats):
     """The whole reason this is a table. Metricool's stats take a date range,
-    so an old post is in no read at all — and a reference that disappears on a
+    so an old post is in no read at all - and a reference that disappears on a
     rolling window is not a reference."""
     client.post("/overview/saved", json={"page_id": 1, "post_id": "old", "text": "t"})
 
@@ -169,7 +169,7 @@ def test_unsaving_removes_it(client, page):
 
 
 def test_reusing_a_saved_post_writes_its_story_again(client, page, writes, illustrated):
-    """The point of keeping a top performer. The same story, written fresh —
+    """The point of keeping a top performer. The same story, written fresh -
     not a copy, and not a style sample."""
     saved = client.post(
         "/overview/saved",
@@ -271,7 +271,7 @@ def planner(monkeypatch):
 
     Stubbed here for the same reason the stats call is: it is somebody else's
     service. What matters is that the route reads `media` and `firstCommentText`
-    from *this* row rather than from the saved post — the saved post's
+    from *this* row rather than from the saved post - the saved post's
     `picture_url` is a 130-pixel thumbnail and has no first comment at all.
     """
     from app.publish import repost
@@ -325,7 +325,7 @@ def test_reposting_copies_the_image_into_our_own_bucket(client, page, cdn, plann
     assert draft["caption"] == "The 1925 serum run to Nome.", "the caption verbatim"
     assert draft["composed_image_path"], "the copied image, not the CDN URL"
     assert "fbcdn" not in draft["composed_image_path"], (
-        "the stored path must be ours — a Facebook URL here is the bug this "
+        "the stored path must be ours - a Facebook URL here is the bug this "
         "feature exists to avoid"
     )
 
@@ -344,7 +344,7 @@ def test_a_repost_carries_the_first_comment(client, page, cdn, planner):
 def test_the_picture_comes_from_the_planner_not_the_saved_thumbnail(
     client, page, cdn, planner
 ):
-    """`SavedPost.picture_url` is Facebook's 130×163 thumbnail — the URL carries
+    """`SavedPost.picture_url` is Facebook's 130×163 thumbnail - the URL carries
     `stp=dst-jpg_p130x130`, and the full-size sibling is empty on all 633 posts
     measured. Publishing it puts a pixelated image on the page. The planner
     carries the 896×1120 file we handed Metricool at publish time."""
@@ -374,8 +374,8 @@ def test_a_post_whose_original_is_gone_is_refused_rather_than_pixelated(
 
 
 def test_the_planner_being_unreachable_reads_as_no_original(client, page, cdn, planner):
-    """Not a 502. The operator's next move is the same either way — “Write
-    again” — and a repost that cannot find its picture cannot proceed."""
+    """Not a 502. The operator's next move is the same either way - “Write
+    again” - and a repost that cannot find its picture cannot proceed."""
     from app.publish.metricool import PublishError
 
     saved = _saved_with_picture(client)
@@ -425,7 +425,7 @@ def test_a_saved_post_with_no_picture_cannot_be_reposted(client, page, planner):
     """Nothing to repost. `Write again` is the answer, and the message says so.
 
     The saved row carries no `published_at` here either, so the planner cannot
-    even be asked — which is the same outcome by a different road.
+    even be asked - which is the same outcome by a different road.
     """
     saved = client.post(
         "/overview/saved", json={"page_id": 1, "post_id": "a", "text": "A story."}

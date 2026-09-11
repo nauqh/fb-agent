@@ -1,7 +1,7 @@
 """baseline: page, source_item, draft
 
 The schema as it stood when Alembic was adopted, the day after the move to
-Supabase. It was never *run* against the live database — those tables were built
+Supabase. It was never *run* against the live database - those tables were built
 by `create_all` and the database was `alembic stamp`ed at this revision. It
 exists so a fresh database can be built from migrations alone, and so the next
 change has something to be a diff against.
@@ -11,7 +11,7 @@ models against whatever it is pointed at and Supabase already matched.
 
 Note the enum columns: `native_enum=False, length=32`, not a Postgres `CREATE
 TYPE`. That is `models._stored_enum` and it stays that way with Alembic in place
-— a native enum would make every new member an `ALTER TYPE` migration, and would
+- a native enum would make every new member an `ALTER TYPE` migration, and would
 build a schema the SQLite test fixture cannot express.
 
 Revision ID: 148cf3f13e08
