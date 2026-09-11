@@ -48,11 +48,14 @@ history. If the directory is missing, create it.
   If it does, **don't edit it**. Tell the user and stop; do not negotiate with
   the other agent through the status files.
 - Update your own file when you start a task, when you start touching new files,
-  when you make a decision others need (API shape, renamed function, new env
-  var, new migration), and when you finish.
-- On finishing: `Status: done`, `Files:` cleared, `Notes:` holding what landed
-  and anything the next session needs.
-- Only ever write to your own status file.
+  and when you make a decision others need (API shape, renamed function, new env
+  var, new migration).
+- **When the task is done, delete your status file, by name.** Hand what landed
+  and anything the next session needs to the user in your final message, and
+  put the durable record in the commit message. A finished task leaves no file
+  behind; a file that lingers looks like a live claim on its `Files:`.
+- Only ever write to your own status file. Deleting your own file is the one
+  exception, and only the exact file you created.
 
 ### Format
 
@@ -74,14 +77,11 @@ Updated: 2026-09-11 14:20
 | --- | --- | --- |
 | `working` | Actively editing right now. | Yes. Do not touch them. |
 | `blocked` | Stopped, waiting on the user or on another session. Say what for in `Notes:`. | Yes. The work is unfinished and will resume. |
-| `review` | Change is complete and checks have passed, waiting on the user to look. | Yes. It may still come back for edits. |
-| `done` | Task finished and handed over. `Files:` cleared. | No. |
-| `idle` | Session alive, no task claimed. | No. |
 
-The difference that matters is `done` versus `idle`: `done` says a task
-completed and its `Notes:` are worth reading, `idle` says there is nothing here.
-A session that finishes one task and picks up another goes `done` then straight
-back to `working` with a new `Task:`, rather than through `idle`.
+There is no `done` status: done means the file is deleted. A session that
+finishes one task and picks up another deletes its file and starts a fresh one
+named after the new task. Waiting on the user to review finished work is still
+`blocked`, with `Notes:` saying what is ready.
 
 ## Writing style (REQUIRED)
 
@@ -180,6 +180,6 @@ A task is done when:
 - new warnings and errors are fixed, or explicitly listed as out of scope;
 - the impact is stated: what changed, where, and why;
 - anything deliberately left out is named as a follow-up;
-- your status file reflects where things actually stand.
+- your status file is deleted, and the user got the summary of what landed.
 
 If a check failed, say so and show the output. If you skipped one, say that too.
