@@ -15,10 +15,9 @@ export type LiveSourceItem = Omit<SourceItem, "id" | "created_at">;
 /**
  * `GET /sources/competitors|rss|tweet`. Reads only.
  *
- * **Browsing does not write.** There is no save here any more: the Cart carries
- * the items and `POST /generate` writes the ones a run actually uses, so
- * nothing is stored that is not used. See docs/plan.md, "Ticking stops
- * writing".
+ * **Browsing does not write.** There is no save here: the Cart carries the items
+ * and `POST /generate` writes the ones a run actually uses, so nothing is stored
+ * that is not used.
  */
 
 /**

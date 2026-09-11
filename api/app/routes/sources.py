@@ -8,10 +8,10 @@ Competitor posts are the standing exception, and stay one: the Metricool sync
 writes them on arrival, because they are synced rather than browsed. Storage is
 also what makes them checkable - there is no `is_curated_url` equivalent for a
 Facebook post, so `POST /generate` takes a competitor by id and resolves it
-against a row the sync owns. Phase 3 planned to drop the storage and re-fetch at
-generate instead; that was reversed, because it would put a vendor call that has
-already 502'd twice at the front of a 60-second run. See docs/plan.md, "But
-competitor posts stay stored".
+against a row the sync owns. Dropping the storage and re-fetching at generate
+was considered and rejected: it would put a vendor call that has already 502'd
+twice at the front of a 60-second run, failing a cart for a reason that has
+nothing to do with the posts or the writer.
 """
 
 from datetime import datetime, timedelta, timezone
@@ -858,8 +858,8 @@ def get_competitor_pages(
     Metricool allows 100 competitors across the whole account, and this is the
     only screen where that budget is visible.
 
-    The list is Metricool's and is not stored (see `CONTEXT.md`: the agent
-    stores their posts, never the list itself), so this reads it every time.
+    The list is Metricool's and is not stored - this app keeps competitors'
+    posts, never the list itself - so this reads it every time.
     `fetch_competitors` was written for exactly this question and had no caller
     until now.
 

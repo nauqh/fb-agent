@@ -185,8 +185,7 @@ def add_competitor(page: Page, facebook_page_id: str, timeout: float = 20.0) -> 
     """Add a Facebook page to this Metricool profile's competitor set.
 
     Their list stays authoritative - this drives it rather than keeping a copy
-    beside it, which is what `CONTEXT.md` means by the list being configured in
-    Metricool and never stored here.
+    beside it. The list is configured in Metricool and never stored here.
 
     Verified against the live account: `POST` with `id` set to the Facebook page
     id answers `{"data": true}` and the page appears in the next `GET`. `PUT` is

@@ -1,7 +1,8 @@
-"""FastAPI app. Four screens' worth of routes hang off this.
+"""FastAPI app: routers, the API-key middleware, the `/assets` mount, and the
+startup sweeps for work a restart interrupted.
 
-Pages and sources so far; generate and drafts arrive with Phase 3. See
-docs/plan.md.
+Both tools are served from this one process - the Facebook side under the
+routers below, the Shorts tool under `app.youtube`. See docs/design.md.
 """
 
 import secrets

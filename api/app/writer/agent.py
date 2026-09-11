@@ -25,7 +25,7 @@ MAX_RETRIES = 2
 """Two, then the residue becomes a Warning on the Draft.
 
 The happy path still costs one call. If the retry rate climbs past ~20% the
-rule is wrong, not the model - see plan.md's risk table.
+rule is wrong, not the model.
 """
 
 

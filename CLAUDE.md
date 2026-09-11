@@ -1,8 +1,8 @@
 # Working in this repo
 
-Loaded automatically every session. Conventions and traps only - the domain
-language is `CONTEXT.md`, the reasoning is in `docs/` and the commit messages,
-and the current state of play is `HANDOFF.md`.
+Loaded automatically every session. Conventions and traps only - the
+architecture is `docs/design.md`, the schema is `docs/data-model.md`, and the
+reasoning behind past changes is in the commit messages.
 
 @AGENTS.md
 
@@ -11,9 +11,10 @@ and the current state of play is `HANDOFF.md`.
 - This repo is `fb-agent`. **`D:\Laboratory\social-agent` is the old app**: still
   deployed, still publishing History Retraced, and the source of most of the
   prior art referenced in comments here. Read it freely; never edit it.
-- `docs/plan.md` has the phases, `docs/decisions.md` what was cut and why,
-  `docs/adr/` the decisions that bind. ADR-0001 is the one that comes up most:
-  **no local schedule state**, Metricool's planner is the source of truth.
+- `docs/adr/` holds the decisions that bind. ADR-0001 is the one that comes up
+  most: **no local schedule state**, Metricool's planner is the source of truth.
+- The Shorts tool is a separate application in the same process:
+  `docs/youtube-tool.md`, `api/app/youtube/`, `web/src/app/(app)/shorts/`.
 
 ## Checks
 
@@ -90,8 +91,8 @@ restarted, or `touch` a watched file.
 - Ask before creating a branch.
 - No `Co-Authored-By` trailers.
 - Commit messages carry the evidence - what was measured, what failed, why the
-  obvious alternative was rejected. They are the durable record; this file and
-  `HANDOFF.md` are not.
+  obvious alternative was rejected. They are the durable record; this file is
+  not.
 
 ## Destructive operations
 

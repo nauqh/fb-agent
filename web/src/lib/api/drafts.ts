@@ -78,7 +78,7 @@ export interface GenerateRequest {
    * The Source Items to write from, **by value**.
    *
    * Generate is the only thing that writes a `source_item` row, so it takes the
-   * item rather than an id - see docs/plan.md, "Ticking stops writing". The
+   * item rather than an id: nothing is stored that a run does not use. The
    * server decides which kinds the client may author: an RSS item is host-checked
    * against the curated feeds, and a competitor post must already exist, because
    * the Metricool sync owns those rows.

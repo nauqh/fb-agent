@@ -37,10 +37,10 @@ PAGES = [
         "name": "History Retraced",
         "facebook_page_id": "569035169625026",
         "metricool_blog_id": "4605385",
-        # Relative to API_DIR. Committed, unlike media/, because the current
-        # Supabase project 404s every watermark path - this one was recovered
-        # from the *previous* project. See docs/decisions.md, "The watermark
-        # becomes a committed file".
+        # Relative to API_DIR. Committed rather than kept in the bucket: a
+        # cleared bucket key turns every logo into a 404, and the compositor
+        # that treats a failed download as "no logo" then prints the page name
+        # as text with no error anywhere. A committed asset cannot 404.
         #
         # The stacked wordmark, not the single-line one: on a 138px cap
         # "HistoryRetraced" across one line renders too small to read, which is

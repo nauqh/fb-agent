@@ -71,7 +71,7 @@ Updated: 2026-09-11 14:20
 `Status:` is one of:
 
 | Status | Meaning | Are its `Files:` claimed? |
-|---|---|---|
+| --- | --- | --- |
 | `working` | Actively editing right now. | Yes. Do not touch them. |
 | `blocked` | Stopped, waiting on the user or on another session. Say what for in `Notes:`. | Yes. The work is unfinished and will resume. |
 | `review` | Change is complete and checks have passed, waiting on the user to look. | Yes. It may still come back for edits. |

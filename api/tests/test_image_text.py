@@ -12,8 +12,10 @@ but a matching measurer still wraps differently if the safety factor, the space
 handling or the panel arithmetic is off by a hair, and the symptom is a picture
 that is subtly wrong rather than a test that fails.
 
-`six-lines` is the case plan.md records: 6 lines, 45px line height, a 300px
-panel over an 820px hero, matching a real History Retraced post.
+`six-lines` is the golden case, taken from a real History Retraced post and
+replayed through `layout.yml`: 6 lines, 45px line height, a 300px panel over an
+820px hero. Those four numbers came off the published post, so they are the
+contract - do not re-derive them from the current code.
 """
 
 import json
@@ -58,7 +60,7 @@ def test_the_gold_falls_on_the_same_characters(case):
 
 
 def test_the_golden_post_reproduces_its_own_geometry():
-    """plan.md's recorded numbers, asserted directly rather than by index."""
+    """The golden post's own geometry, asserted directly rather than by index."""
     case = next(c for c in CASES if c["name"] == "six-lines")
     result = overlay.plan(case["text"])
 

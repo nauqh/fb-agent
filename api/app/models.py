@@ -472,9 +472,9 @@ class PageTimeSlot(SQLModel, table=True):
 class PageCompetitor(SQLModel, table=True):
     """Which Competitors feed which Pages. Ours, not Metricool's.
 
-    This is not a mirror of Metricool's competitor list, and `CONTEXT.md`'s rule
-    survives intact: the list is still configured there and still never stored
-    here. What is stored is an *assignment* on top of it - a decision only this
+    This is not a mirror of Metricool's competitor list, and that rule survives
+    intact: the list is still configured there and still never stored here.
+    What is stored is an *assignment* on top of it - a decision only this
     app can hold, because Metricool has no concept of one competitor serving
     several of your pages.
 
@@ -540,11 +540,11 @@ class PageLayout(SQLModel, table=True):
     silently stop tracking a change to the file.
 
     **This reverses a decision, deliberately.** `config/layout.yml` said it "has
-    no per-page section and should not grow one", and `CONTEXT.md` said a Page
-    "does not own styling - every Page renders in the same form and size". Both
-    were written when there was one Page. Two Pages with unrelated beats, and an
+    no per-page section and should not grow one", on the rule that a Page does
+    not own styling and every Page renders in the same form and size. That was
+    written when there was one Page. Ten Pages with unrelated beats, and an
     operator who wants a news card to look unlike a history card, is new
-    evidence rather than a lapse. Both files now say so.
+    evidence rather than a lapse.
 
     Image dimensions and the font are **not** here, and that part of the old
     decision holds: 4:5 is the tallest ratio Facebook renders in feed, and a

@@ -12,11 +12,10 @@ Postgres has.
 
 Schema changes are Alembic revisions in `api/alembic/versions/`.
 
-**Eight tables**, and it started at three. The old system had eight plus a
-54-column templates table; everything cut from it was one of three things -
-configuration duplicated across rows, external state mirrored locally, or
-tenancy ceremony. None of the five added since is any of those, and each one's
-row docstring in `models.py` argues its own case:
+**Eleven tables**, and it started at three. Nothing here is configuration
+duplicated across rows, external state mirrored locally, or tenancy ceremony -
+the three shapes this model is built to avoid. Each row docstring in `models.py`
+argues its own case:
 
 | | Revision | Why it could not stay out of the database |
 |---|---|---|
@@ -25,28 +24,43 @@ row docstring in `models.py` argues its own case:
 | `PAGE_COMPETITOR` | `5dd689a49084` | which competitors feed which Pages. Metricool caps an *account* at 100 and has no such concept |
 | `PAGE_TIME_SLOT` | `e95cf1ff6545` | the times a Page publishes at. Policy, not schedule state - see ADR-0001 |
 | `SAVED_POST` | `85d4da17f9d6` | a published post kept on purpose. Metricool's stats take a date range, so a reference found there stops being readable once it ages out |
+| `PROMPT_TEMPLATE` | | a named post style the operator picks at run time. Each field is a *delta* over the Page's prompts, never a copy - see below |
+| `CTA_TEMPLATE` | | the Shorts tool's clip library. [youtube-tool.md](youtube-tool.md) |
+| `YOUTUBE_JOB` | | one processed Short. The row *is* the job record, exactly as `DRAFT` is for generation. [youtube-tool.md](youtube-tool.md) |
 
-The rule they share, and the reason none of them reverses ADR-0001: **nothing
-points *into* a row in any of them.** They all carry a `page_id` outward; none
-is the target of a foreign key. No `feed_id` on a Source Item, no slot id on a
-scheduled post, no competitor table for an assignment to key into. So deleting a
-Feed, a slot or an assignment changes tomorrow and nothing that already
-happened - which is the property that makes them safe to edit from a form.
+The last two belong to the Shorts tool and touch nothing above them: no foreign
+key crosses between a Draft and a Short, and the two halves share only the
+process and the Metricool account.
+
+The rule the first five share, and the reason none of them reverses ADR-0001:
+**nothing points *into* a row in any of them.** They all carry a `page_id`
+outward; none is the target of a foreign key. No `feed_id` on a Source Item, no
+slot id on a scheduled post, no competitor table for an assignment to key into.
+So deleting a Feed, a slot or an assignment changes tomorrow and nothing that
+already happened - which is the property that makes them safe to edit from a
+form.
+
+`PROMPT_TEMPLATE` is the one deliberate exception: `DRAFT.prompt_template_id` is
+a real foreign key into it, because a regenerate or a hero rebuild has to use the
+voice the draft was written in. Re-reading the operator's *current* selection
+would let a dropdown change retroactively rewrite half a draft in another voice.
+The price is that a style is not freely deletable once something has been
+generated under it, and that price is what the other five are avoiding.
 
 ## Ten pages
 
-v1 ran **History Retraced only**. It now runs ten: History Retraced, The Fact
-Feed, Bible Focus, Bodybuilding Tips N Tricks, Fitness Girls, Fitness Recipes,
-GYM Motivation, `GYM Motivation | quotes | videos | tips|`, Hot Tub Timeout,
-House of Common Sense. The eighth of those is why `watermark_text` is a column:
-`name` is the Metricool brand's name, and `GYM Motivation | quotes | videos |
-tips|` is not what anyone wants stamped on a photograph.
+History Retraced, The Fact Feed, Bible Focus, Bodybuilding Tips N Tricks,
+Fitness Girls, Fitness Recipes, GYM Motivation, `GYM Motivation | quotes |
+videos | tips|`, Hot Tub Timeout, House of Common Sense.
 
-`PAGE` stayed a table rather than collapsing into a constant, and adding the
-other nine really was an insert each: no schema change, no query rewritten. That
-is ADR-0003 paying off rather than being argued.
+The eighth is why `watermark_text` is a column: `name` is the Metricool brand's
+name, and `GYM Motivation | quotes | videos | tips|` is not what anyone wants
+stamped on a photograph.
 
-`is_active` is still absent. Ten Pages and the flag is still never false; a Page
+`PAGE` is a table rather than a constant, so each of the nine after the first was
+an insert - no schema change, no query rewritten (ADR-0003).
+
+`is_active` is absent. Ten Pages and the flag would still never be false: a Page
 that should not publish does not get generated for.
 
 ## Prompts are files, with per-Page overrides in the database
@@ -60,29 +74,25 @@ Three tiers, resolved in this order by
    `bodybuilding-tips-n-tricks/` and `fitness-recipes/`
 3. `api/prompts/*.txt` - the house prompts
 
-The columns came back on 2026-08-17, and it is worth being exact about what did
-and did not reverse. The failure that drove prompts out of the database was
-**drift between copies**: the old system's three configured pages each stored the
-same 2,350-character block, 2,030 characters byte-identical, and every copy had
-gone stale against the code it was pasted from. History Retraced's stored
-*overlay* prompt carried that block a second time, at offset 903, still claiming
-a 75% hero and a circular logo.
+The house prompts stay files: in git, reviewable, revertable, not editable from
+the screen. Only the overrides are rows, and the forcing reason is deployment -
+**Railway's filesystem is ephemeral**, so a Settings editor that wrote
+`prompts/pages/<slug>/system.txt` would lose every edit on the next redeploy.
 
-A nullable override cannot drift, because it never holds a copy of what it
-inherits. Null is not "the same text as the file" - it is a live pointer at the
-file, and editing the file moves every Page that has not overridden it.
+**A nullable override cannot drift, because it never holds a copy of what it
+inherits.** Null is not "the same text as the file" - it is a live pointer at
+the file, and editing the file moves every Page that has not overridden one.
+That property is the whole design: a stored *copy* of a prompt goes stale
+against the code it was pasted from, silently, and keeps generating.
 
-Files alone could not answer the client's F5 ("I did write new prompts already in
-Setting tab"), because **Railway's filesystem is ephemeral** (`db.py`). An editor
-that wrote `prompts/pages/<slug>/system.txt` would lose every edit on the next
-redeploy. So the globals stay files - in git, reviewable, revertable, and not
-editable from the screen - and only the overrides are rows.
+On top of the three tiers sits a fourth **layer**: a `PROMPT_TEMPLATE` row, the
+named post style chosen at run time. It is a delta laid over the resolved text,
+never a replacement for it, and it is per-Page.
 
 Two numbers appear in both a prompt and the compositor and are substituted from
 `layout.yml` at read time rather than typed twice: `{panel_pct}` and
-`{highlight_color}`. Production had already drifted on the first - History
-Retraced rendered a 20% panel while its prompt said 25%. Substitution happens
-after resolution, so a stored override gets it too.
+`{highlight_color}`. Substitution happens after resolution, so a stored override
+and a template delta both get it, and no tier can contradict the compositor.
 
 ## How long a Page writes
 
@@ -91,21 +101,16 @@ Five nullable columns on `PAGE` - `hook_max_words`, `first_comment_min_chars`,
 `first_comment_max_paragraphs` - read by `writer/validators.Limits`. Null means
 the house number: 65 words, 1,500-2,100 characters, 2-3 paragraphs.
 
-They are columns rather than prose in a prompt because that is the whole
-difference between C6/C7 as dropped and C6/C7 as shipped. **The prompt and the
+They are columns rather than prose in a prompt because **the prompt and the
 validator have to move together.** A prompt asking for 30 words while the
 validator accepts 65 does not produce 30-word hooks; it produces a rule nothing
-enforces. `Limits.disagrees()` also refuses an unsatisfiable band with a 422 -
-a Page that sets only the ceiling to 1,500 against a 1,500 floor would fail every
-draft at whichever end it missed, which is exactly why C7 was first dropped as
-unbuildable.
+enforces. `Limits.disagrees()` also refuses an unsatisfiable band with a 422: a
+Page setting a 1,500 ceiling against a 1,500 floor would fail every draft at
+whichever end it missed.
 
 Nullable rather than defaulted, for `PAGE_LAYOUT`'s reason: a copied default
 cannot be told from a chosen one, so changing the house number would leave every
 Page pinned to the old value with nothing recording that anyone meant it.
-
-**As of 2026-08-17 no Page has set any of the eight.** The mechanism is
-deployed-ready and unused - see `HANDOFF.md`.
 
 ## ERD
 
@@ -119,6 +124,8 @@ erDiagram
     PAGE ||--o{ PAGE_COMPETITOR : "watches"
     PAGE ||--o{ PAGE_TIME_SLOT : "publishes at"
     PAGE ||--o{ SAVED_POST : "kept from"
+    PAGE ||--o{ PROMPT_TEMPLATE : "its post styles"
+    PROMPT_TEMPLATE ||--o{ DRAFT : "written under"
     DRAFT ||--o| SAVED_POST : "became, if ours"
 
     PAGE {
@@ -211,12 +218,22 @@ erDiagram
         ts created_at
     }
 
+    PROMPT_TEMPLATE {
+        int id PK
+        int page_id FK "styles are one Page's, never global"
+        text name UK
+        text system_prompt "a delta, null = nothing layered"
+        text overlay_prompt
+        text image_prompt
+    }
+
     DRAFT {
         int id PK
         int page_id FK
         int source_item_id FK "null = topic-only"
         text topic
         text status "generating | review | approved | rejected | failed"
+        int prompt_template_id FK "the style it was written under; stored, not re-derived"
         text hook
         text caption "the recap"
         text first_comment
@@ -254,92 +271,36 @@ Every layout and image-size setting lives in
 Retraced**. The file is loaded once into a frozen Pydantic model at startup, so
 a bad value fails the boot rather than the render.
 
-**`PAGE_LAYOUT` reverses the second half of this, on purpose.** This section
-used to say the file "has no per-page section and should not grow one", and
-`CONTEXT.md` said a Page "does not own styling - every Page renders in the same
-form and size". Both were written when there was one Page. Ten Pages with
-unrelated beats, and an operator who wants a news card to look unlike a history
-card, is new evidence rather than a lapse.
+**`PAGE_LAYOUT` holds only what a Page *changed*.** Every column is nullable and
+the renderer resolves `{**yaml, **row}`; resetting a Page is deleting its row.
+The columns are never seeded with the current values, because a row full of
+copied defaults would silently stop tracking a change to the file - the same
+argument the writing lengths make above.
 
-What a row holds is only what a Page *changed*: every column is nullable and the
-renderer resolves `{**yaml, **row}`. Resetting a Page is deleting its row. The
-columns are not seeded with the current values, because a row full of copied
-defaults would silently stop tracking a change to the file - the same argument
-the writing lengths make above, and the same one that kept prompts out of the
-database for a month.
+Image dimensions and the font stay out of it: one shape, 896×1120, for every
+Page. 4:5 is the tallest ratio Facebook renders in feed.
 
-Image dimensions and the font stay out of it, and that part of the old decision
-holds: 4:5 is the tallest ratio Facebook renders in feed.
-
-Model ids do **not** live there - they are deployment config and change without
-warning (the previous system had to ship `fix(gemini): replace retired image
-fallback model`). `GEMINI_TEXT_MODEL`, `GEMINI_IMAGE_MODEL` and
+Model ids do **not** live there - they are deployment config and get retired
+upstream without warning. `GEMINI_TEXT_MODEL`, `GEMINI_IMAGE_MODEL` and
 `GEMINI_IMAGE_FALLBACK_MODELS` go to env.
 
-Ten of the settings never varied in production anyway - across all 10 page
-rows, the four paddings, `panel_color`, `text_align` and `model_id` each had
-exactly **one distinct value**, and `panel_opacity` had one in 9 of 10. `brand_watermark_text`
-was byte-identical to `page_name` in **10/10**, so it is derived from `name`, not
-stored. `font_min_px == font_size_px == font_max_px` in **10/10** - autofit was
-never switched on.
-
-The rest were standardised deliberately, with the cost noted:
-
-| Setting | Was | Now | Cost |
-|---|---|---|---|
-| Image size | 1080×1080, 1080×1350, 896×1120 | 896×1120 | none - 4:5 is the tallest ratio Facebook renders, so the square pages gain feed height |
-| `panel_ratio` | 0.25 (×3), 0.2 | 0.20 | none - it is a *floor*, and the panel grows to fit (`image-composite.ts:291`) |
-| `font_size_px` | 35 (×3), 36 | 36 | none - the spread was noise, and nothing autofits |
-| `badge_label`, `badge_color`, `badge_font_size_px` | NEWS ×3, `BEST TUB EVER`; two colours; 22-48px | **gone** | the badge renders only under `if (isFullOverlay && label)` (`image-composite.ts:367`), so cutting `full_overlay` cut the badge with it |
-
-Rounded corners went the same way and were already dead before this rebuild: the
-compositor hardcodes `const cornerRadius = 0` (`image-composite.ts:313`) and the
-preview helper was zeroed to match, with the comment "previews must match the
-composited output, which is no longer rounded" (`brand-image-layout.ts:111`).
-
-One thing stayed a column throughout because it is genuinely per-page, not
-layout: `watermark_image_path` (each page's own logo file - cannot be one
-constant). It has since been joined by `watermark_upload_path`,
-`watermark_text`, `watermark_enabled`, `badge_text`, the two avatar columns, the
-five writing lengths and the three prompt overrides - all of them answers to
-"the other nine Pages are not History Retraced", which is the same question
-`PAGE_LAYOUT` answers for style.
-
-`daily_quota` was the third. It was ported (1, 2, 12 across the old pages) and
-then cut on 2026-08-06: nothing in v1 publishes, so the cap was counted against
-**Approve**, and Approve is a queue movement that `unapprove` can undo. A cap
-that only warns, over a number the operator can move by clicking twice, is not
-policy - it is decoration. It comes back with publishing or not at all.
-
 **The watermark is a committed file, and that is the whole point.**
+`watermark_image_path` is relative to `API_DIR` and the file lives in
+`api/assets/` beside the font, **not** in the media bucket. A bucket key can be
+cleared, and a compositor that treats a failed download as "no logo" then prints
+the page name as text instead - no error, no log, no failed post, just every
+image shipping without its logo until somebody looks. A committed asset is
+present on a fresh clone and cannot 404.
 
-The old system stored it in Supabase Storage and read it back by key at composite
-time. In the *current* project that key now 404s - all six watermark paths do,
-across every bucket - because the bucket was cleared down to 8 recent draft jpgs.
-The compositor treats a failed download as "no logo" (`return null`,
-`image-composite.ts:136`) and silently prints the page name as text, so the logo
-disappeared from output with no error, no log, and no failed post. The newest
-draft on record, 2026-08-02, ships the text version.
+`watermark_image_path` is genuinely per-Page rather than layout, and has since
+been joined by `watermark_upload_path`, `watermark_text`, `watermark_enabled`,
+`badge_text`, the two avatar columns, the five writing lengths and the three
+prompt overrides - all of them answers to "the other nine Pages are not History
+Retraced", which is the question `PAGE_LAYOUT` answers for style.
 
-The real assets survive in the **previous** Supabase project
-(`zlrgwutoctezdbunaqxu`, commented out at the top of the old `.env.local`), which
-still holds 1491 objects:
-
-| File | Size | Shape |
-|---|---|---|
-| `brand-assets/hr/watermark-1782917403896-historyretracedwhite.png` | 350×74 RGBA | one line - **in use** |
-| `brand-assets/hr/watermark-1782917347424-historyretracedlogo.png` | 350×74 RGBA | one line, near-identical |
-| `brand-assets/hr/watermark-1782917203719-profilephoto.jpg` | 400×400 RGB | stacked, on white |
-
-The single-line PNG is what the old `portrait_image_path` actually pointed at,
-and it is already white-on-transparent with the red H and R, so it is used as-is.
-The stacked variant is kept as `history-retraced-stacked.jpg` for the switch;
-using it needs the white background removed first.
-
-`watermark_image_path` is relative to `API_DIR`, and the file lives in
-`api/assets/` beside the font - **not** in the media bucket, which is where the
-old system kept it and where clearing the bucket turned every logo into a
-`NoSuchKey`. A committed asset is present on a fresh clone and cannot 404.
+`daily_quota` was cut on 2026-08-06. The cap counted against **Approve**, and
+Approve is a queue movement `unapprove` can undo - a cap that only warns, over a
+number the operator can move by clicking twice, is decoration rather than policy.
 
 Config in a module is safe here in a way `brand_key` was not: **nothing points at
 it**. ADR-0003's failure was rows carrying a foreign key into a code constant that
@@ -347,38 +308,27 @@ could not grow with the data. A padding value has no referent, so it cannot rot.
 
 ## Why the original three
 
-**`PAGE`** is the unit of identity, and of the little configuration that survived
-the layout cut above. It replaces the old `facebook_post_templates` (54 columns,
-two-level page→brand fallback whose brand rows turned out to be byte-identical
-duplicates) and the `brand-config.ts` constant. Pages are rows, so adding the
-second page is an insert. See ADR-0003 for what the code-constant version cost.
+**`PAGE`** is the unit of identity, and of the per-Page configuration that
+survived the layout cut above. Pages are rows, so adding one is an insert - see
+ADR-0003 for what the code-constant version cost.
 
 It is deliberately **not** split into `page` + `page_style`. That relationship
-would be strictly 1:1, so the split buys a join and nothing else - and it
-rebuilds the exact shape ADR-0003 destroyed, where one setting lived in two rows
-and drifted.
+would be strictly 1:1, so the split buys a join and nothing else, and it rebuilds
+the exact shape ADR-0003 destroyed, where one setting lived in two rows and
+drifted.
 
-**Adding page two** was predicted here as: insert a row, move the prompt files
-into `prompts/<page>/`, and nothing in the schema moves. That is what happened,
-almost. Nine inserts, `prompts/pages/<slug>/` for the two Pages that needed
-their own text, and no query rewritten.
-
-What the prediction missed is everything a *second* Page turned out to want that
-the first never had to say out loud: its own watermark, its own badge word, its
-own card proportions, its own hook length. Those are the columns and the
-`PAGE_LAYOUT` row above. The schema did move - additively, one nullable column
-at a time, each one a thing that was a constant while there was one Page.
+Adding Pages two through ten moved the schema anyway - additively, one nullable
+column at a time: a Page's own watermark, badge word, card proportions, hook
+length. Each was a constant while there was one Page.
 
 **`SOURCE_ITEM`** is one table for all three source kinds. They differ only at
-ingest; generation reads `text`, `image_url`, and whether the subject is
-binding. The old system faked a "competitor" parent row for every Twitter handle
-and every RSS feed to fit them into `competitor_posts`.
+ingest; generation reads `text`, `image_url`, and whether the subject is binding.
 
 `reactions`, `comments` and `shares` are null for tweets and RSS items and stay
-three typed columns anyway: reactions is the *default* sort on the Competitors tab
-(`competitor-panel.tsx:691`), and they are populated in 144-147 of 150 competitor
-rows. Production already tried the blob alternative - `competitor_posts.metrics`
-(jsonb) is populated in **0 of 150 rows**.
+three typed columns anyway: reactions is the *default* sort on the Competitors
+tab, and they are populated in 144-147 of 150 competitor rows. The blob
+alternative was tried in production and its `metrics` jsonb was populated in
+**0 of 150 rows**.
 
 **`DRAFT`** carries its own progress (`status`, `progress_step`, `progress_pct`,
 `error`) because the row is created *before* generation starts. That placeholder
@@ -392,19 +342,12 @@ polls.
 | `competitor_post` | **binding** | same story - and not their wording |
 | `tweet`, `rss` | **binding** | write about this *same* story, people, events |
 
-`competitor_post` was "not binding" until 2026-08-18: borrow the tone, pick your
-own story. The client reported it as the tool not generating from the competitor
-posts they had chosen. It had; the prompt told the model to write about
-something else, and a run that does that still reports success, because nothing
-about it failed.
-
-The exception came from the old app's *comment* at
-`facebookGenerateGraph.ts:389` - "a competitor post is a style reference, where
-the subject is deliberately loose" - rather than from its prompt. Twenty lines
-down, the prompt it actually sends is "Write ONE original Facebook post
-**inspired by** this competitor post", which is loose enough that the model
-stayed on the story. So the behaviour the client has used for months was never
-the behaviour the comment described, and this rewrite matches the prompt.
+`competitor_post` was "not binding" until 2026-08-18 - borrow the tone, pick your
+own story - and the client reported it as the tool not generating from the
+competitor posts they had chosen. It had. The prompt told the model to write
+about something else, and **a run that does that still reports success**, because
+nothing about it failed. That is the failure mode worth remembering here: wrong
+subject, well-formed output, no error anywhere.
 
 What survives of the distinction is one extra sentence for competitor posts: the
 story is shared, the writing is ours. Their *picture* is a separate rule and did
@@ -479,23 +422,26 @@ Tweets and RSS items are fetched live and become rows **only when they are
 generated from**. This keeps the table from filling with hundreds of unread
 items.
 
-Competitor posts are the standing exception: they arrive by a Metricool sync the
-operator pressed, not by a tab opening, so they are written on arrival. The
-exception is deliberate and stays. The rule exists to stop the table filling with
-items nobody looked twice at, and a competitor sync is not that - it is bounded
-by the seven-day window and re-syncing updates the same rows rather than adding
-more. Storage is also what makes them checkable: there is no `is_curated_url`
-equivalent for a Facebook post, so `POST /generate` accepts a competitor by **id
-only**, resolved against a row the sync owns. Phase 3 planned to remove the
-storage and re-fetch from Metricool instead, then reversed it -
-[why](plan.md#but-competitor-posts-stay-stored--reversed-2026-08-06).
+Competitor posts are the standing exception: they arrive through a Metricool sync
+the operator pressed rather than through a tab opening, so they are written on
+arrival. The rule exists to stop the table filling with items nobody looked twice
+at, and a sync is not that - it is bounded by the seven-day window, and
+re-syncing updates the same rows rather than adding more.
 
-**The write happens at generate, not at tick.** Phase 2 shipped it at tick,
-which left a hole: untick removes the id from the Cart but there is no `DELETE`,
-so an unticked row survives referenced by nothing. It also gave one gesture two
-meanings - a tick on a competitor post is a local cart add, a tick on an RSS
-item is a network write. Phase 3 moves the write to `POST /generate`; the
-reasoning and its consequences are in [plan.md](plan.md#ticking-stops-writing).
+Storage is also what makes a competitor post checkable. There is no
+`is_curated_url` equivalent for a Facebook post, so `POST /generate` accepts one
+by **id only**, resolved against a row the sync owns. Removing the storage was
+considered and rejected: it would require confirming the id against Metricool at
+the front of a run that is already 60 seconds deep in paid model calls, against
+an API that has timed out and returned 502 in normal use, so a cart of competitor
+posts would fail for reasons unrelated to the posts or the writer.
+
+**The write happens at generate, not at tick.** Writing at tick leaves unticked
+rows referenced by nothing, since removing an item from the Cart issues no
+`DELETE`, and it gives one gesture two meanings - a tick on a competitor post is
+a local cart add, a tick on an RSS item would be a network write. The Cart
+therefore carries the item itself and `POST /generate` writes only what a run
+uses.
 
 A Source Item is worth contrasting with a Draft here, because the two are saved
 for opposite reasons. A Draft is **load-bearing**: it is the job record, it holds

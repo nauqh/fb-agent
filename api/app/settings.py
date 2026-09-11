@@ -350,9 +350,9 @@ class Settings(BaseSettings):
     old repo already shipped `fix(gemini): replace retired image fallback model`
     once - see design.md on why model ids are deployment config.
 
-    `gemini-2.5-flash-image` is the default because it is the model the old system
-    actually shipped heroes on (decisions.md), so its output is known to be
-    acceptable for this brand rather than merely available.
+    `gemini-2.5-flash-image` is the default because it is the model this brand's
+    heroes have actually shipped on, so its output is known to be acceptable
+    rather than merely available.
     """
 
     api_key: str = ""

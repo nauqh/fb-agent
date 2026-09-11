@@ -1,25 +1,33 @@
 # Design
 
-How the app is put together. The vocabulary is
-[CONTEXT.md](../CONTEXT.md); the tables are
-[data-model.md](data-model.md); why the old system was cut this way is
-[decisions.md](decisions.md) and the three [ADRs](adr/).
+This document describes the architecture of the application: its components,
+their interfaces, and the reasoning behind the boundaries between them.
 
-The rule this document is written against: **a module is deep when a lot of
-behaviour sits behind a small interface**. The previous system failed not
-because it had too much code but because its interfaces were as wide as their
-implementations - `facebookGenerateGraph.ts` was 819 lines of orchestration
-whose every intermediate state was public to the next node.
+Related documents:
+
+| Document | Covers |
+|---|---|
+| [data-model.md](data-model.md) | The database schema and the ERD |
+| [adr/](adr/) | The decisions that constrain future changes |
+| [youtube-tool.md](youtube-tool.md) | The Shorts tool, which is a separate application sharing this process |
+| [CLAUDE.md](../CLAUDE.md) | Development conventions, the check commands, and known integration traps |
+
+The design principle applied throughout is that **a module should present a
+small interface over a large amount of behaviour**. Where a module is described
+below, it is described by its interface first and its implementation second.
 
 ## Shape
 
 ```
         ┌───────────────────────────────┐
-        │  web/   Next.js               │   7 screens, no DB access
+        │  web/   Next.js               │   11 screens, no DB access
         │  Overview · Sources · Manual  │   talks only to /api over fetch
-        │  Review · Schedule · Settings │   plus Global, the cross-Page one
+        │  Review · Schedule · Settings │
+        │  · Global                     │
+        │  Shorts: Produce · Overview   │   the second tool, same rail
+        │  · History · Shorts Settings  │
         └───────────────┬───────────────┘
-                        │ HTTP + JSON
+                        │ HTTP + JSON, X-API-Key on every path but /health
         ┌───────────────▼───────────────┐
         │  api/   FastAPI               │
         │                               │
@@ -27,14 +35,28 @@ whose every intermediate state was public to the next node.
         │              sources    ──►   │──► Metricool · x.com · RSS
         │              compositor       │
         │              media store  ──► │──► Supabase Storage, public bucket
+        │              youtube    ──►   │──► yt-dlp · ffmpeg · youtube-media
         │              db               │
         └───────────────┬───────────────┘
                         │
                  Supabase Postgres   session pooler, :5432
 ```
 
-Two processes, one machine. No queue, no worker, no Redis, no cron - see
-[decisions.md](decisions.md#cut-with-the-evidence) for why each is absent.
+Authentication is one shared secret in `X-API-Key`, checked in **middleware**
+rather than as a `Depends` per router - a dependency is something the next route
+can be written without, and the failure is a new endpoint that is silently
+unprotected. It also covers the `/assets` StaticFiles mount, which a `Depends`
+could not. A blank `API_KEY` denies rather than allows: `compare_digest("", "")`
+is `True`, so the explicit emptiness check in `main.py` is what stops a deploy
+coming up wide open and looking exactly like a working one.
+
+The browser never holds that key. `web/src/proxy.ts` attaches it from the web
+server's own environment as it forwards `/api/*`, and what the browser carries
+is an httpOnly session cookie issued by `/auth/login` against `APP_EMAIL` /
+`APP_PASSWORD`. Two secrets, neither of them client-side: the cookie says who is
+using the screens, the key says the API may be called at all.
+
+Two processes, one machine. No queue, no worker, no Redis, no cron.
 
 ## Layout
 
@@ -45,25 +67,39 @@ fb-agent/
 │   ├── config/sources.yml       the windows. The feed list is rows now
 │   ├── prompts/                 system · overlay · image
 │   │   └── pages/<slug>/        a Page's own, when it has one
-│   ├── alembic/versions/        17 revisions; head is e232c1fcb279
+│   ├── alembic/versions/        21 revisions; head is 4c88d1d59926
 │   ├── app/
-│   │   ├── main.py              FastAPI app, lifespan, /assets mount
+│   │   ├── main.py              FastAPI app, lifespan, API-key middleware,
+│   │   │                        /assets mount
 │   │   ├── settings.py          env + both yml files → frozen models
 │   │   ├── db.py                engine, alembic upgrade, session dependency
-│   │   ├── models.py            SQLModel, eight tables
+│   │   ├── models.py            SQLModel, eleven tables
 │   │   ├── routes/              pages · prompts · sources · competitors ·
 │   │   │                        feeds · drafts · schedule · overview · config
 │   │   ├── sources/             metricool.py · x.py · rss.py
 │   │   ├── publish/             metricool.py - the planner write path
+│   │   │                        repost.py - republishing one of our own
 │   │   ├── writer/              agent.py · prompts.py · validators.py
 │   │   ├── image/               hero.py · compositor.py · text.py
+│   │   ├── youtube/             the Shorts tool: routes · process (the worker)
+│   │   │                        · sources (yt-dlp) · storage · overview
 │   │   ├── media.py             MediaStore
+│   │   ├── http.py              the shared httpx clients
+│   │   ├── log.py               loguru setup
+│   │   ├── transient.py         "should I ask again" - one answer, both models
+│   │   ├── layout_for.py        layout.yml under a Page's PAGE_LAYOUT row
 │   │   └── generate.py          the run
 │   ├── assets/                  fonts/Arial-Bold.ttf · watermarks/
 │   └── tests/
 ├── web/                         Next.js, fresh
 └── docs/
 ```
+
+`app/youtube/` is a second tool sharing this process rather than a layer of the
+first: its own table, its own bucket, its own worker thread, and no code path
+between a Draft and a Short. It is documented separately in
+[youtube-tool.md](youtube-tool.md); everything below this line is the Facebook
+side unless it says otherwise.
 
 ## The modules
 
@@ -90,42 +126,26 @@ API, images that are linked and never re-hosted, and `update()` returning a
 
 Persistence is **SQLModel** - the table classes in `models.py` are both the
 schema and the API-facing types, so there is no second set of DTOs to keep in
-sync. Schema changes go through **Alembic**, adopted the day after the move to
-Supabase. `create_all` had been the whole story: it creates missing tables and
-never alters existing ones, so every added column was a hand-written `ALTER
-TABLE` that nothing recorded - the inset columns were done exactly that way.
+sync.
 
-That was survivable while the database was a disposable file on one laptop and
-"delete it and let it rebuild" was the escape hatch. It stopped being survivable
-when the database became shared and held the only copy of the drafts: a deploy
-ships new code but does not change the schema with it, so a column added to
-`models.py` breaks every query on that table until someone remembers the DDL.
-
-`db.init_db()` is `alembic upgrade head`, run in-process at startup rather than
-as a separate release command - there is exactly one replica, so nothing races
-for the migration lock and no deploy can forget its own migration.
-
-The baseline revision was autogenerated against a throwaway SQLite file and the
-live database was `alembic stamp`ed at it, because autogenerate diffs the models
-against whatever it is pointed at and Supabase already matched.
-
-The store moved to **Supabase Postgres** on 2026-08-10 (2 pages, 954 source
-items, 6 drafts, ids preserved). SQLite was right for a laptop-only v1 and wrong
-the moment anything deployed: Railway's filesystem is ephemeral, so a redeploy
-dropped the drafts while their pictures stayed in the bucket as orphans.
+Schema changes go through **Alembic**, and `db.init_db()` is `alembic upgrade
+head` run in-process at startup rather than as a release command: there is
+exactly one replica, so nothing races for the migration lock and no deploy can
+forget its own migration. `create_all` cannot do this job - it creates missing
+tables and never alters existing ones, so a column added to `models.py` breaks
+every query on that table until someone remembers the `ALTER TABLE` by hand.
 
 `app/db.py` **refuses** a non-Postgres URL rather than building an engine for
-it. One backend keeps every behavioural question answerable once - the enum
+it. One backend keeps every behavioural question answerable once: the enum
 column that round-tripped as `str` on one backend and as the enum on the other
 was invisible precisely because two disagreed. The connection is the session
-pooler on `:5432`; the transaction pooler on `:6543` breaks psycopg's prepared
+pooler on `:5432` - the transaction pooler on `:6543` breaks psycopg's prepared
 statements, and the direct host is IPv6-only.
 
-The test suite still runs on a throwaway SQLite file per test, but it builds
-that engine itself in `tests/conftest.py` and assigns `db._engine` directly -
-so SQLite is a property of the suite (offline, ~60s) with no representation in
-the app's configuration. The two schemas agree only because the enum columns are
-pinned to `VARCHAR`.
+The test suite still runs on a throwaway SQLite file per test, but it builds that
+engine itself in `tests/conftest.py` and assigns `db._engine` directly, so SQLite
+is a property of the suite and has no representation in the app's configuration.
+The two schemas agree only because the enum columns are pinned to `VARCHAR`.
 
 ### `Source` - the one real seam
 
@@ -156,39 +176,55 @@ One Pydantic AI agent over `GoogleModel`, returning a typed `DraftContent`
 (hook, caption, first comment, overlay text, highlight phrases, hashtags, image
 prompt).
 
-The brand rules that `validation.ts:44` computed and then discarded as warnings
-become `@agent.output_validator` functions raising `ModelRetry` with the
-specific failure: hook ≤65 words, no question mark in the hook, ≤5 recap lines
-each opening with an emoji, first comment 2-3 paragraphs, body 1500-2100 chars,
-birth/death years present, no meta-phrases. Capped at two retries; the happy
-path costs the same one call as today. Whatever still fails after two lands in
-`draft.warnings` for the operator.
+The brand rules are `@agent.output_validator` functions raising `ModelRetry`
+with the specific failure: hook ≤65 words, no question mark in the hook, ≤5
+recap lines each opening with an emoji, first comment 2-3 paragraphs, body
+1500-2100 chars, no meta-phrases. Capped at two retries, so the happy path costs
+one call. Whatever still fails after two lands in `draft.warnings`.
+
+The lengths in that list are the house numbers. A Page may set its own through
+the five nullable columns in
+[data-model.md](data-model.md#how-long-a-page-writes), and `Limits.disagrees()`
+refuses an unsatisfiable band with a 422 rather than letting every draft fail at
+one end of it.
+
+**A validator may block only if the prompt states it and the model can verify it
+in its own output.** Everything else is a Warning, and that line is what
+separates `check` from `advise`. It was learned the expensive way: a paragraph
+count was enforced and never stated, so the model was rejected on the first
+attempt of *every* run, and a birth/death-years rule could not be satisfied at
+all by a story naming no people. Moving a rule from warning to blocker raises the
+bar on its precision - a loose warning is noise, a loose blocker is a dead run.
 
 This is the depth that matters most: callers ask for a draft and get a
 brand-compliant draft, or an explanation. They never see a retry.
 
+**Post styles are a fourth layer, not a fourth tier.** A `PROMPT_TEMPLATE` row
+is a named style the operator picks at run time - Meme, Workout Infographic -
+and each of its three fields is a **delta** laid over the resolved prompt, never
+a copy of it. A style that restated the house prompt would drift from it; a Meme
+style is a dozen lines of "ignore the essay structure above".
+
+Styles are per-Page rather than global, and the chosen one is recorded on the
+Draft as `prompt_template_id`, so a redraw or a rewrite applies the same one.
+
 ### `Compositor` - the largest implementation, four arguments
 
 Everything about how the image looks is [`layout.yml`](../api/config/layout.yml)
-plus the hero and the text. Ported from the old renderer, which already used
-resvg rather than sharp for text (`composite-font.ts:24`) and measured with
-`opentype.js` advance widths (`overlay-text-measure.server.ts:19`) - both have
-exact Python equivalents reading the same `Arial-Bold.ttf`, so this is a port,
-not a rewrite.
+plus the hero and the text. `resvg` rasterises, `fontTools` measures, both
+reading the same `Arial-Bold.ttf`.
 
 Internally it splits into `text.py` (measure → wrap → plan panel height) and
 `compositor.py` (SVG → raster → paste). That split is an **internal seam**: its
 own tests use it, callers never see it. Text measurement is a pure function and
 is tested as one; the composite is tested against golden images.
 
-Two facts the Phase 0 spike established, both easy to get wrong:
+Two traps here, both easy to get wrong and both silent:
 
-- **Kerning is not optional.** `opentype.js` applies it inside
-  `getAdvanceWidth`. Without it `AVATAR` measures 10.69px too wide at 36px -
-  Arial's AV/VA/AT/TA pairs at −152 units over a 2048 em. A token measured too
-  wide wraps early, which changes the line count, which changes the panel
-  height. With kerning, `fontTools` matches `opentype.js` to four decimal
-  places on every token tried.
+- **Kerning is not optional.** Without it `AVATAR` measures 10.69px too wide at
+  36px - Arial's AV/VA/AT/TA pairs at −152 units over a 2048 em. A token
+  measured too wide wraps early, which changes the line count, which changes the
+  panel height.
 - **resvg substitutes silently.** It does not error on an unmatched
   `font-family`; it renders a system face and returns a valid PNG of the wrong
   font, which then disagrees with every width the measurer computed. The family
@@ -196,34 +232,45 @@ Two facts the Phase 0 spike established, both easy to get wrong:
   `font-weight="bold"`, *not* `"Arial Bold"`. The compositor asserts rendered
   ink width against measured advance so a regression here fails loudly.
 
-**Pixel parity with the old system is not a goal.** One good form, re-curated.
-
 ### `MediaStore` - one adapter, on purpose
 
-`save(bytes, name) -> url`, with `LocalMediaStore` writing `./media` and serving
-it from FastAPI's static mount.
+`save(bytes, name) -> url`. The implementation is `SupabaseMediaStore`, writing
+to a **public** bucket.
 
-Normally one adapter means the seam is hypothetical and should not exist. It is
-kept here because the second adapter is scheduled rather than imagined:
-Metricool's servers fetch the image URL themselves
-(`metricoolService.ts:182`), so the v2 push cannot work against local disk and
-*will* need Supabase Storage or R2. The seam costs one Protocol and one class.
+Public is load-bearing, not lazy. Metricool stores the image *link* and never
+re-hosts the file, whatever their help centre says about the normalize endpoint,
+and Facebook fetches that link when the post is due - days later. A signed URL
+expires before then, and the evidence is not hypothetical: the previous system
+signed for 24h and 0 of its 105 published posts still have a working image.
+Public means "public to whoever holds the link" - buckets do not list, and every
+filename ends in six random hex characters.
 
-### `GenerateRun` - what replaced the graph
+A row holds the path *relative to the bucket*, never a URL, so moving the
+project or the bucket is an env change rather than an `UPDATE` across every
+draft; `public_url` turns a stored path into the link at read time. There is no
+`/media` mount on the API any more - the browser fetches from the bucket
+directly, and a mount would be a second, staler way to reach the same file.
 
-The old LangGraph had six nodes, linear, zero conditional edges
-(`facebookGenerateGraph.ts:742`). Each becomes something smaller or nothing:
+The Protocol survives the one-implementation rule because `tests/conftest.py`
+substitutes a filesystem-backed fake for it, which is what keeps the suite
+offline instead of mocking HTTP in order to write a file.
 
-| Old node | Becomes |
-|---|---|
-| `resolvePrompt` | a `Page` row read |
-| `loadPosts` | a `SourceItem` row read |
-| `summarize` | **deleted** - it already mapped each post to itself without calling a model (`:352`) |
-| `writeThreeDrafts` | `Writer.write()` per (source × page) |
-| `validateAll` | **absorbed** into `Writer`'s output validators |
-| `saveBatch` | one transaction |
+### `GenerateRun` - one function, not a graph
 
-An `async def`, roughly forty lines.
+`run(source_ids, page_ids) -> list[draft_id]`. Resolving the prompt is a `Page`
+row read, resolving the sources is a `SourceItem` row read, validation lives
+inside `Writer`, and the save is one transaction.
+
+`generate.py` is ~600 lines, and almost none of it is orchestration: it is the
+image path, the style layer, the source resolution and the failure handling,
+all of it behind that one call.
+
+A run generates its drafts **in parallel** - a `ThreadPoolExecutor` with a
+session per draft, because SQLAlchemy Sessions are not thread-safe and `_run_one`
+commits several times. Concurrency defaults to **3**, and the cap is about Gemini
+rather than threads: the writer's fallback chain steps models on a transient
+error without ever backing off, so a 429 burns the chain and fails the draft
+instead of waiting. Going wider means adding backoff first.
 
 ## Background work and progress
 
@@ -285,13 +332,12 @@ The one picture nothing on that diagram produces is the **circular inset** - the
 disc that sits, by default, on the seam between the hero and the panel. It is
 uploaded from the drawer, so it costs nothing, cannot fail a run, and does not
 exist until somebody puts it there. `POST /drafts/{id}/inset` stores the file and
-re-composites. The old app offered Upload beside a Generate tab and defaulted to
-Upload; only Upload is ported.
+re-composites. It is uploaded only - there is no generate-an-inset path.
 
 Size and position live on the row - `inset_size_px`, `inset_x_ratio`,
 `inset_y_ratio` - because they depend on what is in the picture rather than on
 the brand, and changing either is a free redraw like any text edit. Position is
-a *ratio* of the card, as `centerXRatio`/`centerYRatio` were, and **null is not
+a *ratio* of the card, and **null is not
 zero**: it means the default, which cannot be written down as a number because
 the panel grows with the copy and the seam is therefore at a different height on
 every draft. `compositor.inset_centre` resolves it per axis at draw time, and
@@ -310,13 +356,13 @@ completed call - the model answered, the answer was a well-formed empty response
 and Google charged for it - so retrying buys the same rejection twice and a
 second model refuses the same prompt for the same reason. A 503 never reached a
 model at all: nothing was generated, nothing was billed, and asking again is
-free. The hero step originally retried neither, reasoning that "a second attempt
-is a second charge"; that is true of the first case and simply false of the
-second, which is how a transient outage came to kill whole runs. The writer
-carries the same scar (`FALLBACK_MODELS` in `writer/agent.py`).
+free. The hero step originally retried neither, on the reasoning that "a second
+attempt is a second charge" - true of the refusal, false of the 503, and that
+one conflated rule is how a transient outage came to kill whole runs.
 
-So the image side has the same ladder now, minus the alias at the bottom - see
-[Configuration](#configuration) for why it cannot have one. Both sides share one
+So the image side has the same ladder as the writer now, minus the alias at the
+bottom - see [Configuration](#configuration) for why it cannot have one. Both
+sides share one
 `is_transient` in `app/transient.py`, because "should I ask again" is one
 question and two copies of the answer would drift.
 
@@ -338,7 +384,14 @@ process there is no other writer that could still own it.
 
 ## HTTP surface
 
+Every path but `/health` requires `X-API-Key`; `/assets` included, because the
+check is middleware and not a per-route dependency.
+
 ```
+GET    /health                      boot state. The only unauthenticated path -
+                                    Railway probes it before routing traffic.
+                                    Names missing secrets, never their values
+
 GET    /pages                       ten rows
 GET    /pages/{id}
 PATCH  /pages/{id}                  watermark, badge, writing lengths (422 on an
@@ -349,6 +402,8 @@ POST   /pages/{id}/slots            DELETE /pages/{id}/slots/{slot_id}
 
 GET    /prompts                     resolved per Page, with `source` and `editable`
 PUT    /prompts/{page_id}/{file}    this Page's own text. Blank body = inherit again
+GET    /prompts/templates           the Page's named post styles
+POST   /prompts/templates           PUT /{id} ;  DELETE /{id}
 
 GET    /layout                      layout.yml with the Page's overrides laid over
 PATCH  /layout                      write an override;  DELETE /layout resets
@@ -374,6 +429,7 @@ PATCH  /drafts/{id}                 operator edits. Allowed on a queued post for
                                     text only; pushes the edit to Metricool
 POST   /drafts/{id}/regenerate      one field, by the model
 POST   /drafts/{id}/image           redraw; ?new_hero=true buys a new picture
+POST   /drafts/{id}/hero            upload a hero instead of paying for one
 POST   /drafts/{id}/inset           upload the disc;  DELETE removes it
 POST   /drafts/{id}/approve         /unapprove  /reject
 DELETE /drafts/{id}
@@ -388,9 +444,28 @@ GET    /schedule/next-slot          the next free PAGE_TIME_SLOT
 
 GET    /overview/performance        live from Metricool's stats
 GET    /overview/saved              POST to keep one;  /reuse ;  DELETE
+POST   /overview/saved/{id}/repost  the original back in the queue, as published -
+                                    /reuse sends the story through the writer again
 
 GET    /assets/{path}               committed watermarks and fonts
 ```
+
+The Shorts tool hangs off the same app under `/youtube`, and shares nothing with
+the block above but the process and the Metricool account:
+
+```
+POST   /youtube/jobs                enqueue; GET lists, GET /{id} polls
+GET    /youtube/jobs/{id}/download  DELETE /youtube/jobs/{id}
+GET    /youtube/channel-shorts      the picker, ranked by views
+GET    /youtube/brands              GET /youtube/overview?brand_id&days
+GET    /youtube/config              presence, never values
+GET    /youtube/cta-templates       /upload-url mints a signed PUT;
+                                    /complete makes the row;  DELETE /{id}
+```
+
+`cta-templates/upload-url` is the shape worth noticing from here: the bytes never
+cross this app. See [youtube-tool.md](youtube-tool.md) for why, and for the two
+production ceilings that made it necessary.
 
 `hero_image_path` and `composed_image_path` are stored separately so
 regenerating the overlay after an edit does not re-pay for image generation -
@@ -419,15 +494,14 @@ every time. See `data-model.md#what-happens-after-publish`.
 
 ## Configuration
 
-Four tiers, and the split is deliberate. Two of them have grown a per-Page layer
-since this was written, and in both cases the layer holds **only what a Page
-changed** - never a copy of what it inherits, which is the property that stops
-either from drifting:
+Four tiers. Two of them carry a per-Page layer, and in both cases that layer
+holds **only what a Page changed** - never a copy of what it inherits, which is
+the property that stops either from drifting:
 
 - **[`layout.yml`](../api/config/layout.yml)** - how the image looks. Loaded once
   into a frozen Pydantic model at startup, so a bad value fails the boot, not the
-  render. It said "no per-page section, ever"; `PAGE_LAYOUT` rows now override it
-  per Page and the file is the default they resolve against
+  render. `PAGE_LAYOUT` rows override it per Page and the file is the default
+  they resolve against
   ([why](data-model.md#layout-is-config-with-per-page-overrides)).
 - **[`prompts/*.txt`](../api/prompts)** - what the model is told. Read on every
   call, so an edit needs no restart. Files because they are the most-edited thing
@@ -439,8 +513,7 @@ either from drifting:
   `{highlight_color}` are substituted from `layout.yml` after resolution, so no
   tier can contradict the compositor.
 - **env** - secrets and model ids. Model ids belong here because they get retired
-  upstream without notice; the old repo shipped
-  `fix(gemini): replace retired image fallback model`. **Every link in both
+  upstream without notice. **Every link in both
   chains is a pinned version and will eventually rot.** There is no `-latest`
   alias for any image model - only pinned ids (`gemini-3.1-flash-image`,
   `gemini-3-pro-image`, `gemini-2.5-flash-image`) - and the text chain does not
@@ -459,7 +532,7 @@ prompt, one loader each.
 
 | File | Model | What it does |
 |---|---|---|
-| `system.txt` | text | The post: hook ≤65 words no questions, recap of ≤5 emoji-led points, first comment with birth/death years and no meta-phrases. The lengths are the house numbers, and a Page that sets its own gets them appended as an overriding block |
+| `system.txt` | text | The post: hook ≤65 words no questions, recap of ≤5 emoji-led points, first comment of 2-3 paragraphs and no meta-phrases. The lengths are the house numbers, and a Page that sets its own gets them appended as an overriding block |
 | `overlay.txt` | text | The panel copy, then 5-8 short substrings quoted verbatim out of it |
 | `image.txt` | image | How the photo should look, which layer to draw, and what must not appear in it |
 
@@ -477,56 +550,40 @@ file rather than two. It tells the model the panel takes `{panel_pct}`% from the
 bottom, that the watermark lands top-right, and that layers 2-3 are drawn in
 code - so it must leave room and draw neither.
 
-It was two files, on the theory that hero *style* is the page's taste while the
-*card contract* is universal, so page two would fork the first and share the
-second. Measured against the actual text, the theory did not hold: **7 of the 19
-lines in the shared half were History Retraced's taste** - historical
-reenactment, period-accurate dress, no surreal metaphors, mid-shot filling
-40-60% of frame. The old system is the proof, because it sent exactly that block
-to Hot Tub Timeout, and to a Bible Focus page whose own style block asked for
-reverent fine-art photography that the shared rules then forbade.
+Style and card contract are one file rather than two, deliberately. The split
+looked principled - hero *style* is the page's taste, the *card contract* is
+universal - but no line can be drawn there correctly: most of what read as
+universal was one Page's taste (reenactment, period dress, mid-shot filling
+40-60% of frame), and three rules ended up stated twice, once on either side of
+the boundary. This is the same call as `page` + `page_style` in
+[data-model.md](data-model.md#why-the-original-three): a strictly 1:1 split buys
+nothing and rebuilds the shape where one setting lives in two places and drifts.
 
-A boundary nobody can place a line on correctly is not a boundary, and this one
-had already cost something: photorealistic-not-illustration, mid-shot, and
-documentary/reenactment were each stated twice, once on either side of it. The
-merge changed no bytes - the concatenation `image_prompt()` used to perform is
-now simply the file - so it deletes a seam without touching a prompt. Whether
-the surviving repetition helps the image model is a Phase 4 question, to be
-answered by rendering rather than by reasoning.
-
-This is the same call as `page` + `page_style` in
-[decisions.md](decisions.md): a strictly 1:1 split buys nothing and rebuilds the
-shape where one setting lives in two places and drifts.
-
-**The fork it predicted has happened**, and the merge is what made it cheap.
 `prompts/pages/bodybuilding-tips-n-tricks/` and `prompts/pages/fitness-recipes/`
-each hold all three files; the other eight Pages inherit the house ones. Had the
-split survived, page two would have inherited the old "universal" file and with
-it History Retraced's reenactment rules - exactly as Hot Tub Timeout did in the
-old system.
+each hold all three files; the other eight Pages inherit the house ones.
 
-A Page overriding a file overrides **all** of it, deliberately: there is no
-merge, no block-level inheritance, and no way for a Page to take half a prompt.
-That is the same reasoning as the ERD's null columns - a partial copy is the
-thing that drifts.
+A Page overriding a file overrides **all** of it, deliberately: no merge, no
+block-level inheritance, no way to take half a prompt. Same reasoning as the
+ERD's null columns - a partial copy is the thing that drifts.
 
-The two files that exist are **drafts of ours and have never been approved by
-the client**. There was nothing in the old tool to port for either Page, so
-somebody wrote a plausible prompt and it has been generating with it since.
-
-The old system glued the pair together and stored the result per page: three
-pages, ~2350 characters each, of which **2030 were byte-identical**. Every copy
-had drifted from the code it was pasted from - all three still specified a 75%
-hero and a circular logo long after the panel had learned to grow and the logo
-had moved to natural aspect ratio. Files fix that; the number of files was never
-what fixed it.
+The two per-Page sets are **drafts of ours and have never been approved by the
+client**.
 
 ## Frontend
 
-Seven screens - Overview, Sources, Manual, Review, Schedule, Settings, and
-Global - in a fresh Next.js app. It holds no database credentials and no Supabase
-client; every read is `fetch` to `/api`. The Cart is client state, holding the
-items themselves, and is not persisted.
+Eleven screens in a fresh Next.js app, in two groups on one rail:
+
+- **Facebook** - Overview, Sources, Manual, Review, Schedule, Settings, Global
+- **Shorts** - Produce, Overview, History, Shorts Settings
+
+They are two tools rather than one with a tab: no screen crosses the line, and
+nothing in the Shorts group reads a Draft. The rail groups them for that reason
+rather than to sort a long list.
+
+It holds no database credentials and no Supabase client; every read is `fetch`
+to `/api`, which `proxy.ts` forwards to FastAPI with the API key attached
+server-side. The Cart is client state, holding the items themselves, and is not
+persisted.
 
 Which Page a screen is showing is a **cookie**, `fb_page_id` (`lib/page-cookie.ts`),
 not a route segment or a query parameter. Global is the one screen with no
@@ -534,22 +591,14 @@ switcher in its title row: the competitor pool at the top is account-wide, and a
 Page name up there read as the scope of the whole screen. The two cards below it
 that *are* per-Page carry their own switcher, beside the sentence saying so.
 
-There was a fourth, `Generate`, and removing it is the one frontend decision
-worth recording. It staged a run: the Cart again, the target Page, and
-`N sources × 1 page = N drafts`. The reasoning was that *how many* against
-*which Page* should be visible rather than buried in a page-picker dialog -
-sound for the old app's ten brands, and empty at one, where the Page cannot be
-chosen and the arithmetic multiplies by one. That left a confirmation screen for
-a decision with a single possible answer.
+**There is no Generate screen.** It existed, staging a run that had one possible
+answer, so the Cart panel runs the generation itself and the count sits on its
+button (`Generate 3 drafts`) - a label on the click that spends the money. The
+topic field lives in the Cart's empty state, which is when a topic run is the
+only kind available anyway.
 
-So the Cart panel runs the generation itself and the count moved onto its button
-(`Generate 3 drafts`), which is both the thing the screen existed to show and a
-label on the click that now spends the money. The topic field was the only
-control unique to that screen; it lives in the Cart's empty state, which is when
-a topic run is the only kind available anyway.
-
-Server state is polled, not streamed. Polling is what the old system did and it
-is enough for a run measured in tens of seconds.
+Server state is polled, not streamed: enough for a run measured in tens of
+seconds.
 
 ## Testing
 
@@ -570,33 +619,3 @@ callers use.
 
 No mocking library reaches past an interface. If a test wants to, the module is
 the wrong shape.
-
-## Deliberately absent
-
-BullMQ · Redis · a worker process · cron · LangGraph · Supabase auth · RLS ·
-`user_id` · Postiz · Facebook Graph OAuth · `sharp` · rounded corners ·
-a schedule table · a competitors table.
-
-Each was checked against running code or production data before removal;
-[decisions.md](decisions.md#cut-with-the-evidence) records the evidence.
-
-**Two came back**, and the list says so rather than quietly dropping them. The
-`full_overlay` layout and the headline badge were cut because one Page never
-used them; they are `PAGE_LAYOUT.template` (and `Draft.template` for one post)
-and `Page.badge_text` now, because a news Page wants a card a history Page does
-not. Both are still absent from `layout.yml` as *global* settings, which is what
-the original cut was actually about.
-
-The schedule table and the competitors table have **not** come back.
-`PAGE_TIME_SLOT` is policy - the times we publish at, which Metricool has
-nowhere to keep - and `PAGE_COMPETITOR` is an assignment on top of a list that
-is still configured in Metricool and still never mirrored here. ADR-0001 holds:
-what is queued is read live, every time.
-
-## Shipped since, having been deferred
-
-Publishing to Metricool, the Schedule screen that depends on it, and the
-`MediaStore` swap to Supabase Storage. The accepted risk was that "the riskiest
-integration ships unproven"; it is proven now, at the cost of most of the
-integration traps in `CLAUDE.md` - and one that outlived the deferral, that a
-queued post could not be edited or cancelled from this app at all until D6.

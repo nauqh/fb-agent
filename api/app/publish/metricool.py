@@ -103,9 +103,9 @@ def publication_date(when: datetime | None = None) -> str:
     """Naive local time in the page's timezone, which is what Metricool wants.
 
     It takes the timezone as a separate field and **rejects an offset suffix**,
-    so this must not be an ISO instant. The same trap on the read side is
-    already recorded in plan.md:116 - Metricool's `creationDate.dateTime` is
-    naive local time in the account's own timezone, not UTC.
+    so this must not be an ISO instant. The read side carries the same trap:
+    Metricool's `creationDate.dateTime` is naive local time in the account's own
+    timezone, not UTC, whatever the `timezone` parameter asked for.
     """
     zone = ZoneInfo(settings.timezone)
     earliest = datetime.now(zone) + timedelta(minutes=MIN_MINUTES_AHEAD)

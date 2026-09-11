@@ -11,7 +11,7 @@ import type { LiveSourceItem } from "@/lib/api/sources";
  * written until `POST /generate` uses them, so ticking is instant and offline,
  * unticking leaves nothing behind, and there is no orphan row to clean up. It
  * used to hold ids, which meant a tick was a round trip that created a row and
- * an untick silently abandoned it - see docs/plan.md, "Ticking stops writing".
+ * an untick silently abandoned it, leaving rows referenced by nothing.
  *
  * Client state, not persisted: there is no cart table, because nothing about a
  * Cart needs to survive that is not already a row. It lives in the root layout

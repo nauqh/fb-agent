@@ -7,7 +7,7 @@ is a transaction. What is left is this file.
 
 **This is the only thing that writes a Source Item.** Browsing does not write -
 the Cart carries items, and they become rows here, when something actually uses
-them. See docs/plan.md, "Ticking stops writing".
+them. Ticking stops writing.
 
 Logging lives at the two boundaries of a run - queued and finished - never per
 step. That is the loggingsucks.com rule: a line for what changed and what it

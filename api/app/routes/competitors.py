@@ -1,7 +1,7 @@
 """Which Competitors feed which Pages.
 
-The assignment only. The competitor *list* stays Metricool's and is still never
-stored (`CONTEXT.md`) - `GET /sources/competitors/pages` reads it live. What is
+The assignment only. The competitor *list* stays Metricool's and is never
+stored here - `GET /sources/competitors/pages` reads it live. What is
 stored here is a decision Metricool has no way to express: one competitor
 serving several of your Pages.
 
