@@ -18,6 +18,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
+from app.http import shared as http_shared
 from app.settings import settings
 
 BASE = "https://app.metricool.com/api"
@@ -72,8 +73,7 @@ def normalize_image(url: str, blog_id: str, client: httpx.Client | None = None) 
     It is still called, because their own troubleshooting page says a post
     scheduled without normalizing first silently loses its media.
     """
-    owned = client is None
-    client = client or httpx.Client(timeout=TIMEOUT)
+    client = client or http_shared(TIMEOUT)
     try:
         response = client.get(
             f"{BASE}/actions/normalize/image/url",
@@ -84,9 +84,6 @@ def normalize_image(url: str, blog_id: str, client: httpx.Client | None = None) 
         raise PublishError(
             f"Metricool did not answer the image normalize: {type(error).__name__}"
         ) from error
-    finally:
-        if owned:
-            client.close()
 
     if response.is_error:
         raise PublishError(
@@ -179,8 +176,7 @@ def list_scheduled(
     if not settings.metricool_api_token or not settings.metricool_user_id:
         raise PublishError("Metricool is not configured (token and user id)")
 
-    owned = client is None
-    client = client or httpx.Client(timeout=TIMEOUT)
+    client = client or http_shared(TIMEOUT)
     try:
         response = client.get(
             f"{BASE}/v2/scheduler/posts",
@@ -196,9 +192,6 @@ def list_scheduled(
         raise PublishError(
             f"Metricool did not answer the planner: {type(error).__name__}"
         ) from error
-    finally:
-        if owned:
-            client.close()
 
     if response.is_error:
         raise PublishError(
@@ -226,8 +219,7 @@ def get_post(
     if not settings.metricool_api_token or not settings.metricool_user_id:
         raise PublishError("Metricool is not configured (token and user id)")
 
-    owned = client is None
-    client = client or httpx.Client(timeout=TIMEOUT)
+    client = client or http_shared(TIMEOUT)
     try:
         response = client.get(
             f"{BASE}/v2/scheduler/posts/{post_id}",
@@ -238,9 +230,6 @@ def get_post(
         raise PublishError(
             f"Metricool did not answer the post read: {type(error).__name__}"
         ) from error
-    finally:
-        if owned:
-            client.close()
 
     if response.status_code == 404:
         return None
@@ -329,8 +318,7 @@ def schedule(
     if not settings.metricool_api_token or not settings.metricool_user_id:
         raise PublishError("Metricool is not configured (token and user id)")
 
-    owned = client is None
-    client = client or httpx.Client(timeout=TIMEOUT)
+    client = client or http_shared(TIMEOUT)
     try:
         response = client.post(
             f"{BASE}/v2/scheduler/posts",
@@ -342,9 +330,6 @@ def schedule(
         raise PublishError(
             f"Metricool did not answer the schedule: {type(error).__name__}"
         ) from error
-    finally:
-        if owned:
-            client.close()
 
     if response.is_error:
         raise PublishError(
@@ -401,8 +386,7 @@ def update(
     body = build_body(text, first_comment, image_url, when)
     body["id"] = int(post_id) if str(post_id).isdigit() else post_id
 
-    owned = client is None
-    client = client or httpx.Client(timeout=TIMEOUT)
+    client = client or http_shared(TIMEOUT)
     try:
         response = client.put(
             f"{BASE}/v2/scheduler/posts/{post_id}",
@@ -414,9 +398,6 @@ def update(
         raise PublishError(
             f"Metricool did not answer the update: {type(error).__name__}"
         ) from error
-    finally:
-        if owned:
-            client.close()
 
     if response.is_error:
         raise PublishError(
@@ -457,8 +438,7 @@ def delete(blog_id: str, post_id: str, client: httpx.Client | None = None) -> No
     if not settings.metricool_api_token or not settings.metricool_user_id:
         raise PublishError("Metricool is not configured (token and user id)")
 
-    owned = client is None
-    client = client or httpx.Client(timeout=TIMEOUT)
+    client = client or http_shared(TIMEOUT)
     try:
         response = client.request(
             "DELETE",
@@ -470,9 +450,6 @@ def delete(blog_id: str, post_id: str, client: httpx.Client | None = None) -> No
         raise PublishError(
             f"Metricool did not answer the delete: {type(error).__name__}"
         ) from error
-    finally:
-        if owned:
-            client.close()
 
     if response.status_code == 404:
         return

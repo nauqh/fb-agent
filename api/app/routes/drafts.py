@@ -202,6 +202,7 @@ async def create_manual_draft(
 def list_drafts(
     status: DraftStatus | None = Query(None),
     page_id: int | None = Query(None),
+    limit: int = Query(500, ge=1, le=1000),
     session: Session = Depends(get_session),
 ) -> list[Draft]:
     query = select(Draft)
@@ -209,7 +210,15 @@ def list_drafts(
         query = query.where(Draft.status == status)
     if page_id is not None:
         query = query.where(Draft.page_id == page_id)
-    return list(session.exec(query.order_by(Draft.created_at.desc())).all())  # type: ignore[union-attr]
+    # Newest `limit` rows, not every row ever. The queue paginates client-side
+    # and re-polls the whole filtered list every 2s while anything is
+    # generating, so unbounded meant the poll grew a megabyte at a time,
+    # forever — nothing prunes `draft`. Five hundred covers a month of daily
+    # runs; beyond it the oldest fall off the *queue*, not out of existence:
+    # each is still addressable by id, and Metricool holds what it published.
+    return list(
+        session.exec(query.order_by(Draft.created_at.desc()).limit(limit)).all()
+    )  # type: ignore[union-attr]
 
 
 @router.get("/drafts/{draft_id}")

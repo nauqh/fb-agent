@@ -17,6 +17,7 @@ outcome.
 """
 
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
 import httpx
@@ -26,6 +27,7 @@ from sqlmodel import Session, select
 
 from app import layout_for, media
 from app.db import get_engine
+from app.http import shared as http_shared
 from app.image import compositor, hero
 from app.image import text as overlay
 from app.models import (
@@ -99,16 +101,13 @@ def competitor_image(
     url = (source.image_url or "").strip()
     if not url:
         return None
-    owned = client is None
-    client = client or httpx.Client(timeout=IMAGE_INPUT_TIMEOUT, follow_redirects=True)
+    if client is None:
+        client = http_shared(IMAGE_INPUT_TIMEOUT, follow_redirects=True)
     try:
         response = client.get(url, headers={"User-Agent": IMAGE_INPUT_UA})
         response.raise_for_status()
     except httpx.HTTPError:
         return None
-    finally:
-        if owned:
-            client.close()
     kind = (response.headers.get("content-type") or "").split(";")[0].strip().lower()
     media_type = IMAGE_INPUT_MIME.get(kind)
     if media_type is None:
@@ -237,16 +236,41 @@ def start_run(
 def run_drafts(draft_ids: list[int]) -> None:
     """Fill the placeholder rows in. Runs as a BackgroundTask, off the request.
 
-    Its own session: FastAPI runs background work on a different thread to the
-    request that spawned it, and this outlives that request by minutes.
+    Drafts are independent — the only thing two of them share is the database —
+    so they are written `settings.generate_concurrency` at a time instead of one
+    after another. A draft is wall time spent waiting on the writer and image
+    models, and waiting overlaps; a dozen-draft run lands at roughly the slowest
+    three drafts rather than the sum of twelve. The bound is the vendors' rate
+    limits, not the CPU — three concurrent Gemini call chains is what the
+    account comfortably allows, and GENERATE_CONCURRENCY moves it without code.
+
+    Each worker gets its own `Session`. A Session is not thread-safe, which is
+    the whole reason this used to be sequential; the pool in `db.py` (5 + 5)
+    already had room for the extra connections.
 
     Never raises. A failure belongs on the row, where the operator can see it —
     an exception here would land in a log nobody reads while the Draft sat at
     `generating` forever.
     """
-    with Session(get_engine()) as session:
+    with ThreadPoolExecutor(max_workers=settings.generate_concurrency) as pool:
         for draft_id in draft_ids:
+            pool.submit(_run_one_isolated, draft_id)
+
+
+def _run_one_isolated(draft_id: int) -> None:
+    """One draft, one session. The unit `run_drafts` puts on a worker thread.
+
+    Anything that escapes `_run_one` — only a database failure before its try,
+    which is where its own error handling starts — is logged and dropped: the
+    row keeps `generating` until the startup sweep does for it, exactly as the
+    old single-threaded failure would have. A future whose exception is never
+    retrieved is silent by default, so this catch is not decoration.
+    """
+    try:
+        with Session(get_engine()) as session:
             _run_one(session, draft_id)
+    except Exception:  # noqa: BLE001 — never escapes; run_drafts cannot raise
+        logger.exception("draft {} failed before its own error handling", draft_id)
 
 
 def _run_one(session: Session, draft_id: int) -> None:

@@ -27,6 +27,7 @@ from uuid import uuid4
 
 import httpx
 
+from app.http import shared as http_shared
 from app.settings import settings
 
 _SAFE = re.compile(r"[^a-z0-9]+")
@@ -137,13 +138,10 @@ class SupabaseMediaStore:
         headers = {"Authorization": f"Bearer {settings.supabase_service_key}"}
         headers.update(kwargs.pop("headers", {}))
 
-        owned = self._client is None
-        client = self._client or httpx.Client(timeout=TIMEOUT)
-        try:
-            response = _attempt(client, method, url, headers, kwargs)
-        finally:
-            if owned:
-                client.close()
+        # Shared, not per call — see `app.http`. A constructor-passed client
+        # (the test seam) still wins and is still never closed here.
+        client = self._client or http_shared(TIMEOUT)
+        response = _attempt(client, method, url, headers, kwargs)
 
         if response.status_code == 404 and missing_ok:
             return response

@@ -1914,3 +1914,103 @@ def test_a_draft_whose_picture_failed_still_cannot_publish(client, written, illu
 
     assert response.status_code == 409
     assert "nothing to post" in response.json()["detail"]
+
+
+# --- the run writes drafts in parallel ---------------------------------------
+
+
+def test_two_drafts_write_at_once(engine, page, monkeypatch):
+    """Two drafts meet at a Barrier — passes only if they ran concurrently.
+
+    The old sequential loop could never satisfy this: the second writer stub
+    would arrive to a barrier whose first party had already given up. It is the
+    pin on `settings.generate_concurrency`, so raising the setting keeps this
+    green and dropping it to 1 turns it red.
+    """
+    import threading
+    from datetime import datetime, timedelta, timezone
+
+    now = datetime.now(timezone.utc)
+    with Session(engine) as session:
+        first = Draft(page_id=page.id, topic="first", created_at=now)
+        second = Draft(page_id=page.id, topic="second", created_at=now + timedelta(seconds=1))
+        session.add(first)
+        session.add(second)
+        session.commit()
+        ids = [first.id, second.id]
+
+    barrier = threading.Barrier(2, timeout=10)
+
+    def meet(*_args, **_kwargs):
+        barrier.wait()
+        return type("Result", (), {"output": GOOD})
+
+    monkeypatch.setattr(generate.writer, "write", meet)
+
+    generate.run_drafts(ids)
+
+    with Session(engine) as session:
+        statuses = {d.topic: d.status for d in session.exec(select(Draft)).all()}
+    assert statuses["first"] is DraftStatus.REVIEW
+    assert statuses["second"] is DraftStatus.REVIEW
+
+
+def test_one_failed_draft_does_not_strand_the_run(engine, page, monkeypatch):
+    """A writer failure in one worker leaves the other draft whole.
+
+    Parallel workers must not share a Session — this is that pin. A shared
+    session would leak the failure across rows; separate sessions keep a
+    failure on its own row, exactly as the sequential loop did.
+    """
+    with Session(engine) as session:
+        good = Draft(page_id=page.id, topic="good")
+        bad = Draft(page_id=page.id, topic="boom")
+        session.add(good)
+        session.add(bad)
+        session.commit()
+        ids = [good.id, bad.id]
+
+    def flaky(*args, **kwargs):
+        if args[2] == "boom":
+            raise RuntimeError("vendor down")
+        return type("Result", (), {"output": GOOD})
+
+    monkeypatch.setattr(generate.writer, "write", flaky)
+
+    generate.run_drafts(ids)
+
+    with Session(engine) as session:
+        statuses = {d.topic: d.status for d in session.exec(select(Draft)).all()}
+    assert statuses["good"] is DraftStatus.REVIEW
+    assert statuses["boom"] is DraftStatus.FAILED
+    with Session(engine) as session:
+        failed = session.exec(select(Draft).where(Draft.topic == "boom")).one()
+    assert "vendor down" in failed.error
+
+
+# --- the queue's cap ---------------------------------------------------------
+
+
+def test_drafts_list_returns_a_capped_newest_first_page(client, session, page):
+    """`GET /drafts` answers the newest `limit` rows, not every row ever.
+
+    The queue re-polls this list every 2s while anything generates, so unbounded
+    meant a payload that grew forever — nothing prunes `draft`. Beyond the cap
+    the oldest fall off the *queue*, not out of existence: each stays
+    addressable by id.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    now = datetime.now(timezone.utc)
+    session.add_all(
+        Draft(page_id=page.id, topic=str(i), created_at=now - timedelta(seconds=i))
+        for i in range(501)
+    )
+    session.commit()
+
+    rows = client.get("/drafts").json()
+    assert len(rows) == 500
+    assert [row["topic"] for row in rows] == [str(i) for i in range(500)]
+
+    narrower = client.get("/drafts?limit=2").json()
+    assert [row["topic"] for row in narrower] == ["0", "1"]

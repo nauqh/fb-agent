@@ -288,6 +288,16 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     """Loguru verbosity. DEBUG turns on SQL echo and module trace spans."""
 
+    generate_concurrency: int = 3
+    """Drafts written in parallel inside one run.
+
+    Each draft is wall time spent waiting on the writer and image models, and
+    waiting overlaps. The bound is the vendors' rate limits, not the CPU: three
+    concurrent Gemini call chains is what the account comfortably allows — raise
+    via GENERATE_CONCURRENCY only if a run of 429s says otherwise. One worker
+    equals the old sequential behaviour.
+    """
+
     @property
     def database_summary(self) -> str:
         """Host and database name, never the password.

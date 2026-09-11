@@ -15,6 +15,7 @@ from google import genai
 from google.genai import types
 from PIL import Image
 
+from app.http import shared as http_shared
 from app.settings import Layout, settings
 from app.settings import layout as default_layout
 from app.transient import is_transient
@@ -80,17 +81,14 @@ def from_url(url: str, client: httpx.Client | None = None) -> bytes:
 
     PNG out, matching what `generate` returns and what the `hero` filename says.
     """
-    owned = client is None
-    client = client or httpx.Client(timeout=FETCH_TIMEOUT, follow_redirects=True)
+    if client is None:
+        client = http_shared(FETCH_TIMEOUT, follow_redirects=True)
     try:
         response = client.get(url)
     except httpx.HTTPError as error:
         raise HeroError(
             f"the feed's image did not answer ({type(error).__name__}): {url}"
         ) from error
-    finally:
-        if owned:
-            client.close()
 
     if response.is_error:
         raise HeroError(
