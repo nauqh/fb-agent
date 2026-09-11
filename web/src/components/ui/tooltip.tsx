@@ -26,8 +26,37 @@ function Tooltip(props: React.ComponentProps<typeof TooltipPrimitive.Root>) {
   return <TooltipPrimitive.Root data-slot="tooltip" {...props} />;
 }
 
-function TooltipTrigger(props: React.ComponentProps<typeof TooltipPrimitive.Trigger>) {
-  return <TooltipPrimitive.Trigger data-slot="tooltip-trigger" {...props} />;
+/**
+ * Radix opens the tooltip on *any* focus, and that is what made the rail's
+ * chips appear on their own.
+ *
+ * Clicking a collapsed rail icon leaves DOM focus on it - it is a link or a
+ * button, and nothing takes focus away afterwards. So every later focus
+ * *restore* fired `focus` again with the pointer parked somewhere else
+ * entirely: coming back to the tab, alt-tab, a dialog closing. Radix's own
+ * guard only covers the click itself (a `pointerdown` ref cleared on
+ * `pointerup`), not the focus the click left behind.
+ *
+ * `:focus-visible` is the distinction the browser already draws: it is false
+ * for focus a pointer put there and true for focus arrived at by keyboard, and
+ * it survives a tab switch. `preventDefault()` is how Radix's
+ * `composeEventHandlers` is asked to skip its own handler, so tabbing to a
+ * collapsed icon still names it.
+ */
+function TooltipTrigger({
+  onFocus,
+  ...props
+}: React.ComponentProps<typeof TooltipPrimitive.Trigger>) {
+  return (
+    <TooltipPrimitive.Trigger
+      data-slot="tooltip-trigger"
+      onFocus={(event) => {
+        onFocus?.(event);
+        if (!event.currentTarget.matches(":focus-visible")) event.preventDefault();
+      }}
+      {...props}
+    />
+  );
 }
 
 function TooltipContent({
