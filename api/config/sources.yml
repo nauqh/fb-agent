@@ -22,7 +22,7 @@ rss:
     max_items: 50
 
 # Both numbers stay global, and the news page is the reason to say so. The
-# obvious move when The Fact Feed arrived was a per-page `since_days` — a
+# obvious move when The Fact Feed arrived was a per-page `since_days` - a
 # 24-hour beat under a seven-day window looked wrong. Measured, it never binds:
 # `_merge` windows, sorts newest-first, *then* caps, and that page's feeds put
 # 306 deduplicated items into the last few hours, so the 50-item cap leaves the
@@ -32,10 +32,22 @@ rss:
 competitors:
     lookback_days: 7
     # How many competitor posts the grid shows. Every post in the window is
-    # stored — they arrive on sync and cost nothing — but a week runs to several
+    # stored - they arrive on sync and cost nothing - but a week runs to several
     # hundred across seventeen competitor pages, and the tail below this is not
     # what anyone browses for.
     grid_limit: 60
+    # How old the stored posts may get before opening the grid re-syncs them by
+    # itself. Sync used to be *only* the button, and the grid froze twice
+    # because of it: measured 2026-09-11, History Retraced and The Fact Feed
+    # were two days behind with 135 and 235 posts sitting unfetched upstream,
+    # and a two-day-old grid of sixty posts looks exactly like a fresh one.
+    #
+    # Six hours is roughly eighteen posts behind per brand, and the number that
+    # actually constrains it is FETCH_LIMIT - one brand's seven-day window came
+    # back 499 against a cap of 500, so once a window exceeds the limit a missed
+    # sync stops being staleness and becomes permanent loss. Any sub-daily value
+    # stays clear of that; between 2 and 12 nothing else changes.
+    stale_after_hours: 6
 
 # ---------------------------------------------------------------------------
 # Feeds that were probed and *not* kept.

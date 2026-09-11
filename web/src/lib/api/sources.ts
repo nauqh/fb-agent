@@ -3,7 +3,7 @@ import type { Feed } from "@/lib/api/feeds";
 import { get } from "@/lib/api/client";
 
 /**
- * A Source Item that is not a row yet — no id, no created_at.
+ * A Source Item that is not a row yet - no id, no created_at.
  *
  * It has a type of its own because **browsing does not write**: an RSS item or
  * tweet is fetched live and shown in the grid long before, and usually without
@@ -26,7 +26,7 @@ export type LiveSourceItem = Omit<SourceItem, "id" | "created_at">;
  *
  * `refresh` forces a Metricool sync. Without it the server answers from what it
  * already has, because a sync costs ~5.5s and 1.6MB to fetch 500 posts against
- * a seven-day window that gains roughly three an hour — so syncing on every tab
+ * a seven-day window that gains roughly three an hour - so syncing on every tab
  * open paid six seconds to learn nothing. The server still syncs by itself when
  * it has nothing stored.
  */
@@ -40,7 +40,7 @@ export async function getCompetitorPosts(
   return get<SourceItem[]>("/sources/competitors", {
     // An empty array sends no `page_ids` at all, which the server reads as
     // every Page. That is the shared pool: a competitor is configured under one
-    // Page in Metricool — whichever had room under their 100-per-account cap —
+    // Page in Metricool - whichever had room under their 100-per-account cap -
     // and any Page assigned it can read its posts.
     ...(pageIds.length > 0 ? { page_ids: pageIds } : {}),
     ...(refresh ? { refresh: "true" } : {}),
@@ -48,7 +48,7 @@ export async function getCompetitorPosts(
   });
 }
 
-/** Mirrors `CompetitorReach`. Counts over rows we hold — no Metricool call. */
+/** Mirrors `CompetitorReach`. Counts over rows we hold - no Metricool call. */
 export interface CompetitorReach {
   /** Assignments for this Page. Zero means it is on the provenance fallback. */
   assigned: number;
@@ -57,10 +57,21 @@ export interface CompetitorReach {
   /** Everything it may read, before the reactions window. Zero empties the grid. */
   visible_posts: number;
   /**
-   * Distinct sources this Page has generated from — including ones off screen,
+   * Distinct sources this Page has generated from - including ones off screen,
    * and ones it can no longer see at all. Counted from its drafts, not the pool.
    */
   used_posts: number;
+  /**
+   * When a competitor post was last stored for the brands that feed this Page.
+   * Null means never.
+   *
+   * The one field here that is not a count, and the reason it was added: every
+   * other number describes a grid that is *full*, which is exactly what a
+   * frozen grid also looks like. Sixty real posts, none of them from the last
+   * two days, and nothing on screen saying so - that is how this went unnoticed
+   * twice.
+   */
+  last_synced_at: string | null;
 }
 
 /**
@@ -68,8 +79,8 @@ export interface CompetitorReach {
  *
  * "Nobody is configured", "nothing has been synced" and "quiet week" are one
  * blank screen otherwise, and the operator's next move differs for each. Five of
- * the ten Pages have zero competitors in Metricool — including one of the Pages
- * the client's 2026-08-16 note was about — and the grid said nothing at all.
+ * the ten Pages have zero competitors in Metricool - including one of the Pages
+ * the client's 2026-08-16 note was about - and the grid said nothing at all.
  *
  * `used_posts` is the same failure in the non-empty case: the marker is computed
  * over the 60 rows returned, so a post generated from yesterday has usually
@@ -82,7 +93,7 @@ export async function getCompetitorReach(pageIds: number[]): Promise<CompetitorR
 }
 
 /**
- * One stored Source Item by id — what a Draft was generated from.
+ * One stored Source Item by id - what a Draft was generated from.
  *
  * The review drawer's only way to answer "which post did this come from".
  * `Draft.source_item_id` has always been on the wire and nothing rendered it,
@@ -115,7 +126,7 @@ export async function getTweet(url: string): Promise<LiveSourceItem> {
 export interface SourcesConfig {
   since_days: number;
   max_items: number;
-  /** Rows, not file entries — see `api/feeds.ts`. Added and removed on Settings. */
+  /** Rows, not file entries - see `api/feeds.ts`. Added and removed on Settings. */
   feeds: Feed[];
   lookback_days: number;
   grid_limit: number;
@@ -126,7 +137,7 @@ export interface SourcesConfig {
  *
  * Two halves from two places now: the windows are `config/sources.yml`, the
  * feeds are rows. Read rather than restated on this side, for the reason
- * `api/config.ts` records about `layout.yml` — Settings showing a hand-kept
+ * `api/config.ts` records about `layout.yml` - Settings showing a hand-kept
  * copy of a config file is a screen that can disagree with the run it claims to
  * describe.
  */
@@ -136,7 +147,7 @@ export async function getSourcesConfig(pageId: number): Promise<SourcesConfig> {
 
 /** Mirrors `CompetitorOut`. `posts_stored: 0` is the row worth looking at. */
 export interface CompetitorPage {
-  /** Metricool's own row id — what DELETE takes. Null on rows they return
+  /** Metricool's own row id - what DELETE takes. Null on rows they return
    *  without one, which is why removal is disabled rather than guessed. */
   id: number | null;
   provider_id: string;
@@ -145,7 +156,7 @@ export interface CompetitorPage {
   /**
    * Facebook's CDN, signed and expiring in about four days.
    *
-   * Safe to render only because this list is never stored — the server re-reads
+   * Safe to render only because this list is never stored - the server re-reads
    * it live on every request, so the URL reaching the browser is minutes old.
    * Storing it is what `routes/sources.VOLATILE` exists to undo for posts.
    */
@@ -161,7 +172,7 @@ export interface CompetitorPage {
    * gone, and so is the flag.
    */
   assigned_page_ids: number[];
-  /** Whose Metricool set it sits in — where the 100-competitor allowance went. */
+  /** Whose Metricool set it sits in - where the 100-competitor allowance went. */
   page_id: number;
   page_name: string;
 }
@@ -169,7 +180,7 @@ export interface CompetitorPage {
 /**
  * The Page's competitor set, live from Metricool.
  *
- * A separate call from `getSourcesConfig` on purpose — that one is a local file
+ * A separate call from `getSourcesConfig` on purpose - that one is a local file
  * and cannot fail, this one is a vendor that has 502'd twice, and one request
  * for both would let Metricool being down blank the feed list as well.
  */

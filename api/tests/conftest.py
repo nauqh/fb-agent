@@ -1,7 +1,7 @@
 """A throwaway database per test, and a client bound to it.
 
 Nothing here touches the network. The three adapters are the seam, so tests
-substitute them there rather than intercepting HTTP — if a test ever needs to
+substitute them there rather than intercepting HTTP - if a test ever needs to
 mock past an adapter, the module is the wrong shape.
 """
 
@@ -22,7 +22,23 @@ if str(API_DIR) not in sys.path:
 
 from app import db as db_module  # noqa: E402
 from app.models import Feed, Page  # noqa: E402
+from app.routes import sources as sources_routes  # noqa: E402
 from app.settings import settings  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def competitor_sync_memo_cleared():
+    """`sources._attempted` is process-global, so it leaks between tests.
+
+    It rate-limits the automatic competitor sync - one attempt per brand per
+    window - which means a test whose arrangement expects a sync to fire gets a
+    silent no-op if an earlier test already stamped that brand. Left alone it
+    took out ten tests, all of them with the same symptom: an empty grid and a
+    fetch that was never called.
+    """
+    sources_routes._attempted.clear()
+    yield
+    sources_routes._attempted.clear()
 
 
 @pytest.fixture(autouse=True)
@@ -41,7 +57,7 @@ def youtube_worker_off(monkeypatch):
 def youtube_media_root(tmp_path, monkeypatch):
     """Youtube store writes go to the test's own directory.
 
-    `DirectoryYoutubeStore` is the real module's own dev/test store — the suite
+    `DirectoryYoutubeStore` is the real module's own dev/test store - the suite
     used to carry a duplicate of it, as did the Shorts dev server.
     """
     from app.youtube import storage as ytstore
@@ -58,7 +74,7 @@ def never_buy_an_image(monkeypatch):
 
     Every draft the run finishes now asks for a hero, and `hero.generate` is the
     one function in the app that spends money per call. Without this the suite
-    bills Google on every `POST /generate` test — which it did, once, before
+    bills Google on every `POST /generate` test - which it did, once, before
     this existed. Tests that need pixels use the `illustrated` fixture.
     """
     from app.image import hero
@@ -77,7 +93,7 @@ def illustrated(monkeypatch):
     """A hero without the invoice. Returns a real, decodable PNG.
 
     Real bytes rather than a sentinel because the compositor genuinely opens
-    them — a stub that is not an image tests the error path by accident.
+    them - a stub that is not an image tests the error path by accident.
     """
     import io
 
@@ -113,13 +129,13 @@ class LocalMediaStore:
     """A `MediaStore` backed by a directory. The suite's only storage.
 
     This used to be the app's store. It lives here now because the app has one
-    backend — Supabase — and a second production implementation would exist only
+    backend - Supabase - and a second production implementation would exist only
     to be the thing dev accidentally tested against instead.
 
     It stays as a *fake* because the alternative is worse: every test that saves
     a picture would need an HTTP mock, and 244 of them would go from a file
     write to a round trip through `httpx.MockTransport`. Same reason it keeps
-    `path()`, which is not on the Protocol — tests assert against the file on
+    `path()`, which is not on the Protocol - tests assert against the file on
     disk rather than through the object that wrote it.
     """
 
@@ -161,7 +177,7 @@ def _configure_sqlite(dbapi_connection, _record) -> None:
     """Applied to every connection, not just the first. Neither is a perf knob.
 
     `foreign_keys` is off by default in SQLite and is per-connection. Without
-    it, every foreign key declared in models.py is decorative — a draft can
+    it, every foreign key declared in models.py is decorative - a draft can
     point at a page id that does not exist and nothing complains, so a test
     would pass on data Postgres rejects. Postgres enforces them unasked.
 
@@ -181,7 +197,7 @@ def engine(tmp_path, monkeypatch):
     Built here rather than by handing `app.db` a `sqlite://` URL, because that
     module is Postgres-only and rejects anything else. That refusal is the
     point: the app has exactly one backend, and SQLite is a property of the
-    suite — offline, ~60s, no shared state between tests — not a second
+    suite - offline, ~60s, no shared state between tests - not a second
     configuration the app supports.
 
     The two schemas agree because the enum columns are pinned to `VARCHAR` in
@@ -220,7 +236,7 @@ def page(session) -> Page:
     stopped being configuration and became rows: `rss.curated_hosts` reads the
     table, and `POST /generate` refuses an RSS item whose host is not in it. A
     Page with no feeds is now a Page that cannot accept an RSS Source Item at
-    all, which is a fair rule and a confusing test failure — it surfaces as a
+    all, which is a fair rule and a confusing test failure - it surfaces as a
     404 on the Draft that was never created.
 
     Two feeds, not one, so that a test asserting on the set cannot pass by
@@ -262,7 +278,7 @@ def client(engine, page, monkeypatch):
     """A client that is already authenticated.
 
     The key is set and sent here rather than in each test because the 253 tests
-    that predate authentication are about routes, not about the lock — making
+    that predate authentication are about routes, not about the lock - making
     every one of them assert a header would say nothing they are for.
     `test_auth.py` covers the lock itself, including the unauthenticated case.
     """

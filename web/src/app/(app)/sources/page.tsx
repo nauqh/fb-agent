@@ -22,12 +22,13 @@ import {
 } from "@/lib/api/sources";
 import type { CompetitorReach, LiveSourceItem, SourceSort } from "@/lib/api/sources";
 import { useCart } from "@/lib/cart";
+import { timeAgo } from "@/lib/format";
 import { usePageScope } from "@/lib/page-scope";
 import { emit } from "@/lib/store";
 import { useQuery } from "@/lib/use-query";
 
 // The Page every competitor set and feed list belongs to used to be `const
-// PAGE_ID = 1`. It comes from the switcher now — the competitor sets do not
+// PAGE_ID = 1`. It comes from the switcher now - the competitor sets do not
 // overlap at all (18 pages against 24, zero in common) and neither do the
 // feeds, so a stale id here would show one Page's grid under another's name.
 
@@ -85,14 +86,14 @@ function CompetitorsTab() {
    * Reactions by default, recency on request (client feedback G1).
    *
    * Reactions is what Metricool's own Competitors tab shows and what
-   * `fetch_competitor_posts` has always sorted by — the grid read was the only
+   * `fetch_competitor_posts` has always sorted by - the grid read was the only
    * thing throwing that order away. Newest-first was showing the weakest posts:
    * measured on History Retraced's real pool, the newest 60 topped out at 2,031
    * reactions while the same week held one at 42,738.
    *
    * Held here rather than in the URL. It is a way of reading one grid, not a
    * place to link someone to, and it re-queries the server rather than
-   * re-sorting on the client — the ranking decides which 60 of 1,244 rows come
+   * re-sorting on the client - the ranking decides which 60 of 1,244 rows come
    * back at all.
    */
   const [sort, setSort] = useState<SourceSort>("reactions");
@@ -100,7 +101,7 @@ function CompetitorsTab() {
   const { data, loading, error, refresh } = useQuery(
     () => getCompetitorPosts(pageId === null ? [] : [pageId], false, sort),
     [pageId, sort],
-    { enabled: pageId !== null },
+    { enabled: pageId !== null, cacheKey: "sources-posts" },
   );
   const [syncing, setSyncing] = useState(false);
 
@@ -108,20 +109,20 @@ function CompetitorsTab() {
    * The two things the grid itself cannot say: why it is empty, and how much of
    * what it is showing has already been used.
    *
-   * Local counts, no Metricool call — see `get_competitor_reach`. Read on every
+   * Local counts, no Metricool call - see `get_competitor_reach`. Read on every
    * grid load rather than only when empty, because the used total is needed
    * precisely when there *are* rows.
    */
   const { data: reach, error: reachError } = useQuery(
     () => getCompetitorReach(pageId === null ? [] : [pageId]),
     [pageId],
-    { enabled: pageId !== null },
+    { enabled: pageId !== null, cacheKey: "sources-reach" },
   );
 
   /**
    * How many used sources are actually marked on screen.
    *
-   * `used` is computed over the rows the grid returns — 60 — while the pool
+   * `used` is computed over the rows the grid returns - 60 - while the pool
    * behind it is 808 for History Retraced. Measured 2026-08-17: 31 drafts
    * generated from chosen posts against 2 markers visible, and on Bodybuilding
    * Tips N Tricks 3 against **zero**. Ticking a post, generating, and coming
@@ -130,6 +131,27 @@ function CompetitorsTab() {
    * rather than left to be inferred from a grid that looks untouched.
    */
   const usedInView = data?.filter((item) => item.used).length ?? 0;
+
+  /**
+   * How old the grid is, said out loud.
+   *
+   * The complaint this answers: competitor posts stopped updating twice and
+   * nothing on screen showed it. A stale grid is *full* - sixty real posts,
+   * none of them from the last two days - so every other signal on this screen
+   * reads as healthy, and the operator has no way to tell the difference from a
+   * quiet week. Measured 2026-09-11: two brands were two days behind with 135
+   * and 235 posts sitting unfetched upstream.
+   *
+   * Rendered in `text-foreground` against the muted sentence around it, and
+   * with no threshold of its own. Highlighting it past some age needed
+   * `Date.now()` in render, which is impure and rightly refused
+   * (`react-hooks/purity`) - and the age is the fact that was missing. "2 days
+   * ago" is already the whole finding; a font weight on top of it was polish
+   * nobody asked for.
+   */
+  const syncedAt = reach?.last_synced_at ?? null;
+  const order =
+    sort === "reactions" ? "best of the last 7 days first" : "newest first";
 
   /**
    * Syncing is the operator's call, not the tab's.
@@ -155,9 +177,14 @@ function CompetitorsTab() {
     <>
       <div className="flex items-center justify-between gap-3 pb-3">
         <p className="text-xs text-muted-foreground">
-          {sort === "reactions"
-            ? "Synced from Metricool, best of the last 7 days first."
-            : "Synced from Metricool, newest first."}{" "}
+          {syncedAt ? (
+            <>
+              Synced <span className="text-foreground">{timeAgo(syncedAt)}</span>,{" "}
+              {order}.
+            </>
+          ) : (
+            <>Never synced from Metricool; {order}.</>
+          )}{" "}
           Which competitors this Page reads is set on Settings.
           {reach && reach.used_posts > 0 ? (
             <>
@@ -167,7 +194,7 @@ function CompetitorsTab() {
                 been generated from
               </span>
               {usedInView < reach.used_posts
-                ? ` — ${usedInView === 0 ? "none of them is" : `only ${usedInView} of them are`} marked below.`
+                ? ` - ${usedInView === 0 ? "none of them is" : `only ${usedInView} of them are`} marked below.`
                 : ", all marked below."}
             </>
           ) : null}
@@ -176,7 +203,7 @@ function CompetitorsTab() {
         <div className="flex shrink-0 items-center gap-2">
           {/* Two words, not a dropdown: there are exactly two orders and both
               fit. The window in the hint above moves with the choice because
-              the two are not independent — ranking by reactions is bounded to
+              the two are not independent - ranking by reactions is bounded to
               seven days server-side so that a post that went viral in July
               cannot hold the top of the grid forever.
 
@@ -192,7 +219,7 @@ function CompetitorsTab() {
             </TabsList>
           </Tabs>
 
-          {/* `h-7` to match the pill shell beside it — a default-height button
+          {/* `h-7` to match the pill shell beside it - a default-height button
               stood a few pixels taller and the row read as two unrelated
               controls that happened to be adjacent. Outline, not the pill's
               solid fill: this one *does* something rather than selecting. */}
@@ -214,7 +241,7 @@ function CompetitorsTab() {
       </div>
 
       {/* A five-second wait behind a spinning icon reads as a hung button. The
-          bar and the counter are what separate "slow" from "stuck" — and the
+          bar and the counter are what separate "slow" from "stuck" - and the
           first load waits on the same sync, because the server syncs itself
           when it has nothing stored. */}
       {syncing || loading ? (
@@ -224,7 +251,7 @@ function CompetitorsTab() {
       {error ? (
         <QueryError error={error} onRetry={refresh} />
       ) : loading || !data ? (
-        // `!data` too — `loading` alone showed an empty grid while the Page
+        // `!data` too - `loading` alone showed an empty grid while the Page
         // scope resolved. See `loading` in `use-query.ts` for the root of it.
         <CardGridLoading />
       ) : data.length === 0 ? (
@@ -250,24 +277,24 @@ function CompetitorsTab() {
  *
  * Client feedback G2 (2026-08-16): *"NONE from chosen posts were generated."*
  * They were working on Pages that have **zero** competitors configured in
- * Metricool — six of the ten do — and this tab rendered an empty `<div>`, which
+ * Metricool - six of the ten do - and this tab rendered an empty `<div>`, which
  * looks exactly like a quiet week. Nothing on screen said there was nothing to
  * choose from, so the reasonable conclusion was that generation was broken.
  *
  * The causes need different next moves, which is why they are told apart rather
  * than sharing one "no results" line:
  *
- * - nothing reaches this Page at all — **Sync cannot help**, competitors have to
+ * - nothing reaches this Page at all - **Sync cannot help**, competitors have to
  *   be added in Metricool and assigned on Settings;
- * - posts have arrived and none is ticked — Settings, and Sync cannot help
+ * - posts have arrived and none is ticked - Settings, and Sync cannot help
  *   either;
- * - competitors are assigned but no post has arrived — Sync is exactly right;
+ * - competitors are assigned but no post has arrived - Sync is exactly right;
  * - anything else, where saying less is better than guessing.
  *
  * The second case is new: a Page with no assignments used to read its own
  * Metricool set and now reads nothing, so a screen that was full can be empty
  * without a single post having been lost. Saying "nothing has been synced" there
- * would be a lie about a pool that is sitting right behind it — see
+ * would be a lie about a pool that is sitting right behind it - see
  * `_visible_to` for why the fallback went.
  *
  * The counts are local, so this cannot hang or 502 while explaining an outage.
@@ -281,7 +308,7 @@ function EmptyGrid({
   error: string | null;
 }) {
   // No reason to give, but still an empty grid to account for. Saying only the
-  // part we are sure of beats rendering nothing, which is the bug being fixed —
+  // part we are sure of beats rendering nothing, which is the bug being fixed -
   // this branch is how it came back during verification, when the counts 404'd
   // against a stale server and the screen went blank again.
   if (error !== null) {
@@ -305,7 +332,7 @@ function EmptyGrid({
 
   // Assignments exist and are reading nothing, while this Page's own set holds
   // posts. Measured on Bible Focus, 2026-08-17: one assignment, zero visible
-  // posts, **430 posts in its own set**. Not an empty week — a hidden pool.
+  // posts, **430 posts in its own set**. Not an empty week - a hidden pool.
   const hiddenByAssignment = reach.assigned > 0 && reach.own_set_posts > 0;
 
   return (
@@ -323,7 +350,7 @@ function EmptyGrid({
         {nothingReaches ? (
           <>
             Nothing is assigned to it, and nothing has ever arrived through its own
-            Metricool set — so <strong>Sync will not help</strong>. Add competitors
+            Metricool set - so <strong>Sync will not help</strong>. Add competitors
             under this Page in Metricool, then tick the ones it should read on{" "}
             <Link href="/settings" className="underline underline-offset-2">
               Settings
@@ -336,7 +363,7 @@ function EmptyGrid({
             <strong>{reach.own_set_posts.toLocaleString()} posts</strong>{" "}
             have arrived through this Page&apos;s own Metricool set and none of
             their competitors is ticked for it, so the grid reads nothing.{" "}
-            <strong>Sync will not help</strong> — the posts are already here. Tick
+            <strong>Sync will not help</strong> - the posts are already here. Tick
             the ones this Page should read on{" "}
             <Link href="/settings" className="underline underline-offset-2">
               Settings
@@ -346,13 +373,13 @@ function EmptyGrid({
         ) : hiddenByAssignment ? (
           <>
             {reach.assigned} competitor{reach.assigned === 1 ? " is" : "s are"}{" "}
-            assigned to this Page and none of them has a stored post — while{" "}
+            assigned to this Page and none of them has a stored post - while{" "}
             <strong>{reach.own_set_posts.toLocaleString()} posts</strong> sit in its
             own Metricool set, from competitors it is not ticked to read. Fix it on{" "}
             <Link href="/settings" className="underline underline-offset-2">
               Settings
             </Link>{" "}
-            — tick the competitors that are actually posting. Unticking
+            - tick the competitors that are actually posting. Unticking
             everything empties the grid rather than restoring the set.
           </>
         ) : (
@@ -371,6 +398,7 @@ function RssTab() {
   const { pageId } = usePageScope();
   const { data, loading, error, refresh } = useQuery(() => getRss(pageId!), [pageId], {
     enabled: pageId !== null,
+    cacheKey: "sources-rss",
   });
   const [refreshing, setRefreshing] = useState(false);
 
@@ -378,7 +406,7 @@ function RssTab() {
     <>
       <div className="flex items-center justify-between gap-3 pb-3">
         <p className="text-xs text-muted-foreground">
-          {/* Was "Seven curated feeds" — a number that was only ever true of
+          {/* Was "Seven curated feeds" - a number that was only ever true of
               History Retraced, and went stale the moment a Page with five was
               configured. The count is in `config/sources.yml`, not here. */}
           This Page&rsquo;s curated feeds, 7-day window. Nothing here exists in the
@@ -419,7 +447,7 @@ function RssTab() {
           </span>
           {data.failures.map((failure) => (
             <span key={failure.feed_url} className="truncate text-muted-foreground">
-              {failure.feed_url} — {failure.error}
+              {failure.feed_url} - {failure.error}
             </span>
           ))}
         </div>
@@ -488,7 +516,7 @@ function TweetsTab() {
 
       {found.length === 0 ? (
         <p className="rounded-2xl border border-dashed p-10 text-center text-sm text-muted-foreground">
-          Paste a tweet URL. There is no feed to browse — a tweet is one lookup at a time.
+          Paste a tweet URL. There is no feed to browse - a tweet is one lookup at a time.
         </p>
       ) : (
         <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(360px,1fr))]">

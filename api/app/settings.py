@@ -1,12 +1,12 @@
 """Five tiers of configuration, deliberately kept apart.
 
-  config/layout.yml   how the image looks — identical for every Page, never
+  config/layout.yml   how the image looks - identical for every Page, never
                       per-page
   config/sources.yml  how wide a window material is drawn from
-  prompts/*.txt       what the model is told — the product, edited constantly
+  prompts/*.txt       what the model is told - the product, edited constantly
   .env                secrets and model ids, which get retired upstream
   page rows           identity and publishing policy
-  feed rows           which feeds a Page draws from — the one list an operator
+  feed rows           which feeds a Page draws from - the one list an operator
                       edits from a screen rather than from a diff
 
 Both yml files are parsed at import, so a bad value fails the boot rather than
@@ -14,7 +14,7 @@ the render. Prompts are read per call, so editing one needs no restart.
 
 Neither yml file has a per-page section, and for different reasons. `layout.yml`
 must never grow one: every Page renders the same Composed Image form.
-`sources.yml` lost the one it had — the per-page thing in it was the feed list,
+`sources.yml` lost the one it had - the per-page thing in it was the feed list,
 and that is `feed` rows now, because the beats do not overlap (the old system's
 four brands were history, general facts, scripture and hot tubs, and hot tub
 news is noise on a history grid) *and* because it is the one list that has to
@@ -96,7 +96,7 @@ Template = Literal["card", "full_overlay"]
 """Which of the two card forms a Page draws.
 
 `card` is the original: hero on top, panel below it, the two dividing the height
-between them. `full_overlay` is the old app's Template 2 — the photograph fills
+between them. `full_overlay` is the old app's Template 2 - the photograph fills
 the card and the panel is laid over its bottom, which only reads as one picture
 if the panel is translucent (`panel.opacity`).
 
@@ -109,7 +109,7 @@ field doubled with a `_full_overlay` twin.
 class BadgeLayout(Frozen):
     """The headline chip, bottom-left of a `full_overlay` card.
 
-    Never drawn on a `card` — the old app made it a Template 2 feature and it is
+    Never drawn on a `card` - the old app made it a Template 2 feature and it is
     one: on a card the panel already starts where the badge would sit.
 
     Its *label* is not here. Style is layout, and the word is the Page's
@@ -167,8 +167,8 @@ class PortraitLayout(Frozen):
         outer half is clipped away.
 
         `ring_pad_px` alone was enough only while the border was the file's 2px:
-        1px of overhang against 3px of pad. The border is a setting now — per
-        Page, and per draft over that, up to the old app's 48px — and at that
+        1px of overhang against 3px of pad. The border is a setting now - per
+        Page, and per draft over that, up to the old app's 48px - and at that
         width the overhang is 24px, so a constant pad would silently shave the
         ring down to a thin arc. Derived, so no combination of the two can
         produce a clipped ring.
@@ -191,7 +191,7 @@ class FontLayout(Frozen):
     family: str
     weight: str
     """`family` must match the TTF's name table, not the file name. resvg
-    substitutes a serif face silently when it does not — "Arial Bold" renders,
+    substitutes a serif face silently when it does not - "Arial Bold" renders,
     it just does not render Arial. The file is family "Arial", subfamily "Bold",
     so it is selected as family + weight."""
 
@@ -228,13 +228,14 @@ class RssConfig(Frozen):
 class CompetitorsConfig(Frozen):
     lookback_days: int
     grid_limit: int
+    stale_after_hours: int
 
 
 class Sources(Frozen):
     """The two windows a grid is built inside. Both global, neither per-page.
 
     `feeds` used to be the third field here, a `dict[str, list[Feed]]` keyed by
-    `page.name`, and it is a `feed` table now — see models.py. It moved because
+    `page.name`, and it is a `feed` table now - see models.py. It moved because
     it is the one part of this file an operator has to be able to change without
     a deploy, and this API runs from a container image: a write to
     `config/sources.yml` lasts until the next deploy and disagrees with the
@@ -264,7 +265,7 @@ class Settings(BaseSettings):
     )
 
     database_url: str = ""
-    """SQLAlchemy URL. Supabase Postgres — there is no local file any more.
+    """SQLAlchemy URL. Supabase Postgres - there is no local file any more.
 
     Required, with no default, and that is the point: `database_path` used to
     default to `api/fb_agent.db`, so a misconfigured deploy came up *working*
@@ -276,7 +277,7 @@ class Settings(BaseSettings):
 
         postgresql+psycopg://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres
 
-    Not the transaction pooler on 6543 — it does not support prepared
+    Not the transaction pooler on 6543 - it does not support prepared
     statements, which psycopg uses by default, and the failure is intermittent
     rather than immediate. Not the direct `db.<ref>.supabase.co` host either:
     Supabase serves that over IPv6 only on projects of this age, and Railway
@@ -293,7 +294,7 @@ class Settings(BaseSettings):
 
     Each draft is wall time spent waiting on the writer and image models, and
     waiting overlaps. The bound is the vendors' rate limits, not the CPU: three
-    concurrent Gemini call chains is what the account comfortably allows — raise
+    concurrent Gemini call chains is what the account comfortably allows - raise
     via GENERATE_CONCURRENCY only if a run of 429s says otherwise. One worker
     equals the old sequential behaviour.
     """
@@ -316,27 +317,27 @@ class Settings(BaseSettings):
     """Verified against the key before being set, which is the only way to know.
 
     `gemini-2.5-flash` was the default here for exactly one session and answered
-    404 *"no longer available to new users"* — the third pinned id to rot in this
+    404 *"no longer available to new users"* - the third pinned id to rot in this
     repo, after `gemini-2.0-flash` and a retired image model. It was still listed
     by `models.list()` while 404ing on use, so the catalogue is not evidence; a
     real call is.
 
     This is a pinned version and will rot the same way eventually. When it does,
-    `gemini-flash-latest` is the alias to fall back to — Google repoints it, so
+    `gemini-flash-latest` is the alias to fall back to - Google repoints it, so
     it cannot expire on somebody else's schedule.
     """
     gemini_text_fallback_models: str = "gemini-3.6-flash"
     """Comma-separated, tried in order when the configured model answers 503/429.
 
-    Was empty, so a 503 on `gemini-3.5-flash` — Google's *"currently experiencing
-    high demand"* — ended the run with nothing left to try, and the operator got
+    Was empty, so a 503 on `gemini-3.5-flash` - Google's *"currently experiencing
+    high demand"* - ended the run with nothing left to try, and the operator got
     a failed Rewrite on a button that had worked all week.
 
     Measured with real calls on 2026-08-14, not `models.list()`:
     `gemini-3.6-flash` completed a full structured rewrite; `gemini-3.5-flash`
     and `gemini-3.7-flash` were 503; `gemini-2.5-flash`/`-pro` were 404. The
     alias `gemini-flash-latest` answered a ping and then 503'd on a real rewrite
-    in the same minute — it points at a busy model, so it is no answer to a 503.
+    in the same minute - it points at a busy model, so it is no answer to a 503.
     """
     gemini_image_model: str = "gemini-2.5-flash-image"
     gemini_image_fallback_models: str = ""
@@ -347,7 +348,7 @@ class Settings(BaseSettings):
     which Google repoints; there is no `-latest` for an image model, so every
     link here is a pinned version that expires on somebody else's schedule. The
     old repo already shipped `fix(gemini): replace retired image fallback model`
-    once — see design.md on why model ids are deployment config.
+    once - see design.md on why model ids are deployment config.
 
     `gemini-2.5-flash-image` is the default because it is the model the old system
     actually shipped heroes on (decisions.md), so its output is known to be
@@ -362,7 +363,7 @@ class Settings(BaseSettings):
     with no authentication at all, and a misconfigured deploy that comes up
     *open* looks exactly like a working one until someone finds it.
 
-    Not user login. One operator (ADR-0002), and the browser never holds this —
+    Not user login. One operator (ADR-0002), and the browser never holds this -
     `next.config.ts` proxies `/api/*` on the Next server, so the key lives in
     that server's environment and is added on the way through.
     """
@@ -375,7 +376,7 @@ class Settings(BaseSettings):
 
     On by default, and it should stay on until a real push has been watched
     through end to end. The difference between the two values is the difference
-    between a row in a planner and a post on a page with an audience — there is
+    between a row in a planner and a post on a page with an audience - there is
     no dry run for the second one, and no undo that happens before people see it.
     """
 
@@ -391,14 +392,14 @@ class Settings(BaseSettings):
     twice a day costs ~16MB a month against a 1GB free tier.
 
     The bucket must be **public**. A signed URL would expire, and Metricool does
-    not take its own copy — verified against the live API, which echoed both a
+    not take its own copy - verified against the live API, which echoed both a
     JPEG and a PNG back unchanged rather than re-hosting them, contradicting
     their own documentation. Facebook fetches the URL when the post goes out, so
     it has to still resolve then.
     """
     supabase_youtube_bucket: str = "youtube-media"
     """Where processed videos and uploaded CTA clips go. Its own bucket, and
-    public for the same reason `supabase_bucket` is — Metricool stores the
+    public for the same reason `supabase_bucket` is - Metricool stores the
     *URL* and YouTube/Instagram fetch the file when the post is due, so a
     signed URL would expire first (the old app's images died exactly that way).
     Must accept `video/mp4`; see `supabase/buckets.sql`."""
@@ -416,7 +417,7 @@ class Settings(BaseSettings):
     """The same export, base64-encoded, for hosts with no persistent disk.
 
     Railway's filesystem is rebuilt on every deploy, so a cookies file copied
-    into the container once is gone the next time it ships — which is how
+    into the container once is gone the next time it ships - which is how
     production ended up downloading anonymously from a datacenter IP and
     reporting it as an expired session. A variable survives the deploy; the
     file it decodes to does not have to.
@@ -433,21 +434,21 @@ class Settings(BaseSettings):
     A PO token is YouTube's proof of origin for a player client; the mweb /
     android / ios clients of the rotation now skip every GVS format without
     one, so those fallbacks are armed but hollow. The bgutil-ytdlp-pot-provider
-    plugin (in pyproject) fetches tokens from this server automatically —
+    plugin (in pyproject) fetches tokens from this server automatically -
     no rotation code consults it directly.
 
     The token is bound to the IP it was generated from. The plugin forwards
     `ytdlp_proxy_url` to the server for token generation, so behind a proxy the
     two egresses agree; without one the server must share the API's own IP,
     which is why it belongs on the same host. Unreachable server degrades to a
-    tokenless download with a warning — the same behavior as unset."""
+    tokenless download with a warning - the same behavior as unset."""
     ffmpeg_path: str = ""
     """Explicit ffmpeg binary location. Normally found on PATH; this exists so
     a winget install that a fresh shell has not seen on PATH is available
     without editing the environment."""
     youtube_worker_enabled: bool = True
     """Off in tests (conftest autouse fixture sets it false) so the worker
-    thread never runs against the throwaway database. On in production — a
+    thread never runs against the throwaway database. On in production - a
     single Railway replica is the deploy shape the single-writer code assumes."""
 
 

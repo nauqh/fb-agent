@@ -1,7 +1,7 @@
 """Browsing does not write.
 
-Every route here reads. What used to be tested against `POST /sources` — the
-curated-feed guard, dedup, and not rewriting an existing row — moved to
+Every route here reads. What used to be tested against `POST /sources` - the
+curated-feed guard, dedup, and not rewriting an existing row - moved to
 tests/test_generate.py when generate became the only write point.
 """
 
@@ -62,8 +62,8 @@ WATCHED = "101151834965447"
 def _assign(session, page_id: int, *competitor_page_ids: str) -> None:
     """Tick these competitors for this Page.
 
-    Every grid read goes through the tick list and only the tick list —
-    `_visible_to` has no provenance fallback — so a fixture that writes posts
+    Every grid read goes through the tick list and only the tick list -
+    `_visible_to` has no provenance fallback - so a fixture that writes posts
     without assigning their competitors builds a pool no Page can see. Writing
     the assignment is now part of arranging a competitor test, the same way
     writing the post is.
@@ -81,7 +81,7 @@ def _two_posts(monkeypatch, session, *, apart_days: int = 4):
     The pair the ordering tests need: whichever way the grid is sorted, the two
     answers are different, so an assertion cannot pass by accident.
 
-    Both sit under one competitor, which is what these tests are about — the
+    Both sit under one competitor, which is what these tests are about - the
     round-robin in the reactions sort ranks *within* a competitor before taking
     a second from any, so a pair split across two competitors would come back
     interleaved and test the interleaving rather than the order.
@@ -117,7 +117,7 @@ def _two_posts(monkeypatch, session, *, apart_days: int = 4):
 def test_competitor_posts_are_written_on_arrival_and_ranked_by_reactions(
     client, engine, session, monkeypatch
 ):
-    """The one kind that browsing *does* write — they arrive by sync.
+    """The one kind that browsing *does* write - they arrive by sync.
 
     Reactions by default (client feedback G1, 2026-08-16). It is what
     Metricool's own Competitors tab shows and what `fetch_competitor_posts`
@@ -157,7 +157,7 @@ def test_a_reactions_sort_cannot_be_frozen_by_an_old_viral_post(
 
     Nothing prunes `source_item`, so ranking the whole table by reactions and
     taking `grid_limit` would pin the top of the grid to whatever went viral
-    weeks ago — measured on History Retraced's real pool, 42 of the top 60
+    weeks ago - measured on History Retraced's real pool, 42 of the top 60
     unwindowed were already older than the window. A genuinely new post could
     never enter the grid again.
 
@@ -182,7 +182,7 @@ def test_a_stale_pool_still_ranks_rather_than_answering_empty(client, session, m
     """The window is anchored to the newest post in scope, not to the clock.
 
     Subtracting the window from `now()` is the obvious version and it returns an
-    **empty grid** for a Page nobody has synced this week — trading a stale
+    **empty grid** for a Page nobody has synced this week - trading a stale
     ranking for no ranking at all. An unexplained empty grid is the failure this
     module already guards against twice elsewhere.
 
@@ -229,7 +229,7 @@ def test_a_resync_refreshes_the_image_url_and_metrics_but_not_the_text(
             "/sources/competitors", params={"page_ids": 1, **params}
         ).json()
 
-    # The first read syncs by itself — there is nothing stored yet.
+    # The first read syncs by itself - there is nothing stored yet.
     sync("https://cdn.example/a.jpg?oe=68000000", 10, "As posted")
     rows = sync(
         "https://cdn.example/a.jpg?oe=69999999", 4_200, "Edited upstream", refresh=True
@@ -272,13 +272,64 @@ def test_a_plain_read_does_not_sync(client, monkeypatch):
     assert len(calls) == 2
 
 
+def test_a_stale_grid_resyncs_itself_in_the_background(client, engine, monkeypatch):
+    """The button alone froze the grid twice. Age has to be enough on its own.
+
+    Measured 2026-09-11 with sync purely manual: History Retraced and The Fact
+    Feed were two days behind, 135 and 235 posts of the live window never
+    fetched, and the grid looked exactly as full as a fresh one.
+
+    The sync is queued as a BackgroundTask, so this asserts on the call landing
+    *after* the response - the read itself must still cost no network.
+    """
+    calls: list[int] = []
+
+    def counted(page, **_):
+        calls.append(1)
+        return [
+            SourceItemBase(
+                kind=SourceKind.COMPETITOR_POST,
+                external_id=f"p{len(calls)}",
+                synced_for_page_id=page.id,
+                text="…",
+            )
+        ]
+
+    monkeypatch.setattr(routes.metricool, "fetch_competitor_posts", counted)
+
+    client.get("/sources/competitors", params={"page_ids": 1})  # empty -> syncs
+    assert len(calls) == 1
+    client.get("/sources/competitors", params={"page_ids": 1})  # fresh -> does not
+    assert len(calls) == 1
+
+    # Age the stored rows past the window, and clear the attempt memo with them:
+    # both clocks gate the refresh, so leaving either fresh keeps it shut.
+    old = datetime.now(timezone.utc) - timedelta(
+        hours=sources_config.competitors.stale_after_hours + 1
+    )
+    with Session(engine) as session:
+        for row in session.exec(select(SourceItem)).all():
+            row.created_at = old
+            session.add(row)
+        session.commit()
+    routes._attempted.clear()
+
+    client.get("/sources/competitors", params={"page_ids": 1})
+    assert len(calls) == 2, "a grid older than the window must refresh itself"
+
+    # And having just tried, it does not try again on the very next read - the
+    # regression that made `stored == 0` get widened to a pool-wide count.
+    client.get("/sources/competitors", params={"page_ids": 1})
+    assert len(calls) == 2
+
+
 def test_a_sync_fetches_the_brand_that_hosts_what_this_page_reads(
     client, session, monkeypatch
 ):
     """Sync the brands that *feed* the scope, not the brands the scope *is*.
 
     `fetch_competitor_posts` is per-`blogId`, so a competitor's posts arrive only
-    through the brand it sits under — and which brand that is was decided by
+    through the brand it sits under - and which brand that is was decided by
     where the 100-competitor allowance had room, not by who reads it. Measured
     2026-09-06 on Bodybuilding Tips N Tricks: seven assigned competitors, its own
     Metricool set empty, three of the seven hosted by Fitness Girls. Pressing
@@ -356,16 +407,21 @@ def test_a_sync_leaves_brands_this_page_does_not_read_alone(
 def test_an_empty_brand_set_does_not_resync_on_every_read(
     client, session, monkeypatch
 ):
-    """The auto-sync asks "has a sync ever run", not "has this Page's set filled".
+    """A brand that stores nothing must be asked once, not once per read.
 
-    Those came apart the moment a brand held no competitors of its own. The
-    count used to be scoped to the Pages being read, and for such a Page it is
-    zero permanently — so `stored == 0` held on *every* read and fired a vendor
-    call that fetched nothing, every time. Six of ten brands were in that state
-    when this was written.
+    The original failure: the count was scoped to the Pages being read, and for
+    a brand holding no competitors of its own it is zero permanently - so
+    `stored == 0` held on *every* read and fired a vendor call that fetched
+    nothing, every time. Six of ten brands were in that state when this was
+    written. Page 2 here is one of them.
 
-    Page 2 here is one of them: nothing ever arrives under its own id. Once the
-    pool has been filled by anything at all, reading it must stop syncing.
+    It was fixed by counting the **whole pool** instead, and that overshot: any
+    stored row anywhere silenced the sync for every brand forever, which is how
+    the grid came to depend entirely on the button and froze twice. The basis is
+    per sync-target-group now, so this Page correctly reads as never fetched -
+    and `sources._attempted` is what keeps "never fetched" from meaning "fetch
+    on every request". That is the property this test actually protects, and it
+    survives both designs; `calls == []` only ever held under the broken one.
     """
     other = Page(
         name="Empty Metricool Set",
@@ -397,9 +453,10 @@ def test_an_empty_brand_set_does_not_resync_on_every_read(
     client.get("/sources/competitors", params={"page_ids": 1})  # fills the pool
     calls.clear()
 
-    client.get("/sources/competitors", params={"page_ids": other.id})
-    client.get("/sources/competitors", params={"page_ids": other.id})
-    assert calls == []  # its own set is empty, but the pool is not
+    for _ in range(4):
+        client.get("/sources/competitors", params={"page_ids": other.id})
+
+    assert calls == ["Empty Metricool Set"], "asked once, however often it is read"
 
 
 def test_a_metricool_failure_is_502_not_an_empty_grid(client, monkeypatch):
@@ -470,7 +527,7 @@ def test_sources_config_reads_the_source_rather_than_a_copy_of_it(client, sessio
 
     Two sources now, not one: the windows are still `config/sources.yml`, the
     feeds are rows. Both are read here rather than described again on the
-    client, which is the point — a screen whose job is to show the
+    client, which is the point - a screen whose job is to show the
     configuration must not show a hand-kept copy that can disagree with it.
     """
     body = client.get("/sources/config", params={"page_id": 1}).json()
@@ -489,8 +546,8 @@ def test_a_page_with_no_feeds_reads_as_empty_not_broken(client, session):
     """A new Page has no feeds by definition, and must still be usable.
 
     This asserted a 500 until Pages became something you add rather than seed.
-    The 500 made a new Page's Settings screen unreachable — including the form
-    that adds its first feed — so the empty state has to be legible instead:
+    The 500 made a new Page's Settings screen unreachable - including the form
+    that adds its first feed - so the empty state has to be legible instead:
     the screen says "no feeds yet" and offers the form.
 
     The rule it replaced was protecting against silence, and that protection
@@ -532,7 +589,7 @@ def test_a_configured_competitor_that_published_nothing_is_visible_and_first(
 
     rows = client.get("/sources/competitors/pages", params={"page_ids": 1}).json()
 
-    # Silent first, despite having 900,000x the followers — at the bottom of
+    # Silent first, despite having 900,000x the followers - at the bottom of
     # twenty-six rows it would be as invisible as it is on every other screen.
     assert [(row["name"], row["posts_stored"]) for row in rows] == [
         ("Silent", 0),
@@ -559,11 +616,11 @@ def test_the_competitor_pool_spans_every_page_by_default(client, session, monkey
 
     This is the whole of the shared pool. Metricool caps an account at 100
     competitors *in total*, so five Pages that should each watch the same twenty
-    sources cannot each be given them — the twenty are added once, under
+    sources cannot each be given them - the twenty are added once, under
     whichever Page, and read by all of them.
 
     `synced_for_page_id` still records which set a post arrived through. It is
-    provenance only — it grants nothing — so each Page here is ticked for the
+    provenance only - it grants nothing - so each Page here is ticked for the
     competitor its own post came from, and the default scope is the union of
     every Page's tick list rather than a bypass of them.
     """
@@ -604,7 +661,7 @@ def test_a_draft_can_name_the_source_it_came_from(client, session):
 
     Client feedback G2 (2026-08-16): "I have no idea which source or which
     competitor posts the tool gens content from." `Draft.source_item_id` was
-    already on the wire on 35 of 38 drafts — there was simply no route that
+    already on the wire on 35 of 38 drafts - there was simply no route that
     turned the id into a name, so no screen could render one.
     """
     item = SourceItem(
@@ -644,7 +701,7 @@ def test_a_page_nothing_reaches_says_so_rather_than_showing_an_empty_grid(
     Client feedback G2 (2026-08-16), sent about two Pages that have zero
     competitors configured in Metricool: six of the ten do. The grid renders an
     empty div for all of them, so "nobody is configured" is indistinguishable
-    from "quiet week" — and the operator's next move is different.
+    from "quiet week" - and the operator's next move is different.
     """
     other = Page(
         name="Bodybuilding Tips N Tricks",
@@ -664,6 +721,9 @@ def test_a_page_nothing_reaches_says_so_rather_than_showing_an_empty_grid(
         "own_set_posts": 0,
         "visible_posts": 0,
         "used_posts": 0,
+        # Never synced, which is the honest answer and a different sentence on
+        # screen from "synced, and the week was quiet".
+        "last_synced_at": None,
     }
 
 
@@ -688,7 +748,7 @@ def test_reach_shows_a_pool_hidden_by_its_own_assignment(client, session):
 
     Measured on Bible Focus, 2026-08-17: one assignment, zero visible posts, and
     **430 posts sitting in its own Metricool set**. A Page reads its own set only
-    until its first assignment lands — after that it reads exactly what is
+    until its first assignment lands - after that it reads exactly what is
     ticked, and one assignment to a competitor that never posts hides everything.
 
     Both numbers are reported because the screen needs both to say that: `0
@@ -710,6 +770,11 @@ def test_reach_shows_a_pool_hidden_by_its_own_assignment(client, session):
 
     reach = client.get("/sources/competitors/reach", params={"page_ids": 1}).json()
 
+    # Popped rather than matched: it is the wall clock the row was written at.
+    # That it is set at all is the assertion worth making - this Page *has* been
+    # synced, which is exactly what makes its empty grid a hidden pool rather
+    # than a stale one.
+    assert reach.pop("last_synced_at") is not None
     assert reach == {
         "assigned": 1,
         "own_set_posts": 1,
@@ -721,7 +786,7 @@ def test_reach_shows_a_pool_hidden_by_its_own_assignment(client, session):
 def test_reach_counts_used_sources_the_grid_window_is_hiding(client, session):
     """The marker is right and almost never on screen.
 
-    `_with_used` flags used sources across the rows the grid returns — 60, out of
+    `_with_used` flags used sources across the rows the grid returns - 60, out of
     History Retraced's 808 visible. Measured 2026-08-17: Bodybuilding Tips N
     Tricks had 3 drafts generated from chosen posts and **zero** used markers in
     its grid; History Retraced, 31 against 2. Ticking a post, generating, and
@@ -730,7 +795,7 @@ def test_reach_counts_used_sources_the_grid_window_is_hiding(client, session):
 
     Counted from this Page's drafts rather than from the visible pool. The first
     version intersected the two and answered **0** for Bodybuilding Tips N
-    Tricks — the Page the complaint is about — because its three used sources are
+    Tricks - the Page the complaint is about - because its three used sources are
     no longer visible to it. Distinct, because two drafts from one post is one
     used source, which is what the marker means.
     """
