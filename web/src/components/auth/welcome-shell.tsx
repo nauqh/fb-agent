@@ -54,7 +54,9 @@ export function WelcomeShell({ children }: { children: ReactNode }) {
             <span className="flex size-9 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/15">
               <Logo className="size-5" />
             </span>
-            <span className="text-sm font-semibold tracking-tight">fb-agent</span>
+            <span className="text-sm font-semibold tracking-tight">
+              Social <span className="text-white/60">Agent</span>
+            </span>
           </div>
         </header>
 

@@ -20,7 +20,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "fb-agent",
+  title: "Social Agent",
   description: "Draft factory for History Retraced.",
 };
 

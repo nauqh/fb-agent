@@ -9,7 +9,7 @@
   Phrase kept solid so the one gold element still reads as a mark on the panel
   rather than another line of the drawing.
 -->
-<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="fb-agent">
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Social Agent">
   <rect width="32" height="32" rx="7" fill="#0A0A0A" />
   <g transform="translate(3 3) scale(1.0833)" fill="none" stroke="#FAFAFA"
      stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

@@ -119,7 +119,7 @@ function Row({ post }: { post: ScheduledPost }) {
 
           {post.draft_id ? (
             <span className="rounded border border-gold/40 bg-gold/10 px-1.5 py-0.5 text-foreground">
-              fb-agent · draft {post.draft_id}
+              Social Agent · draft {post.draft_id}
             </span>
           ) : null}
 

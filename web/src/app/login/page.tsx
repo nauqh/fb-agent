@@ -4,7 +4,7 @@ import { LoginForm } from "@/components/auth/login-form";
 import { WelcomeShell } from "@/components/auth/welcome-shell";
 import { Loading } from "@/components/loading";
 
-export const metadata = { title: "Sign in · fb-agent" };
+export const metadata = { title: "Sign in · Social Agent" };
 
 /**
  * `Suspense` is not decoration: `LoginForm` reads `?next=` with
