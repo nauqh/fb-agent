@@ -3,15 +3,8 @@
 import { Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
 
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
-
 /**
- * Light ⇄ dark, as a row in the rail's footer.
+ * Light ⇄ dark, as a row in the panel's footer.
  *
  * **Nothing here reads the theme during render, and that is the whole design.**
  * The active theme lives in localStorage, which the server cannot see, so a
@@ -30,48 +23,43 @@ import { cn } from "@/lib/utils";
  * the same reason: a theme-dependent string in the markup is the mismatch this
  * is avoiding.
  */
-export function ThemeToggle({ collapsed }: { collapsed: boolean }) {
+export function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme();
 
-  const button = (
+  return (
     <button
       type="button"
       onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
       aria-label="Toggle theme"
-      className={cn(
-        // Deliberately the same shape as `Item` in the sidebar: `px-3` constant
-        // so the icon sits at the same x in both rail widths, and the row clips
-        // its own faded label rather than letting it reach the nav's scroll box.
-        "relative flex w-full shrink-0 items-center gap-2.5 rounded-md px-3 py-2 text-sm whitespace-nowrap transition-colors",
-        "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-        collapsed && "lg:overflow-hidden",
-      )}
+      // `title` rather than a `Tooltip`: the label is gone now that this is an
+      // icon, and the native one costs no component, no portal and no timer for
+      // a control opened about twice a year.
+      title="Toggle theme"
+      // A square in the footer's control line, not a row. Sized and tinted like
+      // the panel's other icon buttons so the line reads as one set.
+      className={CONTROL_ICON}
     >
-      <span className="relative shrink-0">
-        <Sun className="size-4 dark:hidden" />
-        <Moon className="hidden size-4 dark:block" />
-      </span>
-
-      {/* Faded, not `hidden` - same reasoning as the nav labels: `hidden` is
-          instant and leaves the rail shrinking around empty space. */}
-      <span
-        className={cn(
-          "truncate transition-opacity duration-300 ease-linear",
-          collapsed && "lg:opacity-0",
-        )}
-      >
-        <span className="dark:hidden">Light</span>
-        <span className="hidden dark:inline">Dark</span>
-      </span>
+      <Sun className="size-4 dark:hidden" />
+      <Moon className="hidden size-4 dark:block" />
     </button>
   );
-
-  if (!collapsed) return button;
-
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>{button}</TooltipTrigger>
-      <TooltipContent side="right">Toggle theme</TooltipContent>
-    </Tooltip>
-  );
 }
+
+/**
+ * The footer line's icon-button shape. `SignOut` carries the same string, the
+ * way these two files have always mirrored each other - a shared constant would
+ * have to live in one of them or in `sidebar.tsx`, and importing it back from
+ * `sidebar.tsx` is a cycle.
+ *
+ * `size-8` in a `px-1` line puts the 16px glyph at the same x as every nav icon
+ * above it, so the footer reads as the bottom of the same column rather than a
+ * separate strip.
+ *
+ * `active:scale` is on a 100ms curve because the press is the feedback - the
+ * theme flip itself is instant and has nothing to animate.
+ */
+const CONTROL_ICON =
+  "flex size-8 shrink-0 items-center justify-center rounded-md text-sidebar-foreground " +
+  "transition-[background-color,color,transform] duration-100 ease-out " +
+  "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground active:scale-[0.97] " +
+  "focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none";

@@ -52,6 +52,12 @@
 }
 
 @theme {
+  /* The shell's motion curve. The built-in `ease-out` is too weak to read as
+     deliberate at 200ms - it spends the first third barely moving, which is
+     the exact third the eye is watching. This one leaves immediately and
+     settles long, so the panel feels like it was already going. */
+  --ease-panel: cubic-bezier(0.23, 1, 0.32, 1);
+
   --animate-progress-sweep: progress-sweep 1.4s ease-in-out infinite;
 
   /* Travels the full track and back. `left` rather than `translate` so the

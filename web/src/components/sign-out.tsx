@@ -3,23 +3,20 @@
 import { useRouter } from "next/navigation";
 import { LogOut } from "lucide-react";
 
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
-
 /**
- * Sign out, as a row in the rail's footer.
+ * Sign out, as an icon at the far end of the panel's footer line.
  *
- * Shaped after `ThemeToggle` down to the class list, because it sits directly
- * beneath it and the icons have to land in the same column at both rail widths.
+ * Shaped after `ThemeToggle` down to the class list, because it shares that
+ * line and the two glyphs have to be the same size and weight.
+ *
+ * It sits at the *opposite* end of the line rather than next to the theme
+ * toggle. Proximity reads as relationship, and these two have none: one is a
+ * display preference, the other ends the session. The gap is the point.
  *
  * A button rather than a link: `/auth/logout` is POST only, so that a prefetch
  * or an image tag cannot sign the operator out by being loaded.
  */
-export function SignOut({ collapsed }: { collapsed: boolean }) {
+export function SignOut() {
   const router = useRouter();
 
   async function signOut() {
@@ -29,35 +26,22 @@ export function SignOut({ collapsed }: { collapsed: boolean }) {
     router.refresh();
   }
 
-  const button = (
+  return (
     <button
       type="button"
       onClick={() => void signOut()}
       aria-label="Sign out"
-      className={cn(
-        "relative flex w-full shrink-0 items-center gap-2.5 rounded-md px-3 py-2 text-sm whitespace-nowrap transition-colors",
-        "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-        collapsed && "lg:overflow-hidden",
-      )}
+      title="Sign out"
+      className={CONTROL_ICON}
     >
-      <LogOut className="size-4 shrink-0" />
-      <span
-        className={cn(
-          "truncate transition-opacity duration-300 ease-linear",
-          collapsed && "lg:opacity-0",
-        )}
-      >
-        Sign out
-      </span>
+      <LogOut className="size-4" />
     </button>
   );
-
-  if (!collapsed) return button;
-
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>{button}</TooltipTrigger>
-      <TooltipContent side="right">Sign out</TooltipContent>
-    </Tooltip>
-  );
 }
+
+/** The line's icon-button shape. See the note on the copy in `theme-toggle`. */
+const CONTROL_ICON =
+  "flex size-8 shrink-0 items-center justify-center rounded-md text-sidebar-foreground " +
+  "transition-[background-color,color,transform] duration-100 ease-out " +
+  "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground active:scale-[0.97] " +
+  "focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none";

@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   BarChart3,
   CalendarDays,
+  Check,
+  ChevronDown,
   Clapperboard,
   Globe,
   History,
@@ -25,17 +27,17 @@ import { listDrafts } from "@/lib/api/drafts";
 import { useCart } from "@/lib/cart";
 import { usePageScope } from "@/lib/page-scope";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { COLLAPSE_COOKIE } from "@/lib/sidebar-cookie";
 import { useQuery } from "@/lib/use-query";
 import { cn } from "@/lib/utils";
 
 /**
- * The shell's navigation: a rail on `lg`, a bar above the screen below it.
+ * The shell's navigation: a panel on `lg`, a bar above the screen below it.
  *
  * Settings is deliberately not in the same group as the other three. Sources →
  * Review → Schedule is the operator loop, walked several times a day; Settings
@@ -44,10 +46,26 @@ import { cn } from "@/lib/utils";
  * bottom on `lg` (`mt-auto`) but stays in the same list, so the mobile bar can
  * lay all four out in a row without a second copy of the markup.
  *
- * Collapsing is `lg`-only, and it is driven entirely by `lg:` classes rather
- * than by branching in JS - below `lg` the rail is already a horizontal bar
- * with nothing to reclaim, and a JS branch would strip the brand off the phone
- * layout too.
+ * ## Collapsing
+ *
+ * Collapsed does **not** mean a narrower rail. The panel only ever renders in
+ * one form - full width, labelled - and collapsing slides that one panel off
+ * the left edge, leaving a 56px gutter holding a single toggle. Hovering the
+ * gutter brings the panel back as a floating card over the screen, and the
+ * screen does not move while it is there.
+ *
+ * The icon-rail collapse this replaced kept a 64px strip of icons on screen and
+ * paid for it everywhere: labels that had to fade rather than hide, counts that
+ * became meaningless gold dots, tooltips to name icons that had lost their
+ * text, a second copy of the workspace switcher drawn as one glyph, and a
+ * constant `px-3` that every row in three files had to honour so nothing jumped
+ * as the width animated. None of that survives here, because there is no second
+ * geometry to keep in sync - there is one panel, and it is either in the flow
+ * or floating over it.
+ *
+ * `lg`-only, in CSS rather than a JS branch: below `lg` the nav is already a
+ * horizontal bar with nothing to reclaim, and a JS branch would take the brand
+ * off the phone layout too.
  */
 
 const LINKS: { href: string; label: string; icon: LucideIcon }[] = [
@@ -81,9 +99,9 @@ const CONFIG: { href: string; label: string; icon: LucideIcon }[] = [
  *
  * Deliberately small: the v1 tool is produce → history → settings and nothing
  * else. The group renders in place of the Facebook `LINKS` when the workspace
- * pill says Shorts - same rail, same active-state gold, same collapse rules,
- * different destinations. Publishing, metrics and the channel picker are not
- * here yet, and adding a route to this list is how they arrive.
+ * switcher says Shorts - same panel, same active-state gold, same collapse
+ * rules, different destinations. Publishing, metrics and the channel picker are
+ * not here yet, and adding a route to this list is how they arrive.
  */
 const SHORTS_LINKS: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/shorts", label: "Produce", icon: Clapperboard },
@@ -97,12 +115,26 @@ const SHORTS_CONFIG: { href: string; label: string; icon: LucideIcon }[] = [
 
 /** The two workspaces. Path-driven: `/shorts*` is Shorts, everything else is
  *  the Facebook agent. This is the whole "switch between everything" - one
- *  pill, and the nav group under it swaps. */
+ *  menu, and the nav group under it swaps. */
 type Workspace = "facebook" | "shorts";
 
 function workspaceOf(pathname: string): Workspace {
   return pathname.startsWith("/shorts") ? "shorts" : "facebook";
 }
+
+/**
+ * The switcher's own list. Ordered as the menu reads, and the only place a
+ * workspace's name and mark are written down.
+ */
+const WORKSPACES: {
+  id: Workspace;
+  label: string;
+  mark: "facebook" | "youtube";
+  home: string;
+}[] = [
+  { id: "facebook", label: "Facebook", mark: "facebook", home: "/sources" },
+  { id: "shorts", label: "Shorts", mark: "youtube", home: "/shorts" },
+];
 
 /**
  * Which nav href owns the current path. The longest match wins.
@@ -129,6 +161,41 @@ function activeHref(pathname: string, hrefs: string[]): string | null {
   if (matches.length === 0) return null;
   return matches.reduce((best, href) => (href.length > best.length ? href : best));
 }
+
+/**
+ * The peek's hover zone, in viewport pixels.
+ *
+ * Deliberately coordinates rather than `onPointerEnter` on a strip element, and
+ * the reason is the browser's own chrome. With a vertical-tabs sidebar or a
+ * side panel open, the pointer leaves the *page* to the left many times an
+ * hour - and `pointerleave` cannot tell that from "went back to work", so the
+ * panel kept slamming shut the moment the cursor crossed into the browser's
+ * furniture. A pointer that has left the window sends no `pointermove` at all,
+ * so reading coordinates means the panel simply stays as it was.
+ *
+ * It also buys a target worth aiming at. The strip this replaced was the 12px
+ * between the screen edge and the toggle, which asked for real care to hit.
+ */
+
+/** How far in from the left edge still counts as reaching for the panel. */
+const PEEK_EDGE_X = 72;
+
+/**
+ * ...and how far down. Everything above this is the toggle button's: it sits
+ * at y=26 and is 36px tall, so 72 clears it with room to spare.
+ *
+ * Without this the button is unusable. The panel paints above it, so a peek
+ * triggered by *approaching* the toggle draws the panel straight over the
+ * control being reached for and swallows the click. Excluding the whole band
+ * rather than the button's own rect matters: coming in from the right at the
+ * button's height would otherwise cross the live zone before arriving.
+ */
+const PEEK_EDGE_TOP = 72;
+
+/** The floating panel's right edge: 8px inset + 256px of panel (`lg:w-64`).
+ *  Past this the pointer is over the screen again, which is the one gesture
+ *  that closes the peek - so this has to move whenever the width does. */
+const PEEK_PANEL_RIGHT = 264;
 
 /** The old app's rail: a plain ghost square, tinted only on hover. */
 const GHOST_ICON =
@@ -171,6 +238,8 @@ export function Sidebar({
   const workspace = workspaceOf(pathname);
   const links = workspace === "shorts" ? SHORTS_LINKS : LINKS;
   const config = workspace === "shorts" ? SHORTS_CONFIG : CONFIG;
+  // Non-null: `workspaceOf` only ever returns an id that is in the list.
+  const activeWorkspace = WORKSPACES.find((w) => w.id === workspace)!;
 
   // One winner across both groups, so exactly one row can be gold.
   const current = activeHref(pathname, [
@@ -178,9 +247,16 @@ export function Sidebar({
     ...config.map((link) => link.href),
   ]);
 
-  function switchWorkspace(next: Workspace) {
-    router.push(next === "shorts" ? "/shorts" : "/sources");
-  }
+  /**
+   * Open state of the workspace menu, kept here rather than left to Radix,
+   * because the peek has to know about it.
+   *
+   * The menu is portalled to `<body>`, so it is not a descendant of the panel
+   * and the pointer moving onto it is, as far as the peek is concerned, the
+   * pointer going back to the screen. Without this the panel closes out from
+   * under its own open menu.
+   */
+  const [menuOpen, setMenuOpen] = useState(false);
 
   /**
    * Seeded from a cookie the server already read, rather than from
@@ -190,12 +266,60 @@ export function Sidebar({
    */
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
 
+  /**
+   * Whether the collapsed panel is currently floating over the screen.
+   *
+   * Lives on the wrapper, not on the gutter, because the panel is a *DOM* child
+   * of the wrapper even though it paints outside it. `mouseleave` walks the
+   * tree, not the box, so moving the pointer off the gutter and onto the panel
+   * never leaves the wrapper - which is the whole reason the panel stays open
+   * long enough to click something in it.
+   */
+  const [peeking, setPeeking] = useState(false);
+
   function toggle() {
     const next = !collapsed;
     setCollapsed(next);
+    // Docking while peeked would otherwise leave `peeking` set, so the next
+    // collapse would snap straight to open with no pointer near the gutter.
+    setPeeking(false);
     // A year, path-wide. No `secure` - this is served over http on the laptop.
     document.cookie = `${COLLAPSE_COOKIE}=${next ? "1" : "0"}; path=/; max-age=31536000; samesite=lax`;
   }
+
+  /**
+   * One listener, two rules: the left edge opens it, and the screen closes it.
+   *
+   * Only while collapsed - docked there is nothing to peek. `setPeeking` with
+   * the value it already holds is a no-op in React, so the common case of a
+   * pointer crossing the middle of the screen costs two comparisons and no
+   * render.
+   *
+   * Touch is excluded for the usual reason: a tap's "hover" begins and never
+   * ends, so it would strand the panel open with nothing to move away. Taps
+   * fall through to the toggle, which is a complete path on its own.
+   */
+  useEffect(() => {
+    if (!collapsed) return;
+
+    function onMove(event: PointerEvent) {
+      if (event.pointerType === "touch") return;
+      // The whole peek is `lg:`-only in CSS, so below it this would just churn
+      // state that nothing renders.
+      if (window.innerWidth < 1024) return;
+      // A menu open against the panel pins it there until the menu closes.
+      if (menuOpen) return;
+
+      if (peeking) {
+        if (event.clientX > PEEK_PANEL_RIGHT) setPeeking(false);
+      } else if (event.clientX < PEEK_EDGE_X && event.clientY > PEEK_EDGE_TOP) {
+        setPeeking(true);
+      }
+    }
+
+    window.addEventListener("pointermove", onMove, { passive: true });
+    return () => window.removeEventListener("pointermove", onMove);
+  }, [collapsed, peeking, menuOpen]);
 
   // Drafts still needing a decision, and rows currently in flight - the two
   // numbers that tell the operator there is work waiting without opening the
@@ -235,76 +359,167 @@ export function Sidebar({
   const toggleLabel = collapsed ? "Expand sidebar" : "Collapse sidebar";
 
   return (
-    <TooltipProvider>
+    /**
+     * The wrapper is what the shell's flex row actually sees. Collapsed it is a
+     * 56px gutter holding the toggle; docked it is exactly the panel's own
+     * width, so the panel sitting on top of it reads as being in the flow.
+     *
+     * Width is the only thing here that costs layout, and it is only ever
+     * driven by a click. The hover-peek moves `transform` alone.
+     */
+    <div
+      className={cn(
+        "lg:relative lg:z-40 lg:h-screen lg:shrink-0",
+        "lg:transition-[width] lg:duration-200 lg:ease-panel motion-reduce:lg:transition-none",
+        collapsed ? "lg:w-14" : "lg:w-64",
+      )}
+    >
+      {/**
+       * The collapsed state's only visible control, and the target that opens
+       * the peek. It lives out here rather than in the panel because the panel
+       * is off-screen exactly when this is needed.
+       *
+       * Faded rather than unmounted: docking should not blink it out of
+       * existence while the panel is still sliding across it.
+       *
+       * `invisible` as well as `opacity-0`, and that is not belt-and-braces.
+       * Opacity alone leaves the button in the accessibility tree, so a docked
+       * panel announced *two* "Collapse sidebar" buttons - this one and the
+       * panel's own - and Playwright's strict mode caught it before a screen
+       * reader had to. `visibility` transitions the same forgiving way as on
+       * the panel, so the fade still plays in full on the way out.
+       */}
+      <button
+        type="button"
+        onClick={toggle}
+        aria-label={toggleLabel}
+        aria-expanded={!collapsed}
+        className={cn(
+          // Radii here and on the panel are written as pixels rather than
+          // `rounded-xl`, on purpose. The scale in `globals.css` is derived from
+          // a deliberately tight `--radius: 0.25rem`, which puts `rounded-xl` at
+          // 5.6px - right for a dense table, far too hard for a card floating
+          // over the screen. These two are the exception, not a new default.
+          "hidden size-9 items-center justify-center rounded-[12px] border bg-sidebar text-sidebar-foreground shadow-sm",
+          /**
+           * `top-[26px]` is not a taste value, it is the only one that holds
+           * still. The panel's own toggle ends up centred at y=44 when the
+           * panel is floating: 8px top inset + 20px of `lg:pt-5` + half of its
+           * 32px box. This button is 36px, so 26 + 18 puts its icon on the same
+           * line - and hovering the gutter therefore slides a panel in *behind*
+           * the icon you are looking at, instead of jumping it 10px down.
+           */
+          "lg:absolute lg:top-[26px] lg:left-3 lg:flex",
+          "transition-[opacity,transform,background-color,visibility] duration-200 ease-panel motion-reduce:transition-none",
+          "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+          "focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none",
+          // The press has to land somewhere. Without it the only feedback is
+          // the panel arriving, which is 200ms after the finger was already up.
+          "active:scale-[0.97]",
+          collapsed ? "opacity-100" : "invisible opacity-0",
+        )}
+      >
+        <PanelLeft className="size-4" />
+      </button>
+
       <aside
         className={cn(
-          "z-40 flex shrink-0 flex-col border-b bg-sidebar text-sidebar-foreground",
-          "lg:h-screen lg:border-r lg:border-b-0",
+          "flex flex-col border-b bg-sidebar text-sidebar-foreground",
           /**
-           * Width is the only thing that moves, and the icons do not move at all.
-           *
-           * `px-3` on the nav and `px-3` on each item put every icon at x=24-40
-           * in both states, so 64px collapsed is not an arbitrary width: it is
-           * 24 + 16 + 24, the number that leaves the icons exactly where the
-           * 240px rail already had them. Centring them with `justify-center`
-           * instead makes them jump to the middle the instant the label hides,
-           * racing ahead of the width animation - which was the jank.
-           *
-           * `overflow-hidden` so the labels clip as the rail narrows rather than
-           * wrapping onto a second line on the way. `ease-linear` matches the
-           * old app's rail. 300ms rather than the old app's 200: at this width
-           * the shorter one arrives before the eye has followed it.
+           * Out of the wrapper's flow on `lg`, so shrinking the wrapper to a
+           * gutter slides the panel sideways instead of squeezing it. Every
+           * row inside keeps its one width and never learns about collapsing.
            */
-          "transition-[width] duration-300 ease-linear lg:overflow-hidden",
-          collapsed ? "lg:w-16" : "lg:w-60",
+          "lg:absolute lg:w-64 lg:overflow-hidden lg:border-r lg:border-b-0",
+          /**
+           * The peek is a **slide**: the whole card travels in from off-screen
+           * as one rigid object, so what arrives is a sidebar that moved rather
+           * than a shape being filled in. A `clip-path` reveal was tried here
+           * and is the wrong read - it uncovers the panel in place, column by
+           * column, and the card never appears to come from anywhere.
+           *
+           * It is `translate` in the list, **not** `transform`, and the
+           * difference is the whole animation. Tailwind v4 compiles
+           * `-translate-x-*` to the standalone `translate` property rather than
+           * into a `transform` matrix, so a transition naming `transform`
+           * matches nothing: the panel teleports from parked to open with the
+           * class change and never animates. It still ends up in the right
+           * place, which is why endpoint assertions pass and only sampling the
+           * box every frame catches it - `translate` on its own is compositor
+           * work either way, no layout, no paint.
+           *
+           * `visibility` is in the list on purpose, and it is the one property
+           * here that is not a number. CSS transitions special-case it: going
+           * *to* hidden it stays visible for the whole duration and flips at
+           * the end, going to visible it flips at the start. So the panel is on
+           * screen for the whole of its exit and none of the wait before its
+           * entrance - which is what stops a hidden panel from collecting tab
+           * stops the moment it has finished leaving.
+           */
+          "lg:transition-[translate,top,bottom,border-radius,box-shadow,visibility] lg:ease-panel motion-reduce:transition-none",
+          // 300ms drawing out, 200ms putting away. Slow where the user is
+          // reading the panel arrive, fast where the system is just tidying up
+          // after them - the duration on a state is the one used to enter it.
+          "lg:duration-300",
+          collapsed
+            ? // Floating: inset from all three edges, rounded on every corner,
+              // lifted off the screen it is covering.
+              "lg:inset-y-2 lg:left-2 lg:rounded-[16px] lg:border lg:shadow-2xl"
+            : "lg:inset-y-0 lg:left-0",
+          // Parked just past the left edge: its own width plus the 8px inset it
+          // sits at, so not even the shadow's leading edge stays in view.
+          collapsed &&
+            !peeking &&
+            "lg:invisible lg:duration-200 lg:-translate-x-[calc(100%+0.5rem)]",
         )}
       >
         {/* `lg:pb-3`, not `pb-1`: the Page heading used to sit under this row
             and supply the gap down to the first icon. With it gone the header
-            owns that spacing itself - and the same value in both states, so
-            collapsing no longer shifts the nav vertically. */}
-        {/* No `gap` here: the only gap that matters is the one between the
-            brand and the trigger, and it has to shrink *with* the brand or it
-            keeps 10px of the 32px collapsed content box and pushes the trigger
-            off the edge. It rides on the brand as `mr` instead. */}
-        <div className="flex h-14 shrink-0 items-center px-4 whitespace-nowrap lg:h-auto lg:pt-5 lg:pb-3">
+            owns that spacing itself. */}
+        <div className="flex h-14 shrink-0 items-center gap-2.5 px-4 whitespace-nowrap lg:h-auto lg:pt-5 lg:pb-3">
           {/**
-           * Collapsed, the rail carries no brand - the trigger is the only
-           * thing in the header, as the old app's is.
+           * `text-base`, a step up from the `text-sm` everything else in the
+           * panel uses. It is the one piece of type here that is a *wordmark*
+           * rather than a label, and at 14px it sat at exactly the weight of
+           * the nav rows below it - present but not the first thing read.
            *
-           * It gets there by shrinking, not by `hidden`. `hidden` is instant,
-           * so the brand vanished on the click while the rail still had 300ms
-           * of travel left - the one part of the collapse that was not
-           * animating. `width: auto` cannot be transitioned, so `max-width`
-           * does the work: 10rem is clear of its ~90px natural width, so it
-           * never clips while open.
+           * The mark stays at `size-5`. `logo.tsx` picked its 1.6 stroke so
+           * that a 20px card lands at the same optical weight as the 16px
+           * lucide icons beside it (2 × 16/20); rendering it at 24px would make
+           * it 1.6px against their 1.33px and read heavier than the nav. 20px
+           * beside 16px type is the right lockup proportion anyway.
            */}
           <Link
             href="/sources"
-            className={cn(
-              "flex items-center gap-2.5 text-sm font-semibold tracking-tight",
-              "lg:overflow-hidden lg:transition-[max-width,opacity,margin] lg:duration-300 lg:ease-linear",
-              collapsed
-                ? "lg:mr-0 lg:max-w-0 lg:opacity-0"
-                : "lg:mr-2.5 lg:max-w-40",
-            )}
+            className="flex items-center gap-2.5 text-base font-semibold tracking-tight"
           >
             <Logo className="size-5 shrink-0" />
-            fb<span className="text-muted-foreground">-agent</span>
+            {/* One flex item, not two. The two halves of the wordmark are
+                separate children of a `gap-2.5` flex row otherwise, so it
+                renders with a 10px hole in the middle - the gap is meant for
+                the space after the logo, and a bare text node is still a flex
+                item. The second word is muted, the way `-agent` was. */}
+            <span>
+              Social <span className="text-muted-foreground">Agent</span>
+            </span>
           </Link>
 
           <div className="ml-auto lg:hidden">
             <Generating count={queue?.generating} />
           </div>
 
-          {/* No tooltip on the trigger. The rail's width already says which
-              way it goes, and a chip naming the control you are looking at is
-              the kind of hint that only gets in the way. `aria-label` still
+          {/* The panel's own copy of the toggle - the one you reach for while
+              the panel is in front of you, whether it is docked or floating.
+              The gutter's copy is for when it is not.
+
+              No tooltip: a chip naming the control you are already looking at
+              is the kind of hint that only gets in the way. `aria-label`
               carries the name for anything not looking at it. */}
           <button
             type="button"
             onClick={toggle}
             aria-label={toggleLabel}
+            aria-expanded={!collapsed}
             className={cn(
               GHOST_ICON,
               // After GHOST_ICON, not before: that string starts with
@@ -312,127 +527,114 @@ export function Sidebar({
               // last-wins - ordered the other way the toggle reappears in
               // the mobile bar, where there is nothing to collapse.
               "hidden lg:flex",
-              // Always `ml-auto`, never a switch to `mx-auto`. Once the brand
-              // shrinks to nothing the collapsed content box is 64 − 32 = 32px
-              // and the button is 32px, so "flush right" *is* centred - and it
-              // glides there with the rail instead of jumping on the click.
               "lg:ml-auto",
+              "active:scale-[0.97]",
             )}
           >
-            {/* One icon, not a swapped pair: the rail's own width already says
-              which way it will go, and a glyph that changes under the cursor
-              is the more distracting of the two. */}
+            {/* One icon, not a swapped pair: the panel being on screen at all
+              already says which way it will go, and a glyph that changes under
+              the cursor is the more distracting of the two. */}
             <PanelLeft className="size-4" />
           </button>
         </div>
 
-        {/* The workspace switch: one pill, two destinations, path-driven. It
-            sits above the nav so the whole group under it reads as one
-            workspace - the same "two alternatives" pill the app uses for
-            sort, not a second nav. Collapsed, the labels have no room, so it
-            becomes a single icon. The icon is the workspace you would switch
-            **to** (on Facebook it shows Clapperboard: "go to Shorts"). */}
+        {/**
+         * The workspace switch. Path-driven, sitting above the nav so the whole
+         * group under it reads as one workspace.
+         *
+         * A dropdown rather than the two-segment pill this replaced, for the
+         * reason `page-switcher.tsx` already gives about the Page control: this
+         * is a **scope** control, not navigation between peers. The pill said
+         * "here are two views of one thing", and Facebook and Shorts are two
+         * applications that happen to share a shell - `docs/youtube-tool.md`
+         * treats Shorts as separate, and every row in the nav below changes
+         * when this moves. It now states which workspace you are in instead of
+         * offering the pair forever, and a third one costs a menu row rather
+         * than a third of the width.
+         */}
         <div className="px-3 pb-1">
-          <div
-            className={cn(
-              "flex rounded-lg border bg-muted p-0.5",
-              collapsed && "lg:hidden",
-            )}
-          >
-            <WorkspaceButton
-              active={workspace === "facebook"}
-              onClick={() => switchWorkspace("facebook")}
-              label="Facebook"
-              mark="facebook"
-            />
-            <WorkspaceButton
-              active={workspace === "shorts"}
-              onClick={() => switchWorkspace("shorts")}
-              label="Shorts"
-              mark="youtube"
-            />
-          </div>
+          <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className={cn(
+                  "flex w-full items-center gap-2.5 rounded-md border px-3 py-2 text-sm font-medium whitespace-nowrap",
+                  "text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                  "focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none",
+                )}
+              >
+                <WorkspaceMark mark={activeWorkspace.mark} className="size-4 shrink-0" />
+                <span className="truncate">{activeWorkspace.label}</span>
+                <ChevronDown className="ml-auto size-3.5 shrink-0 text-muted-foreground" />
+              </button>
+            </DropdownMenuTrigger>
+
+            {/* Matched to the trigger so the menu sits exactly over the control
+                it came from, rather than being wider than the row it opened
+                from and hanging off the panel. */}
+            <DropdownMenuContent
+              align="start"
+              className="min-w-(--radix-dropdown-menu-trigger-width)"
+            >
+              {WORKSPACES.map((candidate) => (
+                <DropdownMenuItem
+                  key={candidate.id}
+                  onSelect={() => router.push(candidate.home)}
+                >
+                  <WorkspaceMark mark={candidate.mark} className="size-4 shrink-0" />
+                  <span className="min-w-0 flex-1 truncate">{candidate.label}</span>
+                  {/* The tick holds its slot either way, so the names do not
+                      shift sideways as the selection moves. */}
+                  <Check
+                    className={cn(
+                      "size-3.5 shrink-0",
+                      candidate.id !== workspace && "invisible",
+                    )}
+                    aria-hidden={candidate.id !== workspace}
+                  />
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         <nav
           className={cn(
-            // `px-3` is constant on purpose - see the width note above.
             "flex gap-1 overflow-x-auto px-3 py-2",
-            // `lg:overflow-x-hidden` matters: `overflow-x-auto` above is for
-            // the mobile bar, and left un-reset it makes the collapsed rail
-            // scroll sideways - the labels stay in flow while faded, so they
-            // overflow the 40px content box and this element, being its own
-            // scroll container, offers to scroll to them. The aside's
-            // `overflow-hidden` clips the paint but cannot stop that.
-            "lg:min-h-0 lg:flex-1 lg:flex-col lg:gap-0.5 lg:overflow-x-hidden lg:overflow-y-auto lg:pt-1 lg:pb-3",
+            // `lg:overflow-x-hidden` resets the mobile bar's horizontal scroll:
+            // the panel is a column on `lg` and has nothing to scroll sideways
+            // to, but a live scroll container still scrolls when something
+            // inside it takes focus, which would slide the rows out of line on
+            // a tab press.
+            //
+            // `lg:pt-3` rather than `pt-1`: with 4px here against the
+            // switcher's own 4px, the destinations sat only 8px under it -
+            // barely more than the 2px between the rows themselves, so the
+            // switcher read as the first item in the list rather than the thing
+            // that decides what the list contains. 12px makes it its own group.
+            // `lg:` only, so the mobile bar's spacing is untouched.
+            "lg:min-h-0 lg:flex-1 lg:flex-col lg:gap-0.5 lg:overflow-x-hidden lg:overflow-y-auto lg:pt-3 lg:pb-3",
           )}
         >
-          {/* Collapsed, the workspace switch rides in the nav's own flow with
-              the **exact item geometry** - `px-3 py-2` and a `size-4` mark in
-              a relative span - so the brand glyph lands in the same pixel
-              column and row band as every nav icon. The separator below marks
-              it as the workspace header; the mark is the workspace you would
-              switch **to**: on the Facebook side it shows YouTube, and vice
-              versa. */}
-          {collapsed ? (
-            <div className="lg:mb-1 lg:border-b lg:border-border/60 lg:pb-1">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      switchWorkspace(workspace === "shorts" ? "facebook" : "shorts")
-                    }
-                    aria-label={
-                      workspace === "shorts"
-                        ? "Switch to Facebook Agent"
-                        : "Switch to Shorts Tool"
-                    }
-                    className={cn(
-                      "relative flex w-full shrink-0 items-center gap-2.5 rounded-md px-3 py-2 whitespace-nowrap transition-colors",
-                      "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                    )}
-                  >
-                    <span className="relative shrink-0">
-                      {workspace === "shorts" ? (
-                        <FacebookMark className="size-4" />
-                      ) : (
-                        <YoutubeMark className="size-4" />
-                      )}
-                    </span>
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="right">
-                  {workspace === "shorts"
-                    ? "Switch to Facebook Agent"
-                    : "Switch to Shorts Tool"}
-                </TooltipContent>
-              </Tooltip>
-            </div>
-          ) : null}
           {links.map((link) => (
             <Item
               key={link.href}
               {...link}
               active={link.href === current}
               count={counts[link.href] ?? null}
-              collapsed={collapsed}
             />
           ))}
 
-          <div className="lg:mt-auto lg:border-t lg:pt-2">
+          {/* A flex column of its own on `lg`, repeating the nav's `gap-0.5`.
+              The nav's gap only separates *its* children, and this whole group
+              is one of them - so Settings and Global were butted flush together
+              while every row above them had 2px of air. `lg:` only: below it
+              the nav is a horizontal bar and this group rides in its flow. */}
+          <div className="lg:mt-auto lg:flex lg:flex-col lg:gap-0.5 lg:border-t lg:pt-2">
             {/* Only mounted when there is something in flight, so the footer
-                does not reserve an empty strip above Settings - and hidden
-                outright when collapsed rather than faded, because a 64px rail
-                has no room to say "2 generating" and a faded block would sit
-                there as a gap. */}
+                does not reserve an empty strip above Settings. */}
             {queue?.generating ? (
-              <div
-                className={cn(
-                  "hidden px-3 py-2 lg:block",
-                  collapsed && "lg:hidden",
-                )}
-              >
+              <div className="hidden px-3 py-2 lg:block">
                 <Generating count={queue.generating} />
               </div>
             ) : null}
@@ -442,53 +644,58 @@ export function Sidebar({
                 {...link}
                 active={link.href === current}
                 count={null}
-                collapsed={collapsed}
               />
             ))}
-            {/* Last, and below the two config screens rather than among them.
-                Those are destinations with a URL and an active state; this is a
-                control that changes nothing about where you are. It shares
-                their row shape only so the icons stay in the same column. */}
-            <ThemeToggle collapsed={collapsed} />
-            <SignOut collapsed={collapsed} />
+
+            {/**
+             * The controls, as one line rather than two more stacked rows.
+             *
+             * The footer used to be four rows deep - Settings, Global, theme,
+             * sign out - which read as four destinations and gave the panel a
+             * heavy foot. The split that fixes it was already written down one
+             * comment up: Settings and Global are *destinations*, with a URL and
+             * an active state, and these two are *controls* that change nothing
+             * about where you are. Rows for the first kind and a line for the
+             * second makes that difference visible instead of merely true, and
+             * takes a row off the stack.
+             *
+             * They keep their labels only as `title`/`aria-label`. A sun and a
+             * door are about as legible as icons get, and this is the footer of
+             * a panel whose five real destinations are all spelled out above.
+             *
+             * `px-1` rather than the rows' `px-3`: a `size-8` button pads its
+             * own 16px glyph by 8, so 4 + 8 lands it on the same x=12 as every
+             * icon above, and the same arithmetic squares the right edge up
+             * with the rows' `px-3`.
+             */}
+            {/* Both icons together at the left, on the nav's icon column.
+                They were pushed to opposite ends on the theory that proximity
+                implies relationship and these two have none - which is true of
+                a crowded row and wrong here: two small glyphs with 190px of
+                empty panel between them read as a gap where something is
+                missing, not as two unrelated controls. The separation that
+                does the work is the one above them, between a labelled
+                destination and an unlabelled control. */}
+            <div className="flex items-center gap-1 px-1 pt-2">
+              <ThemeToggle />
+              <SignOut />
+            </div>
           </div>
         </nav>
       </aside>
-    </TooltipProvider>
+    </div>
   );
 }
 
-function WorkspaceButton({
-  active,
-  onClick,
-  label,
+function WorkspaceMark({
   mark,
+  className,
 }: {
-  active: boolean;
-  onClick: () => void;
-  label: string;
   mark: "facebook" | "youtube";
+  className?: string;
 }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={cn(
-        "flex flex-1 items-center justify-center gap-1.5 rounded-[min(var(--radius-md),10px)] px-3 py-1 text-xs font-medium transition-colors",
-        active
-          ? "bg-background text-foreground shadow-sm"
-          : "text-muted-foreground hover:text-foreground",
-      )}
-    >
-      {mark === "facebook" ? (
-        <FacebookMark className="size-3.5" />
-      ) : (
-        <YoutubeMark className="size-3.5" />
-      )}
-      {label}
-    </button>
-  );
+  const Glyph = mark === "facebook" ? FacebookMark : YoutubeMark;
+  return <Glyph className={className} />;
 }
 
 function Item({
@@ -497,99 +704,88 @@ function Item({
   icon: Icon,
   active,
   count,
-  collapsed,
 }: {
   href: string;
   label: string;
   icon: LucideIcon;
   active: boolean;
   count: number | null;
-  collapsed: boolean;
 }) {
-  const link = (
+  return (
     <Link
       href={href}
       aria-current={active ? "page" : undefined}
       className={cn(
-        // `px-3` constant, and no `justify-center` - the icon must not move.
-        "relative flex shrink-0 items-center gap-2.5 rounded-md px-3 py-2 text-sm whitespace-nowrap transition-colors",
-        // Each row clips its own faded label, so the overflow never reaches
-        // the nav. Hiding it only on the nav leaves the nav's scrollWidth
-        // wider than its box, and a `hidden` scroll container still scrolls
-        // when something inside it takes focus - which would slide the icons
-        // out of line on a tab press.
-        collapsed && "lg:overflow-hidden",
-        // Full-contrast in both states. Greying the inactive items made the
-        // icons look soft and out of focus rather than merely secondary; the
-        // active one is already carried by its fill, its weight and the gold
-        // rail, so it does not need the others dimmed to stand out.
+        /**
+         * 10px, not the `rounded-md` (3px) the rest of the app uses and not the
+         * panel's own 16px either.
+         *
+         * The highlight is a shape drawn *inside* a rounded card, and a 3px
+         * corner inside a 16px one reads as two unrelated radii stacked - which
+         * is why this moved at all. But matching the card exactly overshoots in
+         * the other direction: the row is 36px tall, so 18px is a full pill and
+         * 16px is close enough to one to read as a lozenge rather than a
+         * highlighted row. 10px is unmistakably rounded and unmistakably not a
+         * pill.
+         *
+         * See the note on `--radius` in `globals.css`: the tight global scale is
+         * for dense tables, and this is the one place in the panel that has to
+         * answer to the card around it instead.
+         */
+        "relative flex shrink-0 items-center gap-2.5 rounded-[10px] px-3 py-2 text-sm whitespace-nowrap transition-colors",
+        // Full-contrast whether active or not. Greying the inactive items made
+        // the icons look soft and out of focus rather than merely secondary;
+        // the active one is already carried by its fill, its weight and the
+        // gold rail, so it does not need the others dimmed to stand out.
+        /**
+         * Hover is half the active fill, not the same fill.
+         *
+         * Both states used `bg-sidebar-accent` outright, so running the pointer
+         * down the list lit each row exactly as though it were the current
+         * screen - the one thing the fill is there to say. `/50` composites the
+         * same colour at half strength over `--sidebar`, which lands it between
+         * the panel and the active row in both themes without inventing a
+         * token: light goes 0.985 → 0.978 → 0.970, dark 0.18 → 0.22 → 0.26.
+         *
+         * No `hover:text-*`. `--sidebar-accent-foreground` is *lighter* than
+         * `--sidebar-foreground` (0.205 vs 0.145 in light), so the old hover
+         * faded the label as the pointer arrived - backwards for a state whose
+         * whole job is to say "this responds". The active row can afford it
+         * because `font-medium` and the gold rail carry it; a hover cannot.
+         */
         active
           ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
-          : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+          : "text-sidebar-foreground hover:bg-sidebar-accent/50",
       )}
     >
       {/* The active marker is the brand gold rather than another grey: it is
           the one accent the rest of the shell already uses, and it survives the
           low contrast between `--sidebar` and `--sidebar-accent`. */}
       {active ? (
+        /**
+         * `inset-y-2`, tuned to the row's radius. The rail is flush at
+         * `left-0`; the fill behind it is only flush in the middle, and curves
+         * away towards each corner. At 10px of radius the fill's left edge is
+         * 0.2px inside the box 8px down from the top, so a rail inset that far
+         * stays visually welded to it. (At the 16px radius this row briefly
+         * had, the same test gave 3.5px and the rail hung in the gap beside
+         * the corner, plainly detached.)
+         */
         <span
-          className="absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-gold"
+          className="absolute inset-y-2 left-0 w-0.5 rounded-full bg-gold"
           aria-hidden
         />
       ) : null}
 
-      <span className="relative shrink-0">
-        <Icon className="size-4" />
-        {/* Collapsed, the count has nowhere to sit, but "there is work waiting"
-            is the one thing the rail must still say. */}
-        {count && collapsed ? (
-          <span className="absolute -top-0.5 -right-0.5 hidden size-1.5 rounded-full bg-gold lg:block" />
-        ) : null}
-      </span>
-
-      {/**
-       * Faded out, not `hidden`.
-       *
-       * `hidden` is instant, so on collapse every label vanished on the click
-       * and the rail then spent 300ms shrinking around empty space - which is
-       * what read as unsmooth. Keeping them in flow and fading them means the
-       * text is still there, being clipped by the rail's `overflow-hidden` as
-       * it narrows. They keep their width while faded, so the row overflows
-       * its 40px box in the collapsed rail; that is exactly what gets clipped,
-       * and nothing below `lg` is affected because the fade is `lg:` only.
-       */}
-      <span
-        className={cn(
-          "truncate transition-opacity duration-300 ease-linear",
-          collapsed && "lg:opacity-0",
-        )}
-      >
-        {label}
-      </span>
+      <Icon className="size-4 shrink-0" />
+      <span className="truncate">{label}</span>
 
       {count ? (
-        <span
-          className={cn(
-            "ml-auto pl-2 text-xs tabular-nums text-muted-foreground",
-            "transition-opacity duration-300 ease-linear",
-            collapsed && "lg:opacity-0",
-          )}
-        >
+        <span className="ml-auto pl-2 text-xs tabular-nums text-muted-foreground">
           {count}
         </span>
       ) : null}
     </Link>
-  );
-
-  // Expanded, the label is already on screen and a tooltip repeating it is
-  // noise. Collapsed, it is the only thing naming the icon.
-  if (!collapsed) return link;
-
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>{link}</TooltipTrigger>
-      <TooltipContent side="right">{label}</TooltipContent>
-    </Tooltip>
   );
 }
 
