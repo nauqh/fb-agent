@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-/** The operator loop starts at Sources; there is no dashboard to land on. */
+/** The operator opens on the Page's numbers; Sources is one rail item away. */
 export default function Home() {
-  redirect("/sources");
+  redirect("/overview");
 }

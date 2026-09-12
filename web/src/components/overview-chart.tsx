@@ -39,7 +39,7 @@ export function PerformanceChart({
   days: number;
   cutoff: number;
 }) {
-  const { series, maxReach, reachTicks } = useMemo(() => {
+  const { series, maxReach, reachTicks, xTicks } = useMemo(() => {
     // One bucket per Page-zone day (the same zone every other screen groups
     // by). The zone has no DST, so a 24h walk from the window's first day
     // lands on one entry per calendar day.
@@ -71,15 +71,28 @@ export function PerformanceChart({
     ];
     const reachTicks = [0, ...LADDER.filter((v) => 0 < v && v <= maxReach).slice(-5)];
 
-    return { series, maxReach, reachTicks };
+    // Vertical rules, at whole-day steps holding about six of them, inset
+    // from both edges so the frame keeps no border of its own.
+    const STEP_CANDIDATES = [1, 2, 3, 5, 7, 10, 14];
+    const stepDays = STEP_CANDIDATES.find((s) => (days * 2) / s <= 7) ?? 14;
+    const xTicks: number[] = [];
+    for (
+      let t = cutoff + stepDays * 86_400_000;
+      t < cutoff + days * 86_400_000;
+      t += stepDays * 86_400_000
+    ) {
+      xTicks.push(t);
+    }
+
+    return { series, maxReach, reachTicks, xTicks };
   }, [posts, days, cutoff]);
 
   return (
     <figure className="m-0 mt-2 pb-4">
       {/* A named chart, not an anonymous block: the one sentence the frame
-          answers, in the same furniture type the table's column labels use.
-          The window pill beside the tabs already says "last 30 days". */}
-      <div className="px-0.5 pb-1 font-mono text-[10px] tracking-[0.12em] text-muted-foreground uppercase">
+          answers. Larger than the axis furniture beneath it, since it is
+          what a scanning eye lands on first. */}
+      <div className="px-0.5 pb-1.5 text-base font-semibold tracking-tight text-foreground">
         Reach and engagement, daily
       </div>
       {/* Axis names, once, at the top of their scales - the ticks are mono
@@ -109,20 +122,28 @@ export function PerformanceChart({
               </linearGradient>
             </defs>
 
-            {/* Hairline rules at the left axis's ticks. Border grey is
-                near-invisible on the card at any opacity, so this is the
-                tick colour itself, well faded. */}
-            {/* Hairline rules at the left axis's ticks - all but the topmost,
-                which would read as a frame's top border where there is no
-                frame. Drawn by hand rather than CartesianGrid for exactly
-                that control, at the tick colour well faded. */}
+            {/* Dim rules in both directions. Hand-drawn ReferenceLines rather
+                than CartesianGrid: the grid's horizontal lines come from the
+                default-id y axis, and both of ours are named, so the library
+                draws the verticals and quietly skips the horizontals.
+                Topmost horizontal and the edge verticals stay off - at the
+                frame's edges they read as a border where there is no frame. */}
             {reachTicks.slice(0, -1).map((tick) => (
               <ReferenceLine
-                key={tick}
+                key={`h-${tick}`}
                 yAxisId="reach"
                 y={tick}
                 stroke="var(--muted-foreground)"
-                strokeOpacity={0.15}
+                strokeOpacity={0.12}
+              />
+            ))}
+            {xTicks.map((t) => (
+              <ReferenceLine
+                key={`v-${t}`}
+                yAxisId="reach"
+                x={t}
+                stroke="var(--muted-foreground)"
+                strokeOpacity={0.12}
               />
             ))}
 
@@ -133,7 +154,7 @@ export function PerformanceChart({
               domain={["dataMin", "dataMax"]}
               tickFormatter={(t: number) => DAY_MONTH.format(t)}
               tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
-              axisLine={{ stroke: "var(--border)" }}
+              axisLine={{ stroke: "var(--foreground)" }}
               tickLine={false}
               tickMargin={6}
               minTickGap={56}
@@ -146,7 +167,7 @@ export function PerformanceChart({
               ticks={reachTicks}
               tickFormatter={metric}
               tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
-              axisLine={false}
+              axisLine={{ stroke: "var(--foreground)" }}
               tickLine={false}
               width={40}
             />
@@ -159,7 +180,7 @@ export function PerformanceChart({
               tickFormatter={metric}
               allowDecimals={false}
               tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
-              axisLine={false}
+              axisLine={{ stroke: "var(--foreground)" }}
               tickLine={false}
               width={36}
             />
