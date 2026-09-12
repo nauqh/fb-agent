@@ -28,19 +28,37 @@ function Tabs({
 // Competitors/Tweets/RSS, Overview's Performance/Saved, Manual's two starting
 // points, the Review drawer's Edit/Preview. Rounded-lg to match the app's
 // buttons and chips - the pill's `rounded-full` read as a different element
-// next to them. The active trigger is a solid pill rather than a white card
-// with a shadow - the same shell Settings' Prompts tabs use, built by hand
-// there because this component predates it. A second implementation of the
-// same look is worse than widening this one, so the bespoke version was
-// retired in favour of this.
+// next to them.
 //
 // **The container is back, and it has no padding.** The tray bounds the group;
 // the selected trigger fills its cell edge to edge and corner to corner, so the
 // pill is a segment of the control rather than a chip floating inside it. That
 // is the whole reason `p-0` and `gap-0` are not negotiable here: any padding or
 // gap is tray showing through around the thing that is meant to fill it.
+//
+// ## The segment is raised, not inverted (2026-09-12)
+//
+// It was `bg-foreground` with a `text-background` label - a solid black block
+// in light mode and a solid white one in dark, and with three or four of these
+// on a screen they were the loudest thing in the app by a distance.
+//
+// The obvious correction is the one this control has already failed once: the
+// sort pill on Sources used `bg-primary/10`, a tint so faint it was recorded
+// there as "barely distinguishable from the inactive one". Going back to a
+// weaker tint walks into that.
+//
+// So the selected state changes *mechanism* rather than strength. It is a
+// surface lifted one step off its tray - lighter than the tray in both themes,
+// with the label going `muted-foreground` → `foreground` rather than flipping
+// to the background colour. Elevation reads instantly at a much smaller colour
+// distance than a tint does, which is how it can be both softer and clearer
+// than either previous attempt.
+//
+// The tray has to be a real recess for that to work, hence the two themes
+// being given different values: over white, `bg-muted/40` was within a percent
+// of the page and left the segment with nothing to sit proud of.
 const tabsListVariants = cva(
-  "group/tabs-list inline-flex w-fit items-center justify-center gap-0 rounded-lg border bg-muted/40 p-0 text-muted-foreground group-data-horizontal/tabs:h-auto group-data-vertical/tabs:h-fit group-data-vertical/tabs:flex-col data-[variant=line]:rounded-none",
+  "group/tabs-list inline-flex w-fit items-center justify-center gap-0 rounded-lg border bg-muted p-0 text-muted-foreground group-data-horizontal/tabs:h-auto group-data-vertical/tabs:h-fit group-data-vertical/tabs:flex-col data-[variant=line]:rounded-none dark:bg-muted/40",
   {
     variants: {
       variant: {
@@ -103,10 +121,11 @@ function pillRadius(list: HTMLElement, first: boolean, last: boolean) {
 //
 // **The CSS pill on the trigger stays and is the fallback.** Until the first
 // measurement lands there is no `data-indicator` on the list, so the trigger
-// paints its own `bg-foreground` exactly as before: server-rendered HTML, the
-// frame before hydration, and JS-disabled all show a correct static pill. The
-// swap happens in one commit - the indicator appears at the same rect as the
-// background it replaces - so there is no flash between the two.
+// paints its own fill exactly as before: server-rendered HTML, the frame
+// before hydration, and JS-disabled all show a correct static pill. The swap
+// happens in one commit - the indicator appears at the same rect as the
+// background it replaces - so there is no flash between the two. The two fills
+// are kept identical for that reason; changing one means changing both.
 function TabsList({
   className,
   variant = "default",
@@ -190,7 +209,7 @@ function TabsList({
         <span
           aria-hidden
           data-slot="tabs-indicator"
-          className="absolute top-0 left-0 z-0 bg-foreground transition-[translate,width,height,border-radius] duration-200 ease-out motion-reduce:transition-none"
+          className="absolute top-0 left-0 z-0 bg-background shadow-sm transition-[translate,width,height,border-radius] duration-200 ease-out motion-reduce:transition-none dark:bg-secondary"
           style={{
             translate: `${pill.x}px ${pill.y}px`,
             width: pill.width,
@@ -225,23 +244,22 @@ function TabsTrigger({
         // `pillRadius` computes at runtime. Hardcoding it was wrong within the
         // hour: `--radius` is 4px here, not the 8px `rounded-lg` looks like.
         "relative z-10 inline-flex flex-1 items-center justify-center gap-1.5 rounded-none first:rounded-l-[calc(var(--radius-lg)-1px)] last:rounded-r-[calc(var(--radius-lg)-1px)] px-2.5 py-1 text-xs font-medium whitespace-nowrap text-muted-foreground transition-colors group-data-vertical/tabs:w-full group-data-vertical/tabs:justify-start hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50 has-data-[icon=inline-end]:pr-1 has-data-[icon=inline-start]:pl-1 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",
-        "group-data-[variant=default]/tabs-list:data-active:bg-foreground group-data-[variant=default]/tabs-list:data-active:text-background",
+        "group-data-[variant=default]/tabs-list:data-active:bg-background group-data-[variant=default]/tabs-list:data-active:text-foreground dark:group-data-[variant=default]/tabs-list:data-active:bg-secondary",
         // Handed over to the sliding indicator once it has measured itself.
-        // Important, and it has to be: this and the `bg-foreground` above are
-        // both one variant deep on the same property, so which of them wins is
-        // decided by Tailwind's ordering rather than by anything written here.
-        // It lost - and a trigger that keeps its own pill paints the
-        // destination solid the instant it is clicked, while the indicator is
-        // still travelling towards it. Three pills on screen at once.
+        // Important, and it has to be: this and the fill above are both one
+        // variant deep on the same property, so which of them wins is decided
+        // by Tailwind's ordering rather than by anything written here. It lost
+        // - and a trigger that keeps its own pill paints the destination solid
+        // the instant it is clicked, while the indicator is still travelling
+        // towards it. Three pills on screen at once.
         "group-data-[indicator=on]/tabs-list:data-active:bg-transparent!",
-        // The label inverts to `text-background`, so it is only legible once
-        // the pill is under it. Measured: without the delay the text is 91%
-        // white while the pill has covered barely half the trigger - white on
-        // a white bar, for about three frames. Scoped to `data-active` so it
-        // delays the arriving label and nothing else: hover stays instant, and
-        // the leaving label drops to muted while the pill is still on it,
-        // which is dark-on-dark for a moment but never invisible.
-        "group-data-[indicator=on]/tabs-list:data-active:delay-100",
+        // The `delay-100` that used to sit here is gone with the inversion that
+        // required it. The arriving label was `text-background` - white text,
+        // legible only once the pill had arrived underneath it, and measured at
+        // 91% white while the pill had covered barely half the trigger. The
+        // label is `text-foreground` now and legible over the tray and over the
+        // segment alike, so it can travel with the pill instead of waiting for
+        // it, and the control answers a click 100ms sooner.
         "after:absolute after:bg-foreground after:opacity-0 after:transition-opacity group-data-horizontal/tabs:after:inset-x-0 group-data-horizontal/tabs:after:bottom-[-5px] group-data-horizontal/tabs:after:h-0.5 group-data-vertical/tabs:after:inset-y-0 group-data-vertical/tabs:after:-right-1 group-data-vertical/tabs:after:w-0.5 group-data-[variant=line]/tabs-list:data-active:text-foreground group-data-[variant=line]/tabs-list:data-active:after:opacity-100",
         className
       )}

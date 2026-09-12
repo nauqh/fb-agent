@@ -349,7 +349,12 @@ function Meter({
               dimmed
                 ? "bg-muted-foreground/20"
                 : profile.managed
-                  ? "bg-primary"
+                  // `bg-foreground/60`, not `bg-primary`: at full strength these
+                  // segments were a row of black slabs across the top of the
+                  // card, heavier than the number they annotate. Same value the
+                  // Overview meters use, so the two read as the same kind of
+                  // mark. Still clear of the unmanaged segments below.
+                  ? "bg-foreground/60"
                   : "bg-muted-foreground/40",
             )}
           />
@@ -385,8 +390,17 @@ function Unmanaged({ data }: { data: Allowance | null }) {
   return parts.length > 0 ? <>{parts.join(" · ")}</> : null;
 }
 
-/** A filter pill. Solid when it is the one in force - the palette has no second
- *  hue to spend on selection, so selection is the inversion. */
+/**
+ * A filter pill.
+ *
+ * It used to be a solid inversion when in force, on the reasoning that "the
+ * palette has no second hue to spend on selection". The premise was right and
+ * the conclusion was not: hue is not the only thing that separates a selected
+ * chip from its neighbours, and a black pill in a row of seven white ones was
+ * the loudest object on the screen. Weight does it - a tint, a defined border
+ * and a medium label - at a fraction of the contrast. Same mechanism the tabs'
+ * selected segment uses, so the two read as one idea.
+ */
 function Chip({
   active,
   tone = "default",
@@ -407,13 +421,17 @@ function Chip({
         "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[13px] transition-colors",
         active
           ? tone === "destructive"
-            // `text-background`, not `text-white`: there is no
-            // `--destructive-foreground` in this theme, and dark mode's
-            // destructive is a *light* red that white text disappears into.
-            ? "border-destructive bg-destructive text-background"
-            : "border-primary bg-primary text-primary-foreground"
+            // Tinted rather than filled, which also retires a real problem:
+            // there is no `--destructive-foreground` in this theme, and dark
+            // mode's destructive is a *light* red that white text disappeared
+            // into. `text-destructive` on its own tint is legible in both.
+            ? "border-destructive/40 bg-destructive/15 font-medium text-destructive"
+            : "border-foreground/25 bg-foreground/[0.08] font-medium text-foreground"
           : tone === "destructive"
             ? "border-destructive/30 text-destructive hover:bg-destructive/10"
+            // The inactive hover is `bg-muted`, which is *lighter* than the
+            // selected tint - so hovering an unselected chip can never be
+            // mistaken for selecting it.
             : "hover:bg-muted",
       )}
     >
