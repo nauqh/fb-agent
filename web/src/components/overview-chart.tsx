@@ -39,7 +39,7 @@ export function PerformanceChart({
   days: number;
   cutoff: number;
 }) {
-  const { series, maxReach, reachTicks, xTicks } = useMemo(() => {
+  const { series, reachTicks, top, xTicks } = useMemo(() => {
     // One bucket per Page-zone day (the same zone every other screen groups
     // by). The zone has no DST, so a 24h walk from the window's first day
     // lands on one entry per calendar day.
@@ -63,28 +63,37 @@ export function PerformanceChart({
     // `Math.max(1, ...)` guards an all-zero window - a young Page whose posts
     // have no counts yet would otherwise hand the scale a 0 domain.
     const maxReach = Math.max(1, ...series.map((day) => day.reach));
+    // Even rules, not a ladder. Round ladder values (10K, 25K, 50K, 100K)
+    // cannot be evenly spaced on a linear axis - the lines bunched at the
+    // bottom and stretched at the top. One step instead, sized to give
+    // about five divisions, so every rule sits the same distance from its
+    // neighbours and every label is still a round number.
+    const raw = maxReach / 5;
+    const pow = 10 ** Math.floor(Math.log10(raw));
+    const step =
+      [1, 2, 5, 10].map((m) => m * pow).find((m) => m >= raw) ?? 10 * pow;
+    const top = step * Math.ceil(maxReach / step);
+    const reachTicks = Array.from(
+      { length: Math.ceil(maxReach / step) + 1 },
+      (_, i) => i * step,
+    );
 
-    // Round figures at positions the eye can compare.
-    const LADDER = [
-      0, 100, 250, 500, 1_000, 2_500, 5_000, 10_000, 25_000, 50_000, 100_000,
-      250_000, 500_000, 1_000_000, 2_500_000, 5_000_000, 10_000_000,
-    ];
-    const reachTicks = [0, ...LADDER.filter((v) => 0 < v && v <= maxReach).slice(-5)];
-
-    // Vertical rules, at whole-day steps holding about six of them, inset
-    // from both edges so the frame keeps no border of its own.
-    const STEP_CANDIDATES = [1, 2, 3, 5, 7, 10, 14];
-    const stepDays = STEP_CANDIDATES.find((s) => (days * 2) / s <= 7) ?? 14;
+    // Vertical rules, at whole-day steps that divide the window exactly and
+    // leave about a dozen columns - graph-paper density rather than four
+    // wide panes. The date labels ride the same ticks; twelve short mono
+    // stamps fit the plot's width, and every label still lands on a rule.
+    const spanDays = days * 2;
+    const STEP_CANDIDATES = [1, 2, 3, 5, 7, 10, 14, 15, 20, 30];
+    const stepDays =
+      STEP_CANDIDATES.find(
+        (s) => spanDays % s === 0 && spanDays / s >= 8 && spanDays / s <= 15,
+      ) ?? Math.round(spanDays / 12);
     const xTicks: number[] = [];
-    for (
-      let t = cutoff + stepDays * 86_400_000;
-      t < cutoff + days * 86_400_000;
-      t += stepDays * 86_400_000
-    ) {
+    for (let t = cutoff; t <= xMax; t += stepDays * 86_400_000) {
       xTicks.push(t);
     }
 
-    return { series, maxReach, reachTicks, xTicks };
+    return { series, maxReach, reachTicks, top, xTicks };
   }, [posts, days, cutoff]);
 
   return (
@@ -128,7 +137,12 @@ export function PerformanceChart({
                 draws the verticals and quietly skips the horizontals.
                 Topmost horizontal and the edge verticals stay off - at the
                 frame's edges they read as a border where there is no frame. */}
-            {reachTicks.slice(0, -1).map((tick) => (
+            {/* Rules at the ticks, both ways. Horizontal: every reach tick
+                including the topmost - with even spacing, the topmost is a
+                gridline like the rest, sitting just under the domain's
+                slack. Vertical: inset from both edges, where a rule would
+                read as a frame's border; the edge dates keep their labels. */}
+            {reachTicks.map((tick) => (
               <ReferenceLine
                 key={`h-${tick}`}
                 yAxisId="reach"
@@ -151,19 +165,19 @@ export function PerformanceChart({
               dataKey="t"
               type="number"
               scale="time"
-              domain={["dataMin", "dataMax"]}
+              domain={[cutoff, cutoff + days * 86_400_000]}
+              ticks={xTicks}
               tickFormatter={(t: number) => DAY_MONTH.format(t)}
               tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
               axisLine={{ stroke: "var(--foreground)" }}
               tickLine={false}
               tickMargin={6}
-              minTickGap={56}
             />
             <YAxis
               yAxisId="reach"
               dataKey="reach"
               type="number"
-              domain={[0, maxReach * 1.05]}
+              domain={[0, top * 1.05]}
               ticks={reachTicks}
               tickFormatter={metric}
               tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
