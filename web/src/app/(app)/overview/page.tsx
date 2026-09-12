@@ -16,6 +16,7 @@ import {
 import { toast } from "sonner";
 
 import { Loading } from "@/components/loading";
+import { PerformanceChart } from "@/components/overview-chart";
 import { QueryError } from "@/components/query-error";
 import {
   QUEUE_PAGE_SIZE,
@@ -358,6 +359,8 @@ function Performance({
   return (
     <ScrollFade className="flex flex-col gap-3">
       <Summary posts={posts} previous={data?.previous ?? []} days={days} />
+
+      <PerformanceChart posts={posts} days={days} cutoff={data?.cutoff ?? 0} />
 
       <div className="overflow-hidden rounded-xl border bg-card">
         <TableHead />

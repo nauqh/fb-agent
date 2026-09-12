@@ -56,6 +56,10 @@ export interface PerformanceWindow {
   posts: PostStats[];
   /** The `days` before that, for a comparison. Empty on a young Page. */
   previous: PostStats[];
+  /** The instant that separates the two windows, fixed at fetch time - the
+   *  chart needs the same boundary the cut used, and reading the clock during
+   *  a render would let it drift between paints. */
+  cutoff: number;
 }
 
 /**
@@ -89,7 +93,7 @@ export async function getPerformanceWindow(
     const at = post.published_at === null ? null : asUtc(post.published_at).getTime();
     (at !== null && at < cutoff ? previous : posts).push(post);
   }
-  return { posts, previous };
+  return { posts, previous, cutoff };
 }
 
 export async function listSaved(pageId: number): Promise<SavedPost[]> {
