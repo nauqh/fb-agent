@@ -326,18 +326,13 @@ def test_a_stale_grid_resyncs_itself_in_the_background(client, engine, monkeypat
 def test_a_sync_fetches_the_brand_that_hosts_what_this_page_reads(
     client, session, monkeypatch
 ):
-    """Sync the brands that *feed* the scope, not the brands the scope *is*.
+    """A sync reaches every brand, including a competitor's hosting brand.
 
     `fetch_competitor_posts` is per-`blogId`, so a competitor's posts arrive only
     through the brand it sits under - and which brand that is was decided by
-    where the 100-competitor allowance had room, not by who reads it. Measured
-    2026-09-06 on Bodybuilding Tips N Tricks: seven assigned competitors, its own
-    Metricool set empty, three of the seven hosted by Fitness Girls. Pressing
-    Sync there asked for Bodybuilding's set, was told it has none, and left the
-    grid 27 days stale with 241 current posts waiting under another brand.
-
-    Page 1 here is Bodybuilding: it ticks a competitor whose only stored post
-    arrived under Page 2, so a sync scoped to Page 1 must reach Page 2's brand.
+    where the 100-competitor allowance had room. The selected Page can therefore
+    read posts hosted by another brand, while the account-wide sync keeps both
+    current.
     """
     other = Page(
         name="Hosts The Competitors",
@@ -374,14 +369,13 @@ def test_a_sync_fetches_the_brand_that_hosts_what_this_page_reads(
     assert other.name in fetched_for
 
 
-def test_a_sync_leaves_brands_this_page_does_not_read_alone(
+def test_a_sync_fetches_every_brand_not_just_the_page_in_scope(
     client, session, monkeypatch
 ):
-    """The other half: reaching the hosts is not an excuse to sync everything.
+    """A competitor sync refreshes the whole account, not only the visible Page.
 
-    A full-account sync is 1,677 posts and 31.4s across ten brands (measured
-    2026-09-06), most of it for brands the Page in scope reads nothing from.
-    Page 2 here hosts nothing Page 1 ticks, so it is not fetched.
+    The returned grid remains scoped to Page 1, but every configured brand must
+    be refreshed so a brand does not stay stale until somebody opens it.
     """
     other = Page(
         name="Unrelated Brand",
@@ -401,7 +395,7 @@ def test_a_sync_leaves_brands_this_page_does_not_read_alone(
 
     client.get("/sources/competitors", params={"page_ids": 1, "refresh": True})
 
-    assert fetched_for == ["History Retraced"]
+    assert fetched_for == ["History Retraced", "Unrelated Brand"]
 
 
 def test_an_empty_brand_set_does_not_resync_on_every_read(
@@ -415,13 +409,9 @@ def test_an_empty_brand_set_does_not_resync_on_every_read(
     nothing, every time. Six of ten brands were in that state when this was
     written. Page 2 here is one of them.
 
-    It was fixed by counting the **whole pool** instead, and that overshot: any
-    stored row anywhere silenced the sync for every brand forever, which is how
-    the grid came to depend entirely on the button and froze twice. The basis is
-    per sync-target-group now, so this Page correctly reads as never fetched -
-    and `sources._attempted` is what keeps "never fetched" from meaning "fetch
-    on every request". That is the property this test actually protects, and it
-    survives both designs; `calls == []` only ever held under the broken one.
+    The sync is account-wide now, so the first read asks both brands once and
+    later reads do not repeat either request. `sources._attempted` keeps an
+    empty upstream set from meaning "fetch on every request".
     """
     other = Page(
         name="Empty Metricool Set",
@@ -456,7 +446,7 @@ def test_an_empty_brand_set_does_not_resync_on_every_read(
     for _ in range(4):
         client.get("/sources/competitors", params={"page_ids": other.id})
 
-    assert calls == ["Empty Metricool Set"], "asked once, however often it is read"
+    assert calls == [], "the account-wide sync was already attempted"
 
 
 def test_a_metricool_failure_is_502_not_an_empty_grid(client, monkeypatch):
