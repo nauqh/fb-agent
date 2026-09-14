@@ -452,6 +452,12 @@ class Settings(BaseSettings):
     single Railway replica is the deploy shape the single-writer code assumes."""
 
 
+    unsplash_access_key: str = ""
+    """The circular inset's photo search (`image.inset`). The Access Key only:
+    the Secret Key is for acting as an Unsplash user over OAuth, which this app
+    never does. Blank makes Find with AI answer that it is not configured -
+    deliberately not in `missing_secrets`, which /health reports."""
+
     x_bearer_token: str = ""
 
     @property

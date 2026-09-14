@@ -76,6 +76,7 @@ function WriteItYourself() {
   const [caption, setCaption] = useState("");
   const [firstComment, setFirstComment] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [findInset, setFindInset] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const picker = useRef<HTMLInputElement>(null);
@@ -114,6 +115,7 @@ function WriteItYourself() {
         hook,
         caption,
         first_comment: firstComment,
+        find_inset: findInset,
         file,
       });
       toast.success("Draft created.", {
@@ -195,11 +197,22 @@ function WriteItYourself() {
             ? "Your picture is the hero. The panel, the overlay and the watermark are drawn over it."
             : "Optional. Without one there is no card to publish yet - the gradient above is a placeholder, not the post."}
         </p>
+        {/* Beside the picture it adds to. Reads the text typed on the right,
+            once the draft is created. */}
+        <label className="flex w-fit cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+          <input
+            type="checkbox"
+            checked={findInset}
+            onChange={(event) => setFindInset(event.target.checked)}
+            className="size-3.5 cursor-pointer accent-primary"
+          />
+          Find inset - the AI picks an Unsplash photo that fits
+        </label>
       </div>
 
       <div className="min-w-0 space-y-6">
         <p className="text-xs text-muted-foreground">
-          Nothing on this tab calls a model.
+          Nothing on this tab calls a model, unless Find inset is ticked.
         </p>
 
         <div className="space-y-2">
@@ -267,6 +280,7 @@ function FromATopic() {
   const { page } = usePageScope();
   const [topic, setTopic] = useState("");
   const [noImage, setNoImage] = useState(false);
+  const [findInset, setFindInset] = useState(false);
   const [running, setRunning] = useState(false);
 
   const ready = topic.trim().length > 0 && page !== null;
@@ -280,9 +294,11 @@ function FromATopic() {
         page_ids: [page.id],
         topic: topic.trim(),
         no_image: noImage,
+        find_inset: findInset && !noImage,
       });
       setTopic("");
       setNoImage(false);
+      setFindInset(false);
       toast.success(`${ids.length} draft${ids.length === 1 ? "" : "s"} generating.`, {
         description: "Progress is on the Review screen.",
       });
@@ -327,6 +343,18 @@ function FromATopic() {
         />
         No image - text only, and nothing to pay for
       </label>
+
+      {!noImage ? (
+        <label className="flex w-fit cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+          <input
+            type="checkbox"
+            checked={findInset}
+            onChange={(event) => setFindInset(event.target.checked)}
+            className="size-3.5 cursor-pointer accent-primary"
+          />
+          Find inset - the AI picks an Unsplash photo that fits
+        </label>
+      ) : null}
 
       <Button
         className="bg-gold text-gold-foreground hover:bg-gold/90"

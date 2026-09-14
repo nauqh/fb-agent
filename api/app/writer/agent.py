@@ -79,6 +79,15 @@ class DraftContent(BaseModel):
             "composed fresh; never their actual photograph."
         )
     )
+    inset_subject: str | None = Field(
+        default=None,
+        description=(
+            "A 1-4 word stock photo search query for a small circular photo "
+            "that fits this story - what a photograph could show, not a named "
+            "historical person (e.g. 'hand washing', 'colosseum rome', "
+            "'barbell squat'). Null when nothing in the story can be photographed."
+        ),
+    )
 
 
 def _instructions(page: Page, layout: Layout, template=None) -> str:
@@ -363,35 +372,47 @@ def _run(page: Page, prompt, validator, model=None, template=None):
     A caller passing `model` gets exactly that model and no fallback: tests
     supply a fake, and silently swapping it for a real one would bill them.
     """
-    if model is not None:
-        # Built here rather than through `build_agent`, which attaches the
-        # whole-draft validator and offers no way to detach it. This used to
-        # call it and then rebuild when the validator differed, testing
-        # `validator is not _validate` - an identity check that stopped meaning
-        # anything once the validators became per-Page closures. Constructing
-        # with the validator the caller asked for is what both branches wanted.
+    return ask(
+        prompt,
+        DraftContent,
+        _instructions(page, layout, template),
+        model,
+        validator,
+    )
+
+
+def ask(prompt, output_type, instructions: str, model=None, validator=None):
+    """One structured answer from the text model, down the fallback chain.
+
+    The ladder `write` and `rewrite` have always used, taken out of `_run` so a
+    caller asking for something other than a draft - `image.inset` asks for a
+    search subject and a picture choice - steps down the same chain instead of
+    growing a second copy of it. Built with the validator the caller asked for,
+    never through `build_agent`, which attaches the whole-draft one.
+
+    A caller passing `model` gets exactly that model and no fallback: tests
+    supply a fake, and silently swapping it for a real one would bill them.
+    """
+
+    def run(chosen, model_settings):
         agent = Agent(
-            model,
-            output_type=DraftContent,
-            instructions=_instructions(page, layout, template),
+            chosen,
+            output_type=output_type,
+            instructions=instructions,
+            model_settings=model_settings,
             retries=MAX_RETRIES,
         )
-        agent.output_validator(validator)
+        if validator is not None:
+            agent.output_validator(validator)
         return agent.run_sync(prompt)
 
-    last: Exception | None = None
+    if model is not None:
+        return run(model, None)
 
+    last: Exception | None = None
     for name in dict.fromkeys(settings.text_fallback_chain):  # de-duplicated, order kept
         try:
-            agent = Agent(
-                _model(name),
-                output_type=DraftContent,
-                instructions=_instructions(page, layout, template),
-                model_settings=_model_settings(name),
-                retries=MAX_RETRIES,
-            )
-            agent.output_validator(validator)
-            return agent.run_sync(prompt)
+            return run(_model(name), _model_settings(name))
         except Exception as error:
             if not is_transient(error):
                 raise

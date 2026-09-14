@@ -137,8 +137,10 @@ export interface Draft {
   hero_image_path: string | null;
   composed_image_path: string | null;
 
-  /** The uploaded circular inset. Null is the normal case - no circle. */
+  /** The circular inset, uploaded or found. Null is the normal case - no circle. */
   inset_image_path: string | null;
+  /** What the inset shows, as the writer named it. Prefills the Find box. */
+  inset_subject: string | null;
 
   /**
    * Where each of the three paths above actually resolves, as a public Supabase

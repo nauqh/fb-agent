@@ -24,6 +24,7 @@ from sqlmodel import Session, select
 
 from app import generate, media
 from app.db import get_session
+from app.image import inset
 from app.log import logger
 from app.models import (
     Draft,
@@ -75,6 +76,10 @@ class GenerateRequest(BaseModel):
     direction.
     """
 
+    find_inset: bool = False
+    """Find a Wikipedia picture of the story's subject for the circular inset.
+    Free; ignored with `no_image`."""
+
 
 @router.post("/generate", status_code=202)
 def start_generate(
@@ -93,6 +98,7 @@ def start_generate(
             request.template,
             request.no_image,
             request.prompt_template_id,
+            request.find_inset,
         )
     except generate.GenerateError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
@@ -111,12 +117,15 @@ async def create_manual_draft(
     hook: str = Form(""),
     caption: str = Form(""),
     first_comment: str = Form(""),
+    find_inset: bool = Form(
+        False, description="Have the AI find a picture for the inset from this text."
+    ),
     file: UploadFile | None = File(
         None, description="Optional. Becomes the hero the card is drawn around."
     ),
     session: Session = Depends(get_session),
 ) -> Draft:
-    """A draft the operator wrote, with no model call of any kind.
+    """A draft the operator wrote. No model call, unless it asks for an inset.
 
     The old app's second generate mode - "Create a draft for {page} without
     calling Gemini" (`generate-panel.tsx:474`) - restored at the client's
@@ -170,6 +179,11 @@ async def create_manual_draft(
         first_comment.strip(),
         validators.Limits.for_page(page),
     )
+
+    if find_inset:
+        # Before the card is drawn, so it composites the circle in one pass.
+        # Read from the operator's own text; there is no writer to name a subject.
+        warnings += generate.find_inset(draft)
 
     if file is not None and file.filename:
         data = await file.read(MAX_HERO_BYTES + 1)
@@ -656,6 +670,79 @@ async def upload_inset(
         buffer.getvalue(), media.filename(draft_id, "inset", "png")
     )
     return _redrawn(session, draft, page)
+
+
+def _sentence(error: Exception) -> str:
+    message = str(error)
+    return f"{message[:1].upper()}{message[1:]}."
+
+
+class FindInset(BaseModel):
+    candidate: inset.Candidate | None = None
+    """Swap to one of the candidates a previous find returned, sent back whole.
+    Its URLs must be Unsplash's - `inset.place` checks before fetching.
+    Omitted, the AI finds one."""
+
+
+class FoundInset(BaseModel):
+    subject: str | None
+    chosen: inset.Candidate | None
+    """The AI's pick. Null after a swap, where the operator chose."""
+    candidates: list[inset.Candidate]
+    """Everything the AI looked at, offered as one-click swaps. Empty after a
+    swap: the list swapped from is still on the operator's screen."""
+
+
+@router.post("/drafts/{draft_id}/inset/find")
+def find_inset(
+    draft_id: int, body: FindInset, session: Session = Depends(get_session)
+) -> FoundInset:
+    """Have the AI find a picture for the circle, place it, and redraw the card.
+
+    The client's ask (2026-09-14): "Get the AI to source and place the
+    appropriate image", as a button below Upload. Not a search box - typing a
+    search is what a browser tab already does. The AI reads the post **from the
+    row**, so the client saves first; see `image.inset` for the three steps.
+
+    404 is "no picture" (no subject, nothing on Wikipedia, nothing that fits),
+    and the message says which. 502 is the model failing to answer at all.
+    """
+    draft = _editable(session, draft_id)
+    page = session.get(Page, draft.page_id)
+    if page is None:
+        raise HTTPException(status_code=404, detail=f"No page {draft.page_id}")
+
+    if body.candidate is not None:
+        try:
+            data = inset.place(body.candidate)
+        except inset.InsetError as error:
+            raise HTTPException(status_code=422, detail=_sentence(error)) from error
+        draft.inset_image_path = media.store.save(
+            data, media.filename(draft_id, "inset", "png")
+        )
+        _redrawn(session, draft, page)
+        return FoundInset(subject=draft.inset_subject, chosen=None, candidates=[])
+
+    post = generate.post_text(draft)
+    if not post:
+        raise HTTPException(
+            status_code=422, detail="Write the post first - the AI reads it to choose."
+        )
+    try:
+        found = inset.find_for_post(post)
+    except inset.InsetError as error:
+        raise HTTPException(status_code=404, detail=_sentence(error)) from error
+    except Exception as error:  # noqa: BLE001 - the model chain: outage or refusal
+        raise HTTPException(
+            status_code=502,
+            detail=f"The AI could not choose a picture ({type(error).__name__}).",
+        ) from error
+
+    generate.store_inset(draft, found)
+    _redrawn(session, draft, page)
+    return FoundInset(
+        subject=found.subject, chosen=found.chosen, candidates=found.candidates
+    )
 
 
 @router.delete("/drafts/{draft_id}/inset")

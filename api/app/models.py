@@ -840,13 +840,22 @@ class Draft(SQLModel, table=True):
     """Kept apart so re-compositing an edit does not re-pay for image generation."""
 
     inset_image_path: str | None = None
-    """The circular inset: a picture the operator uploaded, cropped to a disc.
+    """The circular inset: a picture uploaded, or found on Unsplash, cropped to a disc.
 
-    Null is the normal case - no upload, no circle, and the card is the one it
-    was before. Nothing generates this: it is the one image in the app that
-    comes from a person rather than a model, which is why there is no prompt
-    column beside it.
+    Null is the normal case - no circle, and the card is the one it was before.
+    Nothing *draws* this: it is a photograph of something real, never a model's
+    picture, which is why there is no prompt column beside it.
     """
+
+    find_inset: bool = Field(default=False)
+    """Have the AI find the inset on Unsplash during the run (`image.inset`).
+
+    A column for the same reason as `no_image`: `run_drafts` takes ids only, so
+    the run's choices have to live on the row."""
+
+    inset_subject: str | None = None
+    """What the inset shows, as the writer named it or the operator corrected it.
+    Kept so the drawer's Find box opens on the guess rather than blank."""
 
     inset_size_px: int | None = None
     """Diameter of the disc. Null takes `layout.portrait.size_px`.

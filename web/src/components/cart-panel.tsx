@@ -80,6 +80,8 @@ export function CartPanel() {
    * and for no photograph is a contradiction, not a preference.
    */
   const [noImage, setNoImage] = useState(false);
+  /** Have the AI find and place an Unsplash photo in the circular inset. Off with No image. */
+  const [findInset, setFindInset] = useState(false);
   /**
    * The post style this run writes under, from the library on Settings.
    *
@@ -121,11 +123,13 @@ export function CartPanel() {
         page_ids: [page.id],
         hero_from_source: offerSourceHero && heroFromSource && !noImage,
         no_image: noImage,
+        find_inset: findInset && !noImage,
         prompt_template_id: styleId === "" ? null : Number(styleId),
       });
       cart.clear();
       setHeroFromSource(false);
       setNoImage(false);
+      setFindInset(false);
       setStyleId("");
       toast.success(`${ids.length} draft${ids.length === 1 ? "" : "s"} generating.`, {
         description: "Progress is on the Review screen.",
@@ -234,12 +238,31 @@ export function CartPanel() {
               checked={noImage}
               onChange={(event) => {
                 setNoImage(event.target.checked);
-                if (event.target.checked) setHeroFromSource(false);
+                if (event.target.checked) {
+                  setHeroFromSource(false);
+                  setFindInset(false);
+                }
               }}
               className="size-3.5 cursor-pointer accent-primary"
             />
             No image
           </label>
+
+          {/* Hidden with No image: a text-only post has no card to circle. */}
+          {!noImage ? (
+            <label
+              className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs text-muted-foreground"
+              title="The AI finds an Unsplash photo that fits each post and puts it in the circular inset."
+            >
+              <input
+                type="checkbox"
+                checked={findInset}
+                onChange={(event) => setFindInset(event.target.checked)}
+                className="size-3.5 cursor-pointer accent-primary"
+              />
+              Find inset
+            </label>
+          ) : null}
 
           {offerSourceHero && !noImage ? (
             <label

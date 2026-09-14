@@ -103,6 +103,8 @@ export interface GenerateRequest {
   prompt_template_id?: number | null;
   /** Text only: no hero, no card, and the one generate path that costs nothing. */
   no_image?: boolean;
+  /** Have the AI find and place an Unsplash photo that fits each post in the inset. */
+  find_inset?: boolean;
 }
 
 /**
@@ -132,6 +134,8 @@ export async function createManualDraft(input: {
   hook: string;
   caption: string;
   first_comment: string;
+  /** Have the AI find an inset from this text. The one model call on Manual. */
+  find_inset: boolean;
   file: File | null;
 }): Promise<Draft> {
   const body = new FormData();
@@ -139,6 +143,7 @@ export async function createManualDraft(input: {
   body.append("hook", input.hook);
   body.append("caption", input.caption);
   body.append("first_comment", input.first_comment);
+  if (input.find_inset) body.append("find_inset", "true");
   // Only when there is one: an empty part still arrives as an UploadFile with a
   // blank filename, which the server would have to special-case.
   if (input.file) body.append("file", input.file);
@@ -220,6 +225,37 @@ export async function regenerateField(
     instruction: options.instruction ?? null,
     keeping: options.keeping ?? null,
   });
+}
+
+/** An Unsplash photo the AI looked at for the inset. */
+export interface InsetCandidate {
+  /** Unsplash's description of the photo. */
+  title: string;
+  /** 400px, straight from Unsplash - the swap row shows this, as their guidelines require. */
+  url: string;
+  full_url: string;
+  download_location: string;
+}
+
+/** What a find placed, and everything it chose among. */
+export interface FoundInset {
+  subject: string | null;
+  /** The AI's pick. Null after a swap, where the operator chose. */
+  chosen: InsetCandidate | null;
+  /** Offered as one-click swaps. Empty after a swap. */
+  candidates: InsetCandidate[];
+}
+
+/**
+ * Put a picture in the circle and redraw the card.
+ *
+ * Without `candidate` the AI finds one: it reads the post **as saved**, searches
+ * Unsplash and picks by looking - so save first. With `candidate`, swap to one
+ * of the photos a previous find returned. The draft is not in the answer;
+ * refresh it.
+ */
+export async function findInset(id: number, candidate?: InsetCandidate): Promise<FoundInset> {
+  return post<FoundInset>(`/drafts/${id}/inset/find`, candidate ? { candidate } : {});
 }
 
 /** Take the circle off. Answers with the redrawn draft, not 204. */

@@ -28,7 +28,7 @@ from sqlmodel import Session, select
 from app import layout_for, media
 from app.db import get_engine
 from app.http import shared as http_shared
-from app.image import compositor, hero
+from app.image import compositor, hero, inset
 from app.image import text as overlay
 from app.models import (
     Draft,
@@ -176,6 +176,7 @@ def start_run(
     template: str | None = None,
     no_image: bool = False,
     prompt_template_id: int | None = None,
+    find_inset: bool = False,
 ) -> list[int]:
     """Insert one placeholder Draft per (source × page) and return the ids.
 
@@ -213,6 +214,8 @@ def start_run(
             hero_from_source=hero_from_source and row is not None,
             template=template,
             no_image=no_image,
+            # A text-only post has no card to put a circle on.
+            find_inset=find_inset and not no_image,
             status=DraftStatus.GENERATING,
             progress_step="queued",
             progress_pct=0,
@@ -325,6 +328,7 @@ def _run_one(session: Session, draft_id: int) -> None:
         draft.first_comment = content.first_comment
         draft.highlight_phrases = content.highlight_phrases
         draft.image_prompt = content.image_prompt
+        draft.inset_subject = content.inset_subject
 
         # Residue: what the writer could not fix within its retries. Every
         # rule is enforced, so a Warning here has already survived correction.
@@ -345,6 +349,16 @@ def _run_one(session: Session, draft_id: int) -> None:
         # later with nothing left to fetch it, so it never appeared until the
         # operator reloaded. A draft is not in review until it is whole.
         _progress(session, draft, "drawing the image", 60)
+
+        # Before the card, so `build_image` composites the circle in one pass.
+        # The writer has already named the subject, which saves a model call;
+        # its null is an answer ("no single subject"), not a gap to fill.
+        if draft.find_inset:
+            draft.warnings = draft.warnings + (
+                find_inset(draft, draft.inset_subject)
+                if draft.inset_subject
+                else [f"{IMAGE_WARNING}no inset - the post has no single subject."]
+            )
 
         # Rebound, never `+=`. `warnings` is a plain JSON column with no
         # mutation tracking, so an in-place append after the last commit is
@@ -517,6 +531,39 @@ def build_image(session: Session, draft: Draft, page: Page) -> list[str]:
 
     except Exception as error:  # noqa: BLE001 - a warning, not a dead draft
         return [f"{IMAGE_WARNING}{type(error).__name__}: {error}"[:300]]
+
+
+def post_text(draft: Draft) -> str:
+    """What the inset finder reads: the post as it stands, drawn text first."""
+    return "\n\n".join(
+        part.strip()
+        for part in (draft.hook, draft.caption, draft.first_comment)
+        if part and part.strip()
+    )
+
+
+def find_inset(draft: Draft, subject: str | None = None) -> list[str]:
+    """Have the AI find and place a picture in the circle (`image.inset`).
+
+    `subject` is the writer's, on a run; without one the model names it from the
+    post. Returns warnings; never raises. A miss or a model outage is the
+    operator's cue to upload, the way a failed hero is, and must not cost the
+    draft its text or its card.
+    """
+    try:
+        found = inset.find_for_post(post_text(draft), subject)
+    except Exception as error:  # noqa: BLE001 - a warning, not a dead draft
+        return [f"{IMAGE_WARNING}no inset - {error}"[:300]]
+    store_inset(draft, found)
+    return []
+
+
+def store_inset(draft: Draft, found: inset.Found) -> None:
+    """Point the draft at the found picture. The caller redraws and commits."""
+    draft.inset_subject = found.subject
+    draft.inset_image_path = media.store.save(
+        found.png, media.filename(draft.id or 0, "inset", "png")
+    )
 
 
 def _discard(stored: str) -> None:
