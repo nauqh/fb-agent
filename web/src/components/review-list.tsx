@@ -575,5 +575,11 @@ function StatusBadge({ draft }: { draft: Draft }) {
 
 /** The hook is a paragraph; a row wants its first sentence. */
 function title(draft: Draft): string {
-  return headline(draft.hook ?? draft.topic) || "Untitled";
+  // A no-overlay draft has no hook by design (a Page's emptied overlay prompt,
+  // or a style's "No overlay text"), and it read as "Untitled" in the queue.
+  // The caption is what Facebook shows first, so it names the post next.
+  return (
+    headline(draft.hook || draft.topic || draft.caption || draft.first_comment) ||
+    "Untitled"
+  );
 }
