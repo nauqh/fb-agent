@@ -854,8 +854,24 @@ class Draft(SQLModel, table=True):
     the run's choices have to live on the row."""
 
     inset_subject: str | None = None
-    """What the inset shows, as the writer named it or the operator corrected it.
-    Kept so the drawer's Find box opens on the guess rather than blank."""
+    """The last Unsplash query for the inset - the writer's, the AI's, or the
+    operator's own keywords. The drawer's search box opens on it."""
+
+    inset_candidates: list[dict] = Field(
+        default_factory=list,
+        sa_column=Column(JSON, nullable=False, server_default="[]"),
+    )
+    """The photos the last find or search offered, as `inset.Candidate` dicts -
+    the drawer's swap row. On the row rather than in the browser, so a run's
+    alternatives are there when the draft is opened (client, 2026-09-15).
+
+    Not null, with a server default, for the reason `find_inset` has one: the
+    database is shared with production, whose older code omits the column on
+    INSERT during a deploy, and a null list fails the API's own response."""
+
+    inset_photo_url: str | None = None
+    """Which of `inset_candidates` is in the circle, by its `url`. Null for an
+    upload, or while a search has offered photos and none is placed."""
 
     inset_size_px: int | None = None
     """Diameter of the disc. Null takes `layout.portrait.size_px`.

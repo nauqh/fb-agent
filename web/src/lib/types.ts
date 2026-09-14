@@ -113,6 +113,18 @@ export interface SourceItem {
   created_at: string;
 }
 
+/** An Unsplash photo offered for the circular inset (`image.inset.Candidate`). */
+export interface InsetCandidate {
+  /** Unsplash's description of the photo. */
+  title: string;
+  /** 400px, straight from Unsplash - the swap row shows this, as their guidelines require. */
+  url: string;
+  /** 1080px, what is placed in the circle. */
+  full_url: string;
+  /** Pinged when the photo is placed - Unsplash's download event. */
+  download_location: string;
+}
+
 /**
  * A generated post awaiting review.
  *
@@ -139,8 +151,12 @@ export interface Draft {
 
   /** The circular inset, uploaded or found. Null is the normal case - no circle. */
   inset_image_path: string | null;
-  /** What the inset shows, as the writer named it. Prefills the Find box. */
+  /** The last Unsplash query for the inset. Prefills the drawer's search box. */
   inset_subject: string | null;
+  /** The photos the last find or search offered - the drawer's swap row. */
+  inset_candidates: InsetCandidate[];
+  /** Which of those is in the circle, by `url`. Null for an upload, or before one is picked. */
+  inset_photo_url: string | null;
 
   /**
    * Where each of the three paths above actually resolves, as a public Supabase

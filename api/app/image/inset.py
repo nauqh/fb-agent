@@ -75,7 +75,15 @@ a long first comment adds tokens, not judgement."""
 
 
 class InsetError(RuntimeError):
-    """No usable photo. A warning on the draft, or a 4xx from the drawer."""
+    """No usable photo. A warning on the draft, or a 4xx from the drawer.
+
+    `candidates` is what was offered when the answer was "none of these fit":
+    the operator may still like one, so the callers keep them on the draft.
+    """
+
+    def __init__(self, message: str, candidates: list["Candidate"] | None = None):
+        super().__init__(message)
+        self.candidates = candidates or []
 
 
 class Candidate(BaseModel):
@@ -300,7 +308,7 @@ def find_for_post(
 
     pick = writer.ask(prompt, _Pick, PICK_INSTRUCTIONS, model, in_range).output
     if pick.choice is None:
-        raise InsetError(f"none of the Unsplash photos for “{subject}” fit the post")
+        raise InsetError(f"none of the Unsplash photos for “{subject}” fit the post", shown)
 
     chosen = shown[pick.choice - 1]
     return Found(place(chosen, client), subject, chosen, shown)

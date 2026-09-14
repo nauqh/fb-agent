@@ -244,9 +244,13 @@ def test_none_fitting_is_an_inset_error_naming_the_query():
     model, _ = _gemini(picks=(None,))
     client, requests = _unsplash()
 
-    with pytest.raises(inset.InsetError, match="hand washing"):
+    with pytest.raises(inset.InsetError, match="hand washing") as caught:
         inset.find_for_post("a post", "hand washing", client, model)
     assert not any(r.url.path.endswith("/download") for r in requests)
+    assert [c.title for c in caught.value.candidates] == [
+        "hands under a running tap",
+        "a laboratory bench",
+    ], "the photos it looked at travel with the refusal"
 
 
 def test_an_out_of_range_pick_is_retried_never_returned():
@@ -285,7 +289,27 @@ def test_a_run_asked_to_find_an_inset_uses_the_writers_query(
     assert asked[0][1] == "hand washing", "the writer's query saves a model call"
     assert "Semmelweis told doctors" in asked[0][0]
     assert draft["inset_image_path"] and draft["composed_image_path"]
+    assert [c["title"] for c in draft["inset_candidates"]] == ["hands", "lab"], (
+        "a run keeps its alternatives, so Review opens on them"
+    )
+    assert draft["inset_photo_url"] == _candidate("hands").url
     assert draft["status"] == "review"
+
+
+def test_a_run_where_nothing_fits_still_keeps_the_photos(
+    client, written, illustrated, monkeypatch
+):
+    def none_fit(*a, **k):
+        raise inset.InsetError("none fit", [_candidate("hands"), _candidate("lab")])
+
+    monkeypatch.setattr(inset, "find_for_post", none_fit)
+
+    client.post("/generate", json={"page_ids": [1], "topic": "x", "find_inset": True})
+    draft = client.get("/drafts/1").json()
+
+    assert draft["inset_image_path"] is None
+    assert draft["inset_photo_url"] is None
+    assert [c["title"] for c in draft["inset_candidates"]] == ["hands", "lab"]
 
 
 @pytest.mark.parametrize("failure", [inset.InsetError("nothing fits"), RuntimeError("503")])
@@ -343,9 +367,9 @@ def test_find_with_ai_reads_the_saved_post_and_returns_what_it_chose_among(
     assert asked[0][1] is None, "the drawer re-reads the post rather than trusting a stored query"
     assert "Semmelweis told doctors" in asked[0][0]
     body = response.json()
-    assert body["chosen"]["title"] == "hands"
-    assert len(body["candidates"]) == 2
-    assert client.get("/drafts/1").json()["inset_image_path"]
+    assert body["inset_image_path"]
+    assert body["inset_photo_url"] == _candidate("hands").url
+    assert [c["title"] for c in body["inset_candidates"]] == ["hands", "lab"]
 
 
 def test_a_swap_places_that_photo_and_asks_no_model(client, written, illustrated, monkeypatch):
@@ -358,7 +382,8 @@ def test_a_swap_places_that_photo_and_asks_no_model(client, written, illustrated
 
     assert response.status_code == 200, response.text
     assert placed == ["lab"]
-    assert client.get("/drafts/1").json()["inset_image_path"]
+    assert response.json()["inset_image_path"]
+    assert response.json()["inset_photo_url"] == _candidate("lab").url
 
 
 def test_a_swap_off_unsplash_is_a_422(client, written, illustrated):
@@ -376,18 +401,85 @@ def test_no_photo_is_a_404_and_a_dead_model_is_a_502(client, written, illustrate
     client.post("/generate", json={"page_ids": [1], "topic": "x"})
 
     def miss(*a, **k):
-        raise inset.InsetError("none of the Unsplash photos for “hand washing” fit the post")
+        raise inset.InsetError(
+            "none of the Unsplash photos for “hand washing” fit the post", [_candidate("lab")]
+        )
 
     monkeypatch.setattr(inset, "find_for_post", miss)
     response = client.post("/drafts/1/inset/find", json={})
     assert response.status_code == 404
     assert "hand washing" in response.json()["detail"]
+    assert [c["title"] for c in client.get("/drafts/1").json()["inset_candidates"]] == ["lab"], (
+        "a 404 for 'none fit' still commits the photos it looked at"
+    )
 
     def outage(*a, **k):
         raise RuntimeError("503 UNAVAILABLE")
 
     monkeypatch.setattr(inset, "find_for_post", outage)
     assert client.post("/drafts/1/inset/find", json={}).status_code == 502
+
+
+def test_an_upload_is_not_one_of_the_offered_photos_but_they_stay(
+    client, written, illustrated, a_photograph, monkeypatch
+):
+    client.post("/generate", json={"page_ids": [1], "topic": "x"})
+    monkeypatch.setattr(inset, "find_for_post", lambda *a, **k: _found())
+    client.post("/drafts/1/inset/find", json={})
+
+    response = client.post("/drafts/1/inset", files={"file": ("mine.png", a_photograph, "image/png")})
+
+    assert response.status_code == 200, response.text
+    assert response.json()["inset_photo_url"] is None
+    assert len(response.json()["inset_candidates"]) == 2
+
+
+# --- the drawer's keyword search ------------------------------------------------------
+
+
+def test_a_keyword_search_offers_photos_and_places_nothing(client, written, illustrated, monkeypatch):
+    client.post("/generate", json={"page_ids": [1], "topic": "x"})
+    searched = []
+    monkeypatch.setattr(inset, "find_for_post", lambda *a, **k: pytest.fail("a search asked the AI"))
+    monkeypatch.setattr(
+        inset,
+        "candidates",
+        lambda query, *a: searched.append(query) or [_candidate("lab"), _candidate("hands")],
+    )
+
+    response = client.post("/drafts/1/inset/search", json={"query": "  hand washing  "})
+
+    assert response.status_code == 200, response.text
+    assert searched == ["hand washing"]
+    body = response.json()
+    assert [c["title"] for c in body["inset_candidates"]] == ["lab", "hands"]
+    assert body["inset_subject"] == "hand washing", "the box reopens on the operator's query"
+    assert body["inset_image_path"] is None and body["inset_photo_url"] is None
+
+
+def test_a_search_with_no_results_is_a_404_and_keeps_the_old_offers(
+    client, written, illustrated, monkeypatch
+):
+    client.post("/generate", json={"page_ids": [1], "topic": "x"})
+    monkeypatch.setattr(inset, "find_for_post", lambda *a, **k: _found())
+    client.post("/drafts/1/inset/find", json={})
+    monkeypatch.setattr(inset, "candidates", lambda *a: [])
+
+    response = client.post("/drafts/1/inset/search", json={"query": "qwxzzy"})
+
+    assert response.status_code == 404
+    assert "qwxzzy" in response.json()["detail"]
+    assert len(client.get("/drafts/1").json()["inset_candidates"]) == 2
+
+
+def test_a_search_without_a_key_says_so(client, written, illustrated, monkeypatch):
+    client.post("/generate", json={"page_ids": [1], "topic": "x"})
+    monkeypatch.setattr(settings, "unsplash_access_key", "")
+
+    response = client.post("/drafts/1/inset/search", json={"query": "hand washing"})
+
+    assert response.status_code == 502
+    assert "UNSPLASH_ACCESS_KEY" in response.json()["detail"]
 
 
 # --- Manual, written by hand ----------------------------------------------------------

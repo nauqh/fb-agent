@@ -552,6 +552,12 @@ def find_inset(draft: Draft, subject: str | None = None) -> list[str]:
     """
     try:
         found = inset.find_for_post(post_text(draft), subject)
+    except inset.InsetError as error:
+        # "None of these fit" still found photos. Kept, so the operator opens
+        # the draft to a row of alternatives rather than an empty widget.
+        if error.candidates:
+            draft.inset_candidates = [c.model_dump() for c in error.candidates]
+        return [f"{IMAGE_WARNING}no inset - {error}"[:300]]
     except Exception as error:  # noqa: BLE001 - a warning, not a dead draft
         return [f"{IMAGE_WARNING}no inset - {error}"[:300]]
     store_inset(draft, found)
@@ -559,8 +565,16 @@ def find_inset(draft: Draft, subject: str | None = None) -> list[str]:
 
 
 def store_inset(draft: Draft, found: inset.Found) -> None:
-    """Point the draft at the found picture. The caller redraws and commits."""
+    """Point the draft at the found photo, and keep what it was chosen among.
+
+    The alternatives go on the row (client, 2026-09-15): a run's find used to
+    throw them away, so swapping meant pressing Find with AI again - another
+    model call to see photos the run had already looked at. The caller redraws
+    and commits.
+    """
     draft.inset_subject = found.subject
+    draft.inset_candidates = [c.model_dump() for c in found.candidates]
+    draft.inset_photo_url = found.chosen.url
     draft.inset_image_path = media.store.save(
         found.png, media.filename(draft.id or 0, "inset", "png")
     )

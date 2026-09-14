@@ -11,6 +11,7 @@ import {
   Rocket,
   RefreshCw,
   RotateCcw,
+  Search,
   Sparkles,
   TriangleAlert,
   X,
@@ -42,6 +43,7 @@ import {
   removeInset,
   rescheduleDraft,
   returnToReview,
+  searchInset,
   unscheduleDraft,
   updateDraft,
   uploadHero,
@@ -52,8 +54,8 @@ import { listPages } from "@/lib/api/pages";
 import { getNextSlot, type NextSlot } from "@/lib/api/schedule";
 import { getSourceItem } from "@/lib/api/sources";
 import { chars, pageLocalSoon, timeAgo, words } from "@/lib/format";
-import type { InsetCandidate, RegeneratableField, RewriteProposal } from "@/lib/api/drafts";
-import type { Draft } from "@/lib/types";
+import type { RegeneratableField, RewriteProposal } from "@/lib/api/drafts";
+import type { Draft, InsetCandidate } from "@/lib/types";
 import { useQuery } from "@/lib/use-query";
 import { pageAvatarRaw } from "@/lib/page-avatar";
 import { cn } from "@/lib/utils";
@@ -109,15 +111,11 @@ export function DraftDetail({
   const [saving, setSaving] = useState(false);
   const [deciding, setDeciding] = useState(false);
   const [imageWork, setImageWork] = useState<
-    "hero" | "hero-upload" | "inset" | "inset-find" | null
+    "hero" | "hero-upload" | "inset" | "inset-find" | "inset-search" | null
   >(null);
-  /** What the last AI find looked at, tagged with its draft so a switch never
-   *  shows another's. `chosen` is the URL now in the circle. */
-  const [found, setFound] = useState<{
-    draftId: number;
-    chosen: string | null;
-    items: InsetCandidate[];
-  } | null>(null);
+  /** The inset search box. Uncontrolled: it opens on the draft's last query and
+   *  is only read when Search is pressed. The offered photos live on the row. */
+  const insetQuery = useRef<HTMLInputElement>(null);
   const [view, setView] = useState<View>("text");
   const filePicker = useRef<HTMLInputElement>(null);
   const heroPicker = useRef<HTMLInputElement>(null);
@@ -423,12 +421,32 @@ export function DraftDetail({
     setImageWork("inset-find");
     try {
       if (dirty && form) await updateDraft(draftId, form);
-      const result = await findInset(draftId);
-      await refresh();
-      setFound({ draftId, chosen: result.chosen?.url ?? null, items: result.candidates });
-      toast.success(result.chosen ? `Inset: ${result.chosen.title}` : "Inset added.");
+      const row = await findInset(draftId);
+      const chosen = row.inset_candidates.find((item) => item.url === row.inset_photo_url);
+      toast.success(chosen ? `Inset: ${chosen.title}` : "Inset added.");
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : "No inset found");
+    } finally {
+      // On failure too: "none of these fit" still keeps the photos it looked
+      // at on the row, for the operator to pick from.
+      await refresh();
+      setImageWork(null);
+    }
+  }
+
+  /** Unsplash photos for the operator's own keywords, into the row below. No model call. */
+  async function searchInsetPhotos() {
+    const query = insetQuery.current?.value.trim() ?? "";
+    if (!query) return;
+    setImageWork("inset-search");
+    try {
+      // Saved first like every inset action: the refresh below re-reads the
+      // row, and unsaved text must not be the price of a search.
+      if (dirty && form) await updateDraft(draftId, form);
+      await searchInset(draftId, query);
+      await refresh();
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Search failed");
     } finally {
       setImageWork(null);
     }
@@ -441,7 +459,6 @@ export function DraftDetail({
       if (dirty && form) await updateDraft(draftId, form);
       await findInset(draftId, item);
       await refresh();
-      setFound((current) => (current ? { ...current, chosen: item.url } : current));
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : "Swap failed");
     } finally {
@@ -914,17 +931,52 @@ export function DraftDetail({
                 the fix when the pick is close but not right. Unsplash's own
                 hotlinked thumbnails, as their API guidelines require; nothing
                 is copied to us until one is clicked. */}
-            {found?.draftId === draftId && found.items.length > 1 ? (
+            {/* The operator's own keywords, for when the AI's query is not the
+                photo they want (client, 2026-09-15). Fills the row below and
+                places nothing. Keyed on the draft and its last query, so it
+                opens on whatever the AI or the operator searched last. */}
+            <div className="flex gap-1">
+              <Input
+                key={`${draft.id}:${draft.inset_subject ?? ""}`}
+                ref={insetQuery}
+                defaultValue={draft.inset_subject ?? ""}
+                placeholder="Search Unsplash, e.g. hand washing"
+                aria-label="Search Unsplash for an inset"
+                // `h-7`, the `size="sm"` button height beside it.
+                className="h-7 text-xs md:text-xs"
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && imageWork === null) void searchInsetPhotos();
+                }}
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                className="shrink-0"
+                disabled={imageWork !== null}
+                onClick={() => void searchInsetPhotos()}
+              >
+                {imageWork === "inset-search" ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <Search className="size-3.5" />
+                )}
+                Search
+              </Button>
+            </div>
+
+            {draft.inset_candidates.length > 0 ? (
               <div className="space-y-1.5">
-                <p className="text-[11px] text-muted-foreground">Not this one? Swap</p>
+                <p className="text-[11px] text-muted-foreground">
+                  {draft.inset_photo_url ? "Not this one? Swap" : "Click a photo to use it"}
+                </p>
                 <div className="grid grid-cols-6 gap-2">
-                  {found.items.map((item) => (
+                  {draft.inset_candidates.map((item) => (
                     <button
                       key={item.url}
                       type="button"
                       title={item.title}
                       aria-label={`Use ${item.title}`}
-                      disabled={imageWork !== null || item.url === found.chosen}
+                      disabled={imageWork !== null || item.url === draft.inset_photo_url}
                       onClick={() => void swapInset(item)}
                       className="group disabled:cursor-default"
                     >
@@ -935,7 +987,7 @@ export function DraftDetail({
                         alt={item.title}
                         className={cn(
                           "aspect-square w-full rounded-full object-cover ring-1 ring-foreground/10",
-                          item.url === found.chosen
+                          item.url === draft.inset_photo_url
                             ? "ring-2 ring-gold"
                             : "group-hover:ring-2 group-hover:ring-foreground/40",
                         )}

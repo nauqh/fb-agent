@@ -1,4 +1,4 @@
-import type { Draft, DraftStatus } from "@/lib/types";
+import type { Draft, DraftStatus, InsetCandidate } from "@/lib/types";
 import type { LiveSourceItem } from "@/lib/api/sources";
 import { del, delJson, get, patch, post, postForm, upload } from "@/lib/api/client";
 
@@ -227,35 +227,23 @@ export async function regenerateField(
   });
 }
 
-/** An Unsplash photo the AI looked at for the inset. */
-export interface InsetCandidate {
-  /** Unsplash's description of the photo. */
-  title: string;
-  /** 400px, straight from Unsplash - the swap row shows this, as their guidelines require. */
-  url: string;
-  full_url: string;
-  download_location: string;
-}
-
-/** What a find placed, and everything it chose among. */
-export interface FoundInset {
-  subject: string | null;
-  /** The AI's pick. Null after a swap, where the operator chose. */
-  chosen: InsetCandidate | null;
-  /** Offered as one-click swaps. Empty after a swap. */
-  candidates: InsetCandidate[];
+/**
+ * Put a photo in the circle and redraw the card. Answers with the draft.
+ *
+ * Without `candidate` the AI finds one: it reads the post **as saved**, searches
+ * Unsplash and picks by looking - so save first. With `candidate`, place one of
+ * the draft's `inset_candidates`. Either way the offered photos stay on the row.
+ */
+export async function findInset(id: number, candidate?: InsetCandidate): Promise<Draft> {
+  return post<Draft>(`/drafts/${id}/inset/find`, candidate ? { candidate } : {});
 }
 
 /**
- * Put a picture in the circle and redraw the card.
- *
- * Without `candidate` the AI finds one: it reads the post **as saved**, searches
- * Unsplash and picks by looking - so save first. With `candidate`, swap to one
- * of the photos a previous find returned. The draft is not in the answer;
- * refresh it.
+ * Unsplash photos for the operator's own keywords, kept on the draft as its
+ * `inset_candidates`. No model call, and nothing is placed until one is picked.
  */
-export async function findInset(id: number, candidate?: InsetCandidate): Promise<FoundInset> {
-  return post<FoundInset>(`/drafts/${id}/inset/find`, candidate ? { candidate } : {});
+export async function searchInset(id: number, query: string): Promise<Draft> {
+  return post<Draft>(`/drafts/${id}/inset/search`, { query });
 }
 
 /** Take the circle off. Answers with the redrawn draft, not 204. */

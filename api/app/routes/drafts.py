@@ -669,6 +669,8 @@ async def upload_inset(
     draft.inset_image_path = media.store.save(
         buffer.getvalue(), media.filename(draft_id, "inset", "png")
     )
+    # The circle is no longer one of the offered photos; the offers stay.
+    draft.inset_photo_url = None
     return _redrawn(session, draft, page)
 
 
@@ -684,28 +686,22 @@ class FindInset(BaseModel):
     Omitted, the AI finds one."""
 
 
-class FoundInset(BaseModel):
-    subject: str | None
-    chosen: inset.Candidate | None
-    """The AI's pick. Null after a swap, where the operator chose."""
-    candidates: list[inset.Candidate]
-    """Everything the AI looked at, offered as one-click swaps. Empty after a
-    swap: the list swapped from is still on the operator's screen."""
-
-
 @router.post("/drafts/{draft_id}/inset/find")
 def find_inset(
     draft_id: int, body: FindInset, session: Session = Depends(get_session)
-) -> FoundInset:
-    """Have the AI find a picture for the circle, place it, and redraw the card.
+) -> Draft:
+    """Put a photo in the circle, and redraw the card.
 
-    The client's ask (2026-09-14): "Get the AI to source and place the
-    appropriate image", as a button below Upload. Not a search box - typing a
-    search is what a browser tab already does. The AI reads the post **from the
-    row**, so the client saves first; see `image.inset` for the three steps.
+    Without `candidate`, the AI finds one - the client's ask (2026-09-14): "Get
+    the AI to source and place the appropriate image", as a button below
+    Upload. It reads the post **from the row**, so the client saves first; see
+    `image.inset` for the three steps. With `candidate`, place one of the
+    photos already on the row (`inset_candidates`), which costs no model call.
 
-    404 is "no picture" (no subject, nothing on Wikipedia, nothing that fits),
-    and the message says which. 502 is the model failing to answer at all.
+    404 is "no photo" (nothing to photograph, nothing on Unsplash, nothing that
+    fits), and the message says which - and when nothing fitted, the photos it
+    looked at are still kept on the row for the operator to pick from. 502 is
+    the model failing to answer at all.
     """
     draft = _editable(session, draft_id)
     page = session.get(Page, draft.page_id)
@@ -720,8 +716,8 @@ def find_inset(
         draft.inset_image_path = media.store.save(
             data, media.filename(draft_id, "inset", "png")
         )
-        _redrawn(session, draft, page)
-        return FoundInset(subject=draft.inset_subject, chosen=None, candidates=[])
+        draft.inset_photo_url = body.candidate.url
+        return _redrawn(session, draft, page)
 
     post = generate.post_text(draft)
     if not post:
@@ -731,6 +727,11 @@ def find_inset(
     try:
         found = inset.find_for_post(post)
     except inset.InsetError as error:
+        if error.candidates:
+            # Committed before the 404, or the refresh that follows it would
+            # show an empty row.
+            draft.inset_candidates = [c.model_dump() for c in error.candidates]
+            _save(session, draft)
         raise HTTPException(status_code=404, detail=_sentence(error)) from error
     except Exception as error:  # noqa: BLE001 - the model chain: outage or refusal
         raise HTTPException(
@@ -739,10 +740,41 @@ def find_inset(
         ) from error
 
     generate.store_inset(draft, found)
-    _redrawn(session, draft, page)
-    return FoundInset(
-        subject=found.subject, chosen=found.chosen, candidates=found.candidates
-    )
+    return _redrawn(session, draft, page)
+
+
+class SearchInset(BaseModel):
+    query: str = Field(min_length=1, max_length=100)
+
+
+@router.post("/drafts/{draft_id}/inset/search")
+def search_inset(
+    draft_id: int, body: SearchInset, session: Session = Depends(get_session)
+) -> Draft:
+    """Unsplash photos for the operator's own keywords, kept on the row.
+
+    The client's ask (2026-09-15), beside Find with AI: for when the AI's query
+    is not the photo they want. No model call and nothing placed - the results
+    replace `inset_candidates`, and the operator clicks one, which is the
+    `candidate` path of `find_inset`. One Unsplash request.
+
+    404 is "no results". 502 is Unsplash not answering, refusing the key, a
+    spent hourly limit, or no key at all - each says which.
+    """
+    draft = _editable(session, draft_id)
+    query = body.query.strip()
+    if not query:
+        raise HTTPException(status_code=422, detail="Type what to search for.")
+    try:
+        photos = inset.candidates(query)
+    except inset.InsetError as error:
+        raise HTTPException(status_code=502, detail=_sentence(error)) from error
+    if not photos:
+        raise HTTPException(status_code=404, detail=f"No Unsplash photos for “{query}”.")
+
+    draft.inset_subject = query
+    draft.inset_candidates = [photo.model_dump() for photo in photos]
+    return _save(session, draft)
 
 
 @router.delete("/drafts/{draft_id}/inset")
@@ -765,6 +797,8 @@ def remove_inset(draft_id: int, session: Session = Depends(get_session)) -> Draf
         raise HTTPException(status_code=404, detail=f"No page {draft.page_id}")
 
     draft.inset_image_path = None
+    # The offered photos stay: removing the circle is not rejecting them.
+    draft.inset_photo_url = None
     draft.inset_size_px = None
     draft.inset_x_ratio = None
     draft.inset_y_ratio = None
