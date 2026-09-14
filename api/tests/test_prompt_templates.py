@@ -81,6 +81,32 @@ def test_an_all_blank_template_is_refused(client):
     assert response.status_code == 422
 
 
+def test_no_overlay_text_is_a_style_of_its_own(client, session):
+    """The client's 2026-09-14 report: a style for image-only posts still came
+    out with a panel, because its empty Overlay box meant "use the Page's". `""`
+    is the explicit "no overlay text" and survives the round trip; `None` is still
+    "use the Page's" and is not a change on its own."""
+    assert _create(client, system_prompt=None, overlay_prompt="").status_code == 201
+    assert session.exec(select(PromptTemplate)).one().overlay_prompt == ""
+
+    assert (
+        _create(client, name="Blank", system_prompt=None, overlay_prompt=None).status_code
+        == 422
+    )
+
+
+def test_an_update_keeps_no_overlay_distinct_from_inherit(client, session):
+    created = _create(client).json()
+    url = f"/prompts/templates/{created['id']}"
+
+    client.put(url, json={**BODY, "overlay_prompt": "  "})
+    assert session.exec(select(PromptTemplate)).one().overlay_prompt == ""
+
+    client.put(url, json={**BODY, "overlay_prompt": None})
+    session.expire_all()
+    assert session.exec(select(PromptTemplate)).one().overlay_prompt is None
+
+
 def test_a_name_is_required_and_unique(client):
     assert _create(client, name="  ").status_code == 422
     assert _create(client).status_code == 201

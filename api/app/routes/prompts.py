@@ -190,6 +190,18 @@ def list_templates(
     return [_template_out(row) for row in session.exec(query).all()]
 
 
+def _overlay(text: str | None) -> str | None:
+    """A style's overlay has three states, the Page's own overlay prompt's three.
+
+    `None` uses the Page's overlay prompt, `""` is "this style has no overlay
+    text", and text is the style's own panel rules. Stripped but never turned
+    into `None`: the client's styles are often image-only posts with nothing
+    drawn on them (2026-09-14), and an empty box that silently meant "use the
+    Page's" is how one of those still came out with a panel.
+    """
+    return None if text is None else text.strip()
+
+
 @templates_router.post("", status_code=201)
 def create_template(
     body: TemplateBody, session: Session = Depends(get_session)
@@ -197,9 +209,9 @@ def create_template(
     name = body.name.strip()
     if not name:
         raise HTTPException(422, "A template needs a name.")
-    if not any(
-        (text or "").strip()
-        for text in (body.system_prompt, body.overlay_prompt, body.image_prompt)
+    # "No overlay text" is a change on its own, so `""` counts here.
+    if _overlay(body.overlay_prompt) is None and not any(
+        (text or "").strip() for text in (body.system_prompt, body.image_prompt)
     ):
         raise HTTPException(
             422,
@@ -246,7 +258,7 @@ def update_template(
 
     row.name = name
     row.system_prompt = body.system_prompt
-    row.overlay_prompt = body.overlay_prompt
+    row.overlay_prompt = _overlay(body.overlay_prompt)
     row.image_prompt = body.image_prompt
     session.add(row)
     session.commit()

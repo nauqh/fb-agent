@@ -223,7 +223,7 @@ erDiagram
         int page_id FK "styles are one Page's, never global"
         text name UK
         text system_prompt "a delta, null = nothing layered"
-        text overlay_prompt
+        text overlay_prompt "null = the Page's; empty = no overlay text"
         text image_prompt
     }
 

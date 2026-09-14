@@ -172,7 +172,9 @@ def test_a_post_template_with_only_an_image_layer_changes_no_text_instructions(p
     template = SimpleNamespace(
         name="Bright",
         system_prompt=None,
-        overlay_prompt="",
+        # None, not "": a style's empty string is "no overlay text" now, which is
+        # a text instruction. None is the style that changes nothing but the image.
+        overlay_prompt=None,
         image_prompt="Bright daylight.",
     )
 
@@ -620,6 +622,21 @@ def test_an_emptied_overlay_prompt_instructs_no_overlay_and_skips_the_template_l
     assert "null" in instructions and "highlight_phrases" in instructions
     # The page-level switch is authoritative: no panel rules for a panel-less post.
     assert "The panel holds the line" not in instructions
+
+
+def test_a_style_with_no_overlay_text_instructs_no_overlay_on_its_own(page):
+    """The client's 2026-09-14 report: an image-only style still produced a
+    panel. A style's overlay stored as `""` opts its drafts out even though the
+    Page itself has an overlay prompt; `None` uses the Page's and does not."""
+    no_panel = SimpleNamespace(
+        name="Photo", system_prompt=None, overlay_prompt="", image_prompt="Bright."
+    )
+    inherits = SimpleNamespace(
+        name="Photo", system_prompt=None, overlay_prompt=None, image_prompt="Bright."
+    )
+
+    assert "NO OVERLAY TEXT" in writer._instructions(page, layout, no_panel)
+    assert "NO OVERLAY TEXT" not in writer._instructions(page, layout, inherits)
 
 
 def test_a_page_with_an_overlay_prompt_never_sees_the_no_overlay_instruction(page):

@@ -124,14 +124,23 @@ def _instructions(page: Page, layout: Layout, template=None) -> str:
             f"{limits.body_max_chars:,} characters.\n"
             f"- The first comment must be {low}-{high} paragraphs."
         )
-    no_overlay = not prompts.overlay_prompt(layout, page.name, page).strip()
+    # Two ways to opt out, one outcome. The Page's overlay prompt emptied is
+    # every draft on the Page; a style's overlay stored as `""` is only the drafts
+    # written under that style (client, 2026-09-14). A style's `None` is neither:
+    # it uses the Page's overlay prompt, which is what an image-only style that
+    # still wants a panel means.
+    no_overlay = not prompts.overlay_prompt(layout, page.name, page).strip() or (
+        template is not None
+        and template.overlay_prompt is not None
+        and not template.overlay_prompt.strip()
+    )
     if template is not None:
         layers = []
         for label, text in (
             ("SYSTEM", template.system_prompt),
-            # Skipped when the Page has opted out of overlay text entirely: the
-            # Page-level switch is authoritative, and layering panel rules for a
-            # post that must not carry a panel would only confuse the model.
+            # Skipped for a no-overlay post, whichever switch said so: layering
+            # panel rules for a post that must not carry a panel would only
+            # confuse the model.
             ("OVERLAY (text panel rules)", None if no_overlay else template.overlay_prompt),
         ):
             if (text or "").strip():

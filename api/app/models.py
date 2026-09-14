@@ -717,7 +717,13 @@ class PromptTemplate(SQLModel, table=True):
     """Layered onto the writer's instructions, outranking the Page's own."""
 
     overlay_prompt: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
-    """Panel-text rules, layered beside the system layer for this style."""
+    """Panel-text rules, layered beside the system layer for this style.
+
+    The one field with three states rather than two, mirroring
+    `Page.overlay_prompt`: null uses the Page's overlay prompt, `""` means drafts
+    under this style carry no overlay text, and text is the style's own rules. A
+    blank here cannot mean "inherit" alone, because many styles are image-only
+    posts with nothing drawn on them (client, 2026-09-14)."""
 
     image_prompt: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
     """Layered onto the hero brief, not the writer - the image model never sees

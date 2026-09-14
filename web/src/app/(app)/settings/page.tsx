@@ -19,6 +19,7 @@ import { ScreenHeader } from "@/components/screen";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { getCompetitorPages, getSourcesConfig } from "@/lib/api/sources";
@@ -1339,14 +1340,18 @@ function PostStyles({
                     image layer reads very differently from a full rewrite of
                     the post structure, and the row is where that shows. */}
                 <span className="flex shrink-0 items-center gap-1">
-                  {TEMPLATE_FIELDS.filter(
-                    ({ field }) => (template[field] ?? "").trim() !== "",
-                  ).map(({ field, label }) => (
+                  {TEMPLATE_FIELDS.flatMap(({ field, label }) => {
+                    const text = template[field];
+                    if (text == null) return [];
+                    // An empty overlay is a choice, not a missing layer.
+                    if (text.trim() === "") return field === "overlay_prompt" ? ["No overlay"] : [];
+                    return [label];
+                  }).map((chip) => (
                     <span
-                      key={field}
+                      key={chip}
                       className="rounded-full border bg-muted/40 px-1.5 py-0.5 text-[11px] text-muted-foreground"
                     >
-                      {label}
+                      {chip}
                     </span>
                   ))}
                 </span>
@@ -1461,17 +1466,33 @@ function TemplateForm({
     image_prompt: initial?.image_prompt ?? "",
   }));
   const [busy, setBusy] = useState(false);
+  // The overlay is a choice, not only a box (client, 2026-09-14): many styles
+  // are image-only posts with nothing drawn on them, and an empty box that
+  // meant "use the Page's" is how one of those still came out with a panel.
+  // null = the Page's, "" = no overlay text, text = this style's own rules.
+  const [overlayMode, setOverlayMode] = useState<"page" | "none" | "own">(() =>
+    initial?.overlay_prompt == null
+      ? "page"
+      : initial.overlay_prompt.trim() === ""
+        ? "none"
+        : "own",
+  );
+  const overlay =
+    overlayMode === "none" ? "" : overlayMode === "own" ? form.overlay_prompt.trim() || null : null;
 
   // The same rule the API enforces, checked here so the button can say no
   // before a round trip does: a style with no name, or nothing in any layer,
-  // would change nothing about how a draft is written.
+  // would change nothing about how a draft is written. "No overlay text" is a
+  // change on its own.
   const writable =
     form.name.trim() !== "" &&
-    TEMPLATE_FIELDS.some(({ field }) => form[field].trim() !== "");
+    (overlay !== null || form.system_prompt.trim() !== "" || form.image_prompt.trim() !== "");
   const dirty =
     initial === undefined ||
     form.name !== initial.name ||
-    TEMPLATE_FIELDS.some(({ field }) => form[field] !== (initial[field] ?? ""));
+    form.system_prompt !== (initial.system_prompt ?? "") ||
+    form.image_prompt !== (initial.image_prompt ?? "") ||
+    overlay !== (initial.overlay_prompt == null ? null : initial.overlay_prompt.trim());
 
   async function save() {
     setBusy(true);
@@ -1479,9 +1500,9 @@ function TemplateForm({
       const body = {
         name: form.name.trim(),
         page_id: pageId,
-        ...Object.fromEntries(
-          TEMPLATE_FIELDS.map(({ field }) => [field, form[field].trim() || null]),
-        ),
+        system_prompt: form.system_prompt.trim() || null,
+        overlay_prompt: overlay,
+        image_prompt: form.image_prompt.trim() || null,
       };
       if (initial) {
         await updatePromptTemplate(initial.id, body);
@@ -1512,15 +1533,38 @@ function TemplateForm({
       {TEMPLATE_FIELDS.map(({ field, label, hint }) => (
         <div key={field} className="space-y-1">
           <Label htmlFor={`template-${field}`}>{label}</Label>
-          <Textarea
-            id={`template-${field}`}
-            rows={4}
-            className="font-mono text-[13px]"
-            value={form[field]}
-            onChange={(event) => setForm({ ...form, [field]: event.target.value })}
-            placeholder="Empty inherits this Page's prompt."
-          />
-          <p className="text-[12px] text-muted-foreground">{hint}</p>
+          {field === "overlay_prompt" ? (
+            <NativeSelect
+              id="template-overlay-mode"
+              ariaLabel="Overlay text for this style"
+              value={overlayMode}
+              onValueChange={(value) => setOverlayMode(value as typeof overlayMode)}
+              className="flex max-w-72"
+            >
+              <NativeSelectOption value="page">Use this Page&apos;s overlay prompt</NativeSelectOption>
+              <NativeSelectOption value="none">No overlay text</NativeSelectOption>
+              <NativeSelectOption value="own">Own rules for this style</NativeSelectOption>
+            </NativeSelect>
+          ) : null}
+          {field !== "overlay_prompt" || overlayMode === "own" ? (
+            <Textarea
+              id={`template-${field}`}
+              rows={4}
+              className="font-mono text-[13px]"
+              value={form[field]}
+              onChange={(event) => setForm({ ...form, [field]: event.target.value })}
+              placeholder={
+                field === "overlay_prompt"
+                  ? "Panel rules for this style."
+                  : "Empty inherits this Page's prompt."
+              }
+            />
+          ) : null}
+          <p className="text-[12px] text-muted-foreground">
+            {field === "overlay_prompt" && overlayMode === "none"
+              ? "Drafts in this style get the image and logo only."
+              : hint}
+          </p>
         </div>
       ))}
 
