@@ -32,6 +32,7 @@ import { Loading } from "@/components/loading";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  findInset,
   getDraft,
   publishDraft,
   publishMode,
@@ -51,13 +52,13 @@ import { listPages } from "@/lib/api/pages";
 import { getNextSlot, type NextSlot } from "@/lib/api/schedule";
 import { getSourceItem } from "@/lib/api/sources";
 import { chars, pageLocalSoon, timeAgo, words } from "@/lib/format";
-import type { RegeneratableField, RewriteProposal } from "@/lib/api/drafts";
+import type { InsetCandidate, RegeneratableField, RewriteProposal } from "@/lib/api/drafts";
 import type { Draft } from "@/lib/types";
 import { useQuery } from "@/lib/use-query";
 import { pageAvatarRaw } from "@/lib/page-avatar";
 import { cn } from "@/lib/utils";
 
-type View = "edit" | "preview";
+type View = "text" | "image" | "preview";
 
 interface Form {
   hook: string;
@@ -107,10 +108,17 @@ export function DraftDetail({
   });
   const [saving, setSaving] = useState(false);
   const [deciding, setDeciding] = useState(false);
-  const [imageWork, setImageWork] = useState<"hero" | "hero-upload" | "inset" | null>(
-    null,
-  );
-  const [view, setView] = useState<View>("edit");
+  const [imageWork, setImageWork] = useState<
+    "hero" | "hero-upload" | "inset" | "inset-find" | null
+  >(null);
+  /** What the last AI find looked at, tagged with its draft so a switch never
+   *  shows another's. `chosen` is the URL now in the circle. */
+  const [found, setFound] = useState<{
+    draftId: number;
+    chosen: string | null;
+    items: InsetCandidate[];
+  } | null>(null);
+  const [view, setView] = useState<View>("text");
   const filePicker = useRef<HTMLInputElement>(null);
   const heroPicker = useRef<HTMLInputElement>(null);
 
@@ -407,6 +415,41 @@ export function DraftDetail({
   }
 
   /**
+   * The AI finds the inset: it reads the post, searches Wikipedia, looks at the
+   * pictures and places the one that fits. Saves first - the server reads the
+   * post from the row, and an unsaved edit is exactly the text it should read.
+   */
+  async function findInsetWithAi() {
+    setImageWork("inset-find");
+    try {
+      if (dirty && form) await updateDraft(draftId, form);
+      const result = await findInset(draftId);
+      await refresh();
+      setFound({ draftId, chosen: result.chosen?.url ?? null, items: result.candidates });
+      toast.success(result.chosen ? `Inset: ${result.chosen.title}` : "Inset added.");
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "No inset found");
+    } finally {
+      setImageWork(null);
+    }
+  }
+
+  /** Swap to another photo the AI looked at. No model call. */
+  async function swapInset(item: InsetCandidate) {
+    setImageWork("inset-find");
+    try {
+      if (dirty && form) await updateDraft(draftId, form);
+      await findInset(draftId, item);
+      await refresh();
+      setFound((current) => (current ? { ...current, chosen: item.url } : current));
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Swap failed");
+    } finally {
+      setImageWork(null);
+    }
+  }
+
+  /**
    * Use the operator's own photograph instead of a generated one.
    *
    * The escape hatch for a subject the model will not draw - the client's case
@@ -521,7 +564,7 @@ export function DraftDetail({
       <SourceLine draft={draft} />
 
       {draft.error ? (
-        <div className="space-y-2 rounded-2xl border border-destructive/40 bg-destructive/5 p-3">
+        <div className="space-y-2 rounded-xl bg-destructive/10 p-3">
           <p className="flex items-center gap-1.5 text-sm font-medium text-destructive">
             <TriangleAlert className="size-4" />
             Generation stopped
@@ -536,7 +579,7 @@ export function DraftDetail({
           made a working repost look like a broken draft. Same strip, honest
           heading: nothing about a repost has failed. */}
       {draft.warnings.length > 0 ? (
-        <div className="space-y-1.5 rounded-2xl border border-gold/40 bg-gold/[0.07] p-3">
+        <div className="space-y-1.5 rounded-xl bg-gold/15 p-3">
           <p className="flex items-center gap-1.5 text-sm font-medium">
             <AlertTriangle className="size-4" />
             {published
@@ -552,24 +595,31 @@ export function DraftDetail({
       ) : null}
 
 
-      {/* Edit and Preview are separate views, as they were in the old
-          app. The preview is a whole post and was cramped into a 340px
-          column; given the full width it can put the feed post and the
-          first comment side by side, which is how they are read. */}
+      {/* One bar, three views. Text and Image keep the picture alone on the
+          left and swap only the pane beside it: the settings used to stack
+          under the picture, which pushed it out of view while the operator
+          adjusted it. A second tab bar inside an Edit tab would have been the
+          same nesting problem as the boxes it replaced. Preview is a whole
+          post and takes the full width, feed post and first comment side by
+          side, as they are read. */}
       <Tabs value={view} onValueChange={(next) => setView(next as View)}>
-        <TabsList className="*:min-w-28 *:px-4">
-          <TabsTrigger value="edit">Edit</TabsTrigger>
+        <TabsList className="*:min-w-24 *:px-4">
+          <TabsTrigger value="text">Text</TabsTrigger>
+          <TabsTrigger value="image">Image</TabsTrigger>
           <TabsTrigger value="preview">Preview</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="edit" className="mt-6">
+        {view !== "preview" ? (
+        <div className="mt-6">
           <div className="grid gap-8 lg:grid-cols-[340px_minmax(0,1fr)]">
             {/* Sticky against the pane's own scroll, so the image stays in
                 view while the copy beside it moves. */}
-            <div className="space-y-3 lg:sticky lg:top-0 lg:self-start">
+            <div className="space-y-6 lg:sticky lg:top-0 lg:self-start">
+              <div className="space-y-2">
               <div
                 className={cn(
-                  "overflow-hidden rounded border",
+                  // No border of its own: `ComposedImage` draws one, and two
+                  // nested outlines read as a box in a box.
                   // `touch-none` or a drag on a phone scrolls the drawer
                   // instead of moving the circle.
                   draft.inset_image_path && "cursor-crosshair touch-none",
@@ -625,34 +675,12 @@ export function DraftDetail({
                   Save to bake this into the published PNG.
                 </p>
               ) : null}
-          {/* Recomposite used to sit here. Saving now redraws the panel
-              server-side, so the button only ever repeated what Save had
-              already done - and left the PNG stale for anyone who did not
-              know to press it.
+              </div>
+            </div>
 
-              Gone entirely on a repost. `build_image` bails on a draft with no
-              hook, so the press spent nothing and did nothing - but it is the
-              one button that *can* spend money, and offering it beside a
-              picture it cannot touch is the wrong thing to leave clickable. */}
-          {published ? null : (
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-full"
-            disabled={imageWork !== null}
-            onClick={() => void redoImage("hero")}
-            // The one button that spends money. Said on hover rather than in a
-            // paragraph under it - the warning belongs on the trigger.
-            title="Buys a new image from Gemini."
-          >
-            {imageWork === "hero" ? (
-              <Loader2 className="size-3.5 animate-spin" />
-            ) : (
-              <Sparkles className="size-3.5" />
-            )}
-            Regenerate hero
-          </Button>
-          )}
+            <div className="min-w-0">
+            {view === "image" ? (
+            <div className="max-w-xl space-y-6">
           {/* The two ways out of a picture that is wrong, side by side with the
               button that buys another one.
 
@@ -668,45 +696,59 @@ export function DraftDetail({
               right place for "this Page is about exercise form" - is on the
               Settings screen and applies to every draft after it. */}
           {form && !published ? (
-            <div className="space-y-2 rounded-2xl border p-3">
-              <div className="flex items-baseline justify-between">
-                <Label htmlFor="image-prompt" className="text-xs">
-                  Hero prompt
-                </Label>
-                <span className="text-[11px] text-muted-foreground">
-                  {form.image_prompt.trim() ? `${words(form.image_prompt)} words` : "empty"}
-                </span>
-              </div>
+            // Flat sections, not bordered boxes: a heading and spacing group
+            // these, and the drawer is already the container. Absent on a
+            // repost, where nothing here can reach the picture - and Regenerate
+            // is the one button that spends money.
+            <section className="space-y-2">
+              <SectionHead
+                title="Hero"
+                htmlFor="image-prompt"
+                meta={form.image_prompt.trim() ? `${words(form.image_prompt)} words` : "no prompt"}
+              />
               <Textarea
                 id="image-prompt"
                 value={form.image_prompt}
                 onChange={(event) =>
                   setForm({ ...form, image_prompt: event.target.value })
                 }
-                rows={4}
+                rows={3}
                 className="text-xs leading-relaxed"
-                placeholder="What the picture should show."
+                placeholder="What the picture should show. Regenerate draws from this."
               />
-              <p className="text-[11px] leading-relaxed text-muted-foreground">
-                What the image model is asked for. Regenerate saves this first,
-                so an edit here is what the next picture is drawn from.
-              </p>
-
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full"
-                disabled={imageWork !== null}
-                onClick={() => heroPicker.current?.click()}
-                title="Uses your own picture. Nothing is generated."
-              >
-                {imageWork === "hero-upload" ? (
-                  <Loader2 className="size-3.5 animate-spin" />
-                ) : (
-                  <ImagePlus className="size-3.5" />
-                )}
-                Upload your own
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1"
+                  disabled={imageWork !== null}
+                  onClick={() => void redoImage("hero")}
+                  // The warning belongs on the trigger, not in a paragraph.
+                  title="Buys a new image from Gemini. Saves the prompt first."
+                >
+                  {imageWork === "hero" ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <Sparkles className="size-3.5" />
+                  )}
+                  Regenerate
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1"
+                  disabled={imageWork !== null}
+                  onClick={() => heroPicker.current?.click()}
+                  title="Uses your own picture. Nothing is generated."
+                >
+                  {imageWork === "hero-upload" ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <ImagePlus className="size-3.5" />
+                  )}
+                  Upload
+                </Button>
+              </div>
 
               <input
                 ref={heroPicker}
@@ -720,7 +762,7 @@ export function DraftDetail({
                   if (file) void changeHero(file);
                 }}
               />
-            </div>
+            </section>
           ) : null}
           {/* Which of the two forms this card is drawn in. Under the picture
               because that is the only place the difference is visible: the
@@ -731,63 +773,53 @@ export function DraftDetail({
               Null follows the Page, so a draft nobody has touched still moves
               when the Page's form changes. Once set it is this draft's. */}
           {form ? (
-            <div className="space-y-2 rounded-2xl border p-3">
-              <div className="flex items-baseline justify-between">
-                <Label className="text-xs">Card form</Label>
-                <span className="text-[11px] text-muted-foreground">
-                  {form.template === null ? "from Page" : "this draft"}
-                </span>
-              </div>
-              <div className="flex gap-1">
-                {(["card", "full_overlay"] as const).map((option) => {
-                  const shown = form.template ?? layout.template;
-                  return (
+            <section className="space-y-2">
+              <SectionHead
+                title="Card form"
+                meta={
+                  form.template === null ? (
+                    "from Page"
+                  ) : (
                     <button
-                      key={option}
                       type="button"
-                      onClick={() => setForm({ ...form, template: option })}
-                      className={cn(
-                        "flex-1 rounded-md border px-2 py-1 text-[11px] capitalize transition-colors",
-                        option === shown
-                          ? "border-primary bg-primary/10 text-primary"
-                          : "text-muted-foreground hover:bg-muted",
-                      )}
+                      onClick={() => setForm({ ...form, template: null })}
+                      className="hover:text-foreground"
                     >
-                      {option.replace(/_/g, " ")}
+                      Use the Page&rsquo;s
                     </button>
-                  );
-                })}
-                {form.template !== null ? (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-auto px-2 text-[11px] text-muted-foreground"
-                    onClick={() => setForm({ ...form, template: null })}
-                  >
-                    Use the Page&rsquo;s
-                  </Button>
-                ) : null}
-              </div>
-            </div>
+                  )
+                }
+              />
+              {/* The app's own segmented control rather than two outlined
+                  buttons - one track, one sliding pill. */}
+              <Tabs
+                value={form.template ?? layout.template}
+                onValueChange={(next) =>
+                  setForm({ ...form, template: next as "card" | "full_overlay" })
+                }
+              >
+                <TabsList className="w-full *:flex-1">
+                  <TabsTrigger value="card">Card</TabsTrigger>
+                  <TabsTrigger value="full_overlay">Full overlay</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </section>
           ) : null}
 
           {/* The inset sits under the picture rather than in the copy column:
               it is the one control whose whole feedback is the image, and the
               slider is useless without it in view. */}
-          <div className="space-y-2 rounded-2xl border p-3">
-            <div className="flex items-baseline justify-between">
-              <Label className="text-xs">Circular inset</Label>
-              <span className="text-[11px] tabular-nums text-muted-foreground">
-                {draft.inset_image_path
-                  ? `${clampInset(form?.inset_size_px, layout)}px`
-                  : "none"}
-              </span>
-            </div>
+          <section className="space-y-3">
+            <SectionHead
+              title="Circular inset"
+              meta={draft.inset_image_path ? "drag it on the image" : "none"}
+            />
 
             {draft.inset_image_path && form ? (
               // Free and instant: the preview redraws as it moves, and Save
               // bakes it into the PNG like every other edit.
               <>
+                <SliderRow label="Size" value={`${clampInset(form.inset_size_px, layout)}px`}>
                 <input
                   type="range"
                   className="w-full accent-foreground"
@@ -805,16 +837,12 @@ export function DraftDetail({
                     setForm({ ...form, inset_size_px: Number(event.target.value) })
                   }
                 />
-                <p className="text-[11px] text-muted-foreground">
-                  Drag the circle on the image, or click where you want it.
-                </p>
-
+                </SliderRow>
                 <InsetRing layout={layout} form={form} onChange={setForm} />
               </>
             ) : (
               <p className="text-[11px] leading-relaxed text-muted-foreground">
-                Upload a picture to put a circle on the seam. Nothing generates
-                this one.
+                Upload a picture, or let the AI find one that fits the post.
               </p>
             )}
 
@@ -863,6 +891,61 @@ export function DraftDetail({
               ) : null}
             </div>
 
+            {/* Below Upload, where the client asked for it: "Get the AI to
+                source and place the appropriate image". A button, not a search
+                box - typing a search is what a browser tab already does. */}
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full"
+              disabled={imageWork !== null}
+              onClick={() => void findInsetWithAi()}
+              title="The AI reads the post, searches Unsplash and places the photo that fits. Saves first."
+            >
+              {imageWork === "inset-find" ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Sparkles className="size-3.5" />
+              )}
+              Find with AI
+            </Button>
+
+            {/* Everything the AI looked at, its pick ringed - one click swaps,
+                the fix when the pick is close but not right. Unsplash's own
+                hotlinked thumbnails, as their API guidelines require; nothing
+                is copied to us until one is clicked. */}
+            {found?.draftId === draftId && found.items.length > 1 ? (
+              <div className="space-y-1.5">
+                <p className="text-[11px] text-muted-foreground">Not this one? Swap</p>
+                <div className="grid grid-cols-6 gap-2">
+                  {found.items.map((item) => (
+                    <button
+                      key={item.url}
+                      type="button"
+                      title={item.title}
+                      aria-label={`Use ${item.title}`}
+                      disabled={imageWork !== null || item.url === found.chosen}
+                      onClick={() => void swapInset(item)}
+                      className="group disabled:cursor-default"
+                    >
+                      {/* Unsplash is not in `next.config.ts`'s image hosts. */}
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={item.url}
+                        alt={item.title}
+                        className={cn(
+                          "aspect-square w-full rounded-full object-cover ring-1 ring-foreground/10",
+                          item.url === found.chosen
+                            ? "ring-2 ring-gold"
+                            : "group-hover:ring-2 group-hover:ring-foreground/40",
+                        )}
+                      />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
             <input
               ref={filePicker}
               type="file"
@@ -875,10 +958,10 @@ export function DraftDetail({
                 if (file) void changeInset(file);
               }}
             />
-          </div>
+          </section>
             </div>
-
-            <div className="min-w-0 space-y-6">
+            ) : (
+            <div className="space-y-6">
               {form ? (
                 <>
                 {/* A repost has no hook and cannot be given one: the hook it
@@ -968,8 +1051,11 @@ export function DraftDetail({
                 </>
               ) : null}
             </div>
+            )}
+            </div>
           </div>
-        </TabsContent>
+        </div>
+        ) : null}
 
         <TabsContent value="preview" className="mt-6">
           <FacebookPreview
@@ -1374,15 +1460,8 @@ function InsetRing({
   const colour = form.inset_border_color ?? layout.portrait.border_color;
 
   return (
-    <div className="space-y-2 border-t pt-2">
-      <div className="flex items-baseline justify-between gap-2">
-        <Label className="text-xs">Ring</Label>
-        <span className="text-[11px] tabular-nums text-muted-foreground">
-          {width === 0 ? "none" : `${width}px`}
-          {inherited ? " · from Page" : ""}
-        </span>
-      </div>
-
+    <>
+    <SliderRow label="Ring" value={width === 0 ? "none" : `${width}px`}>
       <input
         type="range"
         className="w-full accent-foreground"
@@ -1402,56 +1481,42 @@ function InsetRing({
           })
         }
       />
-
-      <div className="flex items-center gap-2">
-        <input
-          type="color"
-          value={colour}
-          aria-label="Ring colour"
-          // Disabled at zero rather than hidden: the control keeping its place
-          // is what says the colour is still there and simply has nothing to
-          // paint, instead of the row appearing to lose a setting.
-          disabled={width === 0}
-          onChange={(event) =>
-            onChange({
-              ...form,
-              inset_border_color: event.target.value,
-              inset_border_width_px: form.inset_border_width_px ?? width,
-            })
-          }
-          className="size-7 shrink-0 cursor-pointer rounded border bg-transparent disabled:opacity-40"
-        />
-        <Input
-          value={colour}
-          disabled={width === 0}
-          aria-label="Ring colour hex"
-          onChange={(event) =>
-            onChange({
-              ...form,
-              inset_border_color: event.target.value,
-              inset_border_width_px: form.inset_border_width_px ?? width,
-            })
-          }
-          className="h-7 w-24 font-mono text-[11px]"
-        />
-        {inherited ? null : (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 px-2 text-[11px] text-muted-foreground"
-            onClick={() =>
-              onChange({
-                ...form,
-                inset_border_width_px: null,
-                inset_border_color: null,
-              })
-            }
-          >
-            Use the Page&rsquo;s
-          </Button>
-        )}
-      </div>
-    </div>
+      {/* A swatch on the slider's row. The native picker takes a hex value, so
+          the separate hex box was a second control for the same thing.
+          Disabled at zero rather than hidden: the colour is still there and
+          simply has nothing to paint. */}
+      <input
+        type="color"
+        value={colour}
+        aria-label="Ring colour"
+        title={colour}
+        disabled={width === 0}
+        onChange={(event) =>
+          onChange({
+            ...form,
+            inset_border_color: event.target.value,
+            inset_border_width_px: form.inset_border_width_px ?? width,
+          })
+        }
+        className="size-5 shrink-0 cursor-pointer rounded-full border-0 bg-transparent p-0 disabled:opacity-40 [&::-webkit-color-swatch]:rounded-full [&::-webkit-color-swatch]:border [&::-webkit-color-swatch-wrapper]:p-0"
+      />
+    </SliderRow>
+    {inherited ? null : (
+      <button
+        type="button"
+        className="text-[11px] text-muted-foreground hover:text-foreground"
+        onClick={() =>
+          onChange({
+            ...form,
+            inset_border_width_px: null,
+            inset_border_color: null,
+          })
+        }
+      >
+        Use the Page&rsquo;s ring
+      </button>
+    )}
+    </>
   );
 }
 
@@ -1601,7 +1666,7 @@ function SourceLine({ draft }: { draft: Draft }) {
 
   const Glyph = KIND_GLYPH[source.kind];
   return (
-    <div className="space-y-1.5 rounded-2xl border bg-muted/40 p-3">
+    <div className="space-y-1.5 rounded-xl bg-muted/60 p-3">
       <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
         <Glyph className="size-3.5 shrink-0" />
         {KIND_LABEL[source.kind]}
@@ -1694,6 +1759,51 @@ function Field({
           focus the field. */}
       {regenerate}
       {children}
+    </div>
+  );
+}
+
+/** A picture-column section's heading and its quiet note. No box around it. */
+function SectionHead({
+  title,
+  meta,
+  htmlFor,
+}: {
+  title: string;
+  meta?: React.ReactNode;
+  htmlFor?: string;
+}) {
+  return (
+    <div className="flex items-baseline justify-between gap-3">
+      {/* `text-sm`, the Text tab's field headings (`Field`), so both views
+          read as one editor. */}
+      <Label htmlFor={htmlFor} className="text-sm">
+        {title}
+      </Label>
+      {meta ? (
+        <span className="text-[11px] tabular-nums text-muted-foreground">{meta}</span>
+      ) : null}
+    </div>
+  );
+}
+
+/** Label, control, value on one line, so a slider reads as a setting. */
+function SliderRow({
+  label,
+  value,
+  children,
+}: {
+  label: string;
+  value: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center gap-3">
+      <span className="w-8 shrink-0 text-[11px] text-muted-foreground">{label}</span>
+      <div className="flex min-w-0 flex-1 items-center gap-2">{children}</div>
+      <span className="w-10 shrink-0 text-right text-[11px] tabular-nums text-muted-foreground">
+        {value}
+      </span>
     </div>
   );
 }

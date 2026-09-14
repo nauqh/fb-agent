@@ -13,9 +13,11 @@ import { cn } from "@/lib/utils";
  * The same Radix dialog `ui/dialog.tsx` uses - focus trapping, Escape and
  * scroll locking come with it - anchored to the right edge rather than centred.
  *
- * Inset top and bottom to 90vh instead of running edge to edge, so the queue
- * stays visible above and below it and the drawer reads as sitting *over* the
- * screen rather than replacing it. Not full width for the same reason.
+ * A floating card, 12px clear of the top and bottom and 8px clear of the right
+ * edge (client, 2026-09-15), with the sidebar's floating 16px radius. It used to sit at 5vh top and bottom and flush to the
+ * right edge, which spent ~85px of height on margin and read as glued to the
+ * window rather than floating over it. Not full width, so the queue stays in
+ * view beside it.
  */
 
 function Drawer(props: React.ComponentProps<typeof DialogPrimitive.Root>) {
@@ -33,8 +35,8 @@ function DrawerContent({
       <DialogPrimitive.Content
         data-slot="drawer-content"
         className={cn(
-          "fixed top-[5vh] right-0 z-50 flex h-[90vh] w-[92vw] max-w-[1120px] flex-col",
-          "rounded-l-2xl border bg-background shadow-2xl outline-none",
+          "fixed top-3 right-2 bottom-3 z-50 flex w-[calc(92vw-0.5rem)] max-w-[1120px] flex-col",
+          "rounded-[16px] border bg-background shadow-2xl outline-none",
           // Out is slightly quicker than in, which is the usual asymmetry: an
           // opening panel is being read, a closing one is already finished with.
           "duration-300 ease-out data-closed:duration-200 data-closed:ease-in",
