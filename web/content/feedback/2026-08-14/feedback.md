@@ -1,4 +1,6 @@
-# Client Feedback - 2026-08-14
+---
+title: 'feedback'
+---
 
 Second round. Sent after the client's staff drove the app themselves for the
 first time: publishing times set, posts generated, posts pushed to Metricool.

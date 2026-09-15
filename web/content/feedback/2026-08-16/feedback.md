@@ -1,4 +1,6 @@
-# Client Feedback - 2026-08-16 (round 4)
+---
+title: 'feedback'
+---
 
 Sent after round 3's C4/C5 shipped. Numbered `G1`-`G4` here; the client's own
 numbering is 1-4, and the letters continue the scheme the earlier rounds used so

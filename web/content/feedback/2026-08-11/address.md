@@ -1,4 +1,6 @@
-# Our Address - 2026-08-11 Feedback Resolution
+---
+title: 'address'
+---
 
 What was shipped to `main` (merged from `client-feedback` branch), verified in browser, with tests passing.
 

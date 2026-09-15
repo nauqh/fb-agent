@@ -1,4 +1,6 @@
-# Our Comprehension - 2026-08-11 Feedback Analysis
+---
+title: 'comprehension'
+---
 
 Our technical analysis of each feedback item, verified by reading the code (not taking the report at face value).
 

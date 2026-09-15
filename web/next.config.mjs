@@ -1,4 +1,4 @@
-import type { NextConfig } from "next";
+import { createMDX } from "fumadocs-mdx/next";
 
 /**
  * `/api/*` is proxied to FastAPI.
@@ -13,7 +13,7 @@ import type { NextConfig } from "next";
  */
 const API_ORIGIN = process.env.API_ORIGIN ?? "http://127.0.0.1:8000";
 
-const nextConfig: NextConfig = {
+const config = {
   rewrites() {
     return [{ source: "/api/:path*", destination: `${API_ORIGIN}/:path*` }];
   },
@@ -25,4 +25,4 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default createMDX()(config);

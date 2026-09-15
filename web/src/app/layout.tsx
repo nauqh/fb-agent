@@ -2,8 +2,7 @@ import type { Metadata } from "next";
 import { Geist, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
-import { ThemeProvider } from "next-themes";
-
+import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 
 // `--font-sans` is the name globals.css maps `--font-sans` onto; naming it

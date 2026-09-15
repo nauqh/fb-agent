@@ -1,4 +1,6 @@
-# Our Comprehension - 2026-08-14 Feedback Analysis
+---
+title: 'comprehension'
+---
 
 Read against the code, not taken at face value. Every claim below cites the line
 it was read from. Nothing here has been shipped; `address.md` gets written when

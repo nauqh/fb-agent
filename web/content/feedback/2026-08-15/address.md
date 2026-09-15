@@ -1,4 +1,6 @@
-# What Was Addressed - 2026-08-15 Feedback
+---
+title: 'address'
+---
 
 Written as items ship. The request is `feedback.md`, the reading of the code is
 `comprehension.md`, and the evidence for each change is its commit message.

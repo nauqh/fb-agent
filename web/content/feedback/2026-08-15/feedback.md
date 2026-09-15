@@ -1,4 +1,6 @@
-# Client Feedback - 2026-08-15
+---
+title: 'feedback'
+---
 
 Third round. Sent after the logos landed (B6) and the client generated their
 first real drafts for the two new Pages: **BBTT** (Bodybuilding Tips) and **FR**

@@ -12,6 +12,7 @@ wheels/
 # Node
 node_modules/
 .next/
+.source/
 
 # Local state - never committed
 *.db

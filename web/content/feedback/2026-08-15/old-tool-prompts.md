@@ -1,4 +1,6 @@
-# The Prompts the Client Wrote in the Old Tool - read 2026-08-16
+---
+title: 'old-tool-prompts'
+---
 
 F5. The client's closing line was *"Within the old tool, I did write new prompts
 already in Setting tab."* This is what is actually in those rows, copied
