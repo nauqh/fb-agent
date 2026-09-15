@@ -279,6 +279,33 @@ Drive **`http://localhost:3000`**, never `127.0.0.1:3000` - Next blocks
 `/_next/*` from an origin it does not know, and the page then renders as
 skeletons that never resolve, with the warning only on the dev server's stdout.
 
+### A local database
+
+`.env` points the API at the shared Supabase database. To work on a copy
+instead, so nothing done locally reaches production's rows or pictures:
+
+```powershell
+docker run -d --name fb-agent-local-db -e POSTGRES_PASSWORD=local `
+  -e POSTGRES_DB=fbagent -p 127.0.0.1:54320:5432 postgres:16
+
+cd api
+uv run python scripts/seed_local.py --to postgresql+psycopg://postgres:local@127.0.0.1:54320/fbagent
+
+$env:DATABASE_URL = "postgresql+psycopg://postgres:local@127.0.0.1:54320/fbagent"
+$env:SUPABASE_BUCKET = "fb-agent-media-dev"
+uv run uvicorn app.main:app --port 8000 --reload
+```
+
+The seed migrates the empty database, copies the real Pages with their
+configuration and the newest 50 drafts, and copies those drafts' pictures into
+`fb-agent-media-dev`. **The local API must run on that bucket**: a redraw or a
+delete removes the old picture files, and on the production bucket those are
+production's. Metricool, Gemini and Unsplash are still real.
+
+On Windows, `docker run` fails with "access permissions" when the port is in a
+range `netsh interface ipv4 show excludedportrange protocol=tcp` reserves - and
+those ranges move after a reboot. Pick a port outside them.
+
 Checks, all of which should be clean:
 
 ```bash
