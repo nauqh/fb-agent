@@ -720,7 +720,6 @@ class SourcesConfigOut(BaseModel):
     """
 
     since_days: int
-    max_items: int
     feeds: list[Feed]
     """This Page's, not every Page's - the beats do not overlap."""
 
@@ -739,7 +738,6 @@ def get_sources_config(
 
     return SourcesConfigOut(
         since_days=sources_config.rss.since_days,
-        max_items=sources_config.rss.max_items,
         feeds=_feeds_for(session, page),
         lookback_days=sources_config.competitors.lookback_days,
         grid_limit=sources_config.competitors.grid_limit,

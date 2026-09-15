@@ -194,7 +194,7 @@ def _describe(error: Exception) -> str:
 
 
 def _merge(items: list[SourceItemBase]) -> list[SourceItemBase]:
-    """Windowed, deduplicated, newest first, capped.
+    """Windowed, deduplicated, newest first. The window is the only limit.
 
     Deduplicated on url *and* again on normalised title, because the same story
     routinely runs in several of these feeds under different URLs.
@@ -216,7 +216,7 @@ def _merge(items: list[SourceItemBase]) -> list[SourceItemBase]:
         key=lambda item: item.published_at or datetime.min.replace(tzinfo=timezone.utc),
         reverse=True,
     )
-    return merged[: sources.rss.max_items]
+    return merged
 
 
 def curated_hosts(session: Session) -> set[str]:

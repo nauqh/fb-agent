@@ -124,7 +124,6 @@ export async function getTweet(url: string): Promise<LiveSourceItem> {
 /** Mirrors `SourcesConfigOut` in api/app/routes/sources.py. */
 export interface SourcesConfig {
   since_days: number;
-  max_items: number;
   /** Rows, not file entries - see `api/feeds.ts`. Added and removed on Settings. */
   feeds: Feed[];
   lookback_days: number;

@@ -527,7 +527,6 @@ def test_sources_config_reads_the_source_rather_than_a_copy_of_it(client, sessio
         for feed in session.exec(select(Feed).order_by(Feed.name)).all()
     ]
     assert body["since_days"] == sources_config.rss.since_days
-    assert body["max_items"] == sources_config.rss.max_items
     assert body["lookback_days"] == sources_config.competitors.lookback_days
     assert body["grid_limit"] == sources_config.competitors.grid_limit
 

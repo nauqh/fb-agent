@@ -18,16 +18,15 @@ rss:
     # post material. A tighter window buys freshness the beat does not need and
     # empties the grid on a quiet weekend, which reads as broken.
     since_days: 7
-    # The grid is browsed, not paged.
-    max_items: 50
+    # No item cap (client, 2026-09-16): the window is the only limit. A
+    # `max_items: 50` sat here and bound hard on the news page, whose feeds put
+    # 306 deduplicated items into the last few hours - the grid showed the
+    # newest 50 and the rest of the week never appeared.
 
-# Both numbers stay global, and the news page is the reason to say so. The
-# obvious move when The Fact Feed arrived was a per-page `since_days` - a
-# 24-hour beat under a seven-day window looked wrong. Measured, it never binds:
-# `_merge` windows, sorts newest-first, *then* caps, and that page's feeds put
-# 306 deduplicated items into the last few hours, so the 50-item cap leaves the
-# oldest thing in its grid 10 hours old. A per-page window would be
-# configuration that cannot change an outcome, which is the kind that rots.
+# The window stays global. The obvious move when The Fact Feed arrived was a
+# per-page `since_days` - a 24-hour beat under a seven-day window looked wrong -
+# but a busy feed only means a longer grid, and a per-page window would be
+# configuration nobody changes, which is the kind that rots.
 
 competitors:
     lookback_days: 7
@@ -59,7 +58,7 @@ competitors:
 # them across verbatim.
 #
 # Probed 2026-07-31, for the history beat:
-#   Smithsonian Smart News  277 items, swamps max_items on recency alone
+#   Smithsonian Smart News  277 items, swamps the grid on recency alone
 #   Live Science /all,      superseded by the tag feeds they overlap
 #     ScienceDaily Fossils
 #   Archaeology Magazine    101-char summaries are thin fuel

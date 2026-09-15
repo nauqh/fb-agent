@@ -297,7 +297,7 @@ function Feeds({
       }
       meta={
         sources
-          ? `${sources.feeds.length} feeds · ${sources.since_days}d window · ${sources.max_items} shown`
+          ? `${sources.feeds.length} feeds · ${sources.since_days}d window`
           : undefined
       }
     >

@@ -222,7 +222,6 @@ def get_layout() -> Layout:
 
 class RssConfig(Frozen):
     since_days: int
-    max_items: int
 
 
 class CompetitorsConfig(Frozen):
