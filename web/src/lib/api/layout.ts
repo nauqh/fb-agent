@@ -90,11 +90,10 @@ export interface LayoutPatch {
   badge_color?: string | null;
   badge_font_size_px?: number | null;
   /**
-   * The circular inset's defaults. **No screen offers these**, as with
-   * `line_height_ratio` above - the inset is chosen per draft in the review
-   * drawer, where the picture it rings is actually on screen, and a Page-wide
-   * default for it was a control nobody wanted. The API still takes them, and
-   * a draft that sets none of its own resolves through `layout.yml`.
+   * The circular inset's defaults for this Page. The layout editor offers
+   * these three (client, 2026-09-15): a draft that sets none of its own draws
+   * with them, and the review drawer still overrides them per draft. Minimum,
+   * maximum and ring padding stay in `layout.yml`; the API takes those too.
    */
   portrait_size_px?: number | null;
   portrait_border_width_px?: number | null;

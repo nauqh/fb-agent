@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Loader2, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 
-import { splitOnHighlights } from "@/components/composed-image";
+import { clampInset, splitOnHighlights } from "@/components/composed-image";
 import { HookField } from "@/components/hook-field";
 import { Loading } from "@/components/loading";
 import { Button } from "@/components/ui/button";
@@ -41,6 +41,10 @@ const SAMPLE =
   "town of Nome, Alaska. The only serum was a thousand miles away, every port " +
   "was frozen solid, and twenty mushers ran it through a −50°F blizzard in " +
   "five and a half days.";
+
+/** The drawer's cap on a draft's ring (`MAX_INSET_BORDER_PX`), so a Page default
+ *  can never be one a draft could not choose for itself. */
+const MAX_RING_PX = 48;
 
 /**
  * Edit one Page's Composed Image, with the card beside it.
@@ -203,6 +207,40 @@ export function LayoutEditor() {
           </div>
         </Group>
 
+        {/* The circle's defaults for this Page (client, 2026-09-15). A draft
+            that sets none of its own draws with these, and the review drawer
+            still overrides them per draft. Minimum, maximum and ring padding
+            stay house style in `layout.yml` - the same call as line height. */}
+        <Group title="Circular inset">
+          <Range
+            label="Size"
+            hint={`${shown.portrait.min_px}-${Math.round(shown.image.width * shown.portrait.max_width_ratio)}px, the range the compositor clamps to.`}
+            value={clampInset(null, shown)}
+            min={shown.portrait.min_px}
+            max={Math.round(shown.image.width * shown.portrait.max_width_ratio)}
+            step={1}
+            format={(v) => `${v}px`}
+            changed={data.overridden.includes("portrait_size_px")}
+            onChange={(v) => set("portrait_size_px", v)}
+          />
+          <Range
+            label="Ring"
+            value={shown.portrait.border_width_px}
+            min={0}
+            max={MAX_RING_PX}
+            step={1}
+            format={(v) => (v === 0 ? "none" : `${v}px`)}
+            changed={data.overridden.includes("portrait_border_width_px")}
+            onChange={(v) => set("portrait_border_width_px", v)}
+          />
+          <Colour
+            label="Ring colour"
+            value={shown.portrait.border_color}
+            changed={data.overridden.includes("portrait_border_color")}
+            onChange={(v) => set("portrait_border_color", v)}
+          />
+        </Group>
+
         <Group title="Text panel">
           {/* Background only. Height and opacity track `layout.yml` for every
               Page, on the same grounds as line height below: the panel already
@@ -360,6 +398,12 @@ function preview(base: ResolvedLayout, draft: LayoutPatch): ResolvedLayout {
       ...base.watermark,
       max_px: at(draft.watermark_max_px, base.watermark.max_px),
     },
+    portrait: {
+      ...base.portrait,
+      size_px: at(draft.portrait_size_px, base.portrait.size_px),
+      border_width_px: at(draft.portrait_border_width_px, base.portrait.border_width_px),
+      border_color: at(draft.portrait_border_color, base.portrait.border_color),
+    },
   };
 }
 
@@ -506,6 +550,26 @@ function Preview({ layout, page }: { layout: ResolvedLayout; page: Page }) {
                 {page.watermark_text || page.name}
               </span>
             )}
+
+            {/* A stand-in circle on the seam, where an inset lands by default,
+                so Size and Ring have something to move. Sized as `ComposedImage`
+                sizes a real one - the clamped disc plus the ring on each side -
+                right-aligned at the edge margin and centred on the seam. Above
+                the panel because this layer has no stacking context of its own.
+                A neutral fill, not a photo: the picture is chosen per draft;
+                the size and ring are what this Page sets. */}
+            <div
+              className="absolute bottom-0 z-10 aspect-square rounded-full"
+              style={{
+                width: scale(clampInset(null, layout) + layout.portrait.border_width_px * 2),
+                right: `${layout.image.edge_margin_ratio * 100}%`,
+                translate: "0 50%",
+                backgroundColor: layout.portrait.border_color,
+                padding: scale(layout.portrait.border_width_px),
+              }}
+            >
+              <div className="size-full rounded-full bg-gradient-to-br from-slate-300 to-slate-500" />
+            </div>
           </div>
 
           {/* `maxHeight` is `panel.max_ratio`, the same cap the compositor
