@@ -450,17 +450,16 @@ def build_image(session: Session, draft: Draft, page: Page) -> list[str]:
                 if draft.source_item_id
                 else None
             )
-            # **RSS only, and that is not an arbitrary narrowing.** The request
-            # was "use the image provided by the RSS feed". A competitor post's
-            # picture is a rival page's own creative and a tweet's belongs to
-            # whoever posted it, so reusing either as our hero is reposting
-            # their content under our watermark. A feed image accompanies a
-            # story we are retelling, which is the one case that reads as
-            # sourcing rather than lifting.
-            if source is None or source.kind is not SourceKind.RSS:
+            # **RSS and tweets, never a competitor post.** A competitor's
+            # picture is a rival page's own creative, and reusing it is
+            # reposting their content under our watermark. Tweets were refused
+            # on the same reasoning until the client asked for them
+            # (2026-09-16): a news account's photo is the picture of the event,
+            # where an AI or stock image would be wrong.
+            if source is None or source.kind not in (SourceKind.RSS, SourceKind.TWEET):
                 return [
-                    f"{IMAGE_WARNING}only an RSS item's picture can be reused; "
-                    "a competitor post or tweet belongs to whoever published it."
+                    f"{IMAGE_WARNING}a competitor post's picture is never reused; "
+                    "it belongs to whoever published it."
                 ]
             if not source.image_url:
                 return [

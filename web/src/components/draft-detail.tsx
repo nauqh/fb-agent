@@ -1251,7 +1251,9 @@ function PublishAction({
     return <ScheduledActions draft={draft} onChanged={onPublished} />;
   }
 
-  const blocked = draft.status === "failed" || !draft.composed_image_path;
+  // Text-only has no card on purpose, and the API publishes it without media.
+  const blocked =
+    draft.status === "failed" || (!draft.composed_image_path && !draft.no_image);
 
   /** `undefined` means "as soon as Metricool will take it" - Publish now. */
   async function publish(at: string | undefined) {

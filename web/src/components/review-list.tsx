@@ -423,7 +423,9 @@ function RowMenu({
             </DropdownMenuItem>
           ) : (
             <DropdownMenuItem
-              disabled={draft.status === "failed" || !draft.composed_image_path}
+              disabled={
+                draft.status === "failed" || (!draft.composed_image_path && !draft.no_image)
+              }
               onSelect={(event) => {
                 event.preventDefault();
                 setPublishing(true);

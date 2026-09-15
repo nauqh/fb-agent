@@ -99,16 +99,15 @@ export function CartPanel() {
     (template) => template.page_id === page?.id,
   );
   /**
-   * RSS only, mirroring the server, which refuses the rest.
+   * RSS and tweets, mirroring the server, which refuses competitor posts.
    *
-   * A competitor post's picture is a rival page's own creative and a tweet's
-   * belongs to whoever posted it, so reusing either as our hero is reposting
-   * their content under our watermark. A feed image accompanies a story we are
-   * retelling. The client asked for "the image provided by the RSS feed", and
-   * the narrower reading is also the defensible one.
+   * A competitor's picture is a rival page's own creative, so reusing it is
+   * reposting their content under our watermark. Tweets were refused too until
+   * the client asked for them (2026-09-16): a news account's photo is the
+   * picture of the event.
    */
   const withPictures = cart.items.filter(
-    (item) => item.kind === "rss" && item.image_url,
+    (item) => (item.kind === "rss" || item.kind === "tweet") && item.image_url,
   ).length;
   const offerSourceHero = withPictures > 0;
 

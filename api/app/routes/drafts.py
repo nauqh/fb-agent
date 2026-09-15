@@ -607,6 +607,10 @@ async def upload_hero(
         buffer.getvalue(), media.filename(draft_id, "hero", "png")
     )
     draft.hero_from_source = False
+    # An upload is a change of mind about text-only. Left set, `build_image`
+    # skips the draft, so the hero is stored and shown and no card is ever
+    # drawn - a picture that looks ready and cannot be published.
+    draft.no_image = False
     return _redrawn(session, draft, page)
 
 

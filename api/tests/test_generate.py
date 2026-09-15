@@ -991,6 +991,32 @@ def test_a_competitors_picture_is_never_reused_as_our_hero(
     assert draft["hero_image_path"] is None
 
 
+def test_a_tweets_picture_can_be_the_hero(client, written, monkeypatch):
+    """Refused alongside competitor posts until the client asked (2026-09-16):
+    for a news event, the account's own photo is the only right picture."""
+    png = _feed_png(monkeypatch)
+
+    client.post(
+        "/generate",
+        json={
+            "page_ids": [1],
+            "sources": [
+                {
+                    "kind": "tweet",
+                    "external_id": "2099562860229939678",
+                    "text": "Breaking",
+                    "image_url": "https://pbs.twimg.com/media/photo.jpg",
+                }
+            ],
+            "hero_from_source": True,
+        },
+    )
+    draft = client.get("/drafts/1").json()
+
+    assert media.store.read(draft["hero_image_path"]) == png
+    assert draft["composed_image_path"], "the card did not compose around it"
+
+
 def test_a_topic_only_run_never_carries_the_flag(client, written, illustrated):
     """There is no Source Item to take a picture from, so carrying it would
     guarantee the warning above on every topic draft."""
@@ -1447,6 +1473,18 @@ def test_an_uploaded_hero_still_gets_the_card_drawn_on_it(
     assert draft["composed_image_path"] != draft["hero_image_path"], (
         "the composite is the hero itself, so no card was drawn"
     )
+
+
+def test_an_uploaded_hero_ends_text_only(client, written, a_photograph):
+    """House of Common Sense drafts 469 and 470: text-only runs given a picture
+    afterwards. `build_image` skipped them, so the hero was stored and shown and
+    no card was drawn - greyed-out publish buttons on a draft that looked ready."""
+    client.post("/generate", json={"page_ids": [1], "topic": "x", "no_image": True})
+
+    draft = _upload_hero(client, a_photograph).json()
+
+    assert draft["no_image"] is False
+    assert draft["composed_image_path"], "the hero was kept but no card was drawn"
 
 
 def test_an_uploaded_hero_is_no_longer_the_feeds_photograph(
