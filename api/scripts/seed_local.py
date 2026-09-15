@@ -6,20 +6,22 @@ Run from `api/`, after starting an empty Postgres:
         -e POSTGRES_DB=fbagent -p 127.0.0.1:54320:5432 postgres:16
     uv run python scripts/seed_local.py --to postgresql+psycopg://postgres:local@127.0.0.1:54320/fbagent
 
-Then run the API against it, with both variables set in the shell - a variable
-in the environment outranks `.env`:
+Then point the API at it with a `.env.local` beside `.env`, which the API reads
+after `.env` (gitignored; delete it to go back to Supabase):
 
-    $env:DATABASE_URL = "postgresql+psycopg://postgres:local@127.0.0.1:54320/fbagent"
-    $env:SUPABASE_BUCKET = "fb-agent-media-dev"
-    uv run uvicorn app.main:app --port 8000 --reload
+    DATABASE_URL=postgresql+psycopg://postgres:local@127.0.0.1:54320/fbagent
+    SUPABASE_BUCKET=fb-agent-media-dev
+
+and start it as usual: `uv run uvicorn app.main:app --port 8000 --reload`.
 
 A copy of the real Pages rather than sample rows, at the operator's choice
 (2026-09-15): a fresh database with `seed_page.py`'s two Pages had nothing to
 test a screen against - no feeds, no drafts, no pictures.
 
 **Supabase's database is only read.** The source is `DATABASE_URL` from the
-`.env` *file*, not the environment, so a shell already pointed at the local copy
-still reads the real database - and it is only ever SELECTed. The target must be
+`.env` *file* - not the environment and not `.env.local` - so an API already
+pointed at the local copy does not turn the seed into copying the copy onto
+itself. And it is only ever SELECTed. The target must be
 a Postgres on this machine, or nothing runs.
 
 **The pictures go into the dev bucket, and that is the safety, not a
@@ -255,10 +257,10 @@ def main() -> int:
     copied, missing = copy_files(target, args.from_bucket, args.to_bucket)
     print(f"\npictures  {copied} copied into {args.to_bucket}, {missing} missing in {args.from_bucket}")
     print(
-        "\nRun the API against it with both set in the shell:\n"
-        f'  $env:DATABASE_URL = "{args.to}"\n'
-        f'  $env:SUPABASE_BUCKET = "{args.to_bucket}"\n'
-        "  uv run uvicorn app.main:app --port 8000 --reload"
+        "\nPoint the API at it with a .env.local beside .env (gitignored, read after .env):\n"
+        f"  DATABASE_URL={args.to}\n"
+        f"  SUPABASE_BUCKET={args.to_bucket}\n"
+        "Then: uv run uvicorn app.main:app --port 8000 --reload"
     )
     return 0
 

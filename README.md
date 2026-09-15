@@ -291,8 +291,10 @@ docker run -d --name fb-agent-local-db -e POSTGRES_PASSWORD=local `
 cd api
 uv run python scripts/seed_local.py --to postgresql+psycopg://postgres:local@127.0.0.1:54320/fbagent
 
-$env:DATABASE_URL = "postgresql+psycopg://postgres:local@127.0.0.1:54320/fbagent"
-$env:SUPABASE_BUCKET = "fb-agent-media-dev"
+# .env.local, beside .env - read after it, so these two win (gitignored):
+#   DATABASE_URL=postgresql+psycopg://postgres:local@127.0.0.1:54320/fbagent
+#   SUPABASE_BUCKET=fb-agent-media-dev
+
 uv run uvicorn app.main:app --port 8000 --reload
 ```
 
@@ -301,6 +303,10 @@ configuration and the newest 50 drafts, and copies those drafts' pictures into
 `fb-agent-media-dev`. **The local API must run on that bucket**: a redraw or a
 delete removes the old picture files, and on the production bucket those are
 production's. Metricool, Gemini and Unsplash are still real.
+
+With `.env.local` in place every start is local. Delete or rename it to point
+the API back at Supabase. The seed reads `.env` only, so it still copies from
+the real database either way.
 
 On Windows, `docker run` fails with "access permissions" when the port is in a
 range `netsh interface ipv4 show excludedportrange protocol=tcp` reserves - and

@@ -259,7 +259,12 @@ def get_sources() -> Sources:
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=(API_DIR.parent / ".env"),
+        # `.env` first, then `.env.local` over it - a later file wins, and a
+        # variable set in the shell still outranks both. `.env.local` is the
+        # local-database switch (README, "A local database"): gitignored,
+        # absent on Railway, and never read by `scripts/seed_local.py`, whose
+        # source has to stay the real database in `.env`.
+        env_file=(API_DIR.parent / ".env", API_DIR.parent / ".env.local"),
         env_file_encoding="utf-8",
         extra="ignore",
     )
