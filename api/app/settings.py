@@ -293,6 +293,11 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     """Loguru verbosity. DEBUG turns on SQL echo and module trace spans."""
 
+    log_format: str = "text"
+    """`text` or `json`. Railway parses a single-line JSON log into `message`,
+    `level` and custom attributes, so `@draft_id:500` is a filter there; a
+    terminal is not helped by any of that, which is why local stays text."""
+
     generate_concurrency: int = 3
     """Drafts written in parallel inside one run.
 

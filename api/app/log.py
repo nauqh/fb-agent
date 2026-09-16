@@ -1,36 +1,79 @@
 """The app's own logging. Minimal on purpose.
 
-One logger, one sink, one format going to stderr (Railway captures it). No JSON,
-no files, no per-module loggers. uvicorn keeps its own default lines; this only
-covers what the app itself says - an outcome and, usually, how long it took.
-That follows https://loggingsucks.com : log the thing that changed, once, at
-the end, not every step towards it.
+One logger, one sink going to stderr (Railway captures it). No files, no
+per-module loggers. uvicorn keeps its own default lines; this only covers what
+the app itself says - an outcome and, usually, how long it took. That follows
+https://loggingsucks.com : log the thing that changed, once, at the end, not
+every step towards it.
+
+**Two formats, one line each.** `LOG_FORMAT=json` emits Railway's shape - a
+single-line object with `message` and `level` at the top and everything bound
+with `logger.bind(...)` beside them, which Railway turns into attributes you can
+filter on (`@draft_id:500`). Text is the default and is what a terminal gets;
+JSON there would only make the same line harder to read. The same article argues
+for the fields themselves: one wide event per unit of work, carrying the
+high-cardinality things you would want to filter by - which for this app is a
+draft, not an HTTP request (see `generate._run_one`).
 """
 
+import json
 import sys
+import traceback
 
 from loguru import logger
 
 from app.settings import settings
 
 
+def _json_sink(message) -> None:
+    """Railway parses this; it must stay on one line to be parsed at all.
+
+    `extra` is whatever `logger.bind()` put there, spread at the top level
+    rather than nested, because that is what makes it a filterable attribute.
+    """
+    record = message.record
+    payload = {
+        "message": record["message"],
+        "level": record["level"].name.lower(),
+        "time": record["time"].isoformat(),
+        "logger": record["name"],
+        **record["extra"],
+    }
+    if record["exception"] is not None:
+        payload["exception"] = "".join(
+            traceback.format_exception(*record["exception"])
+        )[:4000]
+    # `default=str` rather than a converter per field: a value that is not JSON
+    # is a log line, and losing the whole line to a TypeError is worse than
+    # printing a repr of one field.
+    sys.stderr.write(json.dumps(payload, default=str) + "\n")
+
+
 def setup_logging() -> None:
     """Install the one sink. Idempotent for a reloading uvicorn."""
     logger.remove()
-    logger.add(
-        sys.stderr,
-        format=(
-            "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | "
-            "<level>{level: <8}</level> | "
-            "<cyan>{name}</cyan> - "
-            "<level>{message}</level>"
-        ),
-        level=settings.log_level,
-        colorize=False,
-        backtrace=True,
-        diagnose=True,
+    as_json = settings.log_format.strip().lower() == "json"
+    if as_json:
+        logger.add(_json_sink, level=settings.log_level, backtrace=True, diagnose=False)
+    else:
+        logger.add(
+            sys.stderr,
+            format=(
+                "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | "
+                "<level>{level: <8}</level> | "
+                "<cyan>{name}</cyan> - "
+                "<level>{message}</level>"
+            ),
+            level=settings.log_level,
+            colorize=False,
+            backtrace=True,
+            diagnose=True,
+        )
+    logger.info(
+        "logging ready (level={}, format={})",
+        settings.log_level,
+        "json" if as_json else "text",
     )
-    logger.info("logging ready (level={})", settings.log_level)
 
     _uvicorn_level()
 

@@ -276,15 +276,43 @@ def _run_one_isolated(draft_id: int) -> None:
         logger.exception("draft {} failed before its own error handling", draft_id)
 
 
+def _outcome(draft: Draft, page: Page | None, source: SourceItem | None, started: float):
+    """The run's fields, bound onto the logger. Text ignores them; JSON does not.
+
+    Kept out of the message so the line a person reads stays one sentence while
+    the same call carries everything a filter needs (`log.py`).
+    """
+    return logger.bind(
+        draft_id=draft.id,
+        page=page.name if page else None,
+        source=source.kind.value if source else ("topic" if draft.topic else None),
+        hero=(
+            "none"
+            if draft.no_image
+            else "source"
+            if draft.hero_from_source
+            else "generated"
+        ),
+        inset_query=draft.inset_subject if draft.find_inset else None,
+        warnings=len(draft.warnings),
+        seconds=round(time.perf_counter() - started, 1),
+    )
+
+
 def _run_one(session: Session, draft_id: int) -> None:
     draft = session.get(Draft, draft_id)
     if draft is None:
         return
 
+    # Bound before the try, so the failure path can report the same fields as
+    # the success path rather than reaching into locals for them.
+    page: Page | None = None
+    source: SourceItem | None = None
+    started = time.perf_counter()
+
     try:
         page = session.get(Page, draft.page_id)
         assert page is not None
-        started = time.perf_counter()
         source = (
             session.get(SourceItem, draft.source_item_id)
             if draft.source_item_id
@@ -371,7 +399,12 @@ def _run_one(session: Session, draft_id: int) -> None:
         draft.error = None
         draft.status = DraftStatus.REVIEW
         _progress(session, draft, "done", 100)
-        logger.info(
+        # One wide event per draft, which is this app's unit of work - not an
+        # HTTP request, since `/generate` returns before any of this runs. The
+        # fields are the ones a bad draft gets asked about: which Page, what it
+        # was written from, where its picture came from, what it was searched
+        # for, how much the run had to warn about.
+        _outcome(draft, page, source, started).info(
             "draft {} → review in {:.1f}s (page={})",
             draft_id,
             time.perf_counter() - started,
@@ -379,7 +412,9 @@ def _run_one(session: Session, draft_id: int) -> None:
         )
 
     except Exception as error:  # noqa: BLE001 - the row is where a failure goes
-        logger.error(
+        # The same event, so a failure is queryable beside the successes rather
+        # than being a different shape nobody thinks to look for.
+        _outcome(draft, page, source, started).error(
             "draft {} failed: {}", draft_id, f"{type(error).__name__}: {error}"
         )
         draft.error = f"{type(error).__name__}: {error}"[:500]
