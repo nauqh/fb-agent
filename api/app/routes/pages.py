@@ -11,6 +11,7 @@ watermark needs a way back that is not a SQL prompt.
 
 import io
 from datetime import datetime, timezone
+from typing import Literal
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from PIL import Image
@@ -41,6 +42,14 @@ class PageUpdate(BaseModel):
 
     badge_text: str | None = None
     """The headline chip's word. Null draws no chip. `full_overlay` only."""
+
+    inset_source: Literal["google", "unsplash"] = "google"
+    """Where Find with AI and the inset search look for this Page.
+
+    Not optional, unlike the fields above: null has no meaning here, so a null
+    is a 422 rather than a write the NOT NULL column refuses as a 500. The
+    default is never written - `exclude_unset` below sends only what the form
+    set."""
 
     # How long this Page writes (C6, C7). Null clears the override and returns
     # the Page to the house numbers in `writer/validators.py` - which is why

@@ -201,6 +201,16 @@ class Page(SQLModel, table=True):
     layout value can be.
     """
 
+    inset_source: str = Field(default="google")
+    """Where this Page's inset search looks: `google` or `unsplash` (`image.inset`).
+
+    Per Page because it depends on what the Page posts (client, 2026-09-16): a
+    history or news Page wants the real person or event, which only Google has;
+    a fitness or recipe Page wants stock photography, where Google's answer is
+    shop listings. A `str` column validated on the way in (`PageUpdate`) rather
+    than an enum, for the reason `_stored_enum` gives about new members.
+    """
+
     watermark_enabled: bool = Field(default=True)
     """Whether this Page's cards get a mark at all. Off means a clean image.
 
@@ -852,6 +862,14 @@ class Draft(SQLModel, table=True):
 
     A column for the same reason as `no_image`: `run_drafts` takes ids only, so
     the run's choices have to live on the row."""
+
+    inset_source: str | None = None
+    """This run's inset search, when the operator changed it beside Find inset.
+
+    Null means the Page's (`Page.inset_source`) - the usual case, and every
+    draft from before the choice existed. Resolved when the run reads it rather
+    than copied here at queue time, so a Page switched before its queued drafts
+    run is honoured."""
 
     inset_subject: str | None = None
     """The last Google Images query for the inset - the writer's, the AI's, or the

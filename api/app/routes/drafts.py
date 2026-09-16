@@ -7,6 +7,7 @@ is the job record, which is why progress lives on it.
 
 import io
 from datetime import datetime, timezone
+from typing import Literal
 
 from fastapi import (
     APIRouter,
@@ -77,8 +78,10 @@ class GenerateRequest(BaseModel):
     """
 
     find_inset: bool = False
-    """Have the AI find a Google Images picture for the circular inset.
-    Ignored with `no_image`."""
+    """Have the AI find a picture for the circular inset. Ignored with `no_image`."""
+
+    inset_source: Literal["google", "unsplash"] | None = None
+    """Where that find searches, for this run. Null uses the Page's setting."""
 
 
 @router.post("/generate", status_code=202)
@@ -99,6 +102,7 @@ def start_generate(
             request.no_image,
             request.prompt_template_id,
             request.find_inset,
+            request.inset_source,
         )
     except generate.GenerateError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
@@ -119,6 +123,9 @@ async def create_manual_draft(
     first_comment: str = Form(""),
     find_inset: bool = Form(
         False, description="Have the AI find a picture for the inset from this text."
+    ),
+    inset_source: Literal["google", "unsplash"] | None = Form(
+        None, description="Where that find searches. Omitted uses the Page's setting."
     ),
     file: UploadFile | None = File(
         None, description="Optional. Becomes the hero the card is drawn around."
@@ -183,7 +190,7 @@ async def create_manual_draft(
     if find_inset:
         # Before the card is drawn, so it composites the circle in one pass.
         # Read from the operator's own text; there is no writer to name a subject.
-        warnings += generate.find_inset(draft)
+        warnings += generate.find_inset(draft, source=inset_source or page.inset_source)
 
     if file is not None and file.filename:
         data = await file.read(MAX_HERO_BYTES + 1)
@@ -692,7 +699,7 @@ def _sentence(error: Exception) -> str:
 class FindInset(BaseModel):
     candidate: inset.Candidate | None = None
     """Swap to one of the candidates a previous find returned, sent back whole.
-    Its URLs must be public https - `inset.place` checks before fetching.
+    `inset.place` checks its URLs against the Page's source before fetching.
     Omitted, the AI finds one."""
 
 
@@ -708,7 +715,7 @@ def find_inset(
     `image.inset` for the three steps. With `candidate`, place one of the
     photos already on the row (`inset_candidates`), which costs no model call.
 
-    404 is "no photo" (nothing to photograph, nothing on Google, nothing that
+    404 is "no photo" (nothing to photograph, nothing found, nothing that
     fits), and the message says which - and when nothing fitted, the photos it
     looked at are still kept on the row for the operator to pick from. 502 is
     the model failing to answer at all.
@@ -720,7 +727,7 @@ def find_inset(
 
     if body.candidate is not None:
         try:
-            data = inset.place(body.candidate)
+            data = inset.place(body.candidate, source=page.inset_source)
         except inset.InsetError as error:
             raise HTTPException(status_code=422, detail=_sentence(error)) from error
         draft.inset_image_path = media.store.save(
@@ -735,7 +742,7 @@ def find_inset(
             status_code=422, detail="Write the post first - the AI reads it to choose."
         )
     try:
-        found = inset.find_for_post(post)
+        found = inset.find_for_post(post, source=page.inset_source)
     except inset.InsetError as error:
         if error.candidates:
             # Committed before the 404, or the refresh that follows it would
@@ -761,26 +768,31 @@ class SearchInset(BaseModel):
 def search_inset(
     draft_id: int, body: SearchInset, session: Session = Depends(get_session)
 ) -> Draft:
-    """Google Images results for the operator's own keywords, kept on the row.
+    """Images for the operator's own keywords, from the Page's source, kept on the row.
 
     The client's ask (2026-09-15), beside Find with AI: for when the AI's query
     is not the picture they want. No model call and nothing placed - the results
     replace `inset_candidates`, and the operator clicks one, which is the
-    `candidate` path of `find_inset`. One SerpAPI search.
+    `candidate` path of `find_inset`. One search.
 
-    404 is "no results". 502 is SerpAPI not answering, refusing the key, a
-    plan with no searches left, or no key at all - each says which.
+    404 is "no results". 502 is the source not answering, refusing the key, a
+    spent limit, or no key at all - each says which.
     """
     draft = _editable(session, draft_id)
+    page = session.get(Page, draft.page_id)
+    source = page.inset_source if page else "google"
     query = body.query.strip()
     if not query:
         raise HTTPException(status_code=422, detail="Type what to search for.")
     try:
-        photos = inset.candidates(query)
+        photos = inset.candidates(query, source=source)
     except inset.InsetError as error:
         raise HTTPException(status_code=502, detail=_sentence(error)) from error
     if not photos:
-        raise HTTPException(status_code=404, detail=f"No Google images for “{query}”.")
+        raise HTTPException(
+            status_code=404,
+            detail=f"No {inset.LABEL[source]} images for “{query}”.",
+        )
 
     draft.inset_subject = query
     draft.inset_candidates = [photo.model_dump() for photo in photos]

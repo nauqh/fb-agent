@@ -103,8 +103,10 @@ export interface GenerateRequest {
   prompt_template_id?: number | null;
   /** Text only: no hero, no card, and the one generate path that costs nothing. */
   no_image?: boolean;
-  /** Have the AI find and place a Google Images picture that fits each post in the inset. */
+  /** Have the AI find and place a picture that fits each post in the inset, from the Page's source. */
   find_inset?: boolean;
+  /** Where that find searches for this run. Omitted uses the Page's setting. */
+  inset_source?: "google" | "unsplash";
 }
 
 /**
@@ -136,6 +138,8 @@ export async function createManualDraft(input: {
   first_comment: string;
   /** Have the AI find an inset from this text. The one model call on Manual. */
   find_inset: boolean;
+  /** Where that find searches. Omitted uses the Page's setting. */
+  inset_source?: "google" | "unsplash";
   file: File | null;
 }): Promise<Draft> {
   const body = new FormData();
@@ -144,6 +148,7 @@ export async function createManualDraft(input: {
   body.append("caption", input.caption);
   body.append("first_comment", input.first_comment);
   if (input.find_inset) body.append("find_inset", "true");
+  if (input.find_inset && input.inset_source) body.append("inset_source", input.inset_source);
   // Only when there is one: an empty part still arrives as an UploadFile with a
   // blank filename, which the server would have to special-case.
   if (input.file) body.append("file", input.file);
@@ -231,7 +236,7 @@ export async function regenerateField(
  * Put a photo in the circle and redraw the card. Answers with the draft.
  *
  * Without `candidate` the AI finds one: it reads the post **as saved**, searches
- * Google Images and picks by looking - so save first. With `candidate`, place one of
+ * the Page's source and picks by looking - so save first. With `candidate`, place one of
  * the draft's `inset_candidates`. Either way the offered photos stay on the row.
  */
 export async function findInset(id: number, candidate?: InsetCandidate): Promise<Draft> {
@@ -239,7 +244,7 @@ export async function findInset(id: number, candidate?: InsetCandidate): Promise
 }
 
 /**
- * Google Images results for the operator's own keywords, kept on the draft as its
+ * Pictures from the Page's source for the operator's own keywords, kept on the draft as its
  * `inset_candidates`. No model call, and nothing is placed until one is picked.
  */
 export async function searchInset(id: number, query: string): Promise<Draft> {

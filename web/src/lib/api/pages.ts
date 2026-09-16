@@ -28,6 +28,8 @@ export interface PageUpdate {
   watermark_enabled?: boolean | null;
   /** The headline chip's word. Null draws no chip. `full_overlay` only. */
   badge_text?: string | null;
+  /** Where Find with AI and the inset search look. Never null. */
+  inset_source?: "google" | "unsplash";
 
   /**
    * How long this Page writes (C6, C7). **Null clears the override** and

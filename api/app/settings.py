@@ -456,6 +456,13 @@ class Settings(BaseSettings):
     single Railway replica is the deploy shape the single-writer code assumes."""
 
 
+    unsplash_access_key: str = ""
+    """Unsplash, for the Pages whose inset search is set to it (`image.inset`).
+    The Access Key only: the Secret Key is for acting as an Unsplash user over
+    OAuth, which this app never does. Blank makes Find with AI on those Pages
+    answer that it is not configured - not in `missing_secrets`, like the key
+    below, because a Page set to Google never needs it."""
+
     serp_api_key: str = ""
     """Google Images for the circular inset, through SerpAPI (`image.inset`).
     Blank makes Find with AI answer that it is not configured - deliberately not

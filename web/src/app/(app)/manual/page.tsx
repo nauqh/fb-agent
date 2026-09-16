@@ -14,6 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { createManualDraft, generate } from "@/lib/api/drafts";
 import { getPageLayout } from "@/lib/api/layout";
+import { InsetSourceSelect, type InsetSource } from "@/components/inset-source-select";
 import { usePageScope } from "@/lib/page-scope";
 import { useQuery } from "@/lib/use-query";
 
@@ -77,6 +78,7 @@ function WriteItYourself() {
   const [firstComment, setFirstComment] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [findInset, setFindInset] = useState(false);
+  const [insetSource, setInsetSource] = useState<InsetSource | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const picker = useRef<HTMLInputElement>(null);
@@ -116,6 +118,7 @@ function WriteItYourself() {
         caption,
         first_comment: firstComment,
         find_inset: findInset,
+        inset_source: insetSource ?? page.inset_source,
         file,
       });
       toast.success("Draft created.", {
@@ -199,15 +202,23 @@ function WriteItYourself() {
         </p>
         {/* Beside the picture it adds to. Reads the text typed on the right,
             once the draft is created. */}
-        <label className="flex w-fit cursor-pointer items-center gap-2 text-xs text-muted-foreground">
-          <input
-            type="checkbox"
-            checked={findInset}
-            onChange={(event) => setFindInset(event.target.checked)}
-            className="size-3.5 cursor-pointer accent-primary"
-          />
-          Find inset - the AI picks a Google Images picture that fits
-        </label>
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="flex w-fit cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={findInset}
+              onChange={(event) => setFindInset(event.target.checked)}
+              className="size-3.5 cursor-pointer accent-primary"
+            />
+            Find inset - the AI picks a picture that fits
+          </label>
+          {findInset && page ? (
+            <InsetSourceSelect
+              value={insetSource ?? page.inset_source}
+              onChange={setInsetSource}
+            />
+          ) : null}
+        </div>
       </div>
 
       <div className="min-w-0 space-y-6">
@@ -281,6 +292,7 @@ function FromATopic() {
   const [topic, setTopic] = useState("");
   const [noImage, setNoImage] = useState(false);
   const [findInset, setFindInset] = useState(false);
+  const [insetSource, setInsetSource] = useState<InsetSource | null>(null);
   const [running, setRunning] = useState(false);
 
   const ready = topic.trim().length > 0 && page !== null;
@@ -295,10 +307,12 @@ function FromATopic() {
         topic: topic.trim(),
         no_image: noImage,
         find_inset: findInset && !noImage,
+        inset_source: insetSource ?? page.inset_source,
       });
       setTopic("");
       setNoImage(false);
       setFindInset(false);
+      setInsetSource(null);
       toast.success(`${ids.length} draft${ids.length === 1 ? "" : "s"} generating.`, {
         description: "Progress is on the Review screen.",
       });
@@ -345,15 +359,23 @@ function FromATopic() {
       </label>
 
       {!noImage ? (
-        <label className="flex w-fit cursor-pointer items-center gap-2 text-xs text-muted-foreground">
-          <input
-            type="checkbox"
-            checked={findInset}
-            onChange={(event) => setFindInset(event.target.checked)}
-            className="size-3.5 cursor-pointer accent-primary"
-          />
-          Find inset - the AI picks a Google Images picture that fits
-        </label>
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="flex w-fit cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={findInset}
+              onChange={(event) => setFindInset(event.target.checked)}
+              className="size-3.5 cursor-pointer accent-primary"
+            />
+            Find inset - the AI picks a picture that fits
+          </label>
+          {findInset && page ? (
+            <InsetSourceSelect
+              value={insetSource ?? page.inset_source}
+              onChange={setInsetSource}
+            />
+          ) : null}
+        </div>
       ) : null}
 
       <Button

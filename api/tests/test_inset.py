@@ -55,8 +55,9 @@ RESULTS = [
 
 
 @pytest.fixture(autouse=True)
-def serp_key(monkeypatch):
+def search_keys(monkeypatch):
     monkeypatch.setattr(settings, "serp_api_key", "test-key")
+    monkeypatch.setattr(settings, "unsplash_access_key", "unsplash-key")
 
 
 @pytest.fixture
@@ -293,7 +294,7 @@ def test_a_run_asked_to_find_an_inset_uses_the_writers_query(
 ):
     asked = []
     monkeypatch.setattr(
-        inset, "find_for_post", lambda post, subject=None: asked.append((post, subject)) or _found()
+        inset, "find_for_post", lambda post, subject=None, **k: asked.append((post, subject)) or _found()
     )
 
     client.post("/generate", json={"page_ids": [1], "topic": "x", "find_inset": True})
@@ -371,7 +372,7 @@ def test_find_with_ai_reads_the_saved_post_and_returns_what_it_chose_among(
     client.post("/generate", json={"page_ids": [1], "topic": "x"})
     asked = []
     monkeypatch.setattr(
-        inset, "find_for_post", lambda post, subject=None: asked.append((post, subject)) or _found()
+        inset, "find_for_post", lambda post, subject=None, **k: asked.append((post, subject)) or _found()
     )
 
     response = client.post("/drafts/1/inset/find", json={})
@@ -389,7 +390,7 @@ def test_a_swap_places_that_photo_and_asks_no_model(client, written, illustrated
     client.post("/generate", json={"page_ids": [1], "topic": "x"})
     placed = []
     monkeypatch.setattr(inset, "find_for_post", lambda *a, **k: pytest.fail("a swap asked the AI"))
-    monkeypatch.setattr(inset, "place", lambda candidate, *a: placed.append(candidate.title) or _png())
+    monkeypatch.setattr(inset, "place", lambda candidate, *a, **k: placed.append(candidate.title) or _png())
 
     response = client.post("/drafts/1/inset/find", json={"candidate": _candidate("lab").model_dump()})
 
@@ -458,7 +459,7 @@ def test_a_keyword_search_offers_photos_and_places_nothing(client, written, illu
     monkeypatch.setattr(
         inset,
         "candidates",
-        lambda query, *a: searched.append(query) or [_candidate("lab"), _candidate("hands")],
+        lambda query, *a, **k: searched.append(query) or [_candidate("lab"), _candidate("hands")],
     )
 
     response = client.post("/drafts/1/inset/search", json={"query": "  hand washing  "})
@@ -477,7 +478,7 @@ def test_a_search_with_no_results_is_a_404_and_keeps_the_old_offers(
     client.post("/generate", json={"page_ids": [1], "topic": "x"})
     monkeypatch.setattr(inset, "find_for_post", lambda *a, **k: _found())
     client.post("/drafts/1/inset/find", json={})
-    monkeypatch.setattr(inset, "candidates", lambda *a: [])
+    monkeypatch.setattr(inset, "candidates", lambda *a, **k: [])
 
     response = client.post("/drafts/1/inset/search", json={"query": "qwxzzy"})
 
@@ -506,7 +507,7 @@ def test_a_search_serpapi_refuses_is_a_502(client, written, illustrated, monkeyp
 def test_a_hand_written_draft_can_ask_the_ai_for_an_inset(client, monkeypatch):
     asked = []
     monkeypatch.setattr(
-        inset, "find_for_post", lambda post, subject=None: asked.append((post, subject)) or _found()
+        inset, "find_for_post", lambda post, subject=None, **k: asked.append((post, subject)) or _found()
     )
 
     response = client.post(
@@ -525,3 +526,226 @@ def test_a_hand_written_draft_asks_no_model_by_default(client, monkeypatch):
     response = client.post("/drafts/manual", data={"page_id": "1", "hook": "Anything."})
 
     assert response.status_code == 201
+
+
+# --- Unsplash, for the Pages set to it -----------------------------------------------
+
+
+def _unsplash_photo(pid: str, alt: str, host: str = "images.unsplash.com") -> dict:
+    return {
+        "id": pid,
+        "alt_description": alt,
+        "urls": {"small": f"https://{host}/{pid}-small", "regular": f"https://{host}/{pid}-regular"},
+        "links": {"download_location": f"https://api.unsplash.com/photos/{pid}/download?ixid=x"},
+    }
+
+
+UNSPLASH_RESULTS = [
+    _unsplash_photo("hands", "hands under a running tap"),
+    _unsplash_photo("lab", "a laboratory bench"),
+    _unsplash_photo("plus", "a premium photo", host="plus.unsplash.com"),
+]
+
+
+def _unsplash(results=UNSPLASH_RESULTS, status=200):
+    """A fake Unsplash. Returns the client and every request it saw."""
+    seen: list[httpx.Request] = []
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        if request.url.path == "/search/photos":
+            return httpx.Response(status, json={"results": results})
+        if request.url.host == "api.unsplash.com":
+            return httpx.Response(200, json={"url": "tracked"})
+        return httpx.Response(200, content=_png(), headers={"content-type": "image/png"})
+
+    return httpx.Client(transport=httpx.MockTransport(answer)), seen
+
+
+def _unsplash_candidate(pid="hands") -> inset.Candidate:
+    return inset.Candidate(
+        title=pid,
+        url=f"https://images.unsplash.com/{pid}-small",
+        full_url=f"https://images.unsplash.com/{pid}-regular",
+        source="Unsplash",
+        download_location=f"https://api.unsplash.com/photos/{pid}/download",
+    )
+
+
+def test_unsplash_search_sends_its_key_and_drops_premium_photos():
+    client, seen = _unsplash()
+
+    found = inset.candidates("hand washing", client, source="unsplash")
+
+    assert seen[0].url.host == "api.unsplash.com"
+    assert seen[0].headers["authorization"] == "Client-ID unsplash-key"
+    assert [c.title for c in found] == ["hands under a running tap", "a laboratory bench"], (
+        "the plus.unsplash.com premium photo is not ours to use"
+    )
+    assert all(c.download_location for c in found)
+
+
+def test_no_unsplash_key_names_the_unsplash_key(monkeypatch):
+    """Not SERP_API_KEY: the message is what tells the operator which key to set."""
+    monkeypatch.setattr(settings, "unsplash_access_key", "")
+    client, seen = _unsplash()
+
+    with pytest.raises(inset.InsetError, match="UNSPLASH_ACCESS_KEY"):
+        inset.candidates("hand washing", client, source="unsplash")
+    assert seen == []
+
+
+def test_placing_an_unsplash_photo_pings_its_download_endpoint():
+    client, seen = _unsplash()
+
+    png = inset.place(_unsplash_candidate("lab"), client, source="unsplash")
+
+    assert Image.open(io.BytesIO(png)).format == "PNG"
+    assert [str(r.url) for r in seen] == [
+        "https://images.unsplash.com/lab-regular",
+        "https://api.unsplash.com/photos/lab/download",
+    ]
+
+
+def test_an_unsplash_page_refuses_a_google_result_on_a_swap():
+    """A swap's candidate comes from the browser. On an Unsplash Page it has to
+    be an Unsplash photo, whatever it claims to be."""
+
+    def never(request):
+        raise AssertionError(f"requested {request.url}")
+
+    with pytest.raises(inset.InsetError, match="Unsplash"):
+        inset.place(_candidate(), httpx.Client(transport=httpx.MockTransport(never)), source="unsplash")
+
+
+def test_an_unsplash_find_writes_a_stock_query_rather_than_a_name():
+    model, seen = _gemini(subject="hand washing")
+    client, requests = _unsplash()
+
+    found = inset.find_for_post("Semmelweis told doctors to wash.", None, client, model, source="unsplash")
+
+    assert seen["subject_calls"] == 1
+    assert requests[0].url.params["query"] == "hand washing"
+    assert found.chosen.source == "Unsplash"
+
+
+# --- the Page decides --------------------------------------------------------------
+
+
+def test_a_page_can_be_set_to_unsplash_and_nothing_else(client):
+    assert client.patch("/pages/1", json={"inset_source": "unsplash"}).json()["inset_source"] == "unsplash"
+    assert client.patch("/pages/1", json={"inset_source": "bing"}).status_code == 422
+    assert client.patch("/pages/1", json={"inset_source": None}).status_code == 422
+    assert client.get("/pages/1").json()["inset_source"] == "unsplash", "a refused write changed nothing"
+
+
+def test_pages_search_google_until_told_otherwise(client):
+    assert client.get("/pages/1").json()["inset_source"] == "google"
+
+
+def test_the_drawer_search_uses_the_pages_source(client, written, illustrated, monkeypatch):
+    client.post("/generate", json={"page_ids": [1], "topic": "x"})
+    client.patch("/pages/1", json={"inset_source": "unsplash"})
+    asked = []
+    monkeypatch.setattr(
+        inset,
+        "candidates",
+        lambda query, *a, **k: asked.append(k.get("source")) or [_unsplash_candidate()],
+    )
+
+    response = client.post("/drafts/1/inset/search", json={"query": "hand washing"})
+
+    assert response.status_code == 200, response.text
+    assert asked == ["unsplash"]
+
+
+def test_an_unsplash_page_run_does_not_hand_over_the_writers_google_query(
+    client, written, illustrated, monkeypatch
+):
+    """The writer names a subject for Google - "Ignaz Semmelweis" finds nothing
+    on Unsplash, so that Page's search writes its own stock query instead."""
+    client.patch("/pages/1", json={"inset_source": "unsplash"})
+    asked = []
+    monkeypatch.setattr(
+        inset,
+        "find_for_post",
+        lambda post, subject=None, **k: asked.append((subject, k.get("source"))) or _found(),
+    )
+
+    client.post("/generate", json={"page_ids": [1], "topic": "x", "find_inset": True})
+
+    assert asked == [(None, "unsplash")]
+
+
+# --- a run's own choice, beside Find inset --------------------------------------
+
+
+def test_a_run_can_search_unsplash_on_a_google_page(client, written, illustrated, monkeypatch):
+    asked = []
+    monkeypatch.setattr(
+        inset,
+        "find_for_post",
+        lambda post, subject=None, **k: asked.append((subject, k.get("source"))) or _found(),
+    )
+
+    client.post(
+        "/generate",
+        json={"page_ids": [1], "topic": "x", "find_inset": True, "inset_source": "unsplash"},
+    )
+
+    assert client.get("/pages/1").json()["inset_source"] == "google", "the Page is untouched"
+    assert asked == [(None, "unsplash")], "the run's choice wins, with its own stock query"
+    assert client.get("/drafts/1").json()["inset_source"] == "unsplash"
+
+
+def test_a_run_that_does_not_choose_follows_the_page(client, written, illustrated, monkeypatch):
+    client.patch("/pages/1", json={"inset_source": "unsplash"})
+    asked = []
+    monkeypatch.setattr(
+        inset,
+        "find_for_post",
+        lambda post, subject=None, **k: asked.append(k.get("source")) or _found(),
+    )
+
+    client.post("/generate", json={"page_ids": [1], "topic": "x", "find_inset": True})
+
+    assert asked == ["unsplash"]
+    assert client.get("/drafts/1").json()["inset_source"] is None
+
+
+def test_a_source_without_a_find_is_not_stored(client, written, illustrated):
+    """It would read as a choice about a search that never ran."""
+    client.post("/generate", json={"page_ids": [1], "topic": "x", "inset_source": "unsplash"})
+
+    assert client.get("/drafts/1").json()["inset_source"] is None
+
+
+def test_a_run_refuses_an_unknown_source(client):
+    response = client.post(
+        "/generate",
+        json={"page_ids": [1], "topic": "x", "find_inset": True, "inset_source": "bing"},
+    )
+
+    assert response.status_code == 422
+
+
+def test_a_hand_written_draft_can_choose_its_source(client, monkeypatch):
+    asked = []
+    monkeypatch.setattr(
+        inset,
+        "find_for_post",
+        lambda post, subject=None, **k: asked.append(k.get("source")) or _found(),
+    )
+
+    response = client.post(
+        "/drafts/manual",
+        data={
+            "page_id": "1",
+            "hook": "Semmelweis told doctors to wash.",
+            "find_inset": "true",
+            "inset_source": "unsplash",
+        },
+    )
+
+    assert response.status_code == 201, response.text
+    assert asked == ["unsplash"]

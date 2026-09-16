@@ -177,6 +177,7 @@ def start_run(
     no_image: bool = False,
     prompt_template_id: int | None = None,
     find_inset: bool = False,
+    inset_source: str | None = None,
 ) -> list[int]:
     """Insert one placeholder Draft per (source × page) and return the ids.
 
@@ -216,6 +217,9 @@ def start_run(
             no_image=no_image,
             # A text-only post has no card to put a circle on.
             find_inset=find_inset and not no_image,
+            # Only meaningful beside a find; stored otherwise it would read as a
+            # choice the operator made about a search that never ran.
+            inset_source=inset_source if find_inset and not no_image else None,
             status=DraftStatus.GENERATING,
             progress_step="queued",
             progress_pct=0,
@@ -381,9 +385,18 @@ def _run_one(session: Session, draft_id: int) -> None:
         # Before the card, so `build_image` composites the circle in one pass.
         # The writer has already named the subject, which saves a model call;
         # its null is an answer ("no single subject"), not a gap to fill.
+        #
+        # The writer's query is worded for Google - a name. An Unsplash search
+        # writes its own stock-photo query instead, because a name finds nothing
+        # there. The run's own choice wins over the Page's.
         if draft.find_inset:
+            source = draft.inset_source or page.inset_source
             draft.warnings = draft.warnings + (
-                find_inset(draft, draft.inset_subject)
+                find_inset(
+                    draft,
+                    draft.inset_subject if source == "google" else None,
+                    source=source,
+                )
                 if draft.inset_subject
                 else [f"{IMAGE_WARNING}no inset - the post has no single subject."]
             )
@@ -578,7 +591,9 @@ def post_text(draft: Draft) -> str:
     )
 
 
-def find_inset(draft: Draft, subject: str | None = None) -> list[str]:
+def find_inset(
+    draft: Draft, subject: str | None = None, *, source: inset.InsetSource = "google"
+) -> list[str]:
     """Have the AI find and place a picture in the circle (`image.inset`).
 
     `subject` is the writer's, on a run; without one the model names it from the
@@ -587,7 +602,7 @@ def find_inset(draft: Draft, subject: str | None = None) -> list[str]:
     draft its text or its card.
     """
     try:
-        found = inset.find_for_post(post_text(draft), subject)
+        found = inset.find_for_post(post_text(draft), subject, source=source)
     except inset.InsetError as error:
         # "None of these fit" still found photos. Kept, so the operator opens
         # the draft to a row of alternatives rather than an empty widget.

@@ -58,6 +58,8 @@ export interface Page {
    * photograph and there is room above it.
    */
   badge_text: string | null;
+  /** Where this Page's inset search looks. Set in Settings, "google" by default. */
+  inset_source: "google" | "unsplash";
 
   /**
    * How long this Page writes. **Null means the house number**, not zero -
@@ -113,7 +115,7 @@ export interface SourceItem {
   created_at: string;
 }
 
-/** A Google Images result offered for the circular inset (`image.inset.Candidate`). */
+/** A picture offered for the circular inset (`image.inset.Candidate`). */
 export interface InsetCandidate {
   /** Google's title for the result. */
   title: string;
@@ -121,8 +123,10 @@ export interface InsetCandidate {
   url: string;
   /** The publisher's own image, what is placed in the circle. */
   full_url: string;
-  /** Who published it, shown under the swap row's picture. */
+  /** Who published it, or "Unsplash". Shown on the swap row. */
   source: string;
+  /** Unsplash only: pinged when the photo is placed, as their guidelines ask. */
+  download_location?: string | null;
 }
 
 /**
@@ -151,10 +155,12 @@ export interface Draft {
 
   /** The circular inset, uploaded or found. Null is the normal case - no circle. */
   inset_image_path: string | null;
-  /** The last Google Images query for the inset. Prefills the drawer's search box. */
+  /** The last search query for the inset. Prefills the drawer's search box. */
   inset_subject: string | null;
   /** The photos the last find or search offered - the drawer's swap row. */
   inset_candidates: InsetCandidate[];
+  /** This run's inset search when it overrode the Page's. Null means the Page's. */
+  inset_source: "google" | "unsplash" | null;
   /** Which of those is in the circle, by `url`. Null for an upload, or before one is picked. */
   inset_photo_url: string | null;
 

@@ -194,6 +194,12 @@ export default function SettingsScreen() {
           label: "Output",
           sections: [
             {
+              id: "pictures",
+              label: "Inset pictures",
+              meta: page.inset_source === "unsplash" ? "Unsplash" : "Google",
+              body: <InsetPictures page={page} />,
+            },
+            {
               id: "writing",
               label: "Writing",
               body: (
@@ -264,6 +270,55 @@ function Identity({ page }: { page: Page }) {
             </p>
           )}
         </Block>
+      </div>
+    </Pane>
+  );
+}
+
+/**
+ * Where this Page's inset search looks (client, 2026-09-16).
+ *
+ * Per Page because it depends on what the Page posts: history and news want
+ * the real person or event, which only Google has; fitness and recipes want
+ * stock photography. Saved on the click rather than behind a Save button - one
+ * value, nothing it has to agree with, and a pill that looks chosen but is not
+ * is the confusing state.
+ */
+function InsetPictures({ page }: { page: Page }) {
+  const [busy, setBusy] = useState(false);
+
+  async function choose(next: string) {
+    if (next === page.inset_source) return;
+    setBusy(true);
+    try {
+      await updatePage(page.id, { inset_source: next as Page["inset_source"] });
+      toast(`Saved. Find with AI now searches ${next === "unsplash" ? "Unsplash" : "Google Images"}.`);
+      emit();
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Could not save");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Pane title="Inset pictures" hint="Where Find with AI and the inset search look for this Page.">
+      <div className="space-y-3">
+        <Tabs value={page.inset_source} onValueChange={(next) => void choose(next)}>
+          <TabsList className="w-fit" aria-label="Inset search source">
+            <TabsTrigger value="google" disabled={busy}>
+              Google Images
+            </TabsTrigger>
+            <TabsTrigger value="unsplash" disabled={busy}>
+              Unsplash
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+        <p className="text-[13px] text-muted-foreground">
+          {page.inset_source === "unsplash"
+            ? "Stock photos, free to use. Nothing of named people."
+            : "Real people, places and events. The pictures belong to whoever published them."}
+        </p>
       </div>
     </Pane>
   );

@@ -1,40 +1,44 @@
-"""The circular inset, found by the AI on Google Images through SerpAPI.
+"""The circular inset, found by the AI - on Google Images or Unsplash, per Page.
 
 The client's ask (2026-09-14): "Get the AI to source and place the appropriate
 image" - the operator was fetching every inset off Google by hand. Not a search
 box, which is what a browser tab already is: the AI reads the post, searches,
 looks at what came back and places the picture that fits.
 
-**Google Images via SerpAPI, chosen by the operator (2026-09-16)** over Unsplash
-(2026-09-15, a day) and Wikimedia Commons (2026-09-16, hours). Both were dropped
-for the same reason: a history or news post wants the actual person, place or
-event, and stock photography has none of it while Commons has only what someone
-donated. Google finds what exists.
+**Two sources, chosen per Page (`page.inset_source`, 2026-09-16).** Unsplash was
+first (2026-09-15) and then replaced by Google through SerpAPI, because a history
+or news post wants the actual person, place or event and stock photography has
+none of it. That was right for those Pages and wrong for the rest: a fitness or
+recipe Page wants "barbell squat" and "chicken tikka masala", which is exactly
+what stock is for, and Google's answer there is shop listings and blog clutter.
+So the Page decides, and both searches stay.
 
-**What this does not buy: any right to the pictures.** They belong to whoever
-published them, SerpAPI's terms say so, and their legal shield covers scraping
-rather than how the results are used. The card carries no credit line. That is
-the operator's decision, taken with the trade-off stated.
+They differ in more than the URL:
+
+- **Google** is searched by *name* ("Ignaz Semmelweis") and has to be filtered
+  hard - shop listings, watermarked stock previews and listing-sized thumbnails
+  rank above the real picture. It confers **no right to the pictures**: they
+  belong to whoever published them, and the card carries no credit line. The
+  operator took that trade-off with it stated.
+- **Unsplash** is searched by *what a photograph could show* ("hand washing"),
+  because it has nothing of named people. Its photos are free to use, and its
+  API guidelines ask for a download ping when one is used, which `place` sends.
 
 Three steps, two of them model calls:
 
-1. `name_subject` - a short search query. Skipped on a generate run, where the
-   writer has already written one (`DraftContent.inset_subject`).
+1. `name_subject` - a short search query, worded for the Page's source.
 2. `candidates` - up to six images. No model.
 3. `find_for_post` - the model *looks* at them beside the post and picks one, or
    none; `place` then copies the chosen image in.
 
-The filters in `candidates` are what keeps this usable. Google ranks shop
-listings, watermarked stock previews and 200px thumbnails alongside the real
-picture, and each of those is a circle the operator has to undo by hand.
-
-Rate and cost: a SerpAPI search costs one of the plan's searches (250 a month
-free at the time of writing), and an identical search inside an hour is served
-from their cache for nothing. A find spends one, a keyword search one.
+Cost: a Google search spends one SerpAPI search (250 a month free at the time
+of writing; an identical search inside an hour is cached and free). Unsplash is
+free and allows 50 requests an hour on a demo key; a find spends two (search,
+download ping).
 """
 
 import io
-from typing import NamedTuple
+from typing import Literal, NamedTuple
 
 import httpx
 from PIL import Image
@@ -47,7 +51,15 @@ from app.log import logger
 from app.settings import settings
 from app.writer import agent as writer
 
-SEARCH_URL = "https://serpapi.com/search.json"
+InsetSource = Literal["google", "unsplash"]
+
+LABEL: dict[str, str] = {"google": "Google", "unsplash": "Unsplash"}
+"""What the operator reads in an error. A message that said "no images" without
+saying where was the one that sent people to check the wrong key."""
+
+# --- Google, through SerpAPI -------------------------------------------------
+
+SERPAPI_URL = "https://serpapi.com/search.json"
 
 BROWSER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -79,6 +91,20 @@ MIN_WIDTH_PX = 600
 """Smaller than this is a listing thumbnail. The circle is drawn at up to about
 half the card's width, and an upscaled 200px image looks like a mistake."""
 
+# --- Unsplash ----------------------------------------------------------------
+
+UNSPLASH_URL = "https://api.unsplash.com/search/photos"
+
+UNSPLASH_API_HOST = "api.unsplash.com"
+
+UNSPLASH_IMAGE_HOSTS = {"images.unsplash.com"}
+"""Where free photos are served from. Unsplash+ premium photos come from
+`plus.unsplash.com` and are not ours to use, so this host check is also the
+premium filter - and, on a swap, what keeps a browser-sent candidate on
+Unsplash."""
+
+# --- both --------------------------------------------------------------------
+
 CANDIDATES = 6
 """Images kept - what the model chooses among, and the drawer's swap row."""
 
@@ -104,14 +130,16 @@ class InsetError(RuntimeError):
 
 class Candidate(BaseModel):
     title: str
-    """Google's title for the result, so the operator sees what it is."""
+    """The result's own description, so the operator sees what it is."""
     url: str
-    """Google's thumbnail: the swap row's picture, and what the model sees."""
+    """The small image: the swap row's picture, and what the model sees."""
     full_url: str
-    """The publisher's own image, which is what gets placed in the circle."""
-    source: str
-    """Who published it - shown on the swap row, because with Google results the
-    operator is the only check on where a picture came from."""
+    """The large image, which is what gets placed in the circle."""
+    source: str = ""
+    """Who published it (Google) or "Unsplash". Shown on the swap row, because
+    with Google results the operator is the only check on where it came from."""
+    download_location: str | None = None
+    """Unsplash only: pinged when the photo is placed, as their guidelines ask."""
 
 
 class Found(NamedTuple):
@@ -125,8 +153,8 @@ class Found(NamedTuple):
 class _Subject(BaseModel):
     query: str | None = Field(
         description=(
-            "A 1-4 word Google Images search query for the circular picture, or "
-            "null when nothing in the post can be pictured."
+            "A 1-4 word image search query for the circular picture, or null "
+            "when nothing in the post can be pictured."
         )
     )
 
@@ -141,32 +169,63 @@ class _Pick(BaseModel):
     reason: str = Field(description="One short sentence on why.")
 
 
-SUBJECT_INSTRUCTIONS = (
-    "You write the search query for a small circular picture that sits on a "
-    "Facebook post card, searched on Google Images. Name the specific person, "
-    "place, object or event when the post has one - for example 'Ignaz "
-    "Semmelweis', 'Colosseum', 'Apollo 11', 'chicken tikka masala'. Return null "
-    "when nothing in the post can be pictured."
-)
+SUBJECT_INSTRUCTIONS: dict[str, str] = {
+    "google": (
+        "You write the search query for a small circular picture that sits on a "
+        "Facebook post card, searched on Google Images. Name the specific person, "
+        "place, object or event when the post has one - for example 'Ignaz "
+        "Semmelweis', 'Colosseum', 'Apollo 11', 'chicken tikka masala'. Return "
+        "null when nothing in the post can be pictured."
+    ),
+    "unsplash": (
+        "You write the search query for a small circular stock photo that sits on "
+        "a Facebook post card. Stock photos show real, generic things, not "
+        "specific people from history: describe what a photograph could show that "
+        "fits the post - for example 'hand washing', 'colosseum rome', 'chicken "
+        "tikka masala', 'barbell squat'. Return null when nothing in the post can "
+        "be photographed."
+    ),
+}
 
-PICK_INSTRUCTIONS = (
-    "You choose a small circular picture for a Facebook post card. You are shown "
-    "the post, then numbered candidate images from Google Images. Pick the one "
-    "that best fits the post and still reads when cropped to a small circle: one "
-    "clear subject beats a busy scene, and a collage, a chart, a screenshot, a "
-    "watermarked stock preview or anything with text or a logo across it is a "
-    "poor choice. Return null if none of them fits the post."
-)
+PICK_INSTRUCTIONS: dict[str, str] = {
+    "google": (
+        "You choose a small circular picture for a Facebook post card. You are "
+        "shown the post, then numbered candidate images from Google Images. Pick "
+        "the one that best fits the post and still reads when cropped to a small "
+        "circle: one clear subject beats a busy scene, and a collage, a chart, a "
+        "screenshot, a watermarked stock preview or anything with text or a logo "
+        "across it is a poor choice. Return null if none of them fits the post."
+    ),
+    "unsplash": (
+        "You choose a small circular photo for a Facebook post card. You are shown "
+        "the post, then numbered candidate photos from Unsplash, each with its "
+        "description. Pick the one that best fits the post and still reads when "
+        "cropped to a small circle: one clear subject beats a busy scene, and a "
+        "photo with text or a logo in it is a poor choice. Return null if none of "
+        "them fits the post."
+    ),
+}
 
 
 def _client() -> httpx.Client:
     return httpx.Client(timeout=hero.FETCH_TIMEOUT, follow_redirects=True)
 
 
-def _key() -> str:
-    if not settings.serp_api_key:
+def _require_key(source: str) -> None:
+    """Before any request, and before the model is asked for a query."""
+    if source == "unsplash":
+        if not settings.unsplash_access_key:
+            raise InsetError("UNSPLASH_ACCESS_KEY is not set, so there is nothing to search")
+    elif not settings.serp_api_key:
         raise InsetError("SERP_API_KEY is not set, so there is nothing to search")
-    return settings.serp_api_key
+
+
+def _unsplash_auth() -> dict[str, str]:
+    """Sent to `api.unsplash.com` only, never to the image CDN."""
+    return {
+        "Authorization": f"Client-ID {settings.unsplash_access_key}",
+        "Accept-Version": "v1",
+    }
 
 
 def _public_https(url: str) -> bool:
@@ -178,6 +237,21 @@ def _public_https(url: str) -> bool:
     if parsed.scheme != "https" or not host:
         return False
     return not host.startswith(PRIVATE_HOSTS)
+
+
+def _on(url: str, hosts: set[str]) -> bool:
+    try:
+        parsed = httpx.URL(url)
+    except Exception:  # noqa: BLE001 - a malformed URL is simply not ours
+        return False
+    return parsed.scheme == "https" and parsed.host in hosts
+
+
+def _json(response: httpx.Response, label: str) -> dict:
+    try:
+        return response.json()
+    except ValueError as error:
+        raise InsetError(f"{label} answered something that is not JSON") from error
 
 
 def _wanted(row: dict) -> bool:
@@ -192,18 +266,15 @@ def _wanted(row: dict) -> bool:
     return _public_https(row.get("thumbnail") or "") and _public_https(row.get("original") or "")
 
 
-def candidates(query: str, client: httpx.Client | None = None) -> list[Candidate]:
-    """Google Images results for `query`, filtered. Empty is an answer."""
-    key = _key()
-    client = client or _client()
+def _google(query: str, client: httpx.Client) -> tuple[int, list[Candidate]]:
     try:
         response = client.get(
-            SEARCH_URL,
+            SERPAPI_URL,
             params={
                 "engine": "google_images",
                 "q": query,
                 "safe": "active",
-                "api_key": key,
+                "api_key": settings.serp_api_key,
             },
         )
     except httpx.HTTPError as error:
@@ -214,10 +285,7 @@ def candidates(query: str, client: httpx.Client | None = None) -> list[Candidate
         raise InsetError("SerpAPI's searches for this plan are used up")
     if response.is_error:
         raise InsetError(f"SerpAPI answered {response.status_code}")
-    try:
-        body = response.json()
-    except ValueError as error:
-        raise InsetError("SerpAPI answered something that is not JSON") from error
+    body = _json(response, "SerpAPI")
     # Their own field, and the only place a refusal shows on a 200.
     if body.get("error"):
         raise InsetError(f"SerpAPI: {body['error']}"[:200])
@@ -237,18 +305,76 @@ def candidates(query: str, client: httpx.Client | None = None) -> list[Candidate
         )
         if len(found) == CANDIDATES:
             break
-    logger.info('inset search for "{}": {} results, {} kept', query, len(rows), len(found))
+    return len(rows), found
+
+
+def _unsplash(query: str, client: httpx.Client) -> tuple[int, list[Candidate]]:
+    try:
+        response = client.get(
+            UNSPLASH_URL,
+            params={"query": query, "per_page": str(CANDIDATES), "content_filter": "high"},
+            headers=_unsplash_auth(),
+        )
+    except httpx.HTTPError as error:
+        raise InsetError(f"Unsplash did not answer ({type(error).__name__})") from error
+    if response.status_code == 401:
+        raise InsetError("Unsplash refused the access key - check UNSPLASH_ACCESS_KEY")
+    if response.status_code == 403:
+        raise InsetError("Unsplash's hourly request limit is used up - try again later")
+    if response.is_error:
+        raise InsetError(f"Unsplash answered {response.status_code}")
+
+    results = _json(response, "Unsplash").get("results", []) or []
+    found = []
+    for photo in results:
+        urls = photo.get("urls") or {}
+        small, regular = urls.get("small") or "", urls.get("regular") or ""
+        download = (photo.get("links") or {}).get("download_location") or ""
+        if not (
+            _on(small, UNSPLASH_IMAGE_HOSTS)
+            and _on(regular, UNSPLASH_IMAGE_HOSTS)
+            and _on(download, {UNSPLASH_API_HOST})
+        ):
+            continue
+        found.append(
+            Candidate(
+                title=(photo.get("alt_description") or photo.get("description") or "Untitled photo")
+                .strip()[:120],
+                url=small,
+                full_url=regular,
+                source="Unsplash",
+                download_location=download,
+            )
+        )
+    return len(results), found
+
+
+def candidates(
+    query: str, client: httpx.Client | None = None, *, source: InsetSource = "google"
+) -> list[Candidate]:
+    """Images for `query` from the Page's source, filtered. Empty is an answer."""
+    _require_key(source)
+    client = client or _client()
+    search = _unsplash if source == "unsplash" else _google
+    total, found = search(query, client)
+    logger.info(
+        'inset search ({}) for "{}": {} results, {} kept', source, query, total, len(found)
+    )
     return found
 
 
-def _download(url: str, client: httpx.Client) -> tuple[bytes, str]:
-    """An image's bytes and type, from a public https address.
+def _download(url: str, client: httpx.Client, hosts: set[str] | None = None) -> tuple[bytes, str]:
+    """An image's bytes and type.
 
-    Unlike a stock API's CDN this is the open web, so nothing about the host can
-    be assumed - hence the size and type checks, and `_public_https` before it.
+    `hosts` pins the fetch to one CDN (Unsplash). Without it any public https
+    address is allowed, which is what Google results are - hence the size and
+    type checks, and `_public_https` before any of it.
     """
-    if not _public_https(url):
-        raise InsetError("only a public https image can be used")
+    allowed = _on(url, hosts) if hosts else _public_https(url)
+    if not allowed:
+        raise InsetError(
+            "only an Unsplash photo can be used" if hosts else "only a public https image can be used"
+        )
     try:
         response = client.get(url, headers={"User-Agent": BROWSER_AGENT})
         response.raise_for_status()
@@ -276,14 +402,31 @@ def _png(data: bytes) -> bytes:
     return buffer.getvalue()
 
 
-def place(candidate: Candidate, client: httpx.Client | None = None) -> bytes:
-    """The image as PNG. The drawer's swap.
+def place(
+    candidate: Candidate, client: httpx.Client | None = None, *, source: InsetSource = "google"
+) -> bytes:
+    """The image as PNG. The drawer's swap, and the last step of a find.
 
-    The publisher's own file, falling back to Google's thumbnail when that host
-    refuses us - a hotlink-blocked original is common enough that losing the
-    photo over it would be the failure the operator sees most.
+    Google: the publisher's own file, falling back to Google's thumbnail when
+    that host refuses us - hotlink blocking is common enough that losing the
+    picture over it would be the failure the operator meets most.
+
+    Unsplash: both URLs checked against Unsplash before anything is fetched,
+    then the download ping their guidelines ask for. The ping cannot lose the
+    photo - it is bookkeeping, and a failure is logged, not raised.
     """
     client = client or _client()
+    if source == "unsplash":
+        if not _on(candidate.download_location or "", {UNSPLASH_API_HOST}):
+            raise InsetError("only an Unsplash photo can be used")
+        data, _ = _download(candidate.full_url, client, UNSPLASH_IMAGE_HOSTS)
+        png = _png(data)
+        try:
+            client.get(candidate.download_location, headers=_unsplash_auth()).raise_for_status()
+        except httpx.HTTPError as error:
+            logger.warning("unsplash download ping failed for {}: {}", candidate.full_url, error)
+        return png
+
     try:
         data, _ = _download(candidate.full_url, client)
     except InsetError:
@@ -295,9 +438,9 @@ def place(candidate: Candidate, client: httpx.Client | None = None) -> bytes:
     return _png(data)
 
 
-def name_subject(post: str, model=None) -> str | None:
-    """A short search query for the post, or None."""
-    answer = writer.ask(post[:POST_CHARS], _Subject, SUBJECT_INSTRUCTIONS, model)
+def name_subject(post: str, model=None, *, source: InsetSource = "google") -> str | None:
+    """A short search query for the post, worded for the source, or None."""
+    answer = writer.ask(post[:POST_CHARS], _Subject, SUBJECT_INSTRUCTIONS[source], model)
     return (answer.output.query or "").strip() or None
 
 
@@ -306,26 +449,30 @@ def find_for_post(
     subject: str | None = None,
     client: httpx.Client | None = None,
     model=None,
+    *,
+    source: InsetSource = "google",
 ) -> Found:
     """Search, let the model look, and place the image it chose.
 
     Raises `InsetError` for every "no image" answer - nothing to picture, nothing
-    on Google, nothing that fits, no key - and lets a model failure propagate,
+    found, nothing that fits, no key - and lets a model failure propagate,
     because the callers answer those differently (a 404 against a 502).
     """
     # Before the model: without a key the search cannot run, and asking Gemini
     # for a query first would spend a call on every press until one is set.
-    _key()
-    subject = (subject or "").strip() or name_subject(post, model)
+    _require_key(source)
+    subject = (subject or "").strip() or name_subject(post, model, source=source)
     if not subject:
         raise InsetError("nothing in the post can be photographed")
 
+    label = LABEL[source]
+    hosts = UNSPLASH_IMAGE_HOSTS if source == "unsplash" else None
     client = client or _client()
     shown: list[Candidate] = []
     prompt: list = [f"THE POST:\n{post[:POST_CHARS]}", f"CANDIDATES for “{subject}”:"]
-    for candidate in candidates(subject, client):
+    for candidate in candidates(subject, client, source=source):
         try:
-            data, kind = _download(candidate.url, client)
+            data, kind = _download(candidate.url, client, hosts)
         except InsetError:
             continue
         if kind not in VISION_TYPES:
@@ -336,16 +483,16 @@ def find_for_post(
             BinaryImage(data=data, media_type=kind),
         ]
     if not shown:
-        raise InsetError(f"no Google images for “{subject}”")
+        raise InsetError(f"no {label} images for “{subject}”")
 
     def in_range(output: _Pick) -> _Pick:
         if output.choice is not None and not 1 <= output.choice <= len(shown):
             raise ModelRetry(f"`choice` must be between 1 and {len(shown)}, or null.")
         return output
 
-    pick = writer.ask(prompt, _Pick, PICK_INSTRUCTIONS, model, in_range).output
+    pick = writer.ask(prompt, _Pick, PICK_INSTRUCTIONS[source], model, in_range).output
     if pick.choice is None:
-        raise InsetError(f"none of the Google images for “{subject}” fit the post", shown)
+        raise InsetError(f"none of the {label} images for “{subject}” fit the post", shown)
 
     chosen = shown[pick.choice - 1]
-    return Found(place(chosen, client), subject, chosen, shown)
+    return Found(place(chosen, client, source=source), subject, chosen, shown)

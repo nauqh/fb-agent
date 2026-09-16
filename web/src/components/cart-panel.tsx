@@ -11,6 +11,7 @@ import { listPromptTemplates } from "@/lib/api/prompt-templates";
 import { sourceKey, useCart } from "@/lib/cart";
 import { usePageScope } from "@/lib/page-scope";
 import { useQuery } from "@/lib/use-query";
+import { InsetSourceSelect, type InsetSource } from "@/components/inset-source-select";
 import { Button } from "@/components/ui/button";
 
 /**
@@ -80,8 +81,10 @@ export function CartPanel() {
    * and for no photograph is a contradiction, not a preference.
    */
   const [noImage, setNoImage] = useState(false);
-  /** Have the AI find and place a Google Images picture in the circular inset. Off with No image. */
+  /** Have the AI find and place a picture in the circular inset, from the Page's source. Off with No image. */
   const [findInset, setFindInset] = useState(false);
+  /** Null until touched, so it follows the Page's setting (`InsetSourceSelect`). */
+  const [insetSource, setInsetSource] = useState<InsetSource | null>(null);
   /**
    * The post style this run writes under, from the library on Settings.
    *
@@ -123,12 +126,14 @@ export function CartPanel() {
         hero_from_source: offerSourceHero && heroFromSource && !noImage,
         no_image: noImage,
         find_inset: findInset && !noImage,
+        inset_source: insetSource ?? page.inset_source,
         prompt_template_id: styleId === "" ? null : Number(styleId),
       });
       cart.clear();
       setHeroFromSource(false);
       setNoImage(false);
       setFindInset(false);
+      setInsetSource(null);
       setStyleId("");
       toast.success(`${ids.length} draft${ids.length === 1 ? "" : "s"} generating.`, {
         description: "Progress is on the Review screen.",
@@ -251,7 +256,7 @@ export function CartPanel() {
           {!noImage ? (
             <label
               className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs text-muted-foreground"
-              title="The AI finds a Google Images picture that fits each post and puts it in the circular inset."
+              title="The AI finds a picture that fits each post and puts it in the circular inset."
             >
               <input
                 type="checkbox"
@@ -261,6 +266,13 @@ export function CartPanel() {
               />
               Find inset
             </label>
+          ) : null}
+
+          {findInset && !noImage && page ? (
+            <InsetSourceSelect
+              value={insetSource ?? page.inset_source}
+              onChange={setInsetSource}
+            />
           ) : null}
 
           {offerSourceHero && !noImage ? (
