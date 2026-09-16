@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useState } from "react";
 import { useTheme } from "next-themes";
 import mermaid from "mermaid";
 
@@ -11,6 +11,35 @@ import mermaid from "mermaid";
 // raw source while it did so flashed the diagram's text on every page switch.
 const rendered = new Map<string, string>();
 
+// The map dies with the page, so every reload re-rendered: the component
+// returns null while mermaid works, then the finished SVG popped in and pushed
+// the rest of the document down. localStorage keyed by theme and source keeps
+// a drawn diagram across loads; the key is the chart's own text, so an edited
+// PRD never reads a stale drawing.
+const CACHE_PREFIX = "mermaid:";
+
+function readCache(key: string): string | undefined {
+  try {
+    return localStorage.getItem(CACHE_PREFIX + key) ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function writeCache(key: string, svg: string) {
+  try {
+    localStorage.setItem(CACHE_PREFIX + key, svg);
+  } catch {
+    // Quota or privacy mode: the in-memory map still covers this session.
+  }
+}
+
+// useLayoutEffect is the point: it runs before the first paint, so a cached
+// diagram is on the page in the very first frame. On the server there is no
+// layout to read, hence the usual isomorphic swap.
+const useIsoLayoutEffect =
+  typeof window === "undefined" ? useEffect : useLayoutEffect;
+
 export function Mermaid({ chart }: { chart: string }) {
   const id = useId().replace(/[^a-zA-Z0-9_-]/g, "");
   const { resolvedTheme } = useTheme();
@@ -20,8 +49,16 @@ export function Mermaid({ chart }: { chart: string }) {
   });
   const svg = rendered.get(key) ?? (result.key === key ? result.svg : undefined);
 
-  useEffect(() => {
+  useIsoLayoutEffect(() => {
     if (rendered.has(key)) return;
+
+    const stored = readCache(key);
+    if (stored) {
+      rendered.set(key, stored);
+      setResult({ key, svg: stored });
+      return;
+    }
+
     let cancelled = false;
 
     mermaid.initialize({
@@ -35,6 +72,7 @@ export function Mermaid({ chart }: { chart: string }) {
       .render(`mermaid-${id}`, chart)
       .then(({ svg: output }) => {
         rendered.set(key, output);
+        writeCache(key, output);
         if (!cancelled) setResult({ key, svg: output });
       })
       .catch(() => {
