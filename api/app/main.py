@@ -44,13 +44,13 @@ async def lifespan(_app: FastAPI):
     with Session(get_engine()) as session:
         stranded = generate.sweep_stranded(session)
     if stranded:
-        logger.info("swept {} draft(s) stranded by a restart", stranded)
+        logger.info("Marked {} draft(s) failed: a restart interrupted them", stranded)
     # Same for processed videos: a restart mid-job leaves `youtube_job` rows at
     # `processing`.
     with Session(get_engine()) as session:
         job_stranded = youtube_worker.sweep_stranded(session)
     if job_stranded:
-        logger.info("swept {} youtube job(s) stranded by a restart", job_stranded)
+        logger.info("Marked {} YouTube job(s) failed: a restart interrupted them", job_stranded)
     # Before any job runs: turn YTDLP_COOKIES_B64 into the file yt-dlp wants.
     # A host that rebuilds its disk every deploy can only be handed a variable.
     youtube_sources.install_cookies_from_env()

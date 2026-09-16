@@ -79,7 +79,7 @@ def setup_logging() -> None:
     """Install the one sink. Idempotent for a reloading uvicorn."""
     logger.remove()
     logger.add(_json_sink, level=settings.log_level, backtrace=True, diagnose=False)
-    logger.info("logging ready (level={})", settings.log_level)
+    logger.info("Logging ready (level={})", settings.log_level)
 
     _uvicorn_level()
 

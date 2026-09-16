@@ -223,6 +223,14 @@ async def create_manual_draft(
         )
 
     draft.warnings = warnings
+    logger.bind(
+        draft_id=draft.id,
+        page=page.name,
+        source="manual",
+        hero="upload" if draft.hero_image_path else "none",
+        inset_query=draft.inset_subject if find_inset else None,
+        warnings=len(warnings),
+    ).info("Created 1 manual post for {} (draft {})", page.name, draft.id)
     return _save(session, draft)
 
 
@@ -620,7 +628,7 @@ async def upload_hero(
     was_text_only = draft.no_image
     draft.no_image = False
     logger.info(
-        "hero uploaded for draft {}{}",
+        "Hero uploaded for draft {}{}",
         draft_id,
         " (text-only cleared)" if was_text_only else "",
     )
@@ -1007,7 +1015,7 @@ def publish_draft(
         metricool_post_id=draft.metricool_post_id,
         rehearsal=settings.metricool_publish_as_draft,
     ).info(
-        "draft {} published → Metricool post {} (page={}, rehearsal={})",
+        "Draft {} published as Metricool post {} (page={}, rehearsal={})",
         draft_id,
         draft.metricool_post_id,
         page.name,
@@ -1189,7 +1197,7 @@ def _push_to_metricool(
     logger.bind(
         draft_id=draft.id, metricool_post_id=new_id, replaced=post_id, when=when
     ).info(
-        "draft {} updated in Metricool: post {} -> {} at {}",
+        "Draft {} updated in Metricool: post {} replaced by {} at {}",
         draft.id,
         post_id,
         new_id,
@@ -1249,7 +1257,7 @@ def unschedule_draft(draft_id: int, session: Session = Depends(get_session)) -> 
     except publisher.PublishError as error:
         raise HTTPException(status_code=502, detail=str(error)) from error
     logger.bind(draft_id=draft_id, metricool_post_id=draft.metricool_post_id).info(
-        "draft {} unscheduled: Metricool post {} deleted", draft_id, draft.metricool_post_id
+        "Draft {} unscheduled: Metricool post {} deleted", draft_id, draft.metricool_post_id
     )
 
     draft.metricool_post_id = None

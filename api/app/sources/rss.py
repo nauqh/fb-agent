@@ -185,7 +185,7 @@ def fetch_rss(feeds: list[Feed], timeout: float = 10.0) -> RssFeed:
 
     items = _merge(results)
     logger.info(
-        "rss {} items from {} feed(s), {} failed", len(items), len(feeds), len(failures)
+        "Fetched {} RSS item(s) from {} feed(s), {} failed", len(items), len(feeds), len(failures)
     )
     return RssFeed(items=items, failures=failures)
 

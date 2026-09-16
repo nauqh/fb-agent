@@ -487,7 +487,7 @@ def install_cookies_from_env() -> str | None:
         logger.error("[yt-dlp] YTDLP_COOKIES_B64 is not valid base64 - ignoring it")
         return None
     COOKIES_FROM_ENV.write_bytes(data)
-    logger.info("[yt-dlp] cookies written to {}", COOKIES_FROM_ENV)
+    logger.info("[yt-dlp] Cookies written to {}", COOKIES_FROM_ENV)
     return str(COOKIES_FROM_ENV)
 
 
@@ -633,7 +633,7 @@ def _run(
                 # tool was, and a rate limit answered by four quick attempts is
                 # how downloads get the whole IP blocked. Same breather, kept.
                 logger.warning(
-                    "[yt-dlp] {} failed with client {}, trying next in 2s",
+                    "[yt-dlp] Download of {} failed with client {}, trying the next in 2s",
                     url,
                     player_client,
                 )

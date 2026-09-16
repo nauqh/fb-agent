@@ -243,7 +243,7 @@ def _run_one(session: Session, job: YoutubeJob) -> None:
         _upload(job, session, final_path)
         _progress(session, job, "done", 100)
         logger.bind(job_id=job_id, cta=template.id, trim=job.trim_duration).info(
-            "youtube job {} completed {} ({}s trim, cta {})",
+            "YouTube job {} completed: {} ({}s trim, CTA {})",
             job_id,
             job.raw_title or job.youtube_url or "upload",
             job.trim_duration,
@@ -251,7 +251,7 @@ def _run_one(session: Session, job: YoutubeJob) -> None:
         )
     except Exception as error:  # noqa: BLE001 - the row is where a failure goes
         logger.bind(job_id=job_id).error(
-            "youtube job {} failed: {}", job_id, f"{type(error).__name__}: {error}"
+            "YouTube job {} failed: {}", job_id, f"{type(error).__name__}: {error}"
         )
         job.status = JobStatus.FAILED
         job.error_message = (f"{type(error).__name__}: {error}")[:500]
@@ -427,12 +427,12 @@ def _one_pass() -> int:
 
 def run_forever() -> None:
     """The worker loop. Logs only a pass that raised."""
-    logger.info("youtube worker started (polling every {}s)", POLL_SECONDS)
+    logger.info("YouTube worker started (polling every {}s)", POLL_SECONDS)
     while True:
         try:
             _one_pass()
         except Exception:  # noqa: BLE001 - one bad pass must not kill the loop
-            logger.exception("youtube worker pass failed")
+            logger.exception("YouTube worker pass failed")
         time.sleep(POLL_SECONDS)
 
 
@@ -441,7 +441,7 @@ def start() -> threading.Thread | None:
     it by setting `youtube_worker_enabled` false (conftest autouse fixture -
     the thread must not run against the test database)."""
     if not settings.youtube_worker_enabled:
-        logger.info("youtube worker disabled (youtube_worker_enabled=false)")
+        logger.info("YouTube worker disabled (youtube_worker_enabled=false)")
         return None
 
     thread = threading.Thread(target=run_forever, name="youtube-worker", daemon=True)

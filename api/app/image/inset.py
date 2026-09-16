@@ -358,7 +358,7 @@ def candidates(
     search = _unsplash if source == "unsplash" else _google
     total, found = search(query, client)
     logger.info(
-        'inset search ({}) for "{}": {} results, {} kept', source, query, total, len(found)
+        'Inset search ({}) for "{}": {} results, {} kept', source, query, total, len(found)
     )
     return found
 
@@ -424,14 +424,14 @@ def place(
         try:
             client.get(candidate.download_location, headers=_unsplash_auth()).raise_for_status()
         except httpx.HTTPError as error:
-            logger.warning("unsplash download ping failed for {}: {}", candidate.full_url, error)
+            logger.warning("Unsplash download ping failed for {}: {}", candidate.full_url, error)
         return png
 
     try:
         data, _ = _download(candidate.full_url, client)
     except InsetError:
         logger.info(
-            "inset original refused by {}, using Google's thumbnail",
+            "Inset original refused by {}, using Google's thumbnail",
             httpx.URL(candidate.full_url).host,
         )
         data, _ = _download(candidate.url, client)

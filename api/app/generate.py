@@ -17,6 +17,7 @@ outcome.
 """
 
 import time
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
@@ -231,13 +232,39 @@ def start_run(
         session.add(draft)
     session.commit()
 
-    logger.info(
-        "run queued {} draft(s) across {} page(s)",
-        len(drafts),
-        len(set(page_ids)),
+    names = [page.name for page in pages]
+    logger.bind(
+        drafts=len(drafts),
+        pages=names,
+        source=", ".join(sorted({item.kind.value for item in sources})) or "topic",
+    ).info(
+        "Generating {} from {} for {}",
+        _count(len(drafts), "post"),
+        _describe_sources(sources, topic),
+        ", ".join(names),
     )
 
     return [draft.id for draft in drafts if draft.id is not None]
+
+
+SOURCE_LABEL = {
+    SourceKind.RSS: "RSS article",
+    SourceKind.TWEET: "tweet",
+    SourceKind.COMPETITOR_POST: "competitor post",
+}
+
+
+def _describe_sources(sources: list[SourceItemBase], topic: str | None) -> str:
+    """`2 RSS articles and 1 competitor post`, or `topic "..."` - for the log."""
+    if not sources:
+        return f'topic "{topic}"'
+    counts = Counter(item.kind for item in sources)
+    parts = [_count(n, SOURCE_LABEL[kind]) for kind, n in counts.items()]
+    return " and ".join([", ".join(parts[:-1]), parts[-1]] if len(parts) > 1 else parts)
+
+
+def _count(n: int, noun: str) -> str:
+    return f"{n} {noun}" if n == 1 else f"{n} {noun}s"
 
 
 def run_drafts(draft_ids: list[int]) -> None:
@@ -277,7 +304,7 @@ def _run_one_isolated(draft_id: int) -> None:
         with Session(get_engine()) as session:
             _run_one(session, draft_id)
     except Exception:  # noqa: BLE001 - never escapes; run_drafts cannot raise
-        logger.exception("draft {} failed before its own error handling", draft_id)
+        logger.exception("Draft {} failed before its own error handling", draft_id)
 
 
 def _outcome(draft: Draft, page: Page | None, source: SourceItem | None, started: float):
@@ -418,7 +445,7 @@ def _run_one(session: Session, draft_id: int) -> None:
         # was written from, where its picture came from, what it was searched
         # for, how much the run had to warn about.
         _outcome(draft, page, source, started).info(
-            "draft {} → review in {:.1f}s (page={})",
+            "Draft {} ready for review in {:.1f}s (page={})",
             draft_id,
             time.perf_counter() - started,
             page.name if page else draft_id,
@@ -430,7 +457,7 @@ def _run_one(session: Session, draft_id: int) -> None:
         # With its traceback: `type: message` is enough for a vendor 429 and
         # useless for a bug in this code, and the two look the same here.
         _outcome(draft, page, source, started).opt(exception=error).error(
-            "draft {} failed: {}", draft_id, f"{type(error).__name__}: {error}"
+            "Draft {} failed: {}", draft_id, f"{type(error).__name__}: {error}"
         )
         draft.error = f"{type(error).__name__}: {error}"[:500]
         draft.status = DraftStatus.FAILED

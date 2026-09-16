@@ -216,12 +216,12 @@ def sync_competitors(page_ids: list[int]) -> None:
             ]
             _sync(session, pages)
             logger.info(
-                "auto-synced competitors for {} brand(s): {}",
+                "Synced competitors for {} brand(s): {}",
                 len(pages),
                 ", ".join(page.name for page in pages) or "none",
             )
     except Exception:  # noqa: BLE001 - a BackgroundTask must not raise
-        logger.exception("automatic competitor sync failed for pages {}", page_ids)
+        logger.exception("Competitor sync failed for pages {}", page_ids)
 
 
 def _visible_to(session: Session, scope_ids: list[int]):
