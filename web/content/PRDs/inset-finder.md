@@ -5,7 +5,7 @@ title: 'inset-finder'
 ## 1. Executive summary
 
 - **Product**: AI inset finder
-- **Status**: Approved
+- **Status**: Finished
 - **Last updated**: 17 September 2026
 
 The AI finds a suitable picture for a post's circular inset and places it, so
@@ -35,15 +35,12 @@ Unsplash for stock photos.
 ### How it works
 
 ```mermaid
-flowchart TD
-  A["Reads the post"] --> B{"Source"}
-  B -->|Google search| C["Searches by name, such as Ignaz Semmelweis"]
-  B -->|Unsplash| D["Searches by what a photo could show, such as hand washing"]
-  C --> F["Looks at up to 6 pictures"]
-  D --> F
-  F --> G{"Does one fit the post?"}
-  G -->|Yes| H["Places it and keeps the others to swap"]
-  G -->|No| I["Post arrives without the inset, with a note"]
+flowchart LR
+  A["Post"] --> B["AI writes a search"]
+  B --> C["Searches Google or Unsplash"]
+  C --> D["AI picks the best of 6"]
+  D --> E["Placed in the inset"]
+  D -.->|none fit| F["Post arrives without an inset"]
 ```
 
 ### Where it is available
@@ -97,19 +94,9 @@ flowchart TD
   write the search and choose the picture.
 - **Rights**: Pictures from Google search belong to whoever published them, and
   posts carry no photo credit. Unsplash photos are free to use.
-- **Limits**: SerpAPI's free plan allows 250 searches a month. Unsplash's free
-  tier allows 50 requests an hour.
-
-| Action | Google search (SerpAPI searches) | Unsplash (requests) |
-|---|---|---|
-| Find with AI | 1 | 2 |
-| Swap to an alternative | 0 | 1 |
-| Keyword search | 1 | 1 |
-
-## 6. Open questions
-
-| Question | Status |
-|---|---|
-| Should posts with a Google search inset credit the publisher? | Open |
-| Which SerpAPI plan does the monthly volume need? | Open |
-| Which Pages should use Unsplash? | Open |
+- **Limits**:
+  - Google search (SerpAPI) allows 250 searches a month on the free plan. Each
+    Find with AI or keyword search uses one; swapping to an alternative uses
+    none.
+  - Unsplash allows 50 requests an hour on the free tier. Each search uses one,
+    and placing a photo uses one more.
