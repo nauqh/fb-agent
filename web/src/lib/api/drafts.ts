@@ -239,16 +239,25 @@ export async function regenerateField(
  * the Page's source and picks by looking - so save first. With `candidate`, place one of
  * the draft's `inset_candidates`. Either way the offered photos stay on the row.
  */
-export async function findInset(id: number, candidate?: InsetCandidate): Promise<Draft> {
-  return post<Draft>(`/drafts/${id}/inset/find`, candidate ? { candidate } : {});
+export async function findInset(
+  id: number,
+  candidate?: InsetCandidate,
+  source?: "google" | "unsplash",
+): Promise<Draft> {
+  // A swap sends no source: the candidate says where it came from.
+  return post<Draft>(`/drafts/${id}/inset/find`, candidate ? { candidate } : { source });
 }
 
 /**
  * Pictures from the Page's source for the operator's own keywords, kept on the draft as its
  * `inset_candidates`. No model call, and nothing is placed until one is picked.
  */
-export async function searchInset(id: number, query: string): Promise<Draft> {
-  return post<Draft>(`/drafts/${id}/inset/search`, { query });
+export async function searchInset(
+  id: number,
+  query: string,
+  source?: "google" | "unsplash",
+): Promise<Draft> {
+  return post<Draft>(`/drafts/${id}/inset/search`, { query, source });
 }
 
 /** Take the circle off. Answers with the redrawn draft, not 204. */

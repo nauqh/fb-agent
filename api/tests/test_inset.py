@@ -749,3 +749,78 @@ def test_a_hand_written_draft_can_choose_its_source(client, monkeypatch):
 
     assert response.status_code == 201, response.text
     assert asked == ["unsplash"]
+
+
+# --- the drawer's own choice ---------------------------------------------------------
+
+
+def test_the_drawer_search_can_use_unsplash_on_a_google_page(
+    client, written, illustrated, monkeypatch
+):
+    client.post("/generate", json={"page_ids": [1], "topic": "x"})
+    asked = []
+    monkeypatch.setattr(
+        inset,
+        "candidates",
+        lambda query, *a, **k: asked.append(k.get("source")) or [_unsplash_candidate()],
+    )
+
+    response = client.post(
+        "/drafts/1/inset/search", json={"query": "hand washing", "source": "unsplash"}
+    )
+
+    assert response.status_code == 200, response.text
+    assert asked == ["unsplash"]
+    assert client.get("/pages/1").json()["inset_source"] == "google", "the Page is untouched"
+
+
+def test_find_with_ai_can_use_unsplash_on_a_google_page(
+    client, written, illustrated, monkeypatch
+):
+    client.post("/generate", json={"page_ids": [1], "topic": "x"})
+    asked = []
+    monkeypatch.setattr(
+        inset,
+        "find_for_post",
+        lambda post, subject=None, **k: asked.append(k.get("source")) or _found(),
+    )
+
+    response = client.post("/drafts/1/inset/find", json={"source": "unsplash"})
+
+    assert response.status_code == 200, response.text
+    assert asked == ["unsplash"]
+
+
+@pytest.mark.parametrize(
+    ("candidate", "expected"),
+    [(_unsplash_candidate("lab"), "unsplash"), (_candidate("lab"), "google")],
+    ids=["unsplash-result", "google-result"],
+)
+def test_a_swap_follows_the_pictures_own_source(
+    client, written, illustrated, monkeypatch, candidate, expected
+):
+    """The row can hold an Unsplash search run on a Google Page, and placing one
+    of those through Google's path would skip Unsplash's host pinning and ping."""
+    client.post("/generate", json={"page_ids": [1], "topic": "x"})
+    placed = []
+    monkeypatch.setattr(
+        inset, "place", lambda candidate, *a, **k: placed.append(k.get("source")) or _png()
+    )
+
+    response = client.post(
+        "/drafts/1/inset/find",
+        json={"candidate": candidate.model_dump(), "source": "google"},
+    )
+
+    assert response.status_code == 200, response.text
+    assert placed == [expected], "the swap ignores the dropdown and trusts the picture"
+
+
+def test_the_drawer_refuses_an_unknown_source(client, written, illustrated):
+    client.post("/generate", json={"page_ids": [1], "topic": "x"})
+
+    assert (
+        client.post("/drafts/1/inset/search", json={"query": "x", "source": "bing"}).status_code
+        == 422
+    )
+    assert client.post("/drafts/1/inset/find", json={"source": "bing"}).status_code == 422

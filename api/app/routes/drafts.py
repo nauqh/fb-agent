@@ -707,8 +707,12 @@ def _sentence(error: Exception) -> str:
 class FindInset(BaseModel):
     candidate: inset.Candidate | None = None
     """Swap to one of the candidates a previous find returned, sent back whole.
-    `inset.place` checks its URLs against the Page's source before fetching.
-    Omitted, the AI finds one."""
+    `inset.place` checks its URLs against that candidate's source before
+    fetching. Omitted, the AI finds one."""
+
+    source: Literal["google", "unsplash"] | None = None
+    """Where the AI searches, chosen beside the drawer's search box. Null uses the
+    Page's setting. Ignored on a swap, where the candidate says where it is from."""
 
 
 @router.post("/drafts/{draft_id}/inset/find")
@@ -734,8 +738,13 @@ def find_inset(
         raise HTTPException(status_code=404, detail=f"No page {draft.page_id}")
 
     if body.candidate is not None:
+        # The candidate's own source, not the Page's: the row may hold an
+        # Unsplash search run on a Google Page. Only Unsplash results carry a
+        # download link, and claiming one only narrows the fetch - `place` then
+        # pins it to Unsplash's hosts - so a browser cannot widen it by lying.
+        swap_source = "unsplash" if body.candidate.download_location else "google"
         try:
-            data = inset.place(body.candidate, source=page.inset_source)
+            data = inset.place(body.candidate, source=swap_source)
         except inset.InsetError as error:
             raise HTTPException(status_code=422, detail=_sentence(error)) from error
         draft.inset_image_path = media.store.save(
@@ -750,7 +759,7 @@ def find_inset(
             status_code=422, detail="Write the post first - the AI reads it to choose."
         )
     try:
-        found = inset.find_for_post(post, source=page.inset_source)
+        found = inset.find_for_post(post, source=body.source or page.inset_source)
     except inset.InsetError as error:
         if error.candidates:
             # Committed before the 404, or the refresh that follows it would
@@ -770,13 +779,15 @@ def find_inset(
 
 class SearchInset(BaseModel):
     query: str = Field(min_length=1, max_length=100)
+    source: Literal["google", "unsplash"] | None = None
+    """Where to search, chosen beside the box. Null uses the Page's setting."""
 
 
 @router.post("/drafts/{draft_id}/inset/search")
 def search_inset(
     draft_id: int, body: SearchInset, session: Session = Depends(get_session)
 ) -> Draft:
-    """Images for the operator's own keywords, from the Page's source, kept on the row.
+    """Images for the operator's own keywords, kept on the row.
 
     The client's ask (2026-09-15), beside Find with AI: for when the AI's query
     is not the picture they want. No model call and nothing placed - the results
@@ -788,7 +799,7 @@ def search_inset(
     """
     draft = _editable(session, draft_id)
     page = session.get(Page, draft.page_id)
-    source = page.inset_source if page else "google"
+    source = body.source or (page.inset_source if page else "google")
     query = body.query.strip()
     if not query:
         raise HTTPException(status_code=422, detail="Type what to search for.")

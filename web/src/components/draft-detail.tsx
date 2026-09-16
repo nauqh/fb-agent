@@ -20,6 +20,7 @@ import { toast } from "sonner";
 
 import { ComposedImage, clampInset } from "@/components/composed-image";
 import { HookField } from "@/components/hook-field";
+import { InsetSourceSelect, type InsetSource } from "@/components/inset-source-select";
 import { FacebookPreview } from "@/components/facebook-preview";
 import { PublishAt } from "@/components/publish-at";
 import { PublishDialog } from "@/components/publish-dialog";
@@ -116,6 +117,17 @@ export function DraftDetail({
   /** The inset search box. Uncontrolled: it opens on the draft's last query and
    *  is only read when Search is pressed. The offered photos live on the row. */
   const insetQuery = useRef<HTMLInputElement>(null);
+  /**
+   * Where Search and Find with AI look, when changed from the Page's setting.
+   *
+   * Tagged with the draft it was chosen on and read through that, so opening
+   * another draft falls back to its own Page's setting without an effect to
+   * reset it - which is the `set-state-in-effect` shape this file had to lose.
+   */
+  const [insetChoice, setInsetChoice] = useState<{
+    draftId: number;
+    source: InsetSource;
+  } | null>(null);
   const [view, setView] = useState<View>("text");
   const filePicker = useRef<HTMLInputElement>(null);
   const heroPicker = useRef<HTMLInputElement>(null);
@@ -210,6 +222,8 @@ export function DraftDetail({
   }
 
   const page = pages?.find((candidate) => candidate.id === draft?.page_id);
+  const insetSource: InsetSource =
+    insetChoice?.draftId === draftId ? insetChoice.source : (page?.inset_source ?? "google");
   const dirty = useMemo(
     () => (draft && form ? JSON.stringify(toForm(draft)) !== JSON.stringify(form) : false),
     [draft, form],
@@ -421,7 +435,7 @@ export function DraftDetail({
     setImageWork("inset-find");
     try {
       if (dirty && form) await updateDraft(draftId, form);
-      const row = await findInset(draftId);
+      const row = await findInset(draftId, undefined, insetSource);
       const chosen = row.inset_candidates.find((item) => item.url === row.inset_photo_url);
       toast.success(chosen ? `Inset: ${chosen.title}` : "Inset added.");
     } catch (cause) {
@@ -443,7 +457,7 @@ export function DraftDetail({
       // Saved first like every inset action: the refresh below re-reads the
       // row, and unsaved text must not be the price of a search.
       if (dirty && form) await updateDraft(draftId, form);
-      await searchInset(draftId, query);
+      await searchInset(draftId, query, insetSource);
       await refresh();
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : "Search failed");
@@ -935,6 +949,13 @@ export function DraftDetail({
                 places nothing. Keyed on the draft and its last query, so it
                 opens on whatever the AI or the operator searched last. */}
             <div className="flex gap-1">
+              {/* One choice for both Search and Find with AI above it: they are
+                  the same search, one with the operator's words and one with
+                  the AI's. Starts on the Page's setting. */}
+              <InsetSourceSelect
+                value={insetSource}
+                onChange={(source) => setInsetChoice({ draftId, source })}
+              />
               <Input
                 key={`${draft.id}:${draft.inset_subject ?? ""}`}
                 ref={insetQuery}
