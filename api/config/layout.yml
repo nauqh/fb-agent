@@ -101,7 +101,11 @@ portrait:
     # that costs nothing and comes from a person. Its *size* is per-draft and
     # lives on the row, because it depends on what is in the picture rather than
     # on the brand.
-    size_px: 140 # DEFAULT_PORTRAIT_SIZE_PX in the old app - the default, not a cap
+    # 230, not the old app's DEFAULT_PORTRAIT_SIZE_PX of 140 (client, 2026-09-16).
+    # History Retraced had already been moved to 230 by hand on 2026-08-12, and
+    # it is the only Page anyone had tuned; the other nine sat at a default
+    # nobody chose. The default, not a cap - max_width_ratio is the cap.
+    size_px: 230
     min_px: 40 # MIN_INSET_SIZE_PX; below this the disc is a smudge
     max_width_ratio: 0.45 # MAX_INSET_DIAMETER_RATIO - 403px at 896 wide
     ring_pad_px: 3
