@@ -242,7 +242,7 @@ def _run_one(session: Session, job: YoutubeJob) -> None:
         _progress(session, job, "uploading the processed video", 90)
         _upload(job, session, final_path)
         _progress(session, job, "done", 100)
-        logger.info(
+        logger.bind(job_id=job_id, cta=template.id, trim=job.trim_duration).info(
             "youtube job {} completed {} ({}s trim, cta {})",
             job_id,
             job.raw_title or job.youtube_url or "upload",
@@ -250,7 +250,7 @@ def _run_one(session: Session, job: YoutubeJob) -> None:
             template.id,
         )
     except Exception as error:  # noqa: BLE001 - the row is where a failure goes
-        logger.error(
+        logger.bind(job_id=job_id).error(
             "youtube job {} failed: {}", job_id, f"{type(error).__name__}: {error}"
         )
         job.status = JobStatus.FAILED
@@ -404,13 +404,12 @@ def _claim(session: Session) -> YoutubeJob | None:
 
 
 def _one_pass() -> int:
-    """Claim and run one job.
+    """Claim and run one job. Returns how many ran (0 or 1).
 
-    Returns jobs_processed for the log line - logging lives at the boundary of
-    a pass, never per step (the loggingsucks.com rule `generate` already
-    quotes). The old tool's second half of every pass - reconciling overdue
-    Metricool schedules - was cut with the publish scope (the `youtube_schedule`
-    table and `schedule.py` are gone).
+    Nothing logged here: the job's own completed/failed line is the record. The
+    old tool's second half of every pass - reconciling overdue Metricool
+    schedules - was cut with the publish scope (the `youtube_schedule` table and
+    `schedule.py` are gone).
     """
     with Session(get_engine()) as session:
         job = _claim(session)
@@ -421,20 +420,17 @@ def _one_pass() -> int:
         job_id = job.id if job is not None else None
     jobs = 0
     if job_id is not None:
-        logger.info("youtube worker claiming job {}", job_id)
         run_job(job_id)
         jobs = 1
     return jobs
 
 
 def run_forever() -> None:
-    """The worker loop. Logs one line per pass only when something happened."""
+    """The worker loop. Logs only a pass that raised."""
     logger.info("youtube worker started (polling every {}s)", POLL_SECONDS)
     while True:
         try:
-            jobs = _one_pass()
-            if jobs:
-                logger.info("youtube worker pass: {} job(s)", jobs)
+            _one_pass()
         except Exception:  # noqa: BLE001 - one bad pass must not kill the loop
             logger.exception("youtube worker pass failed")
         time.sleep(POLL_SECONDS)

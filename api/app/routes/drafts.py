@@ -989,7 +989,12 @@ def publish_draft(
         raise HTTPException(status_code=502, detail=str(error)) from error
 
     draft.metricool_post_id = post_id or "queued"
-    logger.info(
+    logger.bind(
+        draft_id=draft_id,
+        page=page.name,
+        metricool_post_id=draft.metricool_post_id,
+        rehearsal=settings.metricool_publish_as_draft,
+    ).info(
         "draft {} published → Metricool post {} (page={}, rehearsal={})",
         draft_id,
         draft.metricool_post_id,
@@ -1167,6 +1172,17 @@ def _push_to_metricool(
     except publisher.PublishError as error:
         raise HTTPException(status_code=502, detail=str(error)) from error
 
+    # Edit and reschedule both land here, and both replace the post: the old id
+    # is gone from the planner, so the pair is what ties the two together.
+    logger.bind(
+        draft_id=draft.id, metricool_post_id=new_id, replaced=post_id, when=when
+    ).info(
+        "draft {} updated in Metricool: post {} -> {} at {}",
+        draft.id,
+        post_id,
+        new_id,
+        when,
+    )
     draft.metricool_post_id = new_id
     return _save(session, draft)
 
@@ -1220,6 +1236,9 @@ def unschedule_draft(draft_id: int, session: Session = Depends(get_session)) -> 
         publisher.delete(blog_id, str(draft.metricool_post_id))
     except publisher.PublishError as error:
         raise HTTPException(status_code=502, detail=str(error)) from error
+    logger.bind(draft_id=draft_id, metricool_post_id=draft.metricool_post_id).info(
+        "draft {} unscheduled: Metricool post {} deleted", draft_id, draft.metricool_post_id
+    )
 
     draft.metricool_post_id = None
     # Back to the queue, not to APPROVED. Nothing writes APPROVED any more -

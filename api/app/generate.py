@@ -414,7 +414,9 @@ def _run_one(session: Session, draft_id: int) -> None:
     except Exception as error:  # noqa: BLE001 - the row is where a failure goes
         # The same event, so a failure is queryable beside the successes rather
         # than being a different shape nobody thinks to look for.
-        _outcome(draft, page, source, started).error(
+        # With its traceback: `type: message` is enough for a vendor 429 and
+        # useless for a bug in this code, and the two look the same here.
+        _outcome(draft, page, source, started).opt(exception=error).error(
             "draft {} failed: {}", draft_id, f"{type(error).__name__}: {error}"
         )
         draft.error = f"{type(error).__name__}: {error}"[:500]
@@ -505,7 +507,6 @@ def build_image(session: Session, draft: Draft, page: Page) -> list[str]:
             draft.hero_image_path = media.store.save(
                 image_bytes, media.filename(draft.id or 0, "hero", "png")
             )
-            logger.info("draft {} hero from its {} source", draft.id, source.kind.value)
         else:
             style = None
             if draft.prompt_template_id:

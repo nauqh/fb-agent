@@ -16,7 +16,9 @@ high-cardinality things you would want to filter by - which for this app is a
 draft, not an HTTP request (see `generate._run_one`).
 """
 
+import inspect
 import json
+import logging
 import sys
 import traceback
 
@@ -49,6 +51,28 @@ def _json_sink(message) -> None:
     sys.stderr.write(json.dumps(payload, default=str) + "\n")
 
 
+class _Intercept(logging.Handler):
+    """stdlib `logging` into loguru, so it gets the same sink and format.
+
+    uvicorn reports an unhandled exception through stdlib ("Exception in ASGI
+    application" and a traceback). Left on its own handler that is plain text,
+    which Railway splits into one entry per traceback line with no level. The
+    body is loguru's documented recipe: the frame walk puts the caller's module
+    in `name` rather than `logging/__init__`.
+    """
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            level: str | int = logger.level(record.levelname).name
+        except ValueError:
+            level = record.levelno
+        frame, depth = inspect.currentframe(), 0
+        while frame and (depth == 0 or frame.f_code.co_filename == logging.__file__):
+            frame = frame.f_back
+            depth += 1
+        logger.opt(depth=depth, exception=record.exc_info).log(level, record.getMessage())
+
+
 def setup_logging() -> None:
     """Install the one sink. Idempotent for a reloading uvicorn."""
     logger.remove()
@@ -79,7 +103,7 @@ def setup_logging() -> None:
 
 
 def _uvicorn_level() -> None:
-    """Raise uvicorn's verbosity to match ours.
+    """Raise uvicorn's verbosity to match ours, and send it through loguru.
 
     uvicorn prints an access line per request at INFO by default, which is
     exactly the noise DEBUG turns on - but it has no idea it is part of this
@@ -87,12 +111,17 @@ def _uvicorn_level() -> None:
     `LOG_LEVEL` so DEBUG shows every request and INFO keeps a quiet stream of
     app outcomes only.
     """
-    import logging
-
     # uvicorn logs its access lines at INFO. Show them only when DEBUG is on;
     # otherwise raise uvicorn's loggers to WARNING so the stream stays app
     # outcomes, not one line per request. `LOG_LEVEL` sets *loguru*; this maps
     # it to the uvicorn loggers it owns.
     uvicorn_level = "INFO" if settings.log_level == "DEBUG" else "WARNING"
+    # Root at WARNING, so libraries' warnings arrive too without httpx's INFO
+    # line for every Gemini and Metricool call. uvicorn's own handlers are
+    # dropped for propagation to the root's, or each line would print twice.
+    logging.basicConfig(handlers=[_Intercept()], level=logging.WARNING, force=True)
     for name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
-        logging.getLogger(name).setLevel(uvicorn_level)
+        stdlib = logging.getLogger(name)
+        stdlib.setLevel(uvicorn_level)
+        stdlib.handlers = []
+        stdlib.propagate = True

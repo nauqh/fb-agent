@@ -9,9 +9,11 @@ import secrets
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
+from fastapi.exception_handlers import http_exception_handler
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlmodel import Session
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app import generate
 from app.db import get_engine, init_db
@@ -67,6 +69,29 @@ It reports the database host, the bucket name and which secrets are missing -
 never a secret's value - which is the most that can be given away here without
 making the probe useless.
 """
+
+
+@app.exception_handler(StarletteHTTPException)
+async def log_server_errors(request: Request, error: StarletteHTTPException):
+    """Log every 5xx the routes raise, then answer as FastAPI would have.
+
+    The 502s are upstream failures - Metricool refusing a publish, YouTube
+    refusing a download - and they only ever reached the browser: a raised
+    HTTPException is not logged, and uvicorn's access line is off below DEBUG.
+    One handler here rather than a log line beside each of the twenty raises.
+    4xx stays quiet; it is the operator's input, and the screen already says so.
+    """
+    if error.status_code >= 500:
+        logger.bind(
+            method=request.method, path=request.url.path, status=error.status_code
+        ).error(
+            "{} {} -> {}: {}",
+            request.method,
+            request.url.path,
+            error.status_code,
+            error.detail,
+        )
+    return await http_exception_handler(request, error)
 
 
 @app.middleware("http")
