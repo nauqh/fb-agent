@@ -417,12 +417,13 @@ def _run_one(session: Session, draft_id: int) -> None:
         # writes its own stock-photo query instead, because a name finds nothing
         # there. The run's own choice wins over the Page's.
         if draft.find_inset:
-            source = draft.inset_source or page.inset_source
+            # Not `source`: that is the Source Item, and `_outcome` reads it below.
+            inset_source = draft.inset_source or page.inset_source
             draft.warnings = draft.warnings + (
                 find_inset(
                     draft,
-                    draft.inset_subject if source == "google" else None,
-                    source=source,
+                    draft.inset_subject if inset_source == "google" else None,
+                    source=inset_source,
                 )
                 if draft.inset_subject
                 else [f"{IMAGE_WARNING}no inset - the post has no single subject."]

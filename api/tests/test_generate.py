@@ -2059,3 +2059,22 @@ def test_drafts_list_returns_a_capped_newest_first_page(client, session, page):
 
     narrower = client.get("/drafts?limit=2").json()
     assert [row["topic"] for row in narrower] == ["0", "1"]
+
+
+def test_a_run_that_finds_an_inset_still_logs_its_outcome(
+    client, written, illustrated, monkeypatch
+):
+    """The closing event reads the Source Item. The inset's Google/Unsplash
+    choice was once assigned to the same local, so every inset run crashed in
+    its own log line - after the row said `review`, so nothing on screen showed
+    it, and the event that says what happened to the draft was the thing lost."""
+    monkeypatch.setattr(generate, "find_inset", lambda *a, **k: [])
+    lines = []
+    sink = generate.logger.add(lambda message: lines.append(message.record["message"]))
+    try:
+        client.post("/generate", json={"page_ids": [1], "topic": "x", "find_inset": True})
+    finally:
+        generate.logger.remove(sink)
+
+    assert client.get("/drafts/1").json()["status"] == "review"
+    assert any(line.startswith("Draft 1 ready for review") for line in lines), lines
