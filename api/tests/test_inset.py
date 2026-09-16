@@ -197,8 +197,14 @@ def test_a_hotlink_blocked_original_falls_back_to_googles_thumbnail():
         return httpx.Response(200, content=_png(), headers={"content-type": "image/png"})
 
     client = httpx.Client(transport=httpx.MockTransport(answer))
+    lines = []
+    sink = inset.logger.add(lambda message: lines.append(message.record["message"]))
+    try:
+        assert inset.place(_candidate(), client)
+    finally:
+        inset.logger.remove(sink)
 
-    assert inset.place(_candidate(), client)
+    assert "HTTP 403" in lines[0], "the log says why, so a block and a rate limit differ"
 
 
 @pytest.mark.parametrize(

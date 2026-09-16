@@ -379,9 +379,14 @@ def _download(url: str, client: httpx.Client, hosts: set[str] | None = None) -> 
         response = client.get(url, headers={"User-Agent": BROWSER_AGENT})
         response.raise_for_status()
     except httpx.HTTPError as error:
-        raise InsetError(
-            f"that image could not be downloaded ({type(error).__name__})"
-        ) from error
+        # The status, not the class name: "HTTPStatusError" is every refusal
+        # alike, and 403 (blocked) and 429 (rate-limited) want different fixes.
+        reason = (
+            f"HTTP {error.response.status_code}"
+            if isinstance(error, httpx.HTTPStatusError)
+            else type(error).__name__
+        )
+        raise InsetError(f"that image could not be downloaded ({reason})") from error
     kind = (response.headers.get("content-type") or "").split(";")[0].strip().lower()
     if not kind.startswith("image/") or not response.content:
         raise InsetError(f"that URL answered {kind or 'nothing'} rather than an image")
@@ -429,10 +434,11 @@ def place(
 
     try:
         data, _ = _download(candidate.full_url, client)
-    except InsetError:
-        logger.info(
-            "Inset original refused by {}, using Google's thumbnail",
+    except InsetError as error:
+        logger.bind(url=candidate.full_url).info(
+            "Inset original refused by {}: {}. Using Google's thumbnail",
             httpx.URL(candidate.full_url).host,
+            error,
         )
         data, _ = _download(candidate.url, client)
     return _png(data)
