@@ -82,10 +82,10 @@ class DraftContent(BaseModel):
     inset_subject: str | None = Field(
         default=None,
         description=(
-            "A 1-4 word stock photo search query for a small circular photo "
-            "that fits this story - what a photograph could show, not a named "
-            "historical person (e.g. 'hand washing', 'colosseum rome', "
-            "'barbell squat'). Null when nothing in the story can be photographed."
+            "A 1-4 word Google Images search query for a small circular "
+            "picture that fits this story. Name the specific person, place, "
+            "object or event when there is one (e.g. 'Ignaz Semmelweis', "
+            "'Colosseum', 'Apollo 11'). Null when nothing in the story can be pictured."
         ),
     )
 

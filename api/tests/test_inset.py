@@ -1,6 +1,6 @@
-"""The circular inset, found by the AI on Unsplash.
+"""The circular inset, found by the AI on Google Images through SerpAPI.
 
-No test reaches the network or Gemini: Unsplash is an `httpx.MockTransport`, and
+No test reaches the network or Gemini: SerpAPI is an `httpx.MockTransport`, and
 the model is a `FunctionModel`, passed in the same way the writer tests pass one
 - or the whole finder is replaced where the test is about its callers.
 """
@@ -28,26 +28,35 @@ WRITTEN = DraftContent(
 )
 
 
-def _photo(pid: str, alt: str, host: str = "images.unsplash.com") -> dict:
+def _row(title: str, source="Britannica", width=1200, product=False, original=None) -> dict:
+    """One `images_results` row, as the google_images engine returns it."""
+    slug = title.replace(" ", "_")
     return {
-        "id": pid,
-        "alt_description": alt,
-        "urls": {"small": f"https://{host}/{pid}-small", "regular": f"https://{host}/{pid}-regular"},
-        "links": {"download_location": f"https://api.unsplash.com/photos/{pid}/download?ixid=x"},
-        "user": {"name": f"Photographer {pid}", "links": {"html": f"https://unsplash.com/@{pid}"}},
+        "title": title,
+        "source": source,
+        "is_product": product,
+        "original_width": width,
+        "original_height": width,
+        "thumbnail": f"https://encrypted-tbn0.gstatic.com/{slug}-thumb.jpg",
+        "original": original or f"https://cdn.example/{slug}-full.jpg",
     }
 
 
+# Google's own ranking, filters and all: the shop listing, the watermarked
+# stock preview and the listing-sized thumbnail all rank above the real picture.
 RESULTS = [
-    _photo("hands", "hands under a running tap"),
-    _photo("lab", "a laboratory bench"),
-    _photo("plus", "a premium photo", host="plus.unsplash.com"),
+    _row("a mug of him", product=True),
+    _row("a watermarked print", source="Getty Images"),
+    _row("a listing thumbnail", width=200),
+    _row("an insecure host", original="http://cdn.example/x.jpg"),
+    _row("hands under a running tap"),
+    _row("a laboratory bench", source="PBS"),
 ]
 
 
 @pytest.fixture(autouse=True)
-def unsplash_key(monkeypatch):
-    monkeypatch.setattr(settings, "unsplash_access_key", "test-key")
+def serp_key(monkeypatch):
+    monkeypatch.setattr(settings, "serp_api_key", "test-key")
 
 
 @pytest.fixture
@@ -64,16 +73,14 @@ def _png() -> bytes:
     return buffer.getvalue()
 
 
-def _unsplash(results=RESULTS, status=200):
-    """A fake Unsplash. Returns the client and every request it saw."""
+def _serpapi(results=RESULTS, status=200, body=None):
+    """A fake SerpAPI. Returns the client and every request it saw."""
     seen: list[httpx.Request] = []
 
     def answer(request: httpx.Request) -> httpx.Response:
         seen.append(request)
-        if request.url.path == "/search/photos":
-            return httpx.Response(status, json={"results": results})
-        if request.url.host == "api.unsplash.com":
-            return httpx.Response(200, json={"url": "tracked"})
+        if request.url.path == "/search.json":
+            return httpx.Response(status, json=body or {"images_results": results})
         return httpx.Response(200, content=_png(), headers={"content-type": "image/png"})
 
     return httpx.Client(transport=httpx.MockTransport(answer)), seen
@@ -102,12 +109,12 @@ def _gemini(subject=None, picks=(1,)):
     return FunctionModel(respond), seen
 
 
-def _candidate(pid="hands", host="images.unsplash.com", api="api.unsplash.com") -> inset.Candidate:
+def _candidate(pid="hands", host="cdn.example") -> inset.Candidate:
     return inset.Candidate(
         title=pid,
-        url=f"https://{host}/{pid}-small",
-        full_url=f"https://{host}/{pid}-regular",
-        download_location=f"https://{api}/photos/{pid}/download",
+        url=f"https://encrypted-tbn0.gstatic.com/{pid}-thumb.jpg",
+        full_url=f"https://{host}/{pid}-full.jpg",
+        source="Britannica",
     )
 
 
@@ -118,88 +125,94 @@ def _found() -> inset.Found:
 # --- search ----------------------------------------------------------------------
 
 
-def test_search_sends_the_key_and_keeps_only_free_photos():
-    client, seen = _unsplash()
+def test_search_sends_the_key_and_drops_what_google_ranks_above_the_picture():
+    client, seen = _serpapi()
 
     found = inset.candidates("hand washing", client)
 
-    assert seen[0].headers["authorization"] == "Client-ID test-key"
-    assert seen[0].url.params["content_filter"] == "high"
+    assert seen[0].url.params["api_key"] == "test-key"
+    assert seen[0].url.params["safe"] == "active"
     assert [c.title for c in found] == ["hands under a running tap", "a laboratory bench"], (
-        "the plus.unsplash.com premium photo must be dropped"
+        "the shop listing, the stock watermark, the 200px thumbnail and the "
+        "http original all have to go"
     )
+    assert found[1].source == "PBS", "who published it travels with the picture"
 
 
 def test_no_key_is_an_inset_error_before_any_request(monkeypatch):
-    monkeypatch.setattr(settings, "unsplash_access_key", "")
-    client, seen = _unsplash()
+    monkeypatch.setattr(settings, "serp_api_key", "")
+    client, seen = _serpapi()
 
-    with pytest.raises(inset.InsetError, match="UNSPLASH_ACCESS_KEY"):
+    with pytest.raises(inset.InsetError, match="SERP_API_KEY"):
         inset.candidates("hand washing", client)
     assert seen == []
 
 
 def test_no_key_spends_no_model_call(monkeypatch):
-    monkeypatch.setattr(settings, "unsplash_access_key", "")
+    monkeypatch.setattr(settings, "serp_api_key", "")
     model, seen = _gemini(subject="hand washing")
-    client, requests = _unsplash()
+    client, requests = _serpapi()
 
-    with pytest.raises(inset.InsetError, match="UNSPLASH_ACCESS_KEY"):
+    with pytest.raises(inset.InsetError, match="SERP_API_KEY"):
         inset.find_for_post("a post", None, client, model)
     assert seen["subject_calls"] == 0 and requests == []
 
 
-@pytest.mark.parametrize(("status", "words"), [(401, "access key"), (403, "limit")])
-def test_a_refused_key_and_a_spent_rate_limit_say_so(status, words):
-    client, _ = _unsplash(status=status)
+@pytest.mark.parametrize(("status", "words"), [(401, "refused the key"), (429, "used up")])
+def test_a_refused_key_and_a_spent_plan_say_so(status, words):
+    client, _ = _serpapi(status=status)
 
     with pytest.raises(inset.InsetError, match=words):
         inset.candidates("hand washing", client)
 
 
+def test_an_error_inside_a_200_is_still_an_error():
+    """SerpAPI answers 200 with an `error` field for a search that found nothing."""
+    client, _ = _serpapi(body={"error": "Google has not returned any results"})
+
+    with pytest.raises(inset.InsetError, match="not returned any results"):
+        inset.candidates("qwxzzy", client)
+
+
 # --- placing ----------------------------------------------------------------------
 
 
-def test_placing_a_photo_pings_its_download_endpoint():
-    client, seen = _unsplash()
+def test_placing_fetches_the_publishers_own_image_as_png():
+    client, seen = _serpapi()
 
     png = inset.place(_candidate("lab"), client)
 
     assert Image.open(io.BytesIO(png)).format == "PNG"
-    urls = [str(r.url) for r in seen]
-    assert urls == [
-        "https://images.unsplash.com/lab-regular",
-        "https://api.unsplash.com/photos/lab/download",
-    ]
-    assert "authorization" not in seen[0].headers, "the key never goes to the image CDN"
+    assert [str(r.url) for r in seen] == ["https://cdn.example/lab-full.jpg"]
+
+
+def test_a_hotlink_blocked_original_falls_back_to_googles_thumbnail():
+    """Common enough that losing the picture over it would be the failure the
+    operator sees most."""
+
+    def answer(request):
+        if request.url.host == "cdn.example":
+            return httpx.Response(403)
+        return httpx.Response(200, content=_png(), headers={"content-type": "image/png"})
+
+    client = httpx.Client(transport=httpx.MockTransport(answer))
+
+    assert inset.place(_candidate(), client)
 
 
 @pytest.mark.parametrize(
-    "candidate",
-    [
-        _candidate(host="plus.unsplash.com"),
-        _candidate(host="evil.example"),
-        _candidate(host="images.unsplash.com.evil.example"),
-        _candidate(api="evil.example"),
-    ],
+    "url",
+    ["http://cdn.example/x.jpg", "https://localhost/x.jpg", "https://127.0.0.1/x.jpg"],
 )
-def test_placing_refuses_anything_but_unsplash_before_a_request(candidate):
+def test_placing_refuses_a_private_or_plain_http_address(url):
+    """`full_url` arrives from the browser on a swap, so this is the only check."""
+
     def never(request):
         raise AssertionError(f"requested {request.url}")
 
-    with pytest.raises(inset.InsetError, match="Unsplash"):
+    candidate = _candidate().model_copy(update={"full_url": url, "url": url})
+    with pytest.raises(inset.InsetError, match="public https"):
         inset.place(candidate, httpx.Client(transport=httpx.MockTransport(never)))
-
-
-def test_a_failed_download_ping_does_not_lose_the_photo():
-    def answer(request):
-        if request.url.host == "api.unsplash.com":
-            return httpx.Response(503)
-        return httpx.Response(200, content=_png(), headers={"content-type": "image/png"})
-
-    png = inset.place(_candidate(), httpx.Client(transport=httpx.MockTransport(answer)))
-
-    assert png
 
 
 # --- the AI's choice ----------------------------------------------------------------
@@ -207,33 +220,33 @@ def test_a_failed_download_ping_does_not_lose_the_photo():
 
 def test_the_model_looks_at_every_candidate_and_its_pick_is_placed():
     model, seen_model = _gemini(picks=(2,))
-    client, seen = _unsplash()
+    client, seen = _serpapi()
 
     found = inset.find_for_post("a post", "hand washing", client, model)
 
     assert seen_model["pictures"] == 2, "the model was not shown every candidate"
     assert seen_model["subject_calls"] == 0, "a query was given, so none is asked for"
     assert found.chosen.title == "a laboratory bench"
-    downloads = [str(r.url) for r in seen if r.url.path.endswith("/download")]
-    assert downloads == ["https://api.unsplash.com/photos/lab/download?ixid=x"], (
-        "only the placed photo counts as a download"
+    large = [str(r.url) for r in seen if r.url.host == "cdn.example"]
+    assert large == ["https://cdn.example/a_laboratory_bench-full.jpg"], (
+        "only the chosen image is fetched at full size"
     )
 
 
 def test_without_a_query_the_model_writes_one_from_the_post():
     model, seen = _gemini(subject="hand washing")
-    client, requests = _unsplash()
+    client, requests = _serpapi()
 
     found = inset.find_for_post("Semmelweis told doctors…", None, client, model)
 
     assert seen["subject_calls"] == 1
     assert found.subject == "hand washing"
-    assert requests[0].url.params["query"] == "hand washing"
+    assert requests[0].url.params["q"] == "hand washing"
 
 
 def test_nothing_to_photograph_is_an_inset_error_and_nothing_is_searched():
     model, seen = _gemini(subject=None)
-    client, requests = _unsplash()
+    client, requests = _serpapi()
 
     with pytest.raises(inset.InsetError, match="photographed"):
         inset.find_for_post("an abstract idea", None, client, model)
@@ -242,11 +255,11 @@ def test_nothing_to_photograph_is_an_inset_error_and_nothing_is_searched():
 
 def test_none_fitting_is_an_inset_error_naming_the_query():
     model, _ = _gemini(picks=(None,))
-    client, requests = _unsplash()
+    client, requests = _serpapi()
 
     with pytest.raises(inset.InsetError, match="hand washing") as caught:
         inset.find_for_post("a post", "hand washing", client, model)
-    assert not any(r.url.path.endswith("/download") for r in requests)
+    assert not any(r.url.host == "cdn.example" for r in requests)
     assert [c.title for c in caught.value.candidates] == [
         "hands under a running tap",
         "a laboratory bench",
@@ -255,7 +268,7 @@ def test_none_fitting_is_an_inset_error_naming_the_query():
 
 def test_an_out_of_range_pick_is_retried_never_returned():
     model, seen = _gemini(picks=(7, 1))
-    client, _ = _unsplash()
+    client, _ = _serpapi()
 
     found = inset.find_for_post("a post", "hand washing", client, model)
 
@@ -265,9 +278,9 @@ def test_an_out_of_range_pick_is_retried_never_returned():
 
 def test_no_results_asks_the_model_nothing():
     model, seen = _gemini()
-    client, _ = _unsplash(results=[])
+    client, _ = _serpapi(results=[])
 
-    with pytest.raises(inset.InsetError, match="no Unsplash photos"):
+    with pytest.raises(inset.InsetError, match="no Google images"):
         inset.find_for_post("a post", "hand washing", client, model)
     assert seen["picks"] == 0
 
@@ -386,7 +399,7 @@ def test_a_swap_places_that_photo_and_asks_no_model(client, written, illustrated
     assert response.json()["inset_photo_url"] == _candidate("lab").url
 
 
-def test_a_swap_off_unsplash_is_a_422(client, written, illustrated):
+def test_a_swap_off_the_public_web_is_a_422(client, written, illustrated):
     client.post("/generate", json={"page_ids": [1], "topic": "x"})
 
     response = client.post(
@@ -402,7 +415,8 @@ def test_no_photo_is_a_404_and_a_dead_model_is_a_502(client, written, illustrate
 
     def miss(*a, **k):
         raise inset.InsetError(
-            "none of the Unsplash photos for “hand washing” fit the post", [_candidate("lab")]
+            "none of the Google images for “hand washing” fit the post",
+            [_candidate("lab")],
         )
 
     monkeypatch.setattr(inset, "find_for_post", miss)
@@ -472,14 +486,18 @@ def test_a_search_with_no_results_is_a_404_and_keeps_the_old_offers(
     assert len(client.get("/drafts/1").json()["inset_candidates"]) == 2
 
 
-def test_a_search_without_a_key_says_so(client, written, illustrated, monkeypatch):
+def test_a_search_serpapi_refuses_is_a_502(client, written, illustrated, monkeypatch):
     client.post("/generate", json={"page_ids": [1], "topic": "x"})
-    monkeypatch.setattr(settings, "unsplash_access_key", "")
+
+    def refused(*a, **k):
+        raise inset.InsetError("SerpAPI answered 503")
+
+    monkeypatch.setattr(inset, "candidates", refused)
 
     response = client.post("/drafts/1/inset/search", json={"query": "hand washing"})
 
     assert response.status_code == 502
-    assert "UNSPLASH_ACCESS_KEY" in response.json()["detail"]
+    assert "503" in response.json()["detail"]
 
 
 # --- Manual, written by hand ----------------------------------------------------------

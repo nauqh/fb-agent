@@ -42,7 +42,7 @@ Shorts jobs, whose videos live in their own bucket.
 The target is migrated first and must hold no Pages: ids are copied, so a second
 run would collide. Remove the container and start again to reseed.
 
-Still real from a local API: Metricool, Gemini and Unsplash. Publishing from the
+Still real from a local API: Metricool, Gemini and SerpAPI. Publishing from the
 copy publishes.
 """
 

@@ -113,16 +113,16 @@ export interface SourceItem {
   created_at: string;
 }
 
-/** An Unsplash photo offered for the circular inset (`image.inset.Candidate`). */
+/** A Google Images result offered for the circular inset (`image.inset.Candidate`). */
 export interface InsetCandidate {
-  /** Unsplash's description of the photo. */
+  /** Google's title for the result. */
   title: string;
-  /** 400px, straight from Unsplash - the swap row shows this, as their guidelines require. */
+  /** Google's thumbnail - the swap row shows this. */
   url: string;
-  /** 1080px, what is placed in the circle. */
+  /** The publisher's own image, what is placed in the circle. */
   full_url: string;
-  /** Pinged when the photo is placed - Unsplash's download event. */
-  download_location: string;
+  /** Who published it, shown under the swap row's picture. */
+  source: string;
 }
 
 /**
@@ -151,7 +151,7 @@ export interface Draft {
 
   /** The circular inset, uploaded or found. Null is the normal case - no circle. */
   inset_image_path: string | null;
-  /** The last Unsplash query for the inset. Prefills the drawer's search box. */
+  /** The last Google Images query for the inset. Prefills the drawer's search box. */
   inset_subject: string | null;
   /** The photos the last find or search offered - the drawer's swap row. */
   inset_candidates: InsetCandidate[];

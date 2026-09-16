@@ -413,7 +413,7 @@ export function DraftDetail({
   }
 
   /**
-   * The AI finds the inset: it reads the post, searches Wikipedia, looks at the
+   * The AI finds the inset: it reads the post, searches Google Images, looks at the
    * pictures and places the one that fits. Saves first - the server reads the
    * post from the row, and an unsaved edit is exactly the text it should read.
    */
@@ -434,7 +434,7 @@ export function DraftDetail({
     }
   }
 
-  /** Unsplash photos for the operator's own keywords, into the row below. No model call. */
+  /** Google Images results for the operator's own keywords, into the row below. No model call. */
   async function searchInsetPhotos() {
     const query = insetQuery.current?.value.trim() ?? "";
     if (!query) return;
@@ -917,7 +917,7 @@ export function DraftDetail({
               className="w-full"
               disabled={imageWork !== null}
               onClick={() => void findInsetWithAi()}
-              title="The AI reads the post, searches Unsplash and places the photo that fits. Saves first."
+              title="The AI reads the post, searches Google Images and places the picture that fits. Saves first."
             >
               {imageWork === "inset-find" ? (
                 <Loader2 className="size-3.5 animate-spin" />
@@ -928,9 +928,8 @@ export function DraftDetail({
             </Button>
 
             {/* Everything the AI looked at, its pick ringed - one click swaps,
-                the fix when the pick is close but not right. Unsplash's own
-                hotlinked thumbnails, as their API guidelines require; nothing
-                is copied to us until one is clicked. */}
+                the fix when the pick is close but not right. Google's own
+                thumbnails; nothing is copied to us until one is clicked. */}
             {/* The operator's own keywords, for when the AI's query is not the
                 photo they want (client, 2026-09-15). Fills the row below and
                 places nothing. Keyed on the draft and its last query, so it
@@ -940,8 +939,8 @@ export function DraftDetail({
                 key={`${draft.id}:${draft.inset_subject ?? ""}`}
                 ref={insetQuery}
                 defaultValue={draft.inset_subject ?? ""}
-                placeholder="Search Unsplash, e.g. hand washing"
-                aria-label="Search Unsplash for an inset"
+                placeholder="Search Google Images, e.g. Colosseum"
+                aria-label="Search Google Images for an inset"
                 // `h-7`, the `size="sm"` button height beside it.
                 className="h-7 text-xs md:text-xs"
                 onKeyDown={(event) => {
@@ -974,13 +973,13 @@ export function DraftDetail({
                     <button
                       key={item.url}
                       type="button"
-                      title={item.title}
+                      title={`${item.title} - ${item.source}`}
                       aria-label={`Use ${item.title}`}
                       disabled={imageWork !== null || item.url === draft.inset_photo_url}
                       onClick={() => void swapInset(item)}
                       className="group disabled:cursor-default"
                     >
-                      {/* Unsplash is not in `next.config.ts`'s image hosts. */}
+                      {/* Google's thumbnails are not in `next.config.mjs`'s image hosts. */}
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={item.url}

@@ -206,7 +206,7 @@ function WriteItYourself() {
             onChange={(event) => setFindInset(event.target.checked)}
             className="size-3.5 cursor-pointer accent-primary"
           />
-          Find inset - the AI picks an Unsplash photo that fits
+          Find inset - the AI picks a Google Images picture that fits
         </label>
       </div>
 
@@ -352,7 +352,7 @@ function FromATopic() {
             onChange={(event) => setFindInset(event.target.checked)}
             className="size-3.5 cursor-pointer accent-primary"
           />
-          Find inset - the AI picks an Unsplash photo that fits
+          Find inset - the AI picks a Google Images picture that fits
         </label>
       ) : null}
 

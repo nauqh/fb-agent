@@ -840,7 +840,7 @@ class Draft(SQLModel, table=True):
     """Kept apart so re-compositing an edit does not re-pay for image generation."""
 
     inset_image_path: str | None = None
-    """The circular inset: a picture uploaded, or found on Unsplash, cropped to a disc.
+    """The circular inset: a picture uploaded, or found on Google Images, cropped to a disc.
 
     Null is the normal case - no circle, and the card is the one it was before.
     Nothing *draws* this: it is a photograph of something real, never a model's
@@ -848,13 +848,13 @@ class Draft(SQLModel, table=True):
     """
 
     find_inset: bool = Field(default=False)
-    """Have the AI find the inset on Unsplash during the run (`image.inset`).
+    """Have the AI find the inset on Google Images during the run (`image.inset`).
 
     A column for the same reason as `no_image`: `run_drafts` takes ids only, so
     the run's choices have to live on the row."""
 
     inset_subject: str | None = None
-    """The last Unsplash query for the inset - the writer's, the AI's, or the
+    """The last Google Images query for the inset - the writer's, the AI's, or the
     operator's own keywords. The drawer's search box opens on it."""
 
     inset_candidates: list[dict] = Field(

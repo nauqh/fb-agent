@@ -103,7 +103,7 @@ export interface GenerateRequest {
   prompt_template_id?: number | null;
   /** Text only: no hero, no card, and the one generate path that costs nothing. */
   no_image?: boolean;
-  /** Have the AI find and place an Unsplash photo that fits each post in the inset. */
+  /** Have the AI find and place a Google Images picture that fits each post in the inset. */
   find_inset?: boolean;
 }
 
@@ -231,7 +231,7 @@ export async function regenerateField(
  * Put a photo in the circle and redraw the card. Answers with the draft.
  *
  * Without `candidate` the AI finds one: it reads the post **as saved**, searches
- * Unsplash and picks by looking - so save first. With `candidate`, place one of
+ * Google Images and picks by looking - so save first. With `candidate`, place one of
  * the draft's `inset_candidates`. Either way the offered photos stay on the row.
  */
 export async function findInset(id: number, candidate?: InsetCandidate): Promise<Draft> {
@@ -239,7 +239,7 @@ export async function findInset(id: number, candidate?: InsetCandidate): Promise
 }
 
 /**
- * Unsplash photos for the operator's own keywords, kept on the draft as its
+ * Google Images results for the operator's own keywords, kept on the draft as its
  * `inset_candidates`. No model call, and nothing is placed until one is picked.
  */
 export async function searchInset(id: number, query: string): Promise<Draft> {

@@ -80,7 +80,7 @@ export function CartPanel() {
    * and for no photograph is a contradiction, not a preference.
    */
   const [noImage, setNoImage] = useState(false);
-  /** Have the AI find and place an Unsplash photo in the circular inset. Off with No image. */
+  /** Have the AI find and place a Google Images picture in the circular inset. Off with No image. */
   const [findInset, setFindInset] = useState(false);
   /**
    * The post style this run writes under, from the library on Settings.
@@ -251,7 +251,7 @@ export function CartPanel() {
           {!noImage ? (
             <label
               className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs text-muted-foreground"
-              title="The AI finds an Unsplash photo that fits each post and puts it in the circular inset."
+              title="The AI finds a Google Images picture that fits each post and puts it in the circular inset."
             >
               <input
                 type="checkbox"

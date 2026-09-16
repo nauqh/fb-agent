@@ -302,7 +302,7 @@ The seed migrates the empty database, copies the real Pages with their
 configuration and the newest 50 drafts, and copies those drafts' pictures into
 `fb-agent-media-dev`. **The local API must run on that bucket**: a redraw or a
 delete removes the old picture files, and on the production bucket those are
-production's. Metricool, Gemini and Unsplash are still real.
+production's. Metricool, Gemini and SerpAPI are still real.
 
 With `.env.local` in place every start is local. Delete or rename it to point
 the API back at Supabase. The seed reads `.env` only, so it still copies from

@@ -77,8 +77,8 @@ class GenerateRequest(BaseModel):
     """
 
     find_inset: bool = False
-    """Find a Wikipedia picture of the story's subject for the circular inset.
-    Free; ignored with `no_image`."""
+    """Have the AI find a Google Images picture for the circular inset.
+    Ignored with `no_image`."""
 
 
 @router.post("/generate", status_code=202)
@@ -686,7 +686,7 @@ def _sentence(error: Exception) -> str:
 class FindInset(BaseModel):
     candidate: inset.Candidate | None = None
     """Swap to one of the candidates a previous find returned, sent back whole.
-    Its URLs must be Unsplash's - `inset.place` checks before fetching.
+    Its URLs must be public https - `inset.place` checks before fetching.
     Omitted, the AI finds one."""
 
 
@@ -702,7 +702,7 @@ def find_inset(
     `image.inset` for the three steps. With `candidate`, place one of the
     photos already on the row (`inset_candidates`), which costs no model call.
 
-    404 is "no photo" (nothing to photograph, nothing on Unsplash, nothing that
+    404 is "no photo" (nothing to photograph, nothing on Google, nothing that
     fits), and the message says which - and when nothing fitted, the photos it
     looked at are still kept on the row for the operator to pick from. 502 is
     the model failing to answer at all.
@@ -755,15 +755,15 @@ class SearchInset(BaseModel):
 def search_inset(
     draft_id: int, body: SearchInset, session: Session = Depends(get_session)
 ) -> Draft:
-    """Unsplash photos for the operator's own keywords, kept on the row.
+    """Google Images results for the operator's own keywords, kept on the row.
 
     The client's ask (2026-09-15), beside Find with AI: for when the AI's query
-    is not the photo they want. No model call and nothing placed - the results
+    is not the picture they want. No model call and nothing placed - the results
     replace `inset_candidates`, and the operator clicks one, which is the
-    `candidate` path of `find_inset`. One Unsplash request.
+    `candidate` path of `find_inset`. One SerpAPI search.
 
-    404 is "no results". 502 is Unsplash not answering, refusing the key, a
-    spent hourly limit, or no key at all - each says which.
+    404 is "no results". 502 is SerpAPI not answering, refusing the key, a
+    plan with no searches left, or no key at all - each says which.
     """
     draft = _editable(session, draft_id)
     query = body.query.strip()
@@ -774,7 +774,7 @@ def search_inset(
     except inset.InsetError as error:
         raise HTTPException(status_code=502, detail=_sentence(error)) from error
     if not photos:
-        raise HTTPException(status_code=404, detail=f"No Unsplash photos for “{query}”.")
+        raise HTTPException(status_code=404, detail=f"No Google images for “{query}”.")
 
     draft.inset_subject = query
     draft.inset_candidates = [photo.model_dump() for photo in photos]
