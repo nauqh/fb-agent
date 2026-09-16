@@ -6,11 +6,13 @@ the app itself says - an outcome and, usually, how long it took. That follows
 https://loggingsucks.com : log the thing that changed, once, at the end, not
 every step towards it.
 
-**Two formats, one line each.** `LOG_FORMAT=json` emits Railway's shape - a
-single-line object with `message` and `level` at the top and everything bound
-with `logger.bind(...)` beside them, which Railway turns into attributes you can
-filter on (`@draft_id:500`). Text is the default and is what a terminal gets;
-JSON there would only make the same line harder to read. The same article argues
+**JSON, always, one line each.** Railway's shape: a single-line object with
+`message` and `level` at the top and everything bound with `logger.bind(...)`
+beside them, which Railway turns into attributes you can filter on
+(`@draft_id:500`). There was a `LOG_FORMAT` toggle with text as the default; it
+meant production printed text until someone remembered to set and deploy a
+variable, which is how the first JSON deploy went. Removed at the operator's
+request (2026-09-16), so local output is JSON too. The same article argues
 for the fields themselves: one wide event per unit of work, carrying the
 high-cardinality things you would want to filter by - which for this app is a
 draft, not an HTTP request (see `generate._run_one`).
@@ -76,28 +78,8 @@ class _Intercept(logging.Handler):
 def setup_logging() -> None:
     """Install the one sink. Idempotent for a reloading uvicorn."""
     logger.remove()
-    as_json = settings.log_format.strip().lower() == "json"
-    if as_json:
-        logger.add(_json_sink, level=settings.log_level, backtrace=True, diagnose=False)
-    else:
-        logger.add(
-            sys.stderr,
-            format=(
-                "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | "
-                "<level>{level: <8}</level> | "
-                "<cyan>{name}</cyan> - "
-                "<level>{message}</level>"
-            ),
-            level=settings.log_level,
-            colorize=False,
-            backtrace=True,
-            diagnose=True,
-        )
-    logger.info(
-        "logging ready (level={}, format={})",
-        settings.log_level,
-        "json" if as_json else "text",
-    )
+    logger.add(_json_sink, level=settings.log_level, backtrace=True, diagnose=False)
+    logger.info("logging ready (level={})", settings.log_level)
 
     _uvicorn_level()
 
