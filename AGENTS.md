@@ -153,6 +153,17 @@ published account, a paid API.
 - Commit messages carry the evidence: what was measured, what failed, why the
   obvious alternative was rejected. They are the durable record; this file is
   not.
+- The subject line is `type(scope): summary`
+  ([Conventional Commits](https://www.conventionalcommits.org)):
+  - `type` is one of `feat`, `fix`, `refactor`, `perf`, `test`, `docs`,
+    `build`, `ci`, `chore`, `revert`.
+  - `scope` is the area touched, one short lowercase word (`api`, `web`,
+    `auth`, `logging`). Leave it out, `type: summary`, when no one area fits.
+  - `summary` is imperative, lowercase, no trailing period, and the whole
+    subject stays under 72 characters: `fix(auth): reject a blank api key`.
+  - A breaking change adds `!` before the colon, `feat(api)!: ...`, and says
+    what breaks in the body.
+  - A blank line, then the body with the evidence above, wrapped at 72.
 
 ## Accuracy and verification
 
