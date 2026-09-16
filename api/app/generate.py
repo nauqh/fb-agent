@@ -470,6 +470,7 @@ def build_image(session: Session, draft: Draft, page: Page) -> list[str]:
             draft.hero_image_path = media.store.save(
                 image_bytes, media.filename(draft.id or 0, "hero", "png")
             )
+            logger.info("draft {} hero from its {} source", draft.id, source.kind.value)
         else:
             style = None
             if draft.prompt_template_id:

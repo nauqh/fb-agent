@@ -25,6 +25,7 @@ import feedparser
 import httpx
 from sqlmodel import Session, select
 
+from app.log import logger
 from app.models import Feed, SourceItemBase, SourceKind
 from app.settings import sources
 
@@ -182,7 +183,11 @@ def fetch_rss(feeds: list[Feed], timeout: float = 10.0) -> RssFeed:
             else:
                 results.extend(outcome)
 
-    return RssFeed(items=_merge(results), failures=failures)
+    items = _merge(results)
+    logger.info(
+        "rss {} items from {} feed(s), {} failed", len(items), len(feeds), len(failures)
+    )
+    return RssFeed(items=items, failures=failures)
 
 
 def _describe(error: Exception) -> str:

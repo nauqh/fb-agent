@@ -43,6 +43,7 @@ from pydantic_ai import ModelRetry
 from pydantic_ai.messages import BinaryImage
 
 from app.image import hero
+from app.log import logger
 from app.settings import settings
 from app.writer import agent as writer
 
@@ -221,8 +222,9 @@ def candidates(query: str, client: httpx.Client | None = None) -> list[Candidate
     if body.get("error"):
         raise InsetError(f"SerpAPI: {body['error']}"[:200])
 
+    rows = body.get("images_results") or []
     found = []
-    for row in body.get("images_results") or []:
+    for row in rows:
         if not _wanted(row):
             continue
         found.append(
@@ -235,6 +237,7 @@ def candidates(query: str, client: httpx.Client | None = None) -> list[Candidate
         )
         if len(found) == CANDIDATES:
             break
+    logger.info('inset search for "{}": {} results, {} kept', query, len(rows), len(found))
     return found
 
 
@@ -284,6 +287,10 @@ def place(candidate: Candidate, client: httpx.Client | None = None) -> bytes:
     try:
         data, _ = _download(candidate.full_url, client)
     except InsetError:
+        logger.info(
+            "inset original refused by {}, using Google's thumbnail",
+            httpx.URL(candidate.full_url).host,
+        )
         data, _ = _download(candidate.url, client)
     return _png(data)
 

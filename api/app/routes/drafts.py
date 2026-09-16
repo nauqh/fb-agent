@@ -610,7 +610,13 @@ async def upload_hero(
     # An upload is a change of mind about text-only. Left set, `build_image`
     # skips the draft, so the hero is stored and shown and no card is ever
     # drawn - a picture that looks ready and cannot be published.
+    was_text_only = draft.no_image
     draft.no_image = False
+    logger.info(
+        "hero uploaded for draft {}{}",
+        draft_id,
+        " (text-only cleared)" if was_text_only else "",
+    )
     return _redrawn(session, draft, page)
 
 
