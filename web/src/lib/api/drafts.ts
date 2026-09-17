@@ -330,6 +330,17 @@ export async function publishMode(): Promise<PublishMode> {
   return get<PublishMode>("/publish/mode");
 }
 
+/** SerpAPI searches left this month, account-wide. A Google inset find spends one. */
+export interface InsetQuota {
+  searches_left: number;
+  searches_per_month: number;
+  renews_on: string;
+}
+
+export async function getInsetQuota(): Promise<InsetQuota> {
+  return get<InsetQuota>("/inset/quota");
+}
+
 /**
  * Gone for good, pictures and all.
  *

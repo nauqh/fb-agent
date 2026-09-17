@@ -9,6 +9,7 @@ import io
 from datetime import datetime, timezone
 from typing import Literal
 
+import httpx
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -767,7 +768,7 @@ def find_inset(
             draft.inset_candidates = [c.model_dump() for c in error.candidates]
             _save(session, draft)
         raise HTTPException(status_code=404, detail=_sentence(error)) from error
-    except Exception as error:  # noqa: BLE001 - the model chain: outage or refusal
+    except Exception as error:
         raise HTTPException(
             status_code=502,
             detail=f"The AI could not choose a picture ({type(error).__name__}).",
@@ -929,6 +930,29 @@ def publish_mode() -> PublishMode:
     audience.
     """
     return PublishMode(rehearsal=settings.metricool_publish_as_draft)
+
+
+@router.get("/inset/quota")
+def inset_quota() -> dict:
+    """SerpAPI searches left this month, for Settings. Each Google inset find spends one.
+
+    Server-side because the key is a secret. SerpAPI's Account API is not billed
+    as a search.
+    """
+    response = httpx.get(
+        "https://serpapi.com/account.json",
+        params={"api_key": settings.serp_api_key},
+        timeout=20,
+    )
+    if response.is_error:
+        # Not `raise_for_status`: its message carries the URL, and the key with it.
+        raise HTTPException(status_code=502, detail=f"SerpAPI answered {response.status_code}")
+    body = response.json()
+    return {
+        "searches_left": body["total_searches_left"],
+        "searches_per_month": body["searches_per_month"],
+        "renews_on": body["plan_renewal_date"],
+    }
 
 
 class PublishRequest(BaseModel):

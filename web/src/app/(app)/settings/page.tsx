@@ -29,6 +29,7 @@ import {
   setAssignments,
   type Assignment,
 } from "@/lib/api/competitors";
+import { getInsetQuota } from "@/lib/api/drafts";
 import { addFeed, removeFeed } from "@/lib/api/feeds";
 import {
   addSlot,
@@ -294,6 +295,7 @@ function Identity({ page }: { page: Page }) {
  */
 function InsetPictures({ page }: { page: Page }) {
   const [busy, setBusy] = useState(false);
+  const { data: quota } = useQuery(() => getInsetQuota(), []);
 
   async function choose(next: string) {
     if (next === page.inset_source) return;
@@ -327,6 +329,12 @@ function InsetPictures({ page }: { page: Page }) {
             ? "Stock photos, free to use. Nothing of named people."
             : "Real people, places and events. The pictures belong to whoever published them."}
         </p>
+        {quota ? (
+          <p className="text-[13px] text-muted-foreground">
+            Google searches left: {quota.searches_left} of {quota.searches_per_month}, renews{" "}
+            {quota.renews_on}. Shared by every Page.
+          </p>
+        ) : null}
       </div>
     </Pane>
   );
