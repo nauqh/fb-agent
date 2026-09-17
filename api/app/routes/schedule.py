@@ -103,6 +103,50 @@ SLOT_SEARCH_DAYS = 30
 full month queued is not a case to solve by searching further."""
 
 
+def busy_minutes(rows: list[dict]) -> set[datetime]:
+    """The minutes the planner already has a post at, naive local.
+
+    To the minute, so a post moved by hand a second off still counts as
+    occupying its slot.
+    """
+    busy = set()
+    for row in rows:
+        stamp = (row.get("publicationDate") or {}).get("dateTime", "")
+        try:
+            busy.add(datetime.fromisoformat(stamp).replace(second=0, microsecond=0))
+        except ValueError:
+            # A row whose time we cannot read is not evidence that a slot is
+            # free, but it is also not something to fail the whole search over.
+            continue
+    return busy
+
+
+def free_slot(
+    slots: list[PageTimeSlot], busy: set[datetime], start: datetime
+) -> tuple[datetime, PageTimeSlot, int] | None:
+    """The first configured time on or after `start` with nothing at it.
+
+    Pure, so the next-slot route (from now) and `auto_repost` (from a repost's
+    target date) walk the same loop. Returns the time, its slot, and how many
+    taken slots were skipped; None when `SLOT_SEARCH_DAYS` holds nothing free.
+    `slots` must be sorted by `minute_of_day`.
+    """
+    taken = 0
+    for day in range(SLOT_SEARCH_DAYS):
+        midnight = (start + timedelta(days=day)).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        for slot in slots:
+            when = midnight + timedelta(minutes=slot.minute_of_day)
+            if when < start:
+                continue
+            if when in busy:
+                taken += 1
+                continue
+            return when, slot, taken
+    return None
+
+
 @router.get("/schedule/next-slot")
 def next_slot(
     page_id: int = Query(1),
@@ -160,36 +204,16 @@ def next_slot(
     except publisher.PublishError as error:
         raise HTTPException(status_code=502, detail=str(error)) from error
 
-    # To the minute, so a post moved by hand a second off still counts as
-    # occupying its slot.
-    busy = set()
-    for row in rows:
-        stamp = (row.get("publicationDate") or {}).get("dateTime", "")
-        try:
-            busy.add(datetime.fromisoformat(stamp).replace(second=0, microsecond=0))
-        except ValueError:
-            # A row whose time we cannot read is not evidence that a slot is
-            # free, but it is also not something to fail the whole search over.
-            continue
-
-    taken = 0
-    for day in range(SLOT_SEARCH_DAYS):
-        midnight = (now + timedelta(days=day)).replace(
-            hour=0, minute=0, second=0, microsecond=0
+    # The next whole minute, not `now`: a slot at this exact minute is already
+    # in progress as far as the planner is concerned, and Metricool refuses a
+    # publication date in the past anyway.
+    start = now.replace(second=0, microsecond=0) + timedelta(minutes=1)
+    found = free_slot(slots, busy_minutes(rows), start)
+    if found is not None:
+        when, slot, taken = found
+        return NextSlot(
+            when=when.strftime("%Y-%m-%dT%H:%M:%S"), label=slot.label, taken=taken
         )
-        for slot in slots:
-            when = midnight + timedelta(minutes=slot.minute_of_day)
-            # `>` not `>=`: a slot at this exact minute is already in progress
-            # as far as the planner is concerned, and Metricool refuses a
-            # publication date in the past anyway.
-            if when <= now:
-                continue
-            if when in busy:
-                taken += 1
-                continue
-            return NextSlot(
-                when=when.strftime("%Y-%m-%dT%H:%M:%S"), label=slot.label, taken=taken
-            )
 
     raise HTTPException(
         status_code=409,

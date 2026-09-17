@@ -157,6 +157,14 @@ export default function SettingsScreen() {
                 <TimeSlots pageId={pageId} slots={slots} refresh={refreshSlots} />
               ),
             },
+            {
+              id: "automation",
+              label: "Automation",
+              meta: page.auto_save_min_reactions
+                ? `${page.auto_save_min_reactions.toLocaleString()} reactions`
+                : "Off",
+              body: <Automation key={page.id} page={page} />,
+            },
           ],
         },
         {
@@ -319,6 +327,105 @@ function InsetPictures({ page }: { page: Page }) {
             ? "Stock photos, free to use. Nothing of named people."
             : "Real people, places and events. The pictures belong to whoever published them."}
         </p>
+      </div>
+    </Pane>
+  );
+}
+
+/**
+ * Automatic save and repost, per Page (H2). See `api/app/publish/auto_repost.py`.
+ *
+ * One Save for both, like the lengths: the repost box means nothing while save
+ * is off, and saving them one at a time would store a half-made decision. An
+ * empty reactions box sends null for both, which is off.
+ */
+function Automation({ page }: { page: Page }) {
+  const [reactions, setReactions] = useState(page.auto_save_min_reactions?.toString() ?? "");
+  const [repost, setRepost] = useState(page.auto_repost_after_days !== null);
+  const [days, setDays] = useState((page.auto_repost_after_days ?? 30).toString());
+  const [busy, setBusy] = useState(false);
+
+  const saveOn = reactions.trim() !== "";
+  const next = {
+    auto_save_min_reactions: saveOn ? Number(reactions) : null,
+    auto_repost_after_days: saveOn && repost ? Number(days) : null,
+  };
+  const dirty =
+    next.auto_save_min_reactions !== page.auto_save_min_reactions ||
+    next.auto_repost_after_days !== page.auto_repost_after_days;
+
+  async function save() {
+    setBusy(true);
+    try {
+      await updatePage(page.id, next);
+      toast(saveOn ? "Saved. Checked next time the app is opened." : "Saved. Automation is off.");
+      emit();
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Could not save");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const box = "flex items-center justify-between gap-3 rounded-2xl border px-3 py-2";
+  const number =
+    "h-7 w-20 border-0 bg-transparent px-1 text-right font-medium tabular-nums shadow-none focus-visible:ring-0";
+
+  return (
+    <Pane
+      title="Automation"
+      hint="Saves this Page's best posts and reposts them later, at the first free publishing time."
+    >
+      <div className="space-y-5">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className={box}>
+            <Label htmlFor="auto-save" className="text-[13px] font-normal text-muted-foreground">
+              Save posts at reactions
+            </Label>
+            <Input
+              id="auto-save"
+              type="number"
+              inputMode="numeric"
+              min={1}
+              placeholder="Off"
+              className={number}
+              value={reactions}
+              onChange={(event) => setReactions(event.target.value)}
+            />
+          </div>
+          <div className={cn(box, !saveOn && "opacity-50")}>
+            <Label className="flex items-center gap-2 text-[13px] font-normal text-muted-foreground">
+              <input
+                type="checkbox"
+                disabled={!saveOn}
+                checked={saveOn && repost}
+                onChange={(event) => setRepost(event.target.checked)}
+              />
+              Repost after days
+            </Label>
+            <Input
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={90}
+              aria-label="Days after publishing"
+              disabled={!saveOn || !repost}
+              className={number}
+              value={days}
+              onChange={(event) => setDays(event.target.value)}
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <Button size="sm" disabled={!dirty || busy} onClick={() => void save()}>
+            {busy ? <Loader2 className="size-4 animate-spin" /> : null}
+            Save automation
+          </Button>
+          <p className="text-[13px] text-muted-foreground">
+            Reposts go straight to Schedule, not Review. Cancel one there.
+          </p>
+        </div>
       </div>
     </Pane>
   );

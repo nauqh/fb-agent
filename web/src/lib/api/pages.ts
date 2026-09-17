@@ -45,6 +45,10 @@ export interface PageUpdate {
   first_comment_max_chars?: number | null;
   first_comment_min_paragraphs?: number | null;
   first_comment_max_paragraphs?: number | null;
+
+  /** Automatic save and repost. Null is off for both. Days are 1-90. */
+  auto_save_min_reactions?: number | null;
+  auto_repost_after_days?: number | null;
 }
 
 /**

@@ -251,6 +251,18 @@ class Page(SQLModel, table=True):
     first_comment_max_paragraphs: int | None = None
     """C7: "3-4 short paragraphs". The house range is 2-3."""
 
+    # --- automatic save and repost (H2) ---------------------------------------
+    #
+    # See `publish/auto_repost.py` and web/content/PRDs/auto-repost.md. Null is off
+    # for both, which is every Page until someone sets a number on Settings.
+
+    auto_save_min_reactions: int | None = None
+    """Save a published post automatically once it has this many reactions."""
+
+    auto_repost_after_days: int | None = None
+    """Repost an auto-saved post this many days after it first went out, at the
+    first free slot. Ignored while `auto_save_min_reactions` is null."""
+
     # --- what this Page tells the model ---------------------------------------
     #
     # Null means the file: `prompts/pages/<slug>/x.txt` if it exists, else
@@ -426,6 +438,25 @@ class SavedPost(SQLModel, table=True):
 
     draft_id: int | None = Field(default=None, foreign_key="draft.id", index=True)
     """Ours, when the post came from this app. Null for everything else."""
+
+    auto_saved: bool = Field(default=False)
+    """Saved by `auto_repost` rather than by hand. Only these are auto-reposted:
+    a hand-saved post was kept for reference or Write again."""
+
+    repost_draft_id: int | None = Field(
+        default=None, foreign_key="draft.id", ondelete="SET NULL"
+    )
+    """The automatic repost, **and the claim on making one**: committed with
+    the Draft and before Metricool is called, so no run builds a second.
+    `SET NULL` so deleting the repost Draft is not refused."""
+
+    repost_error: str | None = None
+    """Why this post will never be auto-reposted. Permanent refusals only."""
+
+    dismissed_at: datetime | None = None
+    """Unsaved by hand after being auto-saved. Kept rather than deleted, because
+    a deleted row is saved again by the next run, and its caption is what stops
+    a repost of it being reposted in turn."""
 
 
 class PageTimeSlot(SQLModel, table=True):

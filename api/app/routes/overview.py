@@ -17,7 +17,7 @@ from sqlmodel import Session, select
 
 from app import generate
 from app.db import get_session
-from app.models import Draft, DraftStatus, Page, SavedPost
+from app.models import Draft, Page, SavedPost
 from app.publish import repost
 from app.sources import metricool
 
@@ -122,7 +122,9 @@ def performance(
     saved = {
         row.metricool_post_id
         for row in session.exec(
-            select(SavedPost).where(SavedPost.page_id == page_id)
+            select(SavedPost)
+            .where(SavedPost.page_id == page_id)
+            .where(SavedPost.dismissed_at.is_(None))  # type: ignore[union-attr]
         ).all()
     }
     posts = [_flatten(row, saved) for row in rows]
@@ -155,11 +157,12 @@ class SaveRequest(BaseModel):
 def list_saved(
     page_id: int = Query(1), session: Session = Depends(get_session)
 ) -> list[SavedPost]:
-    """Kept posts, newest first."""
+    """Kept posts, newest first. Dismissed ones are not kept (see `unsave_post`)."""
     return list(
         session.exec(
             select(SavedPost)
             .where(SavedPost.page_id == page_id)
+            .where(SavedPost.dismissed_at.is_(None))  # type: ignore[union-attr]
             .order_by(SavedPost.created_at.desc())  # type: ignore[union-attr]
         ).all()
     )
@@ -167,7 +170,12 @@ def list_saved(
 
 @router.post("/overview/saved", status_code=201)
 def save_post(request: SaveRequest, session: Session = Depends(get_session)) -> SavedPost:
-    """Keep a post. Saving one twice is the same decision, so it is refused."""
+    """Keep a post. Saving one twice is the same decision, so it is refused.
+
+    Except a post that was auto-saved and then unsaved: its row was kept as
+    dismissed, and saving it by hand brings it back as a hand-saved post - one
+    the automation will not repost.
+    """
     if session.get(Page, request.page_id) is None:
         raise HTTPException(status_code=404, detail=f"No page {request.page_id}")
 
@@ -176,6 +184,13 @@ def save_post(request: SaveRequest, session: Session = Depends(get_session)) -> 
         .where(SavedPost.page_id == request.page_id)
         .where(SavedPost.metricool_post_id == request.post_id)
     ).first()
+    if existing is not None and existing.dismissed_at is not None:
+        existing.dismissed_at = None
+        existing.auto_saved = False
+        session.add(existing)
+        session.commit()
+        session.refresh(existing)
+        return existing
     if existing is not None:
         raise HTTPException(status_code=409, detail="That post is already saved.")
 
@@ -286,61 +301,9 @@ def repost_saved(saved_id: int, session: Session = Depends(get_session)) -> Draf
     if page is None:
         raise HTTPException(status_code=404, detail=f"No page {row.page_id}")
 
-    caption = (row.text or "").strip()
-    if not caption:
-        raise HTTPException(
-            status_code=409,
-            detail="That saved post has no text, so there is nothing to repost.",
-        )
-
-    original = repost.original_for(page, row)
-    media_urls = (original or {}).get("media") or []
-    if not media_urls:
-        raise HTTPException(
-            status_code=409,
-            detail=(
-                "The original picture could not be found in Metricool's "
-                "planner, and the only other copy is a 130-pixel thumbnail that "
-                "would look wrong published. “Write again” writes the story "
-                "fresh with a new picture."
-            ),
-        )
-
-    # The planner's caption over the saved one where both exist: the saved copy
-    # has been through Facebook and back, and this is the string we sent.
-    caption = (original or {}).get("text", "").strip() or caption
-    first_comment = ((original or {}).get("firstCommentText") or "").strip() or None
-
-    draft = Draft(
-        page_id=row.page_id,
-        # The published caption verbatim - `_post_text` sends `caption` and
-        # `first_comment`, so what went out last time is what goes out again.
-        caption=caption,
-        first_comment=first_comment,
-        status=DraftStatus.REVIEW,
-        progress_step="reposted",
-        progress_pct=100,
-        # Named so the queue says what this row is. There is no Source Item and
-        # no hook: the hook was drawn into the picture that is being reused.
-        topic=f"Repost - {caption[:60]}",
-        warnings=[
-            "A repost: the caption, first comment and picture are the ones "
-            "already published. Redrawing the image would replace it with a new "
-            "card, which is not what a repost is."
-        ],
-    )
-    session.add(draft)
-    # The id is wanted for the filename and nothing else. Flushed rather than
-    # committed so that a failed copy below rolls the row back - a draft with a
-    # caption and no picture is worse than no draft, because it looks publishable.
-    session.flush()
-
     try:
-        draft.composed_image_path = repost.copy_original_image(
-            media_urls[0], draft.id or 0
-        )
+        draft = repost.draft_from_saved(session, page, row)
     except repost.RepostError as error:
-        session.rollback()
         raise HTTPException(status_code=error.status, detail=str(error)) from error
 
     session.commit()
@@ -350,9 +313,20 @@ def repost_saved(saved_id: int, session: Session = Depends(get_session)) -> Draf
 
 @router.delete("/overview/saved/{saved_id}", status_code=204)
 def unsave_post(saved_id: int, session: Session = Depends(get_session)) -> None:
-    """Stop keeping it. Nothing points at a saved post, so this cascades nowhere."""
+    """Stop keeping it. Nothing points at a saved post, so this cascades nowhere.
+
+    **An auto-saved post is dismissed, not deleted.** Deleted, the next
+    `auto_repost` run finds it over the threshold and saves it again, and its
+    caption no longer stops a repost of it being reposted in turn. A repost
+    already scheduled is not cancelled here; that is done on Schedule.
+    """
     row = session.get(SavedPost, saved_id)
     if row is None:
         raise HTTPException(status_code=404, detail=f"No saved post {saved_id}")
+    if row.auto_saved:
+        row.dismissed_at = datetime.now(timezone.utc)
+        session.add(row)
+        session.commit()
+        return
     session.delete(row)
     session.commit()

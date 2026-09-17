@@ -13,7 +13,7 @@ import io
 from datetime import datetime, timezone
 from typing import Literal
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
 from PIL import Image
 from pydantic import BaseModel, Field
 from sqlmodel import Session, select
@@ -21,6 +21,7 @@ from sqlmodel import Session, select
 from app import media
 from app.db import get_session
 from app.models import Page, PageTimeSlot
+from app.publish import auto_repost
 from app.writer import validators
 
 router = APIRouter(prefix="/pages", tags=["pages"])
@@ -60,10 +61,26 @@ class PageUpdate(BaseModel):
     first_comment_min_paragraphs: int | None = Field(default=None, ge=1, le=12)
     first_comment_max_paragraphs: int | None = Field(default=None, ge=1, le=12)
 
+    # Automatic save and repost (H2). Null is off, as above.
+    auto_save_min_reactions: int | None = Field(default=None, ge=1)
+    auto_repost_after_days: int | None = Field(default=None, ge=1, le=90)
+
 
 @router.get("")
-def list_pages(session: Session = Depends(get_session)) -> list[Page]:
-    return list(session.exec(select(Page).order_by(Page.name)).all())
+def list_pages(
+    background: BackgroundTasks, session: Session = Depends(get_session)
+) -> list[Page]:
+    """Every Page. Also the trigger for `auto_repost`.
+
+    Every screen calls this (`PageScopeProvider`), so it fires whenever the
+    operator opens the app. The check runs after the response, throttled per
+    Page, and answers the same whether it succeeds or raises.
+    """
+    pages = list(session.exec(select(Page).order_by(Page.name)).all())
+    due = auto_repost.due(pages)
+    if due:
+        background.add_task(auto_repost.run_pages, due)
+    return pages
 
 
 @router.get("/{page_id}")

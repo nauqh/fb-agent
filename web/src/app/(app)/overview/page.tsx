@@ -37,6 +37,7 @@ import {
   type SavedPost,
 } from "@/lib/api/overview";
 import { fullDate, headline, metric, timeAgo } from "@/lib/format";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { usePageScope } from "@/lib/page-scope";
@@ -1166,6 +1167,14 @@ function SavedRow({
       summary={
         <>
           <span className="min-w-0 flex-1 truncate text-sm font-medium">
+            {saved.auto_saved ? (
+              <span
+                className="mr-2 rounded-full border px-1.5 py-0.5 align-middle font-mono text-[10px] text-muted-foreground"
+                title="Saved automatically at the threshold set on Settings"
+              >
+                Auto
+              </span>
+            ) : null}
             {headline(saved.text) || "(no text)"}
           </span>
           <span className={column}>{metric(saved.reactions)}</span>
@@ -1202,6 +1211,18 @@ function SavedRow({
               <span title={fullDate(saved.published_at)}>
                 {timeAgo(saved.published_at)}
               </span>
+              {/* The repost's time lives in Metricool's planner (ADR-0001), so
+                  this links the Draft and leaves the date to Schedule. */}
+              {saved.repost_draft_id !== null ? (
+                <>
+                  {" · "}
+                  <Link href={`/review/${saved.repost_draft_id}`} className="underline underline-offset-2">
+                    Repost queued
+                  </Link>
+                </>
+              ) : saved.repost_error ? (
+                <span title={saved.repost_error}>{" · not reposted: "}{saved.repost_error}</span>
+              ) : null}
             </>
           }
           actions={

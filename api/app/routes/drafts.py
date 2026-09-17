@@ -1000,26 +1000,15 @@ def publish_draft(
     # rebuild, so the composite it points at can no longer change or be deleted.
     # A text-only draft skips the normalize call entirely: there is no image to
     # register, and Metricool answers an error rather than a URL for an empty one.
-    normalized = None
-    if draft.composed_image_path:
-        url = media.public_url(draft.composed_image_path)
-
     try:
-        if draft.composed_image_path:
-            normalized = publisher.normalize_image(url, page.metricool_blog_id)
-        post_id = publisher.schedule(
-            page.metricool_blog_id,
-            _post_text(draft),
-            draft.first_comment,
-            normalized,
-            request.when if request else None,
+        draft.metricool_post_id = schedule_draft(
+            draft, page.metricool_blog_id, request.when if request else None
         )
     except publisher.PublishError as error:
         # 502: the failure is upstream, and the draft is untouched and still
         # publishable once whatever broke is fixed.
         raise HTTPException(status_code=502, detail=str(error)) from error
 
-    draft.metricool_post_id = post_id or "queued"
     logger.bind(
         draft_id=draft_id,
         page=page.name,
@@ -1033,6 +1022,24 @@ def publish_draft(
         settings.metricool_publish_as_draft,
     )
     return _save(session, draft)
+
+
+def schedule_draft(draft: Draft, blog_id: str, when: datetime | None) -> str:
+    """Hand Metricool the post, and answer with what to record as its id.
+
+    The core of `publish_draft`, shared with `auto_repost`, which publishes a
+    repost without a request. Raises `publisher.PublishError`; the caller
+    decides what a refusal means. Does not touch the row.
+    """
+    normalized = None
+    if draft.composed_image_path:
+        normalized = publisher.normalize_image(
+            media.public_url(draft.composed_image_path), blog_id
+        )
+    post_id = publisher.schedule(
+        blog_id, _post_text(draft), draft.first_comment, normalized, when
+    )
+    return post_id or QUEUED
 
 
 def _post_text(draft: Draft) -> str:

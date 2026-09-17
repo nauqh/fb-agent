@@ -34,9 +34,10 @@ import re
 from datetime import datetime, timedelta, timezone
 
 import httpx
+from sqlmodel import Session
 
 from app import media
-from app.models import Page, SavedPost
+from app.models import Draft, DraftStatus, Page, SavedPost
 from app.publish import metricool as publisher
 
 REPOST_TIMEOUT = 20.0
@@ -80,6 +81,66 @@ class RepostError(RuntimeError):
     def __init__(self, message: str, status: int = 409):
         super().__init__(message)
         self.status = status
+
+
+def draft_from_saved(session: Session, page: Page, row: SavedPost) -> Draft:
+    """The repost of a saved post, as a Draft at `review`. **Not committed.**
+
+    Shared by the Repost button (`routes/overview.repost_saved`, where the
+    reasoning lives) and `auto_repost`, which commits the Draft together with
+    its claim on the saved row. Raises `RepostError`: 409 for a post that can
+    never be reposted, 502 for a host that did not answer. A failed image copy
+    rolls the session back, so a Draft with a caption and no picture never
+    survives to look publishable.
+    """
+    caption = (row.text or "").strip()
+    if not caption:
+        raise RepostError("That saved post has no text, so there is nothing to repost.")
+
+    original = original_for(page, row)
+    media_urls = (original or {}).get("media") or []
+    if not media_urls:
+        raise RepostError(
+            "The original picture could not be found in Metricool's planner, and "
+            "the only other copy is a 130-pixel thumbnail that would look wrong "
+            "published. “Write again” writes the story fresh with a new "
+            "picture."
+        )
+
+    # The planner's caption over the saved one where both exist: the saved copy
+    # has been through Facebook and back, and this is the string we sent.
+    caption = (original or {}).get("text", "").strip() or caption
+    first_comment = ((original or {}).get("firstCommentText") or "").strip() or None
+
+    draft = Draft(
+        page_id=row.page_id,
+        # The published caption verbatim - `_post_text` sends `caption` and
+        # `first_comment`, so what went out last time is what goes out again.
+        caption=caption,
+        first_comment=first_comment,
+        status=DraftStatus.REVIEW,
+        progress_step="reposted",
+        progress_pct=100,
+        # Named so the queue says what this row is. There is no Source Item and
+        # no hook: the hook was drawn into the picture that is being reused.
+        topic=f"Repost - {caption[:60]}",
+        warnings=[
+            "A repost: the caption, first comment and picture are the ones "
+            "already published. Redrawing the image would replace it with a new "
+            "card, which is not what a repost is."
+        ],
+    )
+    session.add(draft)
+    # The id is wanted for the filename and nothing else. Flushed rather than
+    # committed so that a failed copy below rolls the row back.
+    session.flush()
+
+    try:
+        draft.composed_image_path = copy_original_image(media_urls[0], draft.id or 0)
+    except RepostError:
+        session.rollback()
+        raise
+    return draft
 
 
 def original_for(page: Page, row: SavedPost) -> dict | None:

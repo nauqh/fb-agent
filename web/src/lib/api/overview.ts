@@ -42,6 +42,12 @@ export interface SavedPost {
   impressions: number;
   note: string | null;
   created_at: string;
+  /** Saved by the automation (Settings), not by hand. */
+  auto_saved: boolean;
+  /** The automatic repost's Draft. Its time is on Schedule, not here. */
+  repost_draft_id: number | null;
+  /** Why this post will never be auto-reposted. */
+  repost_error: string | null;
 }
 
 /** The raw read. Not exported - `getPerformanceWindow` is the way in, and a
@@ -144,6 +150,7 @@ export async function repostSaved(savedId: number): Promise<Draft> {
   return post<Draft>(`/overview/saved/${savedId}/repost`, {});
 }
 
+/** An auto-saved post is dismissed rather than deleted, so it is not saved again. */
 export async function unsavePost(savedId: number): Promise<void> {
   await del(`/overview/saved/${savedId}`);
 }

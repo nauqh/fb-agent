@@ -76,6 +76,11 @@ export interface Page {
   first_comment_min_paragraphs: number | null;
   first_comment_max_paragraphs: number | null;
 
+  /** Save a published post automatically at this many reactions. Null is off. */
+  auto_save_min_reactions: number | null;
+  /** Repost an auto-saved post this many days after it went out. Null is off. */
+  auto_repost_after_days: number | null;
+
   /** This Page's own prompt text, or null to inherit the file. Edited through
    *  `setPromptFile`, and read back through `listPromptFiles`. */
   system_prompt: string | null;
