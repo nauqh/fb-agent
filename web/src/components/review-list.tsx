@@ -154,10 +154,7 @@ export function ReviewList() {
           <table className="w-full min-w-[980px]">
             <thead>
               <tr className="border-b bg-muted/30 text-left font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
-                <th className="w-24 px-5 py-3 font-medium">
-                  <span className="sr-only">Image</span>
-                </th>
-                <th className="px-2 py-3 font-medium">Post</th>
+                <th className="px-5 py-3 font-medium">Post</th>
                 <th className="w-56 px-5 py-3 font-medium">Page</th>
                 <th className="w-44 px-5 py-3 font-medium">Created</th>
                 <th className="w-40 px-5 py-3 font-medium">Status</th>
@@ -181,7 +178,7 @@ export function ReviewList() {
               <tbody key={day} className="divide-y">
                 <tr className="border-b bg-muted/20">
                   <td
-                    colSpan={6}
+                    colSpan={5}
                     className="px-5 py-1.5 font-mono text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground"
                   >
                     {dayHeading(rows[0].created_at)}
@@ -254,35 +251,27 @@ function Row({
         generating ? undefined : () => router.push(`/review/${draft.id}`)
       }
     >
-      {/* No image in the list. It used to show the 72px-wide thumbnail, but
-          the browser was downloading the full 896x1120 composite for each row
-          straight from the bucket - the egress that blew the quota - and the
-          detail screen is where the picture is actually judged. The frame kept
-          its height so rows hold their shape; the generating spinner lives on
-          in the status column. */}
-      <td className="px-5 py-4 align-top">
+      {/* The image column is gone: it used to fetch the full 896x1120
+          composite for a 72px thumbnail, the egress that blew the quota, and
+          the detail screen is where the picture is judged. The row now leads
+          with the title instead - two lines, since the column has the space
+          the thumbnail left behind - and the Page badge beside it repeats
+          nothing. */}
+      <td className="px-5 py-4 align-middle">
         {generating ? (
-          <div className="flex aspect-[4/5] w-[72px] flex-col items-center justify-center gap-2 rounded-2xl border bg-muted px-2 text-center">
-            <Loader2 className="size-4 animate-spin text-muted-foreground" />
-            <span className="text-[10px] leading-tight text-muted-foreground">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="size-4 shrink-0 animate-spin" />
+            <span>
               {draft.progress_pct >= 60
                 ? "Drawing the image"
                 : "Writing the post"}
             </span>
           </div>
-        ) : null}
-      </td>
-
-      {/* Title over the page name, as the old app had it. The title is the
-          hook's first sentence: the writer produces no separate one, and the
-          whole 65-word hook is a paragraph, not a row label. */}
-      <td className="max-w-0 px-2 py-4 align-middle">
-        <p className="line-clamp-1 text-[15px] font-medium leading-snug">
-          {title(draft)}
-        </p>
-        <p className="mt-0.5 line-clamp-1 text-[13px] text-muted-foreground">
-          {page?.name ?? ""}
-        </p>
+        ) : (
+          <p className="line-clamp-2 max-w-2xl text-[15px] font-medium leading-snug">
+            {title(draft)}
+          </p>
+        )}
       </td>
 
       {/* Page, Created and Status as their own columns, which is the old app's
