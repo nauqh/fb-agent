@@ -29,7 +29,7 @@ import {
   setAssignments,
   type Assignment,
 } from "@/lib/api/competitors";
-import { getInsetQuota } from "@/lib/api/drafts";
+import { getInsetQuota, type InsetQuota } from "@/lib/api/drafts";
 import { addFeed, removeFeed } from "@/lib/api/feeds";
 import {
   addSlot,
@@ -329,14 +329,53 @@ function InsetPictures({ page }: { page: Page }) {
             ? "Stock photos, free to use. Nothing of named people."
             : "Real people, places and events. The pictures belong to whoever published them."}
         </p>
-        {quota ? (
-          <p className="text-[13px] text-muted-foreground">
-            Google searches left: {quota.searches_left} of {quota.searches_per_month}, renews{" "}
-            {quota.renews_on}. Shared by every Page.
-          </p>
-        ) : null}
+        {quota ? <SearchQuota {...quota} /> : null}
       </div>
     </Pane>
+  );
+}
+
+/**
+ * SerpAPI's monthly allowance: one bar. One Google inset search spends one.
+ * Renewal and "shared by every Page" live in the tooltip. Amber under a fifth
+ * left, red under a twentieth.
+ */
+function SearchQuota({ searches_left: left, searches_per_month: total, renews_on }: InsetQuota) {
+  const share = total > 0 ? Math.min(1, Math.max(0, left / total)) : 0;
+  const renews = new Date(`${renews_on}T00:00:00Z`).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    timeZone: "UTC",
+  });
+
+  return (
+    <div
+      className="max-w-sm space-y-1.5"
+      title={`Renews ${renews}. Shared by every Page.`}
+    >
+      <div className="flex items-baseline justify-between text-[13px] text-muted-foreground">
+        <span>Google searches</span>
+        <span className="tabular-nums">
+          {left} / {total}
+        </span>
+      </div>
+      <div
+        role="meter"
+        aria-label="Google searches left this month"
+        aria-valuemin={0}
+        aria-valuemax={total}
+        aria-valuenow={left}
+        className="h-1.5 overflow-hidden rounded-full bg-muted"
+      >
+        <div
+          className={cn(
+            "h-full w-full origin-left rounded-full transition-transform duration-500 ease-out motion-reduce:transition-none",
+            share < 0.05 ? "bg-destructive" : share < 0.2 ? "bg-amber-500" : "bg-foreground/70",
+          )}
+          style={{ transform: `scaleX(${share})` }}
+        />
+      </div>
+    </div>
   );
 }
 
