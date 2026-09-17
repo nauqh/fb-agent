@@ -36,6 +36,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   findInset,
   getDraft,
+  placeHero,
   publishDraft,
   publishMode,
   regenerateField,
@@ -44,6 +45,7 @@ import {
   removeInset,
   rescheduleDraft,
   returnToReview,
+  searchHero,
   searchInset,
   unscheduleDraft,
   updateDraft,
@@ -112,8 +114,16 @@ export function DraftDetail({
   const [saving, setSaving] = useState(false);
   const [deciding, setDeciding] = useState(false);
   const [imageWork, setImageWork] = useState<
-    "hero" | "hero-upload" | "inset" | "inset-find" | "inset-search" | null
+    "hero" | "hero-upload" | "hero-search" | "hero-place" | "inset" | "inset-find" | "inset-search" | null
   >(null);
+  const heroQuery = useRef<HTMLInputElement>(null);
+  /** The hero search's source and results. Tagged with the draft like `insetChoice`,
+   *  so another draft opens with neither; results are not stored on the row. */
+  const [heroSearch, setHeroSearch] = useState<{
+    draftId: number;
+    source: InsetSource | null;
+    results: InsetCandidate[];
+  } | null>(null);
   /** The inset search box. Uncontrolled: it opens on the draft's last query and
    *  is only read when Search is pressed. The offered photos live on the row. */
   const insetQuery = useRef<HTMLInputElement>(null);
@@ -224,6 +234,9 @@ export function DraftDetail({
   const page = pages?.find((candidate) => candidate.id === draft?.page_id);
   const insetSource: InsetSource =
     insetChoice?.draftId === draftId ? insetChoice.source : (page?.inset_source ?? "google");
+  const heroResults = heroSearch?.draftId === draftId ? heroSearch.results : [];
+  const heroSource: InsetSource =
+    (heroSearch?.draftId === draftId ? heroSearch.source : null) ?? page?.inset_source ?? "google";
   const dirty = useMemo(
     () => (draft && form ? JSON.stringify(toForm(draft)) !== JSON.stringify(form) : false),
     [draft, form],
@@ -508,6 +521,39 @@ export function DraftDetail({
     }
   }
 
+  /** Pictures for the hero from Google or Unsplash. One search, nothing placed. */
+  async function searchHeroPhotos() {
+    const query = heroQuery.current?.value.trim() ?? "";
+    if (!query) return;
+    setImageWork("hero-search");
+    try {
+      const results = await searchHero(draftId, query, heroSource);
+      setHeroSearch({ draftId, source: heroSource, results });
+      if (results.length === 0) toast.error(`No pictures for “${query}”.`);
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Search failed");
+    } finally {
+      setImageWork(null);
+    }
+  }
+
+  /** Use a search result as the hero. Saves first, like the upload. */
+  async function placeHeroPhoto(item: InsetCandidate) {
+    setImageWork("hero-place");
+    try {
+      if (dirty && form) await updateDraft(draftId, form);
+      await placeHero(draftId, item);
+      await refresh();
+      toast.success("That picture is the hero now.", {
+        description: "The card was redrawn on it. Nothing was generated.",
+      });
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Could not use that picture");
+    } finally {
+      setImageWork(null);
+    }
+  }
+
   const decided = draft.status === "approved" || draft.status === "rejected";
   /** A failed run has nothing to approve, and the server refuses it with a 409. */
   const failed = draft.status === "failed";
@@ -780,6 +826,62 @@ export function DraftDetail({
                   Upload
                 </Button>
               </div>
+
+              <div className="flex gap-1">
+                <InsetSourceSelect
+                  value={heroSource}
+                  onChange={(source) =>
+                    setHeroSearch({ draftId, source, results: heroResults })
+                  }
+                />
+                <Input
+                  key={draft.id}
+                  ref={heroQuery}
+                  placeholder="Search a photo, e.g. Colosseum"
+                  aria-label="Search pictures for the hero"
+                  className="h-7 text-xs md:text-xs"
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && imageWork === null) void searchHeroPhotos();
+                  }}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0"
+                  disabled={imageWork !== null}
+                  onClick={() => void searchHeroPhotos()}
+                >
+                  {imageWork === "hero-search" ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <Search className="size-3.5" />
+                  )}
+                  Search
+                </Button>
+              </div>
+
+              {heroResults.length > 0 ? (
+                <div className="grid grid-cols-3 gap-2">
+                  {heroResults.map((item) => (
+                    <button
+                      key={item.url}
+                      type="button"
+                      title={`${item.title} - ${item.source}`}
+                      aria-label={`Use ${item.title} as the hero`}
+                      disabled={imageWork !== null}
+                      onClick={() => void placeHeroPhoto(item)}
+                      className="group disabled:cursor-default"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={item.url}
+                        alt={item.title}
+                        className="aspect-[4/5] w-full rounded-lg object-cover ring-1 ring-foreground/10 group-hover:ring-2 group-hover:ring-foreground/40"
+                      />
+                    </button>
+                  ))}
+                </div>
+              ) : null}
 
               <input
                 ref={heroPicker}

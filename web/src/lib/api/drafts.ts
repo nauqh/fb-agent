@@ -194,6 +194,20 @@ export async function uploadHero(id: number, file: File): Promise<Draft> {
   return upload<Draft>(`/drafts/${id}/hero`, file);
 }
 
+/** Pictures for the hero, from the inset's searches. Returned, not stored. */
+export async function searchHero(
+  id: number,
+  query: string,
+  source: "google" | "unsplash",
+): Promise<InsetCandidate[]> {
+  return post<InsetCandidate[]>(`/drafts/${id}/hero/search`, { query, source });
+}
+
+/** Use one search result as the hero. Answers with the redrawn draft. */
+export async function placeHero(id: number, candidate: InsetCandidate): Promise<Draft> {
+  return post<Draft>(`/drafts/${id}/hero/place`, candidate);
+}
+
 /** The three fields the writer can be asked for again, one at a time. */
 export type RegeneratableField = "hook" | "caption" | "first_comment";
 

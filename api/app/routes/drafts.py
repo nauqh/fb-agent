@@ -619,21 +619,62 @@ async def upload_hero(
 
     buffer = io.BytesIO()
     picture.convert("RGB").save(buffer, format="PNG")
-    draft.hero_image_path = media.store.save(
-        buffer.getvalue(), media.filename(draft_id, "hero", "png")
-    )
+    return _set_hero(session, draft, page, buffer.getvalue(), "uploaded")
+
+
+def _set_hero(session: Session, draft: Draft, page: Page, png: bytes, how: str) -> Draft:
+    """Store a picture the operator chose as the hero, and redraw the card on it."""
+    draft.hero_image_path = media.store.save(png, media.filename(draft.id or 0, "hero", "png"))
     draft.hero_from_source = False
-    # An upload is a change of mind about text-only. Left set, `build_image`
-    # skips the draft, so the hero is stored and shown and no card is ever
-    # drawn - a picture that looks ready and cannot be published.
+    # A chosen picture is a change of mind about text-only. Left set,
+    # `build_image` skips the draft, so the hero is stored and shown and no card
+    # is ever drawn - a picture that looks ready and cannot be published.
     was_text_only = draft.no_image
     draft.no_image = False
     logger.info(
-        "Hero uploaded for draft {}{}",
-        draft_id,
-        " (text-only cleared)" if was_text_only else "",
+        "Hero {} for draft {}{}", how, draft.id, " (text-only cleared)" if was_text_only else ""
     )
     return _redrawn(session, draft, page)
+
+
+class SearchHero(BaseModel):
+    query: str = Field(min_length=1, max_length=100)
+    source: Literal["google", "unsplash"]
+
+
+@router.post("/drafts/{draft_id}/hero/search")
+def search_hero(
+    draft_id: int, body: SearchHero, session: Session = Depends(get_session)
+) -> list[inset.Candidate]:
+    """Pictures for a hero, from the same searches the inset uses. Nothing is stored.
+
+    Kept on the screen rather than the row: the hero has no candidates column,
+    and a list of search results is not worth a migration. One search.
+    """
+    _editable(session, draft_id)
+    try:
+        return inset.candidates(body.query.strip(), source=body.source)
+    except inset.InsetError as error:
+        raise HTTPException(status_code=502, detail=_sentence(error)) from error
+
+
+@router.post("/drafts/{draft_id}/hero/place")
+def place_hero(
+    draft_id: int, candidate: inset.Candidate, session: Session = Depends(get_session)
+) -> Draft:
+    """Use one search result as the hero. Fetched and checked by `inset.place`."""
+    draft = _editable(session, draft_id)
+    page = session.get(Page, draft.page_id)
+    if page is None:
+        raise HTTPException(status_code=404, detail=f"No page {draft.page_id}")
+    # Same rule as the inset swap: only an Unsplash result carries a download
+    # link, and claiming one only narrows the fetch to Unsplash's hosts.
+    source = "unsplash" if candidate.download_location else "google"
+    try:
+        png = inset.place(candidate, source=source)
+    except inset.InsetError as error:
+        raise HTTPException(status_code=422, detail=_sentence(error)) from error
+    return _set_hero(session, draft, page, png, f"placed from {source}")
 
 
 TEMPLATES = ("card", "full_overlay")
