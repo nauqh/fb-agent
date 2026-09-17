@@ -32,7 +32,6 @@ import type { Draft, Page } from "@/lib/types";
 import { useQuery } from "@/lib/use-query";
 import { pageAvatarRaw } from "@/lib/page-avatar";
 import { cn } from "@/lib/utils";
-import { ViewFullButton } from "@/components/image-lightbox";
 import { PageBadge } from "@/components/page-badge";
 import { PublishAt } from "@/components/publish-at";
 import { Loading } from "@/components/loading";
@@ -255,39 +254,23 @@ function Row({
         generating ? undefined : () => router.push(`/review/${draft.id}`)
       }
     >
+      {/* No image in the list. It used to show the 72px-wide thumbnail, but
+          the browser was downloading the full 896x1120 composite for each row
+          straight from the bucket - the egress that blew the quota - and the
+          detail screen is where the picture is actually judged. The frame kept
+          its height so rows hold their shape; the generating spinner lives on
+          in the status column. */}
       <td className="px-5 py-4 align-top">
-        {/* Big enough to recognise the post, small enough that ten rows fit a
-            screen. 120px made each row taller than the text it carried; the eye
-            button opens it full size when the composite itself is the question.
-            4:5 whether or not one has been drawn, so rows keep their height as
-            pictures arrive. */}
-        <div className="group/thumb relative aspect-[4/5] w-[72px] overflow-hidden rounded-2xl border bg-muted shadow-sm">
-          {draft.composed_image_url ? (
-            <>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={draft.composed_image_url}
-                alt=""
-                className="size-full object-cover"
-              />
-              <ViewFullButton
-                src={draft.composed_image_url}
-                alt={`Draft ${draft.id} composed image`}
-              />
-            </>
-          ) : generating ? (
-            // The empty frame is where the eye goes, so it says what it is
-            // waiting for rather than spinning anonymously.
-            <div className="flex size-full flex-col items-center justify-center gap-2 px-2 text-center">
-              <Loader2 className="size-4 animate-spin text-muted-foreground" />
-              <span className="text-[10px] leading-tight text-muted-foreground">
-                {draft.progress_pct >= 60
-                  ? "Drawing the image"
-                  : "Writing the post"}
-              </span>
-            </div>
-          ) : null}
-        </div>
+        {generating ? (
+          <div className="flex aspect-[4/5] w-[72px] flex-col items-center justify-center gap-2 rounded-2xl border bg-muted px-2 text-center">
+            <Loader2 className="size-4 animate-spin text-muted-foreground" />
+            <span className="text-[10px] leading-tight text-muted-foreground">
+              {draft.progress_pct >= 60
+                ? "Drawing the image"
+                : "Writing the post"}
+            </span>
+          </div>
+        ) : null}
       </td>
 
       {/* Title over the page name, as the old app had it. The title is the
