@@ -1370,6 +1370,7 @@ function PublishAction({
         open={open}
         onOpenChange={setOpen}
         busy={busy}
+        scheduling={Boolean(when)}
         onConfirm={() => void publish(when || undefined)}
       >
         <p className="text-sm text-muted-foreground">

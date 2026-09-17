@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { Loader2, Rocket } from "lucide-react";
+import { CalendarClock, Loader2, Rocket } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -23,18 +23,23 @@ import {
  * it. The drawer has a footer and puts `PublishAt` in it directly, the way the
  * old sheet did; the queue's row menu has no such surface, so it passes the
  * field in here.
+ *
+ * `scheduling` words it as Schedule, so a timed post does not read like the
+ * drawer's Publish now.
  */
 export function PublishDialog({
   open,
   onOpenChange,
   busy,
   onConfirm,
+  scheduling = false,
   children,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   busy: boolean;
   onConfirm: () => void;
+  scheduling?: boolean;
   children?: ReactNode;
 }) {
   return (
@@ -42,7 +47,7 @@ export function PublishDialog({
       {/* No `DialogDescription`: Radix warns when one is missing unless the
           content says outright that there isn't one. */}
       <DialogContent className="sm:max-w-md" aria-describedby={undefined}>
-        <DialogTitle>Publish to Metricool?</DialogTitle>
+        <DialogTitle>{scheduling ? "Schedule on Metricool?" : "Publish to Metricool?"}</DialogTitle>
         {children}
         <DialogFooter className="gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
@@ -51,10 +56,12 @@ export function PublishDialog({
           <Button disabled={busy} onClick={onConfirm}>
             {busy ? (
               <Loader2 className="size-4 animate-spin" />
+            ) : scheduling ? (
+              <CalendarClock className="size-4" />
             ) : (
               <Rocket className="size-4" />
             )}
-            Publish
+            {scheduling ? "Schedule" : "Publish"}
           </Button>
         </DialogFooter>
       </DialogContent>
