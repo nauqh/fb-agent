@@ -1208,7 +1208,15 @@ export function DraftDetail({
               Failed - there is nothing to publish.
             </p>
           ) : (
-            <PublishAction draft={draft} onPublished={refresh} />
+            <PublishAction
+              draft={draft}
+              onPublished={refresh}
+              // Publishing sends the row, not the form, so unsaved edits would
+              // go out as the old post. Saved first, like Reject and the insets.
+              beforePublish={async () => {
+                if (dirty && form) await updateDraft(draftId, form);
+              }}
+            />
           )}
         </div>
       </div>
@@ -1253,9 +1261,11 @@ export function DraftDetail({
 function PublishAction({
   draft,
   onPublished,
+  beforePublish,
 }: {
   draft: Draft;
   onPublished: () => void;
+  beforePublish: () => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -1279,6 +1289,7 @@ function PublishAction({
   async function publish(at: string | undefined) {
     setBusy(true);
     try {
+      await beforePublish();
       await publishDraft(draft.id, at);
       toast(
         mode?.rehearsal
