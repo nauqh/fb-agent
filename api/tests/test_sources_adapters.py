@@ -141,7 +141,7 @@ def test_markup_entities_and_wordpress_boilerplate_are_stripped(entries):
 
     assert "<p>" not in text
     assert "&amp;" not in text and " & " in text
-    # WordPress appends this to every summary; unstripped it reaches the model
+    # WordPress appends this to every summary; unstripped it shows in the RSS tab
     # as content.
     assert "appeared first on" not in text
 

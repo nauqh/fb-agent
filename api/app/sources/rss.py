@@ -58,7 +58,7 @@ _TAGS = re.compile(r"<[^>]+>")
 _SPACE = re.compile(r"\s+")
 _BOILERPLATE = [
     # WordPress appends a self-referential tail to every summary, which would
-    # otherwise reach the model as content.
+    # otherwise show in the RSS tab as content.
     re.compile(r"\s*The post .*? appeared first on .*?\.?\s*$", re.I),
     re.compile(r"\s*Continue reading\b.*$", re.I),
     re.compile(r"\s*\[…\]\s*$"),
@@ -270,9 +270,10 @@ class Probe:
     with_images: int
 
     median_summary: int
-    """Median length of the text a writer would actually receive - title and
-    summary together, boilerplate already stripped, which is the thing being
-    judged rather than whatever the `<description>` element happens to hold."""
+    """Median length of the item text the RSS tab shows - title and summary
+    together, boilerplate already stripped, which is the thing being judged
+    rather than whatever the `<description>` element happens to hold. The writer
+    no longer reads it; it reads the article from the link."""
 
     newest_hours: float | None
     """Age of the newest item. `None` when no item carries a date.

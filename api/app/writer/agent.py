@@ -7,11 +7,15 @@ rules ran afterwards as warnings nobody had to act on.
 """
 
 from functools import lru_cache
+from urllib.parse import urlsplit
 
+import httpx
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent, ModelRetry, RunContext
-from pydantic_ai.messages import BinaryImage
+from pydantic_ai.capabilities.web_fetch import WebFetch
+from pydantic_ai.messages import BinaryImage, NativeToolReturnPart
 from pydantic_ai.models.google import GoogleModel, GoogleModelSettings
+from pydantic_ai.native_tools import WebFetchTool
 from pydantic_ai.providers.google import GoogleProvider
 
 from app.models import Page, SourceItem, SourceKind
@@ -231,6 +235,17 @@ def source_instruction(kind: SourceKind) -> str:
             "theme is the job; reusing the picture itself would be lifting what "
             "the rival shot."
         )
+    if kind is SourceKind.RSS:
+        # The feed's own text is not sent: a summary is a couple of hundred
+        # characters, and the article is the story. See `ask` for what happens
+        # when the page cannot be read.
+        return (
+            "The source is the news article at the URL below. Read that URL and "
+            "write about this same story, the same people and the same events, "
+            "using only facts from the article. Do not invent a different "
+            "subject. Fetch only that URL; do not search for other pages. Do not "
+            "put citation markers such as [1] or [1.1] anywhere in the post."
+        )
     return (
         "The source below is FACTUAL. Write about this same story, the same "
         "people and the same events. Do not invent a different subject."
@@ -314,7 +329,8 @@ def user_prompt(source: SourceItem | None, topic: str | None) -> str:
         parts.append(f"Author: {source.author}")
     if source.url:
         parts.append(f"URL: {source.url}")
-    parts += ["", source.text]
+    if source.kind is not SourceKind.RSS:
+        parts += ["", source.text]
     return "\n".join(parts)
 
 
@@ -360,14 +376,19 @@ def write(
         _validator_for(validators.Limits.for_page(page)),
         model,
         template=template,
+        source=source,
     )
 
 
-def _run(page: Page, prompt, validator, model=None, template=None):
+def _run(page: Page, prompt, validator, model=None, template=None, source=None):
     """Ask the model, stepping down the fallback chain while it is unavailable.
 
     Extracted so `rewrite` cannot grow a second copy of the ladder - the two
     differ only in what they ask for and which rules they hold the answer to.
+
+    An RSS source is read from its link on both, rewrite included: the prompt
+    carries no feed text, so a rewrite without the fetch would have only the
+    kept fields to go on.
 
     A caller passing `model` gets exactly that model and no fallback: tests
     supply a fake, and silently swapping it for a real one would bill them.
@@ -378,10 +399,54 @@ def _run(page: Page, prompt, validator, model=None, template=None):
         _instructions(page, layout, template),
         model,
         validator,
+        fetch_url=source.url if source is not None and source.kind is SourceKind.RSS else None,
     )
 
 
-def ask(prompt, output_type, instructions: str, model=None, validator=None):
+FETCH_TIMEOUT = 90.0
+
+
+class SourceUnreadable(RuntimeError):
+    """The article behind an RSS link could not be fetched by the model."""
+
+
+def _fetched(messages, url: str) -> bool:
+    """Whether URL context actually retrieved `url` during the run.
+
+    Checked because a failed fetch does not raise. Measured 2026-09-17: a BBC
+    article blocks Google's fetcher, and the model answered with a well-formed
+    output saying it could not access the page, after trying DuckDuckGo and
+    Google search on its own. With no feed text in the prompt, that becomes a
+    post about nothing. Compared on host and path, since the model may drop the
+    feed's tracking query string.
+
+    The content is `{"url_metadata": [...]}`: Gemini 3 returns the fetch as a
+    server-side tool response. The bare-list shape pydantic-ai also builds is
+    the 2.x metadata path, which cannot run here (see `ask`).
+    """
+    want = urlsplit(url)
+    for message in messages:
+        for part in message.parts:
+            if not isinstance(part, NativeToolReturnPart) or part.tool_name != WebFetchTool.kind:
+                continue
+            for meta in part.content.get("url_metadata") or []:
+                got = urlsplit(meta.get("retrieved_url") or "")
+                if (
+                    (got.hostname, got.path.rstrip("/")) == (want.hostname, want.path.rstrip("/"))
+                    and meta.get("url_retrieval_status") == "URL_RETRIEVAL_STATUS_SUCCESS"
+                ):
+                    return True
+    return False
+
+
+def ask(
+    prompt,
+    output_type,
+    instructions: str,
+    model=None,
+    validator=None,
+    fetch_url: str | None = None,
+):
     """One structured answer from the text model, down the fallback chain.
 
     The ladder `write` and `rewrite` have always used, taken out of `_run` so a
@@ -392,6 +457,11 @@ def ask(prompt, output_type, instructions: str, model=None, validator=None):
 
     A caller passing `model` gets exactly that model and no fallback: tests
     supply a fake, and silently swapping it for a real one would bill them.
+
+    `fetch_url` turns on Gemini URL context and fails the run with
+    `SourceUnreadable` if that page was not retrieved. It needs a Gemini 3
+    model: 2.x cannot combine a built-in tool with the function call that
+    carries the structured output.
     """
 
     def run(chosen, model_settings):
@@ -401,10 +471,36 @@ def ask(prompt, output_type, instructions: str, model=None, validator=None):
             instructions=instructions,
             model_settings=model_settings,
             retries=MAX_RETRIES,
+            capabilities=[WebFetch()] if fetch_url else None,
         )
+        unreadable = SourceUnreadable(
+            f"Could not read the article at {fetch_url}. The site may block "
+            "automated readers or sit behind a paywall."
+        )
+        if fetch_url:
+            # Registered before the brand rules so it runs first. Checked after
+            # the run instead, an unreadable page cost 211s: the model's "I could
+            # not access it" answer broke the brand rules, and each ModelRetry
+            # fetched the page again. A plain exception here ends the run.
+            @agent.output_validator
+            def _read_the_article(ctx: RunContext, output):
+                if not _fetched(ctx.messages, fetch_url):
+                    raise unreadable
+                return output
+
         if validator is not None:
             agent.output_validator(validator)
-        return agent.run_sync(prompt)
+        try:
+            # ponytail: a flat timeout, because Gemini offers no cap on fetches.
+            # An unreadable BBC page kept one request looping server-side for
+            # 211-354s until TOO_MANY_TOOL_CALLS; readable articles took 26-40s.
+            return agent.run_sync(
+                prompt, model_settings={"timeout": FETCH_TIMEOUT} if fetch_url else None
+            )
+        except httpx.TimeoutException as error:
+            if not fetch_url:
+                raise
+            raise unreadable from error
 
     if model is not None:
         return run(model, None)
@@ -587,4 +683,5 @@ def rewrite(
         _field_rules(field, validators.Limits.for_page(page)),
         model,
         template=template,
+        source=source,
     )

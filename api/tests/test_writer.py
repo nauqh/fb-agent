@@ -4,7 +4,13 @@ from types import SimpleNamespace
 
 import pytest
 from pydantic_ai.exceptions import UnexpectedModelBehavior
-from pydantic_ai.messages import BinaryImage, ModelMessage, ModelResponse, ToolCallPart
+from pydantic_ai.messages import (
+    BinaryImage,
+    ModelMessage,
+    ModelResponse,
+    NativeToolReturnPart,
+    ToolCallPart,
+)
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 
 from app.models import Page, SourceItem, SourceKind
@@ -273,7 +279,7 @@ def test_a_competitor_instruction_tells_the_model_to_mirror_the_shape():
 def test_the_prompt_carries_the_source_text_and_its_instruction():
     source = SourceItem(
         id=1,
-        kind=SourceKind.RSS,
+        kind=SourceKind.TWEET,
         external_id="u",
         author="Smithsonian Magazine",
         text="Marie Tharp drew the ridge by hand.",
@@ -285,6 +291,38 @@ def test_the_prompt_carries_the_source_text_and_its_instruction():
     assert "FACTUAL" in prompt
     assert "Marie Tharp drew the ridge by hand." in prompt
     assert "Smithsonian Magazine" in prompt
+
+
+def test_an_rss_prompt_is_the_link_not_the_feed_text():
+    """The model reads the article itself; the feed summary is not the source."""
+    source = SourceItem(
+        id=1,
+        kind=SourceKind.RSS,
+        external_id="u",
+        text="Marie Tharp drew the ridge by hand.",
+        url="https://example.com/x",
+    )
+
+    prompt = writer.user_prompt(source, None)
+
+    assert "https://example.com/x" in prompt
+    assert "Marie Tharp" not in prompt
+
+
+def test_a_fetch_counts_only_when_the_article_itself_was_retrieved():
+    """A failed fetch does not raise; the model writes "I could not access it"."""
+    url = "https://www.bbc.co.uk/news/articles/abc?at_medium=RSS"
+    ok = {"retrieved_url": "https://www.bbc.co.uk/news/articles/abc", "url_retrieval_status": "URL_RETRIEVAL_STATUS_SUCCESS"}
+    failed = {**ok, "url_retrieval_status": "URL_RETRIEVAL_STATUS_ERROR"}
+    elsewhere = {**ok, "retrieved_url": "https://www.google.com/search?q=abc"}
+
+    def fetches(*metas):
+        part = NativeToolReturnPart(tool_name="web_fetch", content={"url_metadata": list(metas)}, tool_call_id="t")
+        return [ModelResponse(parts=[part])]
+
+    assert writer._fetched(fetches(ok), url)
+    assert not writer._fetched(fetches(failed, elsewhere), url)
+    assert not writer._fetched([], url)
 
 
 def test_a_run_with_neither_a_source_nor_a_topic_is_refused():
