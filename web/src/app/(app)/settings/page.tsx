@@ -336,12 +336,13 @@ function InsetPictures({ page }: { page: Page }) {
 }
 
 /**
- * SerpAPI's monthly allowance: one bar. One Google inset search spends one.
- * Renewal and "shared by every Page" live in the tooltip. Amber under a fifth
- * left, red under a twentieth.
+ * SerpAPI's monthly allowance: one bar, filling as searches are used. One
+ * Google inset search spends one. Renewal and "shared by every Page" live in
+ * the tooltip. Amber past 80% used, red past 95%.
  */
 function SearchQuota({ searches_left: left, searches_per_month: total, renews_on }: InsetQuota) {
-  const share = total > 0 ? Math.min(1, Math.max(0, left / total)) : 0;
+  const used = Math.max(0, total - left);
+  const share = total > 0 ? Math.min(1, used / total) : 0;
   const renews = new Date(`${renews_on}T00:00:00Z`).toLocaleDateString("en-GB", {
     day: "numeric",
     month: "short",
@@ -356,21 +357,21 @@ function SearchQuota({ searches_left: left, searches_per_month: total, renews_on
       <div className="flex items-baseline justify-between text-[13px] text-muted-foreground">
         <span>Google searches</span>
         <span className="tabular-nums">
-          {left} / {total}
+          {used} / {total}
         </span>
       </div>
       <div
         role="meter"
-        aria-label="Google searches left this month"
+        aria-label="Google searches used this month"
         aria-valuemin={0}
         aria-valuemax={total}
-        aria-valuenow={left}
+        aria-valuenow={used}
         className="h-1.5 overflow-hidden rounded-full bg-muted"
       >
         <div
           className={cn(
             "h-full w-full origin-left rounded-full transition-transform duration-500 ease-out motion-reduce:transition-none",
-            share < 0.05 ? "bg-destructive" : share < 0.2 ? "bg-amber-500" : "bg-foreground/70",
+            share > 0.95 ? "bg-destructive" : share > 0.8 ? "bg-amber-500" : "bg-foreground/70",
           )}
           style={{ transform: `scaleX(${share})` }}
         />
