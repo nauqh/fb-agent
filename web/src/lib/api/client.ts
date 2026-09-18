@@ -8,7 +8,7 @@
  * that says what to do next.
  */
 
-import { emit } from "@/lib/store";
+import { beginRequest, emit, endRequest } from "@/lib/store";
 
 const BASE = "/api";
 
@@ -28,22 +28,27 @@ function mutated(method?: string): void {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${BASE}${path}`, {
-    ...init,
-    // Only for a JSON string body. A `FormData` body must go out without this:
-    // the browser sets `multipart/form-data` *plus the boundary*, and a
-    // hand-written Content-Type has no boundary, so the server parses nothing.
-    headers:
-      typeof init?.body === "string"
-        ? { "Content-Type": "application/json" }
-        : undefined,
-  });
+  beginRequest();
+  try {
+    const response = await fetch(`${BASE}${path}`, {
+      ...init,
+      // Only for a JSON string body. A `FormData` body must go out without this:
+      // the browser sets `multipart/form-data` *plus the boundary*, and a
+      // hand-written Content-Type has no boundary, so the server parses nothing.
+      headers:
+        typeof init?.body === "string"
+          ? { "Content-Type": "application/json" }
+          : undefined,
+    });
 
-  if (!response.ok) {
-    throw new Error(await detail(response));
+    if (!response.ok) {
+      throw new Error(await detail(response));
+    }
+    mutated(init?.method);
+    return response.json() as Promise<T>;
+  } finally {
+    endRequest();
   }
-  mutated(init?.method);
-  return response.json() as Promise<T>;
 }
 
 async function detail(response: Response): Promise<string> {
@@ -111,10 +116,15 @@ export function upload<T>(path: string, file: File): Promise<T> {
 
 /** No return type: this DELETE answers 204, which has no body to parse. */
 export async function del(path: string): Promise<void> {
-  const response = await fetch(`${BASE}${path}`, { method: "DELETE" });
-  if (!response.ok) throw new Error(await detail(response));
-  // Its own `fetch`, so it misses the notification in `request`.
-  mutated("DELETE");
+  beginRequest();
+  try {
+    const response = await fetch(`${BASE}${path}`, { method: "DELETE" });
+    if (!response.ok) throw new Error(await detail(response));
+    // Its own `fetch`, so it misses the notification in `request`.
+    mutated("DELETE");
+  } finally {
+    endRequest();
+  }
 }
 
 /** For a DELETE that answers with the row it changed rather than 204. */

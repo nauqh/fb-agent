@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
+import { RequestProgress } from "@/components/request-progress";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 
@@ -71,6 +72,7 @@ export default function RootLayout({
           // colour change and the whole screen smears.
           disableTransitionOnChange
         >
+          <RequestProgress />
           {children}
           <Toaster position="bottom-right" />
         </ThemeProvider>
