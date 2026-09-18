@@ -281,7 +281,17 @@ export function DraftDetail({
    * nothing until a press sets `dragging`.
    */
   const [dragging, setDragging] = useState(false);
+  const [cropEditing, setCropEditing] = useState(false);
+  const [heroDragging, setHeroDragging] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
+  const heroCropStart = useRef<{
+    pointerId: number;
+    clientX: number;
+    clientY: number;
+    x: number;
+    y: number;
+    zoom: number;
+  } | null>(null);
 
   useEffect(() => {
     if (!dragging) return;
@@ -329,6 +339,54 @@ export function DraftDetail({
   // missing Page means no watermark decision. Both are one fast read that
   // starts as soon as the draft lands, so this is a flicker, not a wait.
   if (!layout || !page) return <DetailLoading />;
+
+  function startHeroCrop(event: React.PointerEvent<HTMLDivElement>) {
+    if (!cropEditing || !draft?.hero_image_path || !form) return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    heroCropStart.current = {
+      pointerId: event.pointerId,
+      clientX: event.clientX,
+      clientY: event.clientY,
+      x: form.hero_x_ratio,
+      y: form.hero_y_ratio,
+      zoom: form.hero_zoom,
+    };
+    setHeroDragging(true);
+  }
+
+  function moveHeroCrop(event: React.PointerEvent<HTMLDivElement>) {
+    const start = heroCropStart.current;
+    const image = cardRef.current?.querySelector<HTMLImageElement>("[data-hero-image]");
+    if (!start || start.pointerId !== event.pointerId || !image?.naturalWidth) return;
+
+    const width = image.offsetWidth;
+    const height = image.offsetHeight;
+    const scale = Math.max(width / image.naturalWidth, height / image.naturalHeight) * start.zoom;
+    const overflowX = Math.max(1, image.naturalWidth * scale - width);
+    const overflowY = Math.max(1, image.naturalHeight * scale - height);
+    setEditor((prev) =>
+      prev.form
+        ? {
+            ...prev,
+            form: {
+              ...prev.form,
+              hero_x_ratio: clamp01(start.x - (event.clientX - start.clientX) / overflowX),
+              hero_y_ratio: clamp01(start.y - (event.clientY - start.clientY) / overflowY),
+            },
+          }
+        : prev,
+    );
+  }
+
+  function stopHeroCrop(event: React.PointerEvent<HTMLDivElement>) {
+    if (heroCropStart.current?.pointerId !== event.pointerId) return;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    heroCropStart.current = null;
+    setHeroDragging(false);
+  }
 
   async function save() {
     if (!form) return;
@@ -703,12 +761,22 @@ export function DraftDetail({
                 className={cn(
                   // No border of its own: `ComposedImage` draws one, and two
                   // nested outlines read as a box in a box.
-                  // `touch-none` or a drag on a phone scrolls the drawer
-                  // instead of moving the circle.
-                  draft.inset_image_path && "cursor-crosshair touch-none",
+                  // `touch-none` keeps an image drag from scrolling the drawer.
+                  ((draft.inset_image_path || (draft.hero_image_path && cropEditing)) &&
+                    "touch-none") ||
+                    "",
+                  cropEditing && draft.hero_image_path
+                    ? heroDragging
+                      ? "cursor-grabbing select-none"
+                      : "cursor-grab select-none"
+                    : draft.inset_image_path && "cursor-crosshair",
                 )}
                 ref={cardRef}
                 onPointerDown={(event) => {
+                  if (cropEditing && draft.hero_image_path && form) {
+                    startHeroCrop(event);
+                    return;
+                  }
                   // The press is itself a placement, so a click puts the circle
                   // where you clicked without any dragging at all. The window
                   // listeners take it from here.
@@ -722,6 +790,9 @@ export function DraftDetail({
                   });
                   setDragging(true);
                 }}
+                onPointerMove={moveHeroCrop}
+                onPointerUp={stopHeroCrop}
+                onPointerCancel={stopHeroCrop}
               >
                 {picture}
               </div>
@@ -907,52 +978,40 @@ export function DraftDetail({
                   <SectionHead
                     title="Hero crop"
                     meta={
-                      form.hero_x_ratio === 0.5 &&
-                      form.hero_y_ratio === 0.5 &&
-                      form.hero_zoom === 1 ? null : (
-                        <button
+                      <div className="flex items-center gap-2">
+                        {form.hero_x_ratio === 0.5 &&
+                        form.hero_y_ratio === 0.5 &&
+                        form.hero_zoom === 1 ? null : (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setForm({
+                                ...form,
+                                hero_x_ratio: 0.5,
+                                hero_y_ratio: 0.5,
+                                hero_zoom: 1,
+                              })
+                            }
+                            className="hover:text-foreground"
+                          >
+                            Reset
+                          </button>
+                        )}
+                        <Button
                           type="button"
-                          onClick={() =>
-                            setForm({
-                              ...form,
-                              hero_x_ratio: 0.5,
-                              hero_y_ratio: 0.5,
-                              hero_zoom: 1,
-                            })
-                          }
-                          className="hover:text-foreground"
+                          variant={cropEditing ? "secondary" : "outline"}
+                          size="sm"
+                          onClick={() => {
+                            heroCropStart.current = null;
+                            setHeroDragging(false);
+                            setCropEditing((active) => !active);
+                          }}
                         >
-                          Reset
-                        </button>
-                      )
+                          {cropEditing ? "Done" : "Adjust"}
+                        </Button>
+                      </div>
                     }
                   />
-                  <SliderRow label="X" value={`${Math.round(form.hero_x_ratio * 100)}%`}>
-                    <input
-                      type="range"
-                      className="w-full accent-foreground"
-                      min={0}
-                      max={1}
-                      step={0.01}
-                      value={form.hero_x_ratio}
-                      onChange={(event) =>
-                        setForm({ ...form, hero_x_ratio: Number(event.target.value) })
-                      }
-                    />
-                  </SliderRow>
-                  <SliderRow label="Y" value={`${Math.round(form.hero_y_ratio * 100)}%`}>
-                    <input
-                      type="range"
-                      className="w-full accent-foreground"
-                      min={0}
-                      max={1}
-                      step={0.01}
-                      value={form.hero_y_ratio}
-                      onChange={(event) =>
-                        setForm({ ...form, hero_y_ratio: Number(event.target.value) })
-                      }
-                    />
-                  </SliderRow>
                   <SliderRow label="Zoom" value={`${form.hero_zoom.toFixed(1)}x`}>
                     <input
                       type="range"
@@ -967,7 +1026,8 @@ export function DraftDetail({
                     />
                   </SliderRow>
                   <p className="text-[11px] leading-relaxed text-muted-foreground">
-                    Adjust the crop, then save to use it in the published image.
+                    Choose Adjust, then drag the image to keep the important part in
+                    frame. Save when it looks right.
                   </p>
                 </section>
               ) : null}

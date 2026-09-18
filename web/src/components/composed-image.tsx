@@ -191,6 +191,7 @@ export function ComposedImage({
     <img
       src={heroSrc}
       alt=""
+      data-hero-image
       className="absolute inset-0 size-full object-cover"
       style={{
         objectPosition: `${cropX * 100}% ${cropY * 100}%`,
