@@ -129,48 +129,50 @@ export default function SettingsScreen() {
   return (
     <ConfigShell
       header={<ScreenHeader title="Settings" />}
-      // Three groups rather than one list of six. The sections did not change
-      // shape, but "This Page" over all of them was a label that ruled nothing
-      // out - every section on this screen is about this Page. Naming what a
-      // section *is for* lets the rail be read as three short lists.
+      // Four sections, one group. It was seven in three, and four of them -
+      // Identity, Publishing times, Automation, Inset pictures - were each
+      // under 200px of content behind their own rail entry (measured at
+      // 1600px: 196px for Inset pictures, a title and two pills). The rail was
+      // charging a click apiece for panes that fit on one screen together, so
+      // they are `Block`s of one pane now: what this Page is, when it posts,
+      // what it does on its own, where it looks for pictures. 748px, one screen.
       //
-      // Grouping rather than merging is the deliberate half. Feeds and
-      // Competitors are both sources and the Sources screen tabs them together,
-      // but folding them into one pane would cost 1,200px of scroll and two of
-      // the counts below - and the counts are the point of this rail
-      // (`config-shell.tsx`). A group heading buys the same adjacency for free.
+      // Feeds and Competitors stay apart, and that is still deliberate: folding
+      // them together would cost 1,200px of scroll and two of the counts below,
+      // and the counts are the point of this rail (`config-shell.tsx`).
+      //
+      // One group, like Global's "Account". Three group headings over seven
+      // sections was structure the rail did not need once the sections were
+      // this few, and "Output" over a single entry is a heading that groups
+      // nothing.
       groups={[
         {
           label: "This Page",
           sections: [
             {
-              id: "identity",
-              label: "Identity",
-              gap: !page.watermark_image_path && !page.watermark_upload_path,
-              body: <Identity page={page} />,
-            },
-            {
-              id: "times",
-              label: "Publishing times",
-              meta: slots ? slots.length : PENDING,
-              gap: slots ? slots.length === 0 : false,
+              id: "page",
+              label: "This Page",
+              meta: slots ? `${slots.length}/day` : PENDING,
+              // The two things on this pane that stop something else working:
+              // no publishing times means "Schedule next available" cannot run,
+              // no mark means an unstampable composite. A watermark that is
+              // switched off is a decision, not a gap.
+              gap: slots
+                ? slots.length === 0 ||
+                  (page.watermark_enabled &&
+                    !page.watermark_image_path &&
+                    !page.watermark_upload_path)
+                : false,
               body: (
-                <TimeSlots pageId={pageId} slots={slots} refresh={refreshSlots} />
+                <ThisPage
+                  key={page.id}
+                  page={page}
+                  pageId={pageId}
+                  slots={slots}
+                  refresh={refreshSlots}
+                />
               ),
             },
-            {
-              id: "automation",
-              label: "Automation",
-              meta: page.auto_save_min_reactions
-                ? `${page.auto_save_min_reactions.toLocaleString()} reactions`
-                : "Off",
-              body: <Automation key={page.id} page={page} />,
-            },
-          ],
-        },
-        {
-          label: "Sources",
-          sections: [
             {
               id: "competitors",
               label: "Competitors",
@@ -197,17 +199,6 @@ export default function SettingsScreen() {
               gap: sources ? sources.feeds.length === 0 : false,
               body: <Feeds pageId={pageId} sources={sources} />,
             },
-          ],
-        },
-        {
-          label: "Output",
-          sections: [
-            {
-              id: "pictures",
-              label: "Inset pictures",
-              meta: page.inset_source === "unsplash" ? "Unsplash" : "Google",
-              body: <InsetPictures page={page} />,
-            },
             {
               id: "writing",
               label: "Writing",
@@ -228,6 +219,38 @@ export default function SettingsScreen() {
   );
 }
 
+/**
+ * What this Page is, when it posts, what it does on its own, and where it looks
+ * for pictures.
+ *
+ * Four sections until 2026-09-18, each with its own rail entry and each under
+ * 200px of content - two ids and a logo, one time input, two number boxes, two
+ * pills. As `Block`s of one pane they read as what they are: the Page's own
+ * standing settings, in the order you set them up.
+ */
+function ThisPage({
+  page,
+  pageId,
+  slots,
+  refresh,
+}: {
+  page: Page;
+  pageId: number | null;
+  slots: Awaited<ReturnType<typeof listSlots>> | null;
+  refresh: () => Promise<void> | void;
+}) {
+  return (
+    <Pane title={page.name} hint="Identity comes from Metricool. The rest is set here.">
+      <div className="space-y-7">
+        <Identity page={page} />
+        <TimeSlots pageId={pageId} slots={slots} refresh={refresh} />
+        <Automation page={page} />
+        <InsetPictures page={page} />
+      </div>
+    </Pane>
+  );
+}
+
 /** What this Page is, all of it from Metricool except the mark. */
 function Identity({ page }: { page: Page }) {
   const mark = page.watermark_upload_url
@@ -237,50 +260,41 @@ function Identity({ page }: { page: Page }) {
       : null;
 
   return (
-    <Pane
-      title={page.name}
-      hint="Identity comes from Metricool and is not editable here."
-    >
-      <div className="space-y-6">
-        <Block label="Ids">
-          <dl className="space-y-2 text-[13px]">
-            <Row label="Facebook">{page.facebook_page_id}</Row>
-            <Row label="Metricool">{page.metricool_blog_id ?? "-"}</Row>
-          </dl>
-        </Block>
+    <div className="grid min-w-0 gap-6 sm:grid-cols-2">
+      <Block label="Ids" className="min-w-0">
+        <dl className="max-w-xs space-y-2 text-[13px]">
+          <Row label="Facebook">{page.facebook_page_id}</Row>
+          <Row label="Metricool">{page.metricool_blog_id ?? "-"}</Row>
+        </dl>
+      </Block>
 
-        <Block label="Watermark">
-          {mark ? (
-            <div className="flex items-center gap-3">
-              {/* On black, because that is the only background it is ever drawn
-                  against and it is white ink. */}
-              <span className="rounded-md bg-black px-3 py-2">
-                {/* eslint-disable-next-line @next/next/no-img-element -- a
-                    committed asset at its natural ratio, not a content image. */}
-                <img
-                  src={mark}
-                  alt={`${page.name} watermark`}
-                  className="h-10 w-auto"
-                />
-              </span>
-              <code className="min-w-0 truncate text-[13px] text-muted-foreground">
-                {page.watermark_upload_path ?? page.watermark_image_path}
-              </code>
-            </div>
-          ) : page.watermark_enabled ? (
-            <Gap title="No watermark for this Page.">
-              Its cards are stamped with the Page&rsquo;s name as text instead.
-              A committed asset or an upload is what makes a picture traceable
-              once it is reposted.
-            </Gap>
-          ) : (
-            <p className="text-[13px] text-muted-foreground">
-              Switched off. This Page&rsquo;s cards carry no mark at all.
-            </p>
-          )}
-        </Block>
-      </div>
-    </Pane>
+      <Block label="Watermark" className="min-w-0">
+        {mark ? (
+          // `min-w-0` all the way down, or the filename refuses to truncate
+          // and scrolls the whole screen sideways on a phone.
+          <div className="flex min-w-0 items-center gap-3">
+            {/* On black, because that is the only background it is ever drawn
+                against and it is white ink. */}
+            <span className="rounded-md bg-black px-3 py-2">
+              {/* eslint-disable-next-line @next/next/no-img-element -- a
+                  committed asset at its natural ratio, not a content image. */}
+              <img
+                src={mark}
+                alt={`${page.name} watermark`}
+                className="h-10 w-auto"
+              />
+            </span>
+            <code className="min-w-0 truncate text-[13px] text-muted-foreground">
+              {page.watermark_upload_path ?? page.watermark_image_path}
+            </code>
+          </div>
+        ) : page.watermark_enabled ? (
+          <Gap title="No watermark.">Cards are stamped with the Page name as text.</Gap>
+        ) : (
+          <p className="text-[13px] text-muted-foreground">Off. Cards carry no mark.</p>
+        )}
+      </Block>
+    </div>
   );
 }
 
@@ -312,8 +326,11 @@ function InsetPictures({ page }: { page: Page }) {
   }
 
   return (
-    <Pane title="Inset pictures" hint="Where Find with AI and the inset search look for this Page.">
+    <Block label="Inset pictures">
       <div className="space-y-3">
+        <p className="text-[13px] text-muted-foreground">
+          Where Find with AI looks for this Page.
+        </p>
         <Tabs value={page.inset_source} onValueChange={(next) => void choose(next)}>
           <TabsList className="w-fit" aria-label="Inset search source">
             <TabsTrigger value="google" disabled={busy}>
@@ -324,14 +341,9 @@ function InsetPictures({ page }: { page: Page }) {
             </TabsTrigger>
           </TabsList>
         </Tabs>
-        <p className="text-[13px] text-muted-foreground">
-          {page.inset_source === "unsplash"
-            ? "Stock photos, free to use. Nothing of named people."
-            : "Real people, places and events. The pictures belong to whoever published them."}
-        </p>
         {quota ? <SearchQuota {...quota} /> : null}
       </div>
-    </Pane>
+    </Block>
   );
 }
 
@@ -420,11 +432,12 @@ function Automation({ page }: { page: Page }) {
     "h-7 w-20 border-0 bg-transparent px-1 text-right font-medium tabular-nums shadow-none focus-visible:ring-0";
 
   return (
-    <Pane
-      title="Automation"
-      hint="Saves this Page's best posts and reposts them later, at the first free publishing time."
-    >
-      <div className="space-y-5">
+    <Block label="Automation">
+      <div className="space-y-3">
+        <p className="text-[13px] text-muted-foreground">
+          Saves this Page&rsquo;s best posts and reposts them at the first free
+          time. Reposts go straight to Schedule, not Review.
+        </p>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className={box}>
             <Label htmlFor="auto-save" className="text-[13px] font-normal text-muted-foreground">
@@ -465,17 +478,12 @@ function Automation({ page }: { page: Page }) {
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <Button size="sm" disabled={!dirty || busy} onClick={() => void save()}>
-            {busy ? <Loader2 className="size-4 animate-spin" /> : null}
-            Save automation
-          </Button>
-          <p className="text-[13px] text-muted-foreground">
-            Reposts go straight to Schedule, not Review. Cancel one there.
-          </p>
-        </div>
+        <Button size="sm" disabled={!dirty || busy} onClick={() => void save()}>
+          {busy ? <Loader2 className="size-4 animate-spin" /> : null}
+          Save automation
+        </Button>
       </div>
-    </Pane>
+    </Block>
   );
 }
 
@@ -499,12 +507,7 @@ function Feeds({
   return (
     <Pane
       title="Feeds"
-      hint={
-        <>
-          This Page&rsquo;s feeds. Adding one probes it first &mdash; a feed that
-          does not answer is not saved.
-        </>
-      }
+      hint="A feed is probed before it is saved. One that does not answer is refused."
       meta={
         sources
           ? `${sources.feeds.length} feeds · ${sources.since_days}d window`
@@ -550,9 +553,8 @@ function Feeds({
           </div>
 
           {sources.feeds.length === 0 ? (
-            <Gap title="No feeds, so the RSS tab on Sources is empty for this Page.">
-              Nothing is wrong with the fetch - there is nothing configured to
-              fetch. Add a publisher above; it is probed before it is saved.
+            <Gap title="No feeds, so the RSS tab on Sources is empty.">
+              Add a publisher above.
             </Gap>
           ) : null}
         </div>
@@ -688,7 +690,7 @@ function Competitors({
   return (
     <Pane
       title="Competitors this Page reads"
-      hint="This list is the whole of it - the Competitors grid on Sources shows exactly what is ticked here, at every count. The pool is shared, so one competitor can feed several Pages, and which brand it sits under in Metricool does not matter."
+      hint="The Competitors grid on Sources shows exactly what is ticked here. The pool is shared, so one competitor can feed several Pages."
       meta={assignments ? `${assignments.length} read` : undefined}
       // The one action this section has, in the header rather than under an
       // 800px list. `Pane` has carried an `action` slot beside the count since
@@ -715,9 +717,7 @@ function Competitors({
         <div className="space-y-6">
           {assignedIds.length === 0 ? (
             <Gap title="Nothing is ticked, so this Page reads nothing.">
-              Its Competitors grid on Sources is empty, and a Sync will not
-              change that - there is nothing yet for a sync to go and fetch.
-              Assign from the pool below.
+              Its Competitors grid on Sources is empty. Assign from the pool.
             </Gap>
           ) : (
             <Block label={`Reading - ${assignedIds.length} assigned`}>
@@ -830,7 +830,7 @@ function PoolPicker({
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-3">
         <p className="font-mono text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
-          The pool - not yet assigned here
+          Not yet assigned
         </p>
         <Button variant="ghost" size="sm" onClick={onHide}>
           Hide
@@ -1048,20 +1048,15 @@ function TimeSlots({
   }
 
   return (
-    <Pane
-      title="Publishing times"
-      hint={
-        <>
-          The slots &ldquo;Schedule next available&rdquo; walks through. The same
-          times every day, in this Page&rsquo;s zone (GMT+7).
-        </>
-      }
-      meta={slots ? `${slots.length} a day` : undefined}
-    >
+    <Block label="Publishing times">
       {!slots ? (
         <Loading label="Loading times" className="h-24" />
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-3">
+          <p className="text-[13px] text-muted-foreground">
+            The same times every day, GMT+7. “Schedule next available” walks
+            them in order.
+          </p>
           <form onSubmit={add} className="flex items-center gap-2">
             <Clock className="size-3.5 shrink-0 text-muted-foreground" />
             <Input
@@ -1085,9 +1080,8 @@ function TimeSlots({
           {slots.length === 0 ? (
             // Not decoration: with no slots, "Schedule next available" has
             // nothing to offer and the server answers 409 rather than guessing.
-            <Gap title="No publishing times, so “Schedule next available” cannot run.">
-              It answers 409 rather than inventing a time. Publish now and
-              Publish at a time both still work.
+            <Gap title="No times, so “Schedule next available” cannot run.">
+              Publish now and Publish at a time both still work.
             </Gap>
           ) : (
             <div className="flex flex-wrap gap-1.5">
@@ -1111,7 +1105,7 @@ function TimeSlots({
           )}
         </div>
       )}
-    </Pane>
+    </Block>
   );
 }
 
@@ -1160,13 +1154,7 @@ function Writing({
   return (
     <Pane
       title="How this Page writes"
-      hint={
-        <>
-          The prompts tell the writer what to aim for; the lengths are what a
-          draft is checked against. They cannot disagree &mdash; leave a box
-          empty to use the default.
-        </>
-      }
+      hint="The prompts say what to aim for; the lengths are what a draft is checked against. Empty inherits the default."
       meta={files ? `${files.length} prompts` : undefined}
     >
       <div className="space-y-6">
@@ -1332,18 +1320,11 @@ function Prompts({
   const active = files?.find((file) => file.filename === open) ?? files?.[0];
 
   return (
-    <Block label="Prompts - what the writer is told">
+    <Block label="Prompts">
       {files === null ? (
         <Loading label="Loading prompts" className="h-64" />
       ) : (
         <div className="space-y-4">
-          <p className="max-w-prose text-[13px] text-muted-foreground">
-            Each Page writes under its own prompt. Where nothing has been
-            saved, the default in <code>api/prompts/</code> is used; saving
-            here makes it this Page&rsquo;s own. An <strong>empty overlay
-            prompt</strong> means the Page&rsquo;s images carry no text panel -
-            the picture and the logo only.
-          </p>
           {/* The shared pill shell (`ui/tabs.tsx`) rather than a second
               hand-rolled one: the three are alternatives, not a list, and
               which one you are editing has to stay visible while the textarea
@@ -1476,9 +1457,7 @@ function PromptEditor({ pageId, file }: { pageId: number; file: PromptFile }) {
           <pre className="max-h-96 overflow-auto rounded-2xl border bg-muted/40 p-3 font-mono text-[13px] whitespace-pre-wrap">
             {file.body}
           </pre>
-          <p className="text-[13px] text-muted-foreground">
-            No per-Page column behind this one, so it is a file only.
-          </p>
+          <p className="text-[13px] text-muted-foreground">File only, not editable here.</p>
         </>
       )}
     </div>
@@ -1526,17 +1505,11 @@ function PostStyles({
   }
 
   return (
-    <Block label="Post styles - an optional layer on any run">
+    <Block label="Post styles">
       {templates === null ? (
         <Loading label="Loading post styles" className="h-24" />
       ) : (
         <div className="space-y-4">
-          <p className="max-w-prose text-[13px] text-muted-foreground">
-            A style carries only what it changes: an empty box inherits this
-            Page&rsquo;s prompt. Pick one on the generate screen; &ldquo;Page
-            default&rdquo; writes as configured here.
-          </p>
-
           <ul className="space-y-1">
             {templates.map((template) => (
               <li
