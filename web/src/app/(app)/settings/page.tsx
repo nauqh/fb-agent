@@ -270,23 +270,14 @@ function Identity({ page }: { page: Page }) {
 
       <Block label="Watermark" className="min-w-0">
         {mark ? (
-          // `min-w-0` all the way down, or the filename refuses to truncate
-          // and scrolls the whole screen sideways on a phone.
-          <div className="flex min-w-0 items-center gap-3">
-            {/* On black, because that is the only background it is ever drawn
-                against and it is white ink. */}
-            <span className="rounded-md bg-black px-3 py-2">
-              {/* eslint-disable-next-line @next/next/no-img-element -- a
-                  committed asset at its natural ratio, not a content image. */}
-              <img
-                src={mark}
-                alt={`${page.name} watermark`}
-                className="h-10 w-auto"
-              />
-            </span>
-            <code className="min-w-0 truncate text-[13px] text-muted-foreground">
-              {page.watermark_upload_path ?? page.watermark_image_path}
-            </code>
+          <div className="flex size-16 items-center justify-center overflow-hidden rounded-full bg-transparent">
+            {/* eslint-disable-next-line @next/next/no-img-element -- a
+                committed asset at a fixed preview size, not a content image. */}
+            <img
+              src={mark}
+              alt={`${page.name} watermark`}
+              className="size-full rounded-full bg-transparent object-contain"
+            />
           </div>
         ) : page.watermark_enabled ? (
           <Gap title="No watermark.">Cards are stamped with the Page name as text.</Gap>

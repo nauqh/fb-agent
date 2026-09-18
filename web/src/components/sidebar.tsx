@@ -726,8 +726,8 @@ function Item({
         "relative flex shrink-0 items-center gap-2.5 rounded-[10px] px-3 py-2 text-sm whitespace-nowrap transition-colors",
         // Full-contrast whether active or not. Greying the inactive items made
         // the icons look soft and out of focus rather than merely secondary;
-        // the active one is already carried by its fill, its weight and the
-        // gold rail, so it does not need the others dimmed to stand out.
+        // the active one is already carried by its fill and weight, so it does
+        // not need the others dimmed to stand out.
         /**
          * Hover is half the active fill, not the same fill.
          *
@@ -742,32 +742,13 @@ function Item({
          * `--sidebar-foreground` (0.205 vs 0.145 in light), so the old hover
          * faded the label as the pointer arrived - backwards for a state whose
          * whole job is to say "this responds". The active row can afford it
-         * because `font-medium` and the gold rail carry it; a hover cannot.
+         * because `font-medium` carries it; a hover cannot.
          */
         active
           ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
           : "text-sidebar-foreground hover:bg-sidebar-accent/50",
       )}
     >
-      {/* The active marker is the brand gold rather than another grey: it is
-          the one accent the rest of the shell already uses, and it survives the
-          low contrast between `--sidebar` and `--sidebar-accent`. */}
-      {active ? (
-        /**
-         * `inset-y-2`, tuned to the row's radius. The rail is flush at
-         * `left-0`; the fill behind it is only flush in the middle, and curves
-         * away towards each corner. At 10px of radius the fill's left edge is
-         * 0.2px inside the box 8px down from the top, so a rail inset that far
-         * stays visually welded to it. (At the 16px radius this row briefly
-         * had, the same test gave 3.5px and the rail hung in the gap beside
-         * the corner, plainly detached.)
-         */
-        <span
-          className="absolute inset-y-2 left-0 w-0.5 rounded-full bg-gold"
-          aria-hidden
-        />
-      ) : null}
-
       <Icon className="size-4 shrink-0" />
       <span className="truncate">{label}</span>
 
