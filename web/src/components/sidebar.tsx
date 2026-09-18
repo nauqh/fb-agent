@@ -321,26 +321,17 @@ export function Sidebar({
     return () => window.removeEventListener("pointermove", onMove);
   }, [collapsed, peeking, menuOpen]);
 
-  // Drafts still needing a decision, and rows currently in flight - the two
-  // numbers that tell the operator there is work waiting without opening the
-  // screen.
-  // Scoped to the selected Page, like the queue itself. A badge reading 3 over
-  // a Review screen showing 0 is the kind of wrong that gets ignored rather
-  // than reported.
+  // Rows in flight, because that is the only count the operator can do anything
+  // about from the rail. The Review list itself reports what is waiting there;
+  // re-labelling that number here would say "3 generating" when they are not.
   const { pageId } = usePageScope();
-  const { data: queue } = useQuery(
-    async () => {
-      const [review, generating] = await Promise.all([
-        listDrafts({ status: "review", page_id: pageId! }),
-        listDrafts({ status: "generating", page_id: pageId! }),
-      ]);
-      return { review: review.length, generating: generating.length };
-    },
+  const { data: generating } = useQuery(
+    async () => (await listDrafts({ status: "generating", page_id: pageId! })).length,
     [pageId],
     {
       enabled: pageId !== null,
       intervalMs: 4_000,
-      pollWhile: (counts) => counts === null || counts.generating > 0,
+      pollWhile: (count) => count === null || count > 0,
     },
   );
 
@@ -353,7 +344,7 @@ export function Sidebar({
       ? {}
       : {
           "/sources": cart.count || null,
-          "/review": queue?.review || null,
+          "/review": generating || null,
         };
 
   const toggleLabel = collapsed ? "Expand sidebar" : "Collapse sidebar";
@@ -505,7 +496,7 @@ export function Sidebar({
           </Link>
 
           <div className="ml-auto lg:hidden">
-            <Generating count={queue?.generating} />
+            <Generating count={generating ?? undefined} />
           </div>
 
           {/* The panel's own copy of the toggle - the one you reach for while
@@ -633,9 +624,9 @@ export function Sidebar({
           <div className="lg:mt-auto lg:flex lg:flex-col lg:gap-0.5 lg:border-t lg:pt-2">
             {/* Only mounted when there is something in flight, so the footer
                 does not reserve an empty strip above Settings. */}
-            {queue?.generating ? (
+            {generating ? (
               <div className="hidden px-3 py-2 lg:block">
-                <Generating count={queue.generating} />
+                <Generating count={generating} />
               </div>
             ) : null}
             {config.map((link) => (
