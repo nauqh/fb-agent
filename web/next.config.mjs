@@ -1,5 +1,3 @@
-import { createMDX } from "fumadocs-mdx/next";
-
 /**
  * `/api/*` is proxied to FastAPI.
  *
@@ -25,4 +23,4 @@ const config = {
   },
 };
 
-export default createMDX()(config);
+export default config;

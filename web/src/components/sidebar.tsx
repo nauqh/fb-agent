@@ -5,7 +5,6 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   BarChart3,
-  BookOpen,
   CalendarDays,
   Check,
   ChevronDown,
@@ -93,8 +92,6 @@ const LINKS: { href: string; label: string; icon: LucideIcon }[] = [
 const CONFIG: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/settings", label: "Settings", icon: Settings2 },
   { href: "/global", label: "Global", icon: Globe },
-  // Outside this shell: `/docs` has its own layout and a link back here.
-  { href: "/docs", label: "Docs", icon: BookOpen },
 ];
 
 /**
