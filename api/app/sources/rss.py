@@ -287,9 +287,9 @@ class Probe:
 
     median_summary: int
     """Median length of the item text the RSS tab shows - title and summary
-    together, boilerplate already stripped, which is the thing being judged
-    rather than whatever the `<description>` element happens to hold. The writer
-    no longer reads it; it reads the article from the link."""
+    together, boilerplate already stripped. The writer reads the article URL
+    first, but this is the fallback when that site refuses the automated
+    reader."""
 
     newest_hours: float | None
     """Age of the newest item. `None` when no item carries a date.

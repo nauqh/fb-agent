@@ -294,7 +294,7 @@ def test_the_prompt_carries_the_source_text_and_its_instruction():
 
 
 def test_an_rss_prompt_is_the_link_not_the_feed_text():
-    """The model reads the article itself; the feed summary is not the source."""
+    """The model reads the article itself; the feed summary is only the fallback."""
     source = SourceItem(
         id=1,
         kind=SourceKind.RSS,
@@ -304,9 +304,57 @@ def test_an_rss_prompt_is_the_link_not_the_feed_text():
     )
 
     prompt = writer.user_prompt(source, None)
+    fallback = writer.user_prompt(source, None, summary=True)
 
     assert "https://example.com/x" in prompt
     assert "Marie Tharp" not in prompt
+    assert "Marie Tharp drew the ridge by hand." in fallback
+
+
+def test_a_blocked_rss_article_falls_back_to_the_feed_summary(page, monkeypatch):
+    """A refused URL fetch is retried once with the feed's own text."""
+    source = SourceItem(
+        id=1,
+        kind=SourceKind.RSS,
+        external_id="u",
+        text="Marie Tharp drew the ridge by hand.",
+        url="https://example.com/x",
+    )
+    asked: list[tuple[str, str | None]] = []
+
+    def fake_ask(
+        prompt,
+        _output_type,
+        _instructions,
+        model=None,
+        validator=None,
+        fetch_url=None,
+    ):
+        asked.append((prompt, fetch_url))
+        if fetch_url:
+            raise writer.SourceUnreadable("blocked")
+        return SimpleNamespace(output=writer.DraftContent(**GOOD))
+
+    monkeypatch.setattr(writer, "ask", fake_ask)
+
+    result = writer.write(page, source, model=object())
+
+    assert result.output.hook == GOOD["hook"]
+    assert [fetch_url for _, fetch_url in asked] == [source.url, None]
+    assert "Marie Tharp" not in asked[0][0]
+    assert "Marie Tharp drew the ridge by hand." in asked[1][0]
+
+
+def test_only_rss_sources_can_fall_back_from_a_blocked_url(page, monkeypatch):
+    source = SourceItem(kind=SourceKind.TWEET, external_id="u", text="A tweet")
+
+    def refuse(*_args, **_kwargs):
+        raise writer.SourceUnreadable("blocked")
+
+    monkeypatch.setattr(writer, "ask", refuse)
+
+    with pytest.raises(writer.SourceUnreadable):
+        writer.write(page, source, model=object())
 
 
 def test_a_fetch_counts_only_when_the_article_itself_was_retrieved():

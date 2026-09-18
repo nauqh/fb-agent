@@ -179,7 +179,7 @@ def _instructions(page: Page, layout: Layout, template=None) -> str:
     return "\n\n".join(parts)
 
 
-def source_instruction(kind: SourceKind) -> str:
+def source_instruction(kind: SourceKind, summary: bool = False) -> str:
     """How to read the Source Item. Derived from `kind`, never stored.
 
     **Every kind binds the subject.** A competitor post used to be the exception
@@ -235,10 +235,9 @@ def source_instruction(kind: SourceKind) -> str:
             "theme is the job; reusing the picture itself would be lifting what "
             "the rival shot."
         )
-    if kind is SourceKind.RSS:
-        # The feed's own text is not sent: a summary is a couple of hundred
-        # characters, and the article is the story. See `ask` for what happens
-        # when the page cannot be read.
+    if kind is SourceKind.RSS and not summary:
+        # The feed's own text is only the fallback for a page the reader cannot
+        # access; the article itself is the source.
         return (
             "The source is the news article at the URL below. Read that URL and "
             "write about this same story, the same people and the same events, "
@@ -317,19 +316,21 @@ def _model_settings(model_name: str) -> GoogleModelSettings | None:
     return GoogleModelSettings(google_thinking_config={"thinking_level": "MEDIUM"})
 
 
-def user_prompt(source: SourceItem | None, topic: str | None) -> str:
+def user_prompt(
+    source: SourceItem | None, topic: str | None, summary: bool = False
+) -> str:
     """The run's one variable input: a Source Item, or a bare topic."""
     if source is None:
         if not topic:
             raise ValueError("a run needs either a source item or a topic")
         return f"Write a post about: {topic}"
 
-    parts = [source_instruction(source.kind), ""]
+    parts = [source_instruction(source.kind, summary), ""]
     if source.author:
         parts.append(f"Author: {source.author}")
     if source.url:
         parts.append(f"URL: {source.url}")
-    if source.kind is not SourceKind.RSS:
+    if summary or source.kind is not SourceKind.RSS:
         parts += ["", source.text]
     return "\n".join(parts)
 
@@ -373,6 +374,7 @@ def write(
     return _run(
         page,
         user_contents(user_prompt(source, topic), image),
+        user_contents(user_prompt(source, topic, summary=True), image),
         _validator_for(validators.Limits.for_page(page)),
         model,
         template=template,
@@ -380,27 +382,48 @@ def write(
     )
 
 
-def _run(page: Page, prompt, validator, model=None, template=None, source=None):
+def _run(
+    page: Page,
+    prompt,
+    fallback_prompt,
+    validator,
+    model=None,
+    template=None,
+    source=None,
+):
     """Ask the model, stepping down the fallback chain while it is unavailable.
 
-    Extracted so `rewrite` cannot grow a second copy of the ladder - the two
-    differ only in what they ask for and which rules they hold the answer to.
-
-    An RSS source is read from its link on both, rewrite included: the prompt
-    carries no feed text, so a rewrite without the fetch would have only the
-    kept fields to go on.
+    An RSS page is read from its link first. If the fetcher is refused, the
+    fallback prompt carries the feed's title and summary rather than failing
+    the draft outright.
 
     A caller passing `model` gets exactly that model and no fallback: tests
     supply a fake, and silently swapping it for a real one would bill them.
     """
-    return ask(
-        prompt,
-        DraftContent,
-        _instructions(page, layout, template),
-        model,
-        validator,
-        fetch_url=source.url if source is not None and source.kind is SourceKind.RSS else None,
+    fetch_url = (
+        source.url
+        if source is not None and source.kind is SourceKind.RSS
+        else None
     )
+    try:
+        return ask(
+            prompt,
+            DraftContent,
+            _instructions(page, layout, template),
+            model,
+            validator,
+            fetch_url=fetch_url,
+        )
+    except SourceUnreadable:
+        if not fetch_url:
+            raise
+        return ask(
+            fallback_prompt,
+            DraftContent,
+            _instructions(page, layout, template),
+            model,
+            validator,
+        )
 
 
 FETCH_TIMEOUT = 90.0
@@ -586,6 +609,7 @@ def rewrite_prompt(
     field: str,
     keeping: dict[str, str],
     instruction: str | None = None,
+    summary: bool = False,
 ) -> str:
     """The original brief, plus what is being kept and what to replace.
 
@@ -603,7 +627,7 @@ def rewrite_prompt(
     every unargued retry was an equally valid short hook and the button could
     only re-roll, never steer.
     """
-    parts = [user_prompt(source, topic), ""]
+    parts = [user_prompt(source, topic, summary), ""]
     parts.append(
         "This post already exists. Keep the fields below EXACTLY as they are "
         "and return them unchanged."
@@ -680,6 +704,7 @@ def rewrite(
     return _run(
         page,
         rewrite_prompt(source, topic, field, keeping, instruction),
+        rewrite_prompt(source, topic, field, keeping, instruction, summary=True),
         _field_rules(field, validators.Limits.for_page(page)),
         model,
         template=template,
