@@ -1016,6 +1016,7 @@ function TimeSlots({
 }) {
   const [time, setTime] = useState("");
   const [saving, setSaving] = useState(false);
+  const [removing, setRemoving] = useState<number | null>(null);
 
   async function add(event: React.FormEvent) {
     event.preventDefault();
@@ -1038,12 +1039,15 @@ function TimeSlots({
 
   async function drop(id: number, label: string) {
     if (pageId === null) return;
+    setRemoving(id);
     try {
       await removeSlot(pageId, id);
       toast.success(`${label} removed`);
       await refresh();
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : "Could not remove");
+    } finally {
+      setRemoving(null);
     }
   }
 
@@ -1057,23 +1061,34 @@ function TimeSlots({
             The same times every day, GMT+7. “Schedule next available” walks
             them in order.
           </p>
-          <form onSubmit={add} className="flex items-center gap-2">
-            <Clock className="size-3.5 shrink-0 text-muted-foreground" />
-            <Input
-              type="time"
-              value={time}
-              onChange={(event) => setTime(event.target.value)}
-              aria-label="Publishing time"
-              className="h-8 w-32 text-[13px]"
-            />
+          <form
+            onSubmit={add}
+            className="flex flex-wrap items-end gap-3 rounded-2xl border bg-muted/20 p-3"
+          >
+            <div className="min-w-36 space-y-1.5">
+              <Label htmlFor="publishing-time" className="text-[12px] text-muted-foreground">
+                Add a daily time
+              </Label>
+              <div className="relative">
+                <Clock className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id="publishing-time"
+                  type="time"
+                  value={time}
+                  onChange={(event) => setTime(event.target.value)}
+                  aria-label="Publishing time"
+                  className="h-9 w-36 pl-8 text-[13px] tabular-nums"
+                />
+              </div>
+            </div>
             <Button
               type="submit"
               size="sm"
-              variant="outline"
-              className="h-8"
+              className="h-9"
               disabled={saving || !time || pageId === null}
             >
-              {saving ? <Loader2 className="size-3 animate-spin" /> : "Add time"}
+              {saving ? <Loader2 className="size-3 animate-spin" /> : <Plus className="size-3.5" />}
+              Add time
             </Button>
           </form>
 
@@ -1084,22 +1099,31 @@ function TimeSlots({
               Publish now and Publish at a time both still work.
             </Gap>
           ) : (
-            <div className="flex flex-wrap gap-1.5">
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {slots.map((slot) => (
-                <span
+                <div
                   key={slot.id}
-                  className="group flex items-center gap-1 rounded-full border py-1 pr-1 pl-2.5 text-[13px] tabular-nums"
+                  className="group flex items-center justify-between gap-3 rounded-xl border bg-background px-3 py-2.5 transition-colors hover:bg-muted/30"
                 >
-                  {slot.label}
+                  <div className="min-w-0">
+                    <p className="font-mono text-sm font-medium tabular-nums">{slot.label}</p>
+                    <p className="text-[11px] text-muted-foreground">Every day</p>
+                  </div>
                   <button
                     type="button"
                     onClick={() => void drop(slot.id, slot.label)}
+                    disabled={removing !== null}
                     aria-label={`Remove ${slot.label}`}
-                    className="rounded-full p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                    title={`Remove ${slot.label}`}
+                    className="shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
                   >
-                    <Trash2 className="size-3" />
+                    {removing === slot.id ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : (
+                      <Trash2 className="size-3.5" />
+                    )}
                   </button>
-                </span>
+                </div>
               ))}
             </div>
           )}
@@ -1286,9 +1310,9 @@ function WritingLimits({ page }: { page: Page }) {
 
 /** Where a prompt's text came from, in the words the operator needs. */
 const SOURCE_LABEL: Record<PromptFile["source"], string> = {
-  page: "this Page's own",
-  "file-override": "file, api/prompts/pages/",
-  global: "default, api/prompts/",
+  page: "This Page",
+  "file-override": "File override",
+  global: "Default",
 };
 
 /**
@@ -1330,12 +1354,12 @@ function Prompts({
               which one you are editing has to stay visible while the textarea
               is 400px tall. */}
           <Tabs value={active?.filename ?? ""} onValueChange={setOpen}>
-            <TabsList className="w-fit">
+            <TabsList className="grid w-full max-w-xl grid-cols-3">
               {files.map((file) => (
                 <TabsTrigger
                   key={file.filename}
                   value={file.filename}
-                  className="font-mono"
+                  className="font-mono text-[11px]"
                 >
                   {file.filename}
                 </TabsTrigger>
@@ -1383,83 +1407,95 @@ function PromptEditor({ pageId, file }: { pageId: number; file: PromptFile }) {
     }
   }
 
+  const sourceDescription =
+    file.source === "page"
+      ? "Saved for this Page"
+      : file.source === "global"
+        ? "Inherited from the default"
+        : "Managed in api/prompts/pages/";
+  const noOverlay = file.filename === "overlay.txt" && file.source === "page" && file.body.trim() === "";
+
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px]">
-        <span
-          className={cn(
+    <div className="overflow-hidden rounded-2xl border bg-muted/[0.16]">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
+        <div className="min-w-0">
+          <p className="font-mono text-[12px] font-medium tracking-[0.08em] text-foreground uppercase">
+            {file.filename}
+          </p>
+          <p className="pt-1 text-[12px] text-muted-foreground">{sourceDescription}</p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2 text-[11px] text-muted-foreground">
+          <span className={cn(
+            "rounded-full border px-2 py-1 font-medium",
             file.source === "page"
-              ? "font-medium text-foreground"
-              : "text-muted-foreground",
-          )}
-        >
-          {SOURCE_LABEL[file.source]}
-        </span>
-        <span className="text-muted-foreground">
-          {file.chars.toLocaleString()} chars
-        </span>
-        {/* The no-overlay opt-out, stated where the empty box is (client,
-            2026-09-11): an emptied overlay prompt is a decision, not a
-            blank, and it is the one prompt where empty changes the picture
-            rather than falling back to the default. */}
-        {file.filename === "overlay.txt" && file.source === "page" && file.body.trim() === "" ? (
-          <span className="rounded-full border bg-muted/40 px-2 py-0.5 text-[11px] text-muted-foreground">
-            No overlay text - drafts on this Page get the image and logo only
+              ? "border-gold/40 bg-gold/10 text-foreground"
+              : "bg-background",
+          )}>
+            {SOURCE_LABEL[file.source]}
           </span>
-        ) : null}
+          <span className="tabular-nums">{file.chars.toLocaleString()} chars</span>
+        </div>
       </div>
 
-      {file.editable ? (
-        <>
-          <Textarea
-            rows={18}
-            className="font-mono text-[13px]"
-            value={text}
-            onChange={(event) => setText(event.target.value)}
-          />
-          <div className="flex items-center gap-3">
-            <Button
-              size="sm"
-              disabled={!dirty || busy}
-              onClick={() => void save(text)}
-            >
-              {busy ? <Loader2 className="size-4 animate-spin" /> : null}
-              Save for this Page
-            </Button>
-            {dirty ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={busy}
-                onClick={() => setText(file.body)}
-              >
-                Revert
-              </Button>
-            ) : null}
-            {/* Only when there is an override to clear. On a default prompt
-                this button would claim to undo something that is not there.
-                Sends null, never "" - on overlay.txt an empty string is the
-                no-overlay opt-out, and the button's job is the opposite. */}
-            {file.source === "page" ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={busy}
-                onClick={() => void save(null)}
-              >
-                Use the default
-              </Button>
-            ) : null}
+      <div className="space-y-3 p-3">
+        {/* The no-overlay opt-out stays next to the editor: it is a deliberate
+            state, not a blank value, and it changes how the image is composed. */}
+        {noOverlay ? (
+          <div className="rounded-xl border border-gold/40 bg-gold/10 px-3 py-2 text-[12px] text-foreground">
+            No overlay text. Drafts on this Page get the image and logo only.
           </div>
-        </>
-      ) : (
-        <>
-          <pre className="max-h-96 overflow-auto rounded-2xl border bg-muted/40 p-3 font-mono text-[13px] whitespace-pre-wrap">
-            {file.body}
-          </pre>
-          <p className="text-[13px] text-muted-foreground">File only, not editable here.</p>
-        </>
-      )}
+        ) : null}
+
+        {file.editable ? (
+          <>
+            <Textarea
+              rows={18}
+              aria-label={`${file.filename} prompt`}
+              className="min-h-80 resize-y rounded-xl border bg-background p-4 font-mono text-[13px] leading-6 shadow-none focus-visible:ring-2"
+              value={text}
+              onChange={(event) => setText(event.target.value)}
+            />
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                size="sm"
+                disabled={!dirty || busy}
+                onClick={() => void save(text)}
+              >
+                {busy ? <Loader2 className="size-4 animate-spin" /> : null}
+                Save for this Page
+              </Button>
+              {dirty ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => setText(file.body)}
+                >
+                  Revert changes
+                </Button>
+              ) : null}
+              {/* Only when there is an override to clear. */}
+              {file.source === "page" ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => void save(null)}
+                >
+                  Use the default
+                </Button>
+              ) : null}
+            </div>
+          </>
+        ) : (
+          <>
+            <pre className="max-h-96 overflow-auto rounded-xl border bg-background p-4 font-mono text-[13px] leading-6 whitespace-pre-wrap">
+              {file.body}
+            </pre>
+            <p className="px-1 text-[12px] text-muted-foreground">File only, not editable here.</p>
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -1510,11 +1546,11 @@ function PostStyles({
         <Loading label="Loading post styles" className="h-24" />
       ) : (
         <div className="space-y-4">
-          <ul className="space-y-1">
+          <ul className="space-y-2">
             {templates.map((template) => (
               <li
                 key={template.id}
-                className="group flex items-center gap-2 rounded-xl px-2 py-1.5 text-[13px] hover:bg-muted/40"
+                className="group flex flex-wrap items-center gap-2 rounded-xl border bg-background px-3 py-2.5 text-[13px] transition-colors hover:bg-muted/30"
               >
                 <span className="min-w-0 flex-1 truncate font-medium">
                   {template.name}
@@ -1541,7 +1577,7 @@ function PostStyles({
                 <button
                   type="button"
                   onClick={() => setOpen(open === template.id ? null : template.id)}
-                  className="shrink-0 rounded px-1.5 py-0.5 text-[12px] text-muted-foreground hover:text-foreground"
+                  className="shrink-0 rounded-md border px-2 py-1 text-[12px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   {open === template.id ? "Close" : "Edit"}
                 </button>
@@ -1701,21 +1737,28 @@ function TemplateForm({
   }
 
   return (
-    <div className="space-y-3 rounded-2xl border bg-muted/20 p-3">
-      <div className="space-y-1">
-        <Label htmlFor="template-name">Name</Label>
+    <div className="space-y-3 rounded-2xl border bg-muted/[0.16] p-4">
+      <div className="rounded-xl border bg-background p-3">
+        <Label htmlFor="template-name" className="text-[12px] text-muted-foreground">
+          Style name
+        </Label>
         <Input
           id="template-name"
           value={form.name}
           onChange={(event) => setForm({ ...form, name: event.target.value })}
           placeholder="Meme, Recipe card, Motivational..."
-          className="max-w-72"
+          className="mt-2 max-w-72 bg-background"
         />
       </div>
 
       {TEMPLATE_FIELDS.map(({ field, label, hint }) => (
-        <div key={field} className="space-y-1">
-          <Label htmlFor={`template-${field}`}>{label}</Label>
+        <div key={field} className="rounded-xl border bg-background p-3">
+          <div className="flex items-baseline justify-between gap-3">
+            <Label htmlFor={`template-${field}`} className="text-[13px] font-medium">
+              {label}
+            </Label>
+            <span className="text-[11px] text-muted-foreground">{hint}</span>
+          </div>
           {field === "overlay_prompt" ? (
             <NativeSelect
               id="template-overlay-mode"
@@ -1733,7 +1776,7 @@ function TemplateForm({
             <Textarea
               id={`template-${field}`}
               rows={4}
-              className="font-mono text-[13px]"
+              className="mt-2 min-h-24 resize-y rounded-lg bg-background font-mono text-[13px] leading-6"
               value={form[field]}
               onChange={(event) => setForm({ ...form, [field]: event.target.value })}
               placeholder={
@@ -1743,10 +1786,14 @@ function TemplateForm({
               }
             />
           ) : null}
-          <p className="text-[12px] text-muted-foreground">
+          <p className="pt-1 text-[12px] text-muted-foreground">
             {field === "overlay_prompt" && overlayMode === "none"
               ? "Drafts in this style get the image and logo only."
-              : hint}
+              : field === "overlay_prompt" && overlayMode === "page"
+                ? "This style follows the Page's overlay prompt."
+                : field === "overlay_prompt"
+                  ? "These rules replace the Page's overlay prompt for this style."
+                  : "Empty inherits this Page's prompt."}
           </p>
         </div>
       ))}
