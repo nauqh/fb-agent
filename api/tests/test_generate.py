@@ -200,7 +200,6 @@ def test_a_writer_failure_lands_on_the_row_not_in_a_log(client, monkeypatch):
     # Not `review`, which is what it used to be: an empty row in the review
     # queue reads as a draft awaiting a decision, and the only sign otherwise
     # was an `error` column nothing rendered.
-    assert client.post(f"/drafts/{draft_id}/approve").status_code == 409
     assert client.post(f"/drafts/{draft_id}/reject").status_code == 200
 
 
@@ -220,10 +219,12 @@ def test_a_restart_sweeps_rows_left_generating(session, engine, page):
 # --- review actions ----------------------------------------------------------
 
 
-def test_approve_is_reversible(client, written):
+def test_a_rejected_draft_comes_back(client, written):
+    """`unapprove` is the undo behind the Rejected toast - the one caller left
+    now that Approve is gone."""
     [draft_id] = client.post("/generate", json={"page_ids": [1], "topic": "x"}).json()
 
-    assert client.post(f"/drafts/{draft_id}/approve").json()["status"] == "approved"
+    assert client.post(f"/drafts/{draft_id}/reject").json()["status"] == "rejected"
     assert client.post(f"/drafts/{draft_id}/unapprove").json()["status"] == "review"
 
 

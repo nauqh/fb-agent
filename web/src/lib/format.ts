@@ -145,20 +145,6 @@ export function headline(value: string | null | undefined): string {
   return (sentence ?? source).trim();
 }
 
-/**
- * Everything after the headline, as one paragraph.
- *
- * The other half of `headline`, for a row that shows both. Line breaks are
- * collapsed to single spaces deliberately: a caption is written for Facebook's
- * feed and carries blank lines between its points, which inside a two-line
- * clamp would spend one of those lines on nothing.
- */
-export function body(value: string | null | undefined): string {
-  const source = value?.trim() ?? "";
-  const rest = source.slice(headline(source).length);
-  return rest.replace(/\s+/g, " ").trim();
-}
-
 const dayKeyStamp = new Intl.DateTimeFormat("en-CA", {
   timeZone: PAGE_TIMEZONE,
   year: "numeric",

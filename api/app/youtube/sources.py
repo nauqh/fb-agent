@@ -121,16 +121,6 @@ def _is_single_video_url(url: str) -> bool:
     )
 
 
-def is_short_url(url: str) -> bool:
-    """Is this a Short-shaped URL, for scheduling defaults? The old tool kept
-    the same helper (`youtubeShortsMetadata.ts`) beside the parser so a Short
-    defaulted to `#Shorts` in the description."""
-    trimmed = url.strip()
-    return "/shorts/" in trimmed or bool(
-        re.search(r"youtube\.com/@[^/?#]+(?:/shorts)?(?:\?|$)", trimmed, re.I)
-    )
-
-
 def clamp_trim_duration(value: object) -> int:
     parsed = _as_int(value)
     if parsed is None or parsed < 1:

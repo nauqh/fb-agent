@@ -1,4 +1,4 @@
-import { del, get, post } from "./client";
+import { del, post } from "./client";
 
 /**
  * A Page's RSS feeds. Rows, not configuration.
@@ -24,10 +24,6 @@ export interface FeedProbe {
   median_summary: number;
   /** Age of the newest item. Null when no item carries a date. */
   newest_hours: number | null;
-}
-
-export async function getFeeds(pageId: number): Promise<Feed[]> {
-  return get<Feed[]>("/feeds", { page_id: pageId });
 }
 
 /**

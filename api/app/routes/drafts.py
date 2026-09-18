@@ -1123,25 +1123,14 @@ def _post_text(draft: Draft) -> str:
     return (draft.caption or "").strip()
 
 
-@router.post("/drafts/{draft_id}/approve")
-def approve_draft(draft_id: int, session: Session = Depends(get_session)) -> Draft:
-    """A failed run cannot be approved - there is nothing in it to approve.
-
-    Rejecting one is still allowed: that is how it leaves the queue.
-    """
-    if _require(session, draft_id).status == DraftStatus.FAILED:
-        raise HTTPException(
-            status_code=409, detail="That draft failed and has nothing to approve."
-        )
-    return _set_status(session, draft_id, DraftStatus.APPROVED)
-
-
 @router.post("/drafts/{draft_id}/unapprove")
 def unapprove_draft(draft_id: int, session: Session = Depends(get_session)) -> Draft:
-    """Nothing publishes in v1, so Approve is a queue movement, not a commitment.
+    """Back to the queue. The undo behind the Rejected toast.
 
-    An approved Draft can come back, which is why nothing downstream may treat
-    Approve as final.
+    Named for the Approve it used to reverse. That route is gone: setting
+    `status = approved` was a queue movement with no consequence, sitting in
+    front of a publish that never required it. `DraftStatus.APPROVED` stays for
+    the rows that already carry it, and this is still how one comes back.
     """
     return _set_status(session, draft_id, DraftStatus.REVIEW)
 

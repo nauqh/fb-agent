@@ -4,7 +4,7 @@ import { del, delJson, get, patch, post, postForm, upload } from "@/lib/api/clie
 
 /**
  * `POST /generate`, `GET /drafts`, `GET /drafts/{id}`, `PATCH /drafts/{id}`,
- * approve · unapprove · reject.
+ * unapprove · reject.
  *
  * The two image routes are declared at the bottom but not yet served.
  */
@@ -54,10 +54,6 @@ export async function updateDraft(id: number, edit: DraftEdit): Promise<Draft> {
   return patch<Draft>(`/drafts/${id}`, edit);
 }
 
-export async function approveDraft(id: number): Promise<Draft> {
-  return post<Draft>(`/drafts/${id}/approve`, {});
-}
-
 export async function rejectDraft(id: number): Promise<Draft> {
   return post<Draft>(`/drafts/${id}/reject`, {});
 }
@@ -65,9 +61,9 @@ export async function rejectDraft(id: number): Promise<Draft> {
 /**
  * `POST /drafts/{id}/unapprove` - undo, for the toast.
  *
- * Approve is reversible right up until the v2 Metricool push, which is exactly
- * why nothing downstream may treat Approve as final: an approved Draft can come
- * back.
+ * Named for the Approve it used to reverse; that route is gone, because
+ * approving was a queue movement publish never required. A rejected Draft can
+ * still come back, which is what this is now for.
  */
 export async function returnToReview(id: number): Promise<Draft> {
   return post<Draft>(`/drafts/${id}/unapprove`, {});

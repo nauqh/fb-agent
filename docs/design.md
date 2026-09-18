@@ -431,7 +431,7 @@ POST   /drafts/{id}/regenerate      one field, by the model
 POST   /drafts/{id}/image           redraw; ?new_hero=true buys a new picture
 POST   /drafts/{id}/hero            upload a hero instead of paying for one
 POST   /drafts/{id}/inset           upload the disc;  DELETE removes it
-POST   /drafts/{id}/approve         /unapprove  /reject
+POST   /drafts/{id}/reject          /unapprove puts it back in the queue
 DELETE /drafts/{id}
 
 GET    /publish/mode                rehearsal or live - the flag the screens cannot see
@@ -478,8 +478,10 @@ that leaves a Draft complete except for its image, and the prompt it was refused
 for is `image_prompt` - an operator-editable field on `PATCH`, or the row is a
 dead end.
 
-`unapprove` survives for rows that already carry `APPROVED`; **nothing writes it
-any more** and Approve is gone from the UI. Publishing never required it. That is
+`POST /drafts/{id}/approve` is gone, and so is Approve in the UI: publishing
+never required it, so it was a queue movement with no consequence. `unapprove`
+survives as the undo behind the Rejected toast, and still puts back a row that
+already carries `APPROVED`; **nothing writes that status any more.** That is
 also why the Quota was cut - it capped a number Approve could raise and
 `unapprove` could lower, so it never bound anything.
 
