@@ -7,7 +7,7 @@ decisions: what gets saved, which slot a repost takes, and that nothing is done
 twice.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import pytest

@@ -53,6 +53,21 @@ def auto_repost_memo_cleared():
 
 
 @pytest.fixture(autouse=True)
+def no_migrations_at_startup(monkeypatch):
+    """`init_db` is `alembic upgrade head` against the real DATABASE_URL.
+
+    Nothing else in the lifespan leaves the test database - the engine below is
+    assigned onto `db_module`, and the worker is off - but alembic builds its
+    own engine from the URL and reaches Supabase. Six tests in `test_auth.py`
+    open the app as a context manager, which is what runs the lifespan, and each
+    one sat out psycopg's 130s connection timeout and then failed: 781s of a
+    956s suite. The schema the suite runs on is `create_all` in `engine` below.
+    """
+    # `app.main` imported the name, so patching `app.db.init_db` misses it.
+    monkeypatch.setattr("app.main.init_db", lambda: None)
+
+
+@pytest.fixture(autouse=True)
 def youtube_worker_off(monkeypatch):
     """The in-process youtube worker must not run against the test database.
 
@@ -185,7 +200,7 @@ def media_root(tmp_path, monkeypatch):
 
 
 def _configure_sqlite(dbapi_connection, _record) -> None:
-    """Applied to every connection, not just the first. Neither is a perf knob.
+    """Applied to every connection, not just the first: all four are per-connection.
 
     `foreign_keys` is off by default in SQLite and is per-connection. Without
     it, every foreign key declared in models.py is decorative - a draft can
@@ -194,10 +209,19 @@ def _configure_sqlite(dbapi_connection, _record) -> None:
 
     `busy_timeout` defaults to 0, meaning a locked database fails instantly
     rather than waiting; a generate run commits from a background thread.
+
+    `synchronous` and `journal_mode` *are* perf knobs, and they are free here:
+    the file is thrown away at the end of the test, so there is nothing for a
+    durable commit to protect. `create_all` fsyncs once per DDL statement, which
+    measured 0.32s per test against 0.09s with these two set - ~300 tests take a
+    database, so it is ~70s of the suite spent flushing a file to disk nobody
+    reads back.
     """
     cursor = dbapi_connection.cursor()
     cursor.execute("PRAGMA foreign_keys=ON")
     cursor.execute("PRAGMA busy_timeout=5000")
+    cursor.execute("PRAGMA synchronous=OFF")
+    cursor.execute("PRAGMA journal_mode=MEMORY")
     cursor.close()
 
 

@@ -34,23 +34,23 @@ def configured(monkeypatch):
     monkeypatch.setattr(settings, "metricool_publish_as_draft", True)
 
 
-def _png(size=(896, 1120)) -> bytes:
+SIZE = (896, 1120)
+
+
+def _png() -> bytes:
     """Noise, not a flat fill.
 
     A single-colour PNG compresses to a few KB and JPEG cannot beat it, so a
     flat image makes the "JPEG is smaller" assertion fail on a picture that is
     nothing like a photograph. Noise is closer to a hero.
+
+    `randbytes` + `frombytes` rather than a list of a million tuples through
+    `putdata`: same picture, 1.33s against 0.14s, and `ready` below builds one
+    per test - 27 of them.
     """
     from random import Random
 
-    noise = Random(7)
-    image = Image.new("RGB", size)
-    image.putdata(
-        [
-            (noise.randrange(256), noise.randrange(256), noise.randrange(256))
-            for _ in range(size[0] * size[1])
-        ]
-    )
+    image = Image.frombytes("RGB", SIZE, Random(7).randbytes(SIZE[0] * SIZE[1] * 3))
     buffer = io.BytesIO()
     image.save(buffer, format="PNG")
     return buffer.getvalue()
