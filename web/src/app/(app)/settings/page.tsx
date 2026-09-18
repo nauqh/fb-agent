@@ -270,13 +270,15 @@ function Identity({ page }: { page: Page }) {
 
       <Block label="Watermark" className="min-w-0">
         {mark ? (
-          <div className="flex size-16 items-center justify-center overflow-hidden rounded-full bg-transparent">
+          <div className="flex min-h-28 w-full items-center justify-center rounded-xl bg-black px-4 py-3">
+            {/* The source files are transparent white marks. A dark preview
+                surface keeps them visible without changing the asset itself. */}
             {/* eslint-disable-next-line @next/next/no-img-element -- a
-                committed asset at a fixed preview size, not a content image. */}
+                committed asset at a preview size, not a content image. */}
             <img
               src={mark}
               alt={`${page.name} watermark`}
-              className="size-full rounded-full bg-transparent object-contain"
+              className="max-h-28 max-w-full object-contain"
             />
           </div>
         ) : page.watermark_enabled ? (
