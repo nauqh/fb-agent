@@ -169,6 +169,16 @@ def test_only_curated_hosts_pass_the_guard(session, page):
     assert not rss.is_curated_url(None, hosts)
 
 
+def test_bbc_feed_and_article_hosts_are_treated_as_one_publisher():
+    hosts = {"feeds.bbci.co.uk"}
+
+    assert rss.is_curated_url(
+        "https://www.bbc.co.uk/news/articles/c9qrn3y72dxo?at_medium=RSS", hosts
+    )
+    assert rss.is_curated_url("https://bbc.co.uk/news/article", hosts)
+    assert not rss.is_curated_url("https://evil.co.uk/news/article", hosts)
+
+
 def test_every_curated_feed_host_is_one_an_item_can_come_from(session, page):
     """The guard compares an *item* URL against *feed* hosts.
 

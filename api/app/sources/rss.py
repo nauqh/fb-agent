@@ -33,6 +33,13 @@ USER_AGENT = "Mozilla/5.0 (compatible; fb-agent/1.0)"
 """Several publisher feeds 403 a request that sends none. Not configurable: it
 is part of how the fetch works, not a thing an operator would tune."""
 
+# BBC serves its feed from bbci.co.uk but links to stories on bbc.co.uk. The
+# host check remains closed to arbitrary domains; this is the one known
+# publisher whose feed and article hosts are deliberately different.
+_CURATED_HOST_ALIASES = (
+    frozenset({"feeds.bbci.co.uk", "bbc.co.uk", "www.bbc.co.uk"}),
+)
+
 
 @dataclass
 class FeedFailure:
@@ -250,9 +257,18 @@ def is_curated_url(url: str | None, hosts: set[str]) -> bool:
 
     `hosts` is passed in rather than read here so that the query behind it
     happens once. It also makes the guard a pure function of what was
-    configured, which is what the test asserts against.
+    configured, which is what the test asserts against. A small alias list is
+    used for publishers whose feed and article hosts differ.
     """
-    return bool(url) and urlsplit(url).hostname in hosts
+    host = urlsplit(url).hostname if url else None
+    if not host:
+        return False
+    if host in hosts:
+        return True
+    return any(
+        host in aliases and aliases.intersection(hosts)
+        for aliases in _CURATED_HOST_ALIASES
+    )
 
 
 @dataclass

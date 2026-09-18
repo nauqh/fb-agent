@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Loader2, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
 
@@ -43,7 +42,6 @@ import { Button } from "@/components/ui/button";
  */
 export function CartPanel() {
   const cart = useCart();
-  const router = useRouter();
   const [running, setRunning] = useState(false);
 
   // How many chips the floating dock shows before folding the rest into a
@@ -136,12 +134,8 @@ export function CartPanel() {
       setInsetSource(null);
       setStyleId("");
       toast.success(`${ids.length} draft${ids.length === 1 ? "" : "s"} generating.`, {
-        description: "Progress is on the Review screen.",
+        description: "The sidebar tracks progress; finished drafts land in Review.",
       });
-      // The queue, not the first draft. A run can produce several, and the one
-      // that happened to be first is not more interesting than the rest - the
-      // list shows all of them filling in, and the drawer would cover it.
-      router.push("/review");
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : "Generate failed");
     } finally {
