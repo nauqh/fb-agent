@@ -17,7 +17,7 @@ from enum import StrEnum
 
 from pydantic import computed_field
 from sqlalchemy import Enum as SAEnum
-from sqlalchemy import Text
+from sqlalchemy import Float, Text
 from sqlmodel import JSON, Column, Field, SQLModel, UniqueConstraint
 
 from app import media
@@ -877,6 +877,26 @@ class Draft(SQLModel, table=True):
     """
 
     hero_image_path: str | None = None
+    """The source hero. The compositor fits it into the card on every redraw."""
+
+    hero_x_ratio: float = Field(
+        default=0.5,
+        sa_column=Column(Float, nullable=False, server_default="0.5"),
+    )
+    """Horizontal crop anchor for the hero: 0 is left, 1 is right."""
+
+    hero_y_ratio: float = Field(
+        default=0.5,
+        sa_column=Column(Float, nullable=False, server_default="0.5"),
+    )
+    """Vertical crop anchor for the hero: 0 is top, 1 is bottom."""
+
+    hero_zoom: float = Field(
+        default=1.0,
+        sa_column=Column(Float, nullable=False, server_default="1.0"),
+    )
+    """Extra crop zoom. 1 is the normal cover crop; larger values crop closer."""
+
     composed_image_path: str | None = None
     """Kept apart so re-compositing an edit does not re-pay for image generation."""
 

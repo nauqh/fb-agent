@@ -1671,6 +1671,38 @@ def test_removing_the_circle_forgets_its_ring_too(
     assert fresh["inset_border_color"] is None
 
 
+def test_moving_the_hero_crop_redraws_the_card(client, written, illustrated):
+    _generate(client)
+    before = client.get("/drafts/1").json()
+
+    after = client.patch(
+        "/drafts/1",
+        json={"hero_x_ratio": 0.2, "hero_y_ratio": 0.8, "hero_zoom": 2.0},
+    ).json()
+
+    assert (after["hero_x_ratio"], after["hero_y_ratio"], after["hero_zoom"]) == (
+        0.2,
+        0.8,
+        2.0,
+    )
+    assert after["composed_image_path"] != before["composed_image_path"]
+
+
+def test_hero_crop_controls_are_clamped(client, written, illustrated):
+    _generate(client)
+
+    out = client.patch(
+        "/drafts/1",
+        json={"hero_x_ratio": 4.0, "hero_y_ratio": -2.0, "hero_zoom": 99.0},
+    ).json()
+
+    assert (out["hero_x_ratio"], out["hero_y_ratio"], out["hero_zoom"]) == (
+        1.0,
+        0.0,
+        3.0,
+    )
+
+
 def test_moving_the_circle_redraws_the_card(client, written, illustrated, a_photograph):
     _generate(client)
     before = _upload(client, a_photograph).json()

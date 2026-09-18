@@ -279,6 +279,9 @@ class DraftEdit(BaseModel):
     first_comment: str | None = None
     highlight_phrases: list[str] | None = None
     image_prompt: str | None = None
+    hero_x_ratio: float | None = None
+    hero_y_ratio: float | None = None
+    hero_zoom: float | None = None
     inset_size_px: int | None = None
     inset_x_ratio: float | None = None
     inset_y_ratio: float | None = None
@@ -290,6 +293,9 @@ class DraftEdit(BaseModel):
 DRAWN_FIELDS = (
     "hook",
     "highlight_phrases",
+    "hero_x_ratio",
+    "hero_y_ratio",
+    "hero_zoom",
     "inset_size_px",
     "inset_x_ratio",
     "inset_y_ratio",
@@ -355,6 +361,13 @@ def update_draft(
             status_code=422,
             detail=f"Unknown template {changes['template']!r}. One of: {', '.join(TEMPLATES)}.",
         )
+    for axis in ("hero_x_ratio", "hero_y_ratio"):
+        if axis in changes:
+            value = changes[axis]
+            changes[axis] = min(1.0, max(0.0, 0.5 if value is None else value))
+    if "hero_zoom" in changes:
+        value = changes["hero_zoom"]
+        changes["hero_zoom"] = min(3.0, max(1.0, 1.0 if value is None else value))
     if changes.get("inset_size_px") is not None:
         changes["inset_size_px"] = layout.portrait.clamp(
             changes["inset_size_px"], layout.image.width

@@ -121,19 +121,30 @@ def render_panel(plan: OverlayPlan, phrases: list[str], layout: Layout) -> Image
     return Image.open(io.BytesIO(png)).convert("RGBA")
 
 
-def _cover(image: Image.Image, width: int, height: int) -> Image.Image:
-    """Fill the box, crop the overflow, centred - sharp's `fit: cover`.
+def _cover(
+    image: Image.Image,
+    width: int,
+    height: int,
+    x_ratio: float = 0.5,
+    y_ratio: float = 0.5,
+    zoom: float = 1.0,
+) -> Image.Image:
+    """Fill the box, cropping around a chosen point - the browser's `cover`.
 
     Needed because the hero cannot be ordered at an exact size: Gemini takes an
-    aspect ratio, not dimensions, and returns its own resolution near it.
+    aspect ratio, not dimensions, and returns its own resolution near it. The
+    ratios and zoom are saved with the draft so an operator can keep a face or
+    other important content in frame instead of accepting a centred crop.
     """
-    scale = max(width / image.width, height / image.height)
+    scale = max(width / image.width, height / image.height) * min(max(zoom, 1.0), 3.0)
     resized = image.resize(
         (max(width, round(image.width * scale)), max(height, round(image.height * scale))),
         Image.LANCZOS,
     )
-    left = (resized.width - width) // 2
-    top = (resized.height - height) // 2
+    x = min(max(x_ratio, 0.0), 1.0)
+    y = min(max(y_ratio, 0.0), 1.0)
+    left = round((resized.width - width) * x)
+    top = round((resized.height - height) * y)
     return resized.crop((left, top, left + width, top + height))
 
 
@@ -372,6 +383,9 @@ def compose(
     layout: Layout | None = None,
     fallback_text: str | None = None,
     badge_text: str | None = None,
+    hero_x_ratio: float = 0.5,
+    hero_y_ratio: float = 0.5,
+    hero_zoom: float = 1.0,
 ) -> bytes:
     """The finished JPEG. Everything variable was decided before this call.
 
@@ -411,7 +425,17 @@ def compose(
         if full_overlay or plan is None
         else plan.hero_height_px
     )
-    canvas.paste(_cover(source, width, hero_height), (0, 0))
+    canvas.paste(
+        _cover(
+            source,
+            width,
+            hero_height,
+            hero_x_ratio,
+            hero_y_ratio,
+            hero_zoom,
+        ),
+        (0, 0),
+    )
 
     # `alpha_composite`, not `paste`: a panel below full opacity has to blend
     # with what is under it, and `paste` would replace those pixels with a

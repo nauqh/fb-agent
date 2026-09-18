@@ -590,6 +590,9 @@ def build_image(session: Session, draft: Draft, page: Page) -> list[str]:
             # Drawn only on a `full_overlay` card, and only if the Page has a
             # word for it. The compositor decides which of those applies.
             badge_text=page.badge_text,
+            hero_x_ratio=draft.hero_x_ratio,
+            hero_y_ratio=draft.hero_y_ratio,
+            hero_zoom=draft.hero_zoom,
         )
         superseded = draft.composed_image_path
         draft.composed_image_path = media.store.save(

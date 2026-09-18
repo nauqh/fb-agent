@@ -52,6 +52,9 @@ export function ComposedImage({
   overlayText,
   highlightPhrases,
   heroSrc,
+  heroXRatio = 0.5,
+  heroYRatio = 0.5,
+  heroZoom = 1,
   insetSrc,
   insetSizePx,
   insetXRatio,
@@ -75,8 +78,13 @@ export function ComposedImage({
   page: Page;
   overlayText: string | null;
   highlightPhrases: string[];
-  /** The generated hero, if one exists. A gradient stands in when it does not. */
+  /** The generated or uploaded hero, if one exists. */
   heroSrc?: string | null;
+  /** The crop anchor used by the server compositor. */
+  heroXRatio?: number;
+  heroYRatio?: number;
+  /** Additional crop zoom. 1 is the normal cover crop. */
+  heroZoom?: number;
   /**
    * The uploaded circular inset. Absent is the normal case: no upload, no
    * circle, and nothing stands in for it.
@@ -172,12 +180,24 @@ export function ComposedImage({
     </div>
   ) : null;
 
+  const cropX = Math.min(1, Math.max(0, heroXRatio));
+  const cropY = Math.min(1, Math.max(0, heroYRatio));
+  const cropZoom = Math.min(3, Math.max(1, heroZoom));
   const heroImage = heroSrc ? (
     /* `object-cover` is the compositor's `_cover`: fill the box, crop the
-       overflow, centred. The hero is generated at its own resolution near
-       the requested ratio, never at exact pixels. */
+       overflow around the saved anchor. The hero is generated at its own
+       resolution near the requested ratio, never at exact pixels. */
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={heroSrc} alt="" className="absolute inset-0 size-full object-cover" />
+    <img
+      src={heroSrc}
+      alt=""
+      className="absolute inset-0 size-full object-cover"
+      style={{
+        objectPosition: `${cropX * 100}% ${cropY * 100}%`,
+        transform: `scale(${cropZoom})`,
+        transformOrigin: `${cropX * 100}% ${cropY * 100}%`,
+      }}
+    />
   ) : (
     <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_120%,transparent_40%,rgba(0,0,0,0.55))]" />
   );

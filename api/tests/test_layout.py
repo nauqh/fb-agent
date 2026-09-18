@@ -110,6 +110,23 @@ def test_a_named_draft_supplies_the_hero_when_one_is_asked_for(
     assert named.json()["hero_draft_id"] == older.id
 
 
+def test_cover_uses_the_saved_anchor_and_zoom():
+    """A wide hero can keep either side in frame instead of always using centre."""
+    from app.image import compositor
+
+    source = Image.new("RGB", (200, 100))
+    source.paste((255, 0, 0), (0, 0, 100, 100))
+    source.paste((0, 0, 255), (100, 0, 200, 100))
+
+    left = compositor._cover(source, 100, 100, x_ratio=0, y_ratio=0)
+    right = compositor._cover(source, 100, 100, x_ratio=1, y_ratio=0)
+    zoomed = compositor._cover(source, 100, 100, x_ratio=0, y_ratio=0, zoom=2)
+
+    assert left.getpixel((50, 50)) == (255, 0, 0)
+    assert right.getpixel((50, 50)) == (0, 0, 255)
+    assert zoomed.size == (100, 100)
+
+
 def test_alignment_moves_the_anchor_rather_than_being_ignored():
     """`text-anchor` was hardcoded to the centre while `align` was a control.
 

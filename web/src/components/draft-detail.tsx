@@ -71,6 +71,9 @@ interface Form {
   first_comment: string;
   highlight_phrases: string[];
   image_prompt: string;
+  hero_x_ratio: number;
+  hero_y_ratio: number;
+  hero_zoom: number;
   /** Null means "the default", which is what the server stores for an untouched draft. */
   inset_size_px: number | null;
   inset_x_ratio: number | null;
@@ -613,6 +616,9 @@ export function DraftDetail({
       overlayText={form?.hook ?? draft.hook}
       highlightPhrases={form?.highlight_phrases ?? draft.highlight_phrases}
       heroSrc={draft.hero_image_url}
+      heroXRatio={form?.hero_x_ratio ?? draft.hero_x_ratio}
+      heroYRatio={form?.hero_y_ratio ?? draft.hero_y_ratio}
+      heroZoom={form?.hero_zoom ?? draft.hero_zoom}
       insetSrc={draft.inset_image_url}
       // From the form, not the row: the slider and the drag have to move the
       // circle as they happen, which is the only way to choose either.
@@ -895,6 +901,76 @@ export function DraftDetail({
                   if (file) void changeHero(file);
                 }}
               />
+
+              {draft.hero_image_path && form ? (
+                <section className="space-y-2 border-t pt-3">
+                  <SectionHead
+                    title="Hero crop"
+                    meta={
+                      form.hero_x_ratio === 0.5 &&
+                      form.hero_y_ratio === 0.5 &&
+                      form.hero_zoom === 1 ? null : (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setForm({
+                              ...form,
+                              hero_x_ratio: 0.5,
+                              hero_y_ratio: 0.5,
+                              hero_zoom: 1,
+                            })
+                          }
+                          className="hover:text-foreground"
+                        >
+                          Reset
+                        </button>
+                      )
+                    }
+                  />
+                  <SliderRow label="X" value={`${Math.round(form.hero_x_ratio * 100)}%`}>
+                    <input
+                      type="range"
+                      className="w-full accent-foreground"
+                      min={0}
+                      max={1}
+                      step={0.01}
+                      value={form.hero_x_ratio}
+                      onChange={(event) =>
+                        setForm({ ...form, hero_x_ratio: Number(event.target.value) })
+                      }
+                    />
+                  </SliderRow>
+                  <SliderRow label="Y" value={`${Math.round(form.hero_y_ratio * 100)}%`}>
+                    <input
+                      type="range"
+                      className="w-full accent-foreground"
+                      min={0}
+                      max={1}
+                      step={0.01}
+                      value={form.hero_y_ratio}
+                      onChange={(event) =>
+                        setForm({ ...form, hero_y_ratio: Number(event.target.value) })
+                      }
+                    />
+                  </SliderRow>
+                  <SliderRow label="Zoom" value={`${form.hero_zoom.toFixed(1)}x`}>
+                    <input
+                      type="range"
+                      className="w-full accent-foreground"
+                      min={1}
+                      max={3}
+                      step={0.1}
+                      value={form.hero_zoom}
+                      onChange={(event) =>
+                        setForm({ ...form, hero_zoom: Number(event.target.value) })
+                      }
+                    />
+                  </SliderRow>
+                  <p className="text-[11px] leading-relaxed text-muted-foreground">
+                    Adjust the crop, then save to use it in the published image.
+                  </p>
+                </section>
+              ) : null}
             </section>
           ) : null}
           {/* Which of the two forms this card is drawn in. Under the picture
@@ -2016,6 +2092,9 @@ function toForm(draft: Draft): Form {
     first_comment: draft.first_comment ?? "",
     highlight_phrases: [...draft.highlight_phrases],
     image_prompt: draft.image_prompt ?? "",
+    hero_x_ratio: draft.hero_x_ratio,
+    hero_y_ratio: draft.hero_y_ratio,
+    hero_zoom: draft.hero_zoom,
     inset_size_px: draft.inset_size_px,
     inset_x_ratio: draft.inset_x_ratio,
     inset_y_ratio: draft.inset_y_ratio,

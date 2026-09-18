@@ -155,6 +155,9 @@ export interface Draft {
   highlight_phrases: string[];
 
   image_prompt: string | null;
+  hero_x_ratio: number;
+  hero_y_ratio: number;
+  hero_zoom: number;
   hero_image_path: string | null;
   composed_image_path: string | null;
 
