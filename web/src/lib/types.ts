@@ -76,6 +76,14 @@ export interface Page {
   first_comment_min_paragraphs: number | null;
   first_comment_max_paragraphs: number | null;
 
+  /**
+   * The caption's two rules. Null is the house rule: 5 points, each opening
+   * with an emoji. Per Page since 2026-09-19 - the caption was the one part of
+   * a post a Page's own prompt could not change.
+   */
+  recap_max_points: number | null;
+  recap_emoji: boolean | null;
+
   /** Save a published post automatically at this many reactions. Null is off. */
   auto_save_min_reactions: number | null;
   /** Repost an auto-saved post this many days after it went out. Null is off. */

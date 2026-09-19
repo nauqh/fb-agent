@@ -254,6 +254,37 @@ def test_clearing_a_length_returns_the_page_to_the_house_number(client, page):
     assert response.json()["hook_max_words"] is None
 
 
+def test_a_page_can_be_given_its_own_caption_rules(client, page):
+    """The caption's two rules join the other five (client, 2026-09-19)."""
+    response = client.patch(
+        f"/pages/{page.id}", json={"recap_max_points": 8, "recap_emoji": False}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["recap_max_points"] == 8
+    assert response.json()["recap_emoji"] is False
+
+
+def test_the_emoji_rule_is_off_only_when_it_is_said_to_be(client, page):
+    """False is a choice and null is a clear, so the two cannot collapse. A
+    Page that has never been asked reads as null and writes with emoji."""
+    assert client.get(f"/pages/{page.id}").json()["recap_emoji"] is None
+
+    client.patch(f"/pages/{page.id}", json={"recap_emoji": False})
+    assert client.get(f"/pages/{page.id}").json()["recap_emoji"] is False
+
+    client.patch(f"/pages/{page.id}", json={"recap_emoji": None})
+    assert client.get(f"/pages/{page.id}").json()["recap_emoji"] is None
+
+
+def test_a_caption_cap_of_zero_is_refused_by_the_route(client, page):
+    """`or` reads 0 as unset, so `disagrees()` never sees it - the bound on the
+    field is what stops it, and it has to be there rather than assumed."""
+    response = client.patch(f"/pages/{page.id}", json={"recap_max_points": 0})
+
+    assert response.status_code == 422
+
+
 # --- a Page's own prompts ------------------------------------------------------
 
 

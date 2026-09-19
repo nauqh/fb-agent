@@ -1130,16 +1130,21 @@ function TimeSlots({
  *  placeholder so an empty box reads as "65", not as "unset". */
 const HOUSE = {
   hook_max_words: 65,
+  recap_max_points: 5,
   first_comment_min_chars: 1500,
   first_comment_max_chars: 2100,
   first_comment_min_paragraphs: 2,
   first_comment_max_paragraphs: 3,
 } as const;
 
+/** The house answer for the one caption rule that is not a number. */
+const HOUSE_RECAP_EMOJI = true;
+
 type LimitField = keyof typeof HOUSE;
 
 const LIMIT_ROWS: { field: LimitField; label: string; group: string }[] = [
   { field: "hook_max_words", label: "Max words", group: "Overlay" },
+  { field: "recap_max_points", label: "Max points", group: "Caption" },
   { field: "first_comment_min_chars", label: "Min chars", group: "First comment" },
   { field: "first_comment_max_chars", label: "Max chars", group: "First comment" },
   { field: "first_comment_min_paragraphs", label: "Min ¶", group: "First comment" },
@@ -1207,11 +1212,21 @@ function WritingLimits({ page }: { page: Page }) {
     ) as Record<LimitField, string>;
 
   const [form, setForm] = useState(initial);
+  // The one caption rule that is not a number, so it cannot live in `form`.
+  // Null and true are the same thing on screen - the house rule is emoji - so
+  // the box is ticked for both and unticking it is what gets stored.
+  const [emoji, setEmoji] = useState(page.recap_emoji ?? HOUSE_RECAP_EMOJI);
   const [busy, setBusy] = useState(false);
 
-  const dirty = LIMIT_ROWS.some(
-    ({ field }) => form[field] !== (page[field]?.toString() ?? ""),
-  );
+  const dirty =
+    LIMIT_ROWS.some(
+      ({ field }) => form[field] !== (page[field]?.toString() ?? ""),
+    ) || emoji !== (page.recap_emoji ?? HOUSE_RECAP_EMOJI);
+
+  function revert() {
+    setForm(initial);
+    setEmoji(page.recap_emoji ?? HOUSE_RECAP_EMOJI);
+  }
 
   async function save() {
     setBusy(true);
@@ -1222,7 +1237,7 @@ function WritingLimits({ page }: { page: Page }) {
           form[field].trim() === "" ? null : Number(form[field]),
         ]),
       );
-      await updatePage(page.id, update);
+      await updatePage(page.id, { ...update, recap_emoji: emoji });
       toast("Saved. New drafts for this Page use these lengths.");
       emit();
     } catch (cause) {
@@ -1275,6 +1290,17 @@ function WritingLimits({ page }: { page: Page }) {
               ),
             )}
           </div>
+          {group === "Caption" ? (
+            <label className="flex cursor-pointer items-center gap-2 pt-2 text-xs">
+              <input
+                type="checkbox"
+                checked={emoji}
+                onChange={(event) => setEmoji(event.target.checked)}
+                className="size-3.5 cursor-pointer accent-primary"
+              />
+              Every point starts with an emoji
+            </label>
+          ) : null}
         </Block>
       ))}
 
@@ -1288,7 +1314,7 @@ function WritingLimits({ page }: { page: Page }) {
             variant="ghost"
             size="sm"
             disabled={busy}
-            onClick={() => setForm(initial)}
+            onClick={revert}
           >
             Revert
           </Button>

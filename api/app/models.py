@@ -251,6 +251,26 @@ class Page(SQLModel, table=True):
     first_comment_max_paragraphs: int | None = None
     """C7: "3-4 short paragraphs". The house range is 2-3."""
 
+    recap_max_points: int | None = None
+    """The caption's point cap. The house number is 5.
+
+    Added 2026-09-19 with the column below. The caption was the one part of a
+    post a Page could not change: Fitness Recipes' own prompt asks for "no
+    limit on the number of the points" on a recipe, and a seven-point recipe
+    caption was retried back to five against a module constant. There is no
+    "unlimited" value on purpose - the cap is what the model is told and what
+    the draft is held to, so a Page that wants long captions sets a high
+    number rather than switching the rule off."""
+
+    recap_emoji: bool | None = None
+    """Whether every caption point must open with an emoji. Null is the house
+    rule, which is yes.
+
+    Nullable for the reason the numbers above are, and one more: false is a
+    real choice here, so this column cannot use `or` to resolve and cannot be
+    defaulted to True in the table without losing the difference between a
+    Page that chose the house rule and one that never looked."""
+
     # --- automatic save and repost (H2) ---------------------------------------
     #
     # See `publish/auto_repost.py` and web/content/PRDs/auto-repost.md. Null is off

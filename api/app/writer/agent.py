@@ -52,6 +52,13 @@ class DraftContent(BaseModel):
     # 35-word hook and 1-3 highlights, so a description carrying the old numbers
     # sends the model two caps in the same request and lets it pick. The
     # validators are still the backstop; the prompt is the instruction.
+    #
+    # `caption` was missed in that pass and kept "at most 5 points, each
+    # opening with an emoji" until 2026-09-19 (client: "it always follows the
+    # default prompt and not my custom prompt"). It is exactly the failure the
+    # paragraph above describes, and it hid because the caption's two rules
+    # were the same in the schema, in the validators and in the house prompt -
+    # three copies that could only disagree once a Page wrote its own.
     hook: str | None = Field(
         default=None,
         description=(
@@ -61,7 +68,9 @@ class DraftContent(BaseModel):
             "this is required."
         ),
     )
-    caption: str = Field(description="The recap: at most 5 points, each opening with an emoji.")
+    caption: str = Field(
+        description="The recap. Its shape, length and rules are in the instructions."
+    )
     first_comment: str | None = Field(
         default=None,
         description=(
@@ -130,12 +139,21 @@ def _instructions(page: Page, layout: Layout, template=None) -> str:
     limits = validators.Limits.for_page(page)
     if limits != house:
         low, high = limits.paragraphs
+        lines = [
+            f"- The hook must be at most {limits.hook_max_words} words.",
+            f"- The first comment must be between {limits.body_min_chars:,} and "
+            f"{limits.body_max_chars:,} characters.",
+            f"- The first comment must be {low}-{high} paragraphs.",
+            f"- The caption must be at most {limits.recap_max_points} points.",
+        ]
+        if not limits.recap_emoji:
+            # Stated only when it is off. The house rule is already in the
+            # prompt prose, and repeating it here would be the second copy
+            # this block exists to avoid.
+            lines.append("- The caption's points must NOT start with an emoji.")
         parts.append(
             "LENGTHS FOR THIS PAGE. These override any length given above.\n"
-            f"- The hook must be at most {limits.hook_max_words} words.\n"
-            f"- The first comment must be between {limits.body_min_chars:,} and "
-            f"{limits.body_max_chars:,} characters.\n"
-            f"- The first comment must be {low}-{high} paragraphs."
+            + "\n".join(lines)
         )
     # Two ways to opt out, one outcome. The Page's overlay prompt emptied is
     # every draft on the Page; a style's overlay stored as `""` is only the drafts
@@ -579,8 +597,8 @@ def _field_rules(field: str, limits: validators.Limits | None = None):
             # A minimal post's caption is plain lines; the emoji convention only
             # exists on a story post, signalled by the body being present.
             minimal = not (content.first_comment or "").strip()
-            found = [validators.recap_point_count(content.caption)]
-            if not minimal:
+            found = [validators.recap_point_count(content.caption, limits)]
+            if not minimal and limits.recap_emoji:
                 found.append(validators.recap_lines_start_with_emoji(content.caption))
             found.append(validators.no_meta_phrases(content.caption, ""))
         else:

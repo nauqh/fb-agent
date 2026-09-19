@@ -664,11 +664,72 @@ def test_a_band_no_draft_could_satisfy_is_named_rather_than_left_to_the_model():
     [
         {"first_comment_min_paragraphs": 4, "first_comment_max_paragraphs": 2},
         {"hook_max_words": 3},
+        # Zero is not here: `or` reads it as unset, like every other column in
+        # this block, so a 0 inherits the house number rather than failing.
+        {"recap_max_points": -1},
     ],
-    ids=["backwards-paragraphs", "unwritable-hook"],
+    ids=["backwards-paragraphs", "unwritable-hook", "no-caption-points"],
 )
 def test_the_other_impossible_settings_are_caught_too(overrides):
     assert validators.Limits.for_page(_page(**overrides)).disagrees()
+
+
+# --- the caption, per Page (client, 2026-09-19) --------------------------------
+#
+# "It always follows the default prompt and not my custom prompt." The caption
+# was the one part of a post a Page could not change: its two rules lived in
+# the output schema and in two module constants, and both outranked whatever
+# the Page's own prompt said. Fitness Recipes had already written "no limit on
+# the number of the points" for a recipe and been retried back down to five.
+
+
+def test_a_page_can_ask_for_more_caption_points_than_the_house():
+    """The recipe case, which was live and losing."""
+    limits = validators.Limits.for_page(_page(recap_max_points=8))
+    seven = "\n".join(f"🥗 point {i}" for i in range(7))
+
+    assert validators.recap_point_count(seven, limits) is None
+    assert validators.recap_point_count(seven), "the house caps at 5"
+
+
+def test_a_page_can_turn_the_caption_emoji_rule_off():
+    limits = validators.Limits.for_page(_page(recap_emoji=False))
+    plain = "A point.\nAnother point."
+    body = "x" * 1_600 + "\n\n" + "y" * 300
+
+    assert validators.check("A hook.", plain, body, limits) == []
+    assert validators.check("A hook.", plain, body), "the house wants an emoji"
+
+
+def test_turning_the_emoji_rule_off_is_not_the_same_as_leaving_it_alone():
+    """`or` would read False as unset, which is the one value it has to carry."""
+    assert validators.Limits.for_page(_page()).recap_emoji is True
+    assert validators.Limits.for_page(_page(recap_emoji=True)).recap_emoji is True
+    assert validators.Limits.for_page(_page(recap_emoji=False)).recap_emoji is False
+
+
+def test_the_schema_does_not_restate_the_house_caption_rule():
+    """The bug itself. The description is sent with every request and is not
+    per-Page, so a number in it contradicts the Page's own prompt and the model
+    picks one - which is what the client was watching it do. `hook` and
+    `first_comment` were cleared of their numbers long ago; this one was
+    missed."""
+    described = writer.DraftContent.model_fields["caption"].description
+
+    assert "5" not in described and "emoji" not in described.lower()
+
+
+def test_the_prompt_states_this_pages_caption_rules_too():
+    from app.settings import layout
+
+    capped = writer._instructions(_page(recap_max_points=8), layout)
+    no_emoji = writer._instructions(_page(recap_emoji=False), layout)
+
+    assert "at most 8 points" in capped
+    assert "must NOT start with an emoji" in no_emoji
+    # Off is worth saying; on is already in the prompt prose, and a second copy
+    # is the drift this block is written against.
+    assert "emoji" not in capped.split("LENGTHS FOR THIS PAGE")[1]
 
 
 def test_the_prompt_states_this_pages_lengths_so_the_check_cannot_surprise_it():

@@ -60,6 +60,10 @@ class PageUpdate(BaseModel):
     first_comment_max_chars: int | None = Field(default=None, ge=100, le=10_000)
     first_comment_min_paragraphs: int | None = Field(default=None, ge=1, le=12)
     first_comment_max_paragraphs: int | None = Field(default=None, ge=1, le=12)
+    recap_max_points: int | None = Field(default=None, ge=1, le=50)
+    recap_emoji: bool | None = None
+    """Null clears the override like the numbers above. False is a choice,
+    not a clear: the caption's points carry no emoji on this Page."""
 
     # Automatic save and repost (H2). Null is off, as above.
     auto_save_min_reactions: int | None = Field(default=None, ge=1)
