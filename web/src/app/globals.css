@@ -140,7 +140,13 @@
   --gold-foreground: oklch(0.205 0 0);
   /* layout.yml panel.color */
   --panel: #000000;
-  --sidebar: oklch(0.985 0 0);
+  /* The same white as the ground, not a step off it. The rail's default state
+     is the floating card - inset, rounded, shadowed - and elevation there is
+     carried by the shadow and the corners. 0.985 against 1.0 is ~1.5% of
+     lightness: too little to separate anything, enough to read as a smudge at
+     the card's corners and along `border-r` when it is docked. Dark keeps its
+     step up from the ground, where 3% is visible and surfaces do elevate. */
+  --sidebar: oklch(1 0 0);
   --sidebar-foreground: oklch(0.22 0 0);
   --sidebar-primary: oklch(0.26 0 0);
   --sidebar-primary-foreground: oklch(0.985 0 0);
