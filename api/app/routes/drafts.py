@@ -24,7 +24,7 @@ from PIL import Image
 from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
-from app import generate, media
+from app import auto_draft, generate, media
 from app.db import get_session
 from app.image import inset
 from app.log import logger
@@ -109,6 +109,54 @@ def start_generate(
         raise HTTPException(status_code=422, detail=str(error)) from error
 
     background.add_task(generate.run_drafts, draft_ids)
+    return draft_ids
+
+
+class AutoGenerateRequest(BaseModel):
+    """What the morning cron sends. See `app/auto_draft.py`."""
+
+    page_ids: list[int] = Field(min_length=1)
+    """The Pages to top up. Named explicitly - there is no per-Page switch, so
+    this list is the whole of the configuration."""
+
+    target: int = Field(2, ge=1, le=10)
+    """How many drafts each Page should have waiting once the run finishes."""
+
+    hero_from_source: bool = False
+    """Reuse the competitor's own picture instead of buying a hero.
+
+    False matches the Generate button. It is the only variable cost in the run,
+    so it is a field rather than a constant: the cron can flip it without a
+    deploy."""
+
+
+@router.post("/generate/auto", status_code=202)
+def start_auto_generate(
+    request: AutoGenerateRequest,
+    background: BackgroundTasks,
+    session: Session = Depends(get_session),
+) -> list[int]:
+    """Top up each named Page and queue the drafts. 202, like `/generate`.
+
+    Every Page is resolved before any run starts. Resolving inside the loop
+    would leave the Pages before a bad id with committed drafts and no writer
+    queued for them, because `start_run` commits per call.
+    """
+    pages = []
+    for page_id in dict.fromkeys(request.page_ids):
+        page = session.get(Page, page_id)
+        if page is None:
+            raise HTTPException(status_code=404, detail=f"No page {page_id}")
+        pages.append(page)
+
+    draft_ids: list[int] = []
+    for page in pages:
+        draft_ids += auto_draft.run(
+            session, page, request.target, request.hero_from_source
+        )
+
+    if draft_ids:
+        background.add_task(generate.run_drafts, draft_ids)
     return draft_ids
 
 
