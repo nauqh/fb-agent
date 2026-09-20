@@ -143,3 +143,60 @@ def test_a_template_belongs_to_its_page_only(client):
     ]
     assert client.get("/prompts/templates?page_id=2").json() == []
     assert _create(client, page_id=None).status_code == 422
+
+
+def test_preview_shows_the_page_prompt_with_the_style_layered_on(client):
+    """The Settings preview: the string a run would send, not a reassembly.
+
+    The operator writes a style as a delta against the Page's prompts, so the
+    preview has to contain *both* - the inherited text and their own, in the
+    order the model reads them. A preview that showed only the delta would
+    leave them guessing exactly as before.
+    """
+    body = {
+        "name": "Meme",
+        "page_id": 1,
+        "system_prompt": "One line. No essay.",
+        "overlay_prompt": None,
+        "image_prompt": "Flat studio light.",
+    }
+    preview = client.post("/prompts/templates/preview", json=body).json()
+
+    writer = preview["writer"]
+    # The Page's own prompt is there, ahead of the style, and the style says it
+    # wins - that ordering is the whole contract being previewed.
+    assert writer.index("You are writing for the Facebook page") < writer.index(
+        "POST STYLE: Meme"
+    )
+    assert "One line. No essay." in writer
+    assert "outrank" in writer
+
+    # The image layer goes to the other model, and only there.
+    assert "Flat studio light." not in writer
+    assert "Flat studio light." in preview["hero"]
+
+    # An unsaved style previews; nothing was written.
+    assert client.get("/prompts/templates?page_id=1").json() == []
+
+
+def test_preview_matches_what_the_run_actually_sends(client, session):
+    """The one property worth pinning: the preview is the same function the
+    run calls, so it cannot drift from the request the model gets."""
+    from app.image import hero
+    from app.models import Page
+    from app.settings import layout
+    from app.writer import agent
+
+    body = {
+        "name": "Meme",
+        "page_id": 1,
+        "system_prompt": "One line.",
+        "overlay_prompt": None,
+        "image_prompt": "Flat light.",
+    }
+    preview = client.post("/prompts/templates/preview", json=body).json()
+
+    page = session.get(Page, 1)
+    style = PromptTemplate(**body)
+    assert preview["writer"] == agent.instructions_for(page, style)
+    assert preview["hero"] == hero.brief(layout, page.name, page, "Flat light.")

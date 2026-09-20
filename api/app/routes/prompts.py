@@ -30,8 +30,9 @@ from sqlmodel import Session, select
 
 from app.db import get_session
 from app.models import Draft, Page, PromptTemplate
+from app.image import hero
 from app.settings import layout
-from app.writer import prompts
+from app.writer import agent, prompts
 
 router = APIRouter(prefix="/prompts", tags=["prompts"])
 
@@ -282,3 +283,57 @@ def delete_template(template_id: int, session: Session = Depends(get_session)) -
         session.add(draft)
     session.delete(row)
     session.commit()
+
+
+class TemplatePreview(BaseModel):
+    """The two strings a style actually produces, composed the way a run does."""
+
+    writer: str
+    """Everything the text model is sent as instructions: the Page's system and
+    overlay prompts, the page line, any per-Page lengths, then this style."""
+
+    hero: str
+    """The image model's system instruction: the Page's image brief, then this
+    style's image layer. A separate request - the image model never sees the
+    writer's text."""
+
+
+@templates_router.post("/preview")
+def preview_template(
+    body: TemplateBody, session: Session = Depends(get_session)
+) -> TemplatePreview:
+    """What the model is sent if this style is used, before it is saved.
+
+    Takes the form's current text rather than a row id, so the operator sees
+    the result while typing and a style can be read before it exists.
+
+    The point is that a style is **layered onto** the Page's prompts, not a
+    replacement for them (see `models.PromptTemplate`). Until this endpoint the
+    operator wrote a delta against text they could not see, so "ignore the
+    structure above" was a guess about the prompt it would be glued to. Both
+    strings are built by the functions the real run calls - never reassembled
+    here, which would be the copy that drifts.
+    """
+    page = session.get(Page, body.page_id)
+    if page is None:
+        raise HTTPException(404, f"No Page {body.page_id}")
+
+    # An unsaved row: `_instructions` reads `name`, `system_prompt` and
+    # `overlay_prompt` off it and never touches the session.
+    style = PromptTemplate(
+        name=body.name.strip() or "Untitled style",
+        page_id=body.page_id,
+        system_prompt=body.system_prompt,
+        overlay_prompt=_overlay(body.overlay_prompt),
+        image_prompt=body.image_prompt,
+    )
+    image_layer = (body.image_prompt or "").strip()
+    return TemplatePreview(
+        writer=agent.instructions_for(page, style),
+        hero=hero.brief(
+            layout,
+            page.name,
+            page,
+            prompts.substitute(image_layer, layout) if image_layer else None,
+        ),
+    )

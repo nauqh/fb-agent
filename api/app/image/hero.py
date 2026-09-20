@@ -35,6 +35,23 @@ saving is typography baked into the photograph - the panel is composited over
 it, so a headline in the picture is a headline on the post.
 """
 
+
+def brief(layout, page_name: str | None, page=None, style: str | None = None) -> str:
+    """The hero's system instruction: the page's image brief, then the style.
+
+    Split out of `generate` so the Settings screen can show the operator the
+    exact text a style produces. Composed in one place for the same reason
+    `_instructions` is: a preview assembled separately would be a second copy,
+    and a preview that drifts from the real call is worse than none.
+    """
+    text = prompts.image_prompt(layout, page_name, page)
+    if style and style.strip():
+        text += (
+            f"\n\nPOST STYLE (these rules outrank the brief above):\n{style}"
+        )
+    return text
+
+
 SUPPORTED_RATIOS: dict[str, float] = {
     "1:1": 1.0,
     "5:4": 1.25,
@@ -203,11 +220,8 @@ def generate(
 
     client = genai.Client(api_key=settings.gemini_api_key)
     ratio = aspect_ratio_for(layout.image.width, hero_height_px)
-    system = prompts.image_prompt(layout, page_name, page)
-    if style and style.strip():
-        system += f"\n\nPOST STYLE (these rules outrank the brief above):\n{style}"
     config = types.GenerateContentConfig(
-        system_instruction=system,
+        system_instruction=brief(layout, page_name, page, style),
         response_modalities=["IMAGE"],
         image_config=types.ImageConfig(aspect_ratio=ratio),
     )

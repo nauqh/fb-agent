@@ -1,5 +1,5 @@
 import type { PromptTemplate } from "@/lib/types";
-import { del, get, post, put } from "@/lib/api/client";
+import { del, get, post, postRead, put } from "@/lib/api/client";
 
 /**
  * The prompt-template library: named post styles, selectable at run time.
@@ -46,4 +46,37 @@ export async function updatePromptTemplate(
 /** Unpins the drafts generated under it server-side; nothing to do here. */
 export async function deletePromptTemplate(id: number): Promise<void> {
   await del(`/prompts/templates/${id}`);
+}
+
+export interface TemplatePreview {
+  /** Everything the text model is sent as instructions, this style included. */
+  writer: string;
+  /** The image model's system instruction. A separate request. */
+  hero: string;
+}
+
+/**
+ * What the model is sent if this style is used - composed server-side by the
+ * same functions a real run calls, so the preview cannot drift from the run.
+ *
+ * Takes the form's current text, not an id: a style is a **delta layered onto**
+ * the Page's prompts, and the operator was writing it against text they could
+ * not see. `POST /prompts/templates/preview`.
+ */
+export async function previewPromptTemplate(body: TemplateBody): Promise<TemplatePreview> {
+  // `postRead`: composing a preview stores nothing, and a POST that announced
+  // itself as a write would refetch every open query on the screen.
+  return postRead<TemplatePreview>("/prompts/templates/preview", body);
+}
+
+/**
+ * The same two strings for the Page alone, with no style picked.
+ *
+ * A style with every field blank layers nothing (`agent._instructions` appends
+ * a POST STYLE block only when a layer has text), so the composer above
+ * already answers this - and answers it with the functions a real run calls.
+ * A second endpoint would be a second copy of the layering rules.
+ */
+export async function previewPagePrompts(pageId: number): Promise<TemplatePreview> {
+  return previewPromptTemplate({ name: "", page_id: pageId });
 }

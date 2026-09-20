@@ -197,6 +197,16 @@ def _instructions(page: Page, layout: Layout, template=None) -> str:
     return "\n\n".join(parts)
 
 
+def instructions_for(page: Page, template=None) -> str:
+    """`_instructions` for callers outside the writer.
+
+    The Settings preview needs the exact string a run would send, and must
+    not rebuild it - a preview assembled separately is a second copy of the
+    layering rules, free to drift from the one the model is actually given.
+    """
+    return _instructions(page, layout, template)
+
+
 def source_instruction(kind: SourceKind, summary: bool = False) -> str:
     """How to read the Source Item. Derived from `kind`, never stored.
 

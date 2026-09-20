@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
+  ChevronRight,
   ExternalLink,
   Loader2,
   Plus,
@@ -43,8 +44,11 @@ import {
   createPromptTemplate,
   deletePromptTemplate,
   listPromptTemplates,
+  previewPagePrompts,
+  previewPromptTemplate,
   updatePromptTemplate,
 } from "@/lib/api/prompt-templates";
+import type { TemplatePreview } from "@/lib/api/prompt-templates";
 import type { Page, PromptFile, PromptTemplate } from "@/lib/types";
 import { usePageScope } from "@/lib/page-scope";
 import { emit } from "@/lib/store";
@@ -1187,6 +1191,10 @@ function Writing({
         </div>
 
         <div className="border-t pt-6">
+          <AgentPrompt pageId={pageId} templates={templates} />
+        </div>
+
+        <div className="border-t pt-6">
           <PostStyles pageId={pageId!} templates={templates} refresh={refreshTemplates} />
         </div>
       </div>
@@ -1434,9 +1442,14 @@ function PromptEditor({ pageId, file }: { pageId: number; file: PromptFile }) {
         : "Managed in api/prompts/pages/";
   const noOverlay = file.filename === "overlay.txt" && file.source === "page" && file.body.trim() === "";
 
+  // One surface per level: the Pane is the card, so nothing in here draws a
+  // second one. A border inside a pane means a *field* or a control - the
+  // textarea, the pill - never a box grouping them. The editor used to sit in
+  // a tinted card whose header strip repeated the tab that is already above
+  // it, which put three borders between the pane edge and the prompt text.
   return (
-    <div className="overflow-hidden rounded-2xl border bg-muted/[0.16]">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="font-mono text-[12px] font-medium tracking-[0.08em] text-foreground uppercase">
             {file.filename}
@@ -1456,7 +1469,7 @@ function PromptEditor({ pageId, file }: { pageId: number; file: PromptFile }) {
         </div>
       </div>
 
-      <div className="space-y-3 p-3">
+      <div className="space-y-3">
         {/* The no-overlay opt-out stays next to the editor: it is a deliberate
             state, not a blank value, and it changes how the image is composed. */}
         {noOverlay ? (
@@ -1511,7 +1524,7 @@ function PromptEditor({ pageId, file }: { pageId: number; file: PromptFile }) {
             <pre className="max-h-96 overflow-auto rounded-xl border bg-background p-4 font-mono text-[13px] leading-6 whitespace-pre-wrap">
               {file.body}
             </pre>
-            <p className="px-1 text-[12px] text-muted-foreground">File only, not editable here.</p>
+            <p className="text-[12px] text-muted-foreground">File only, not editable here.</p>
           </>
         )}
       </div>
@@ -1686,6 +1699,274 @@ function RemoveTemplate({
   );
 }
 
+/**
+ * What the model is actually sent, with this style's text marked inside it.
+ *
+ * A style is a delta **layered onto** the Page's prompts, not a replacement
+ * for them (`PromptTemplate`), and until this block the operator wrote that
+ * delta against text they could not see - which is why the guidance for a
+ * Meme style was to write "ignore the essay structure above", a guess about a
+ * prompt nobody was looking at. Both strings are composed server-side by the
+ * functions a real run calls, so this cannot drift from what is sent.
+ *
+ * A `<details>` rather than state: the browser has disclosure, and a preview
+ * that is open by default would push the save button below the fold.
+ */
+function StylePreview({
+  pageId,
+  name,
+  system,
+  overlay,
+  image,
+}: {
+  pageId: number;
+  name: string;
+  system: string;
+  overlay: string | null;
+  image: string;
+}) {
+  const [preview, setPreview] = useState<TemplatePreview | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    // Debounced because it is a round trip, not because the form is slow - the
+    // textareas stay 1:1 with the keyboard and only this block waits. The last
+    // result is left on screen while a new one is in flight, so typing never
+    // blanks the panel or moves the buttons under the pointer.
+    const timer = setTimeout(async () => {
+      try {
+        const next = await previewPromptTemplate({
+          name,
+          page_id: pageId,
+          system_prompt: system.trim() || null,
+          overlay_prompt: overlay,
+          image_prompt: image.trim() || null,
+        });
+        if (live) {
+          setPreview(next);
+          setError(null);
+        }
+      } catch (cause) {
+        // `live` also drops a slow earlier response that lands after a newer
+        // one - the panel would otherwise show text for keystrokes ago.
+        if (live) setError(cause instanceof Error ? cause.message : "Could not compose");
+      }
+    }, 400);
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+  }, [pageId, name, system, overlay, image]);
+
+  return (
+    <PromptDisclosure
+      title="What the model is sent"
+      preview={preview}
+      error={error}
+      // The style's own block starts at this marker in both strings, so one
+      // split serves both: everything before it is inherited, everything
+      // after is what this form wrote. Braces rather than quotes: a JSX
+      // string attribute takes a backslash literally, so the escape in a
+      // quoted attribute would be two characters and match nothing.
+      mark={"\n\nPOST STYLE"}
+      note={(marked) =>
+        marked
+          ? "Grey is the Page's prompt, inherited. Highlighted is this style, layered on top."
+          : "This style adds nothing to this prompt - it is the Page's, unchanged."
+      }
+    />
+  );
+}
+
+/**
+ * The composed prompt, in a disclosure with a tab per model.
+ *
+ * Shared by the style form above and the Page block below, because the thing
+ * on screen is the same thing: the exact string a run sends, which of the two
+ * models gets it, and how long it is. Only the fetch differs - a style is
+ * composed from an unsaved form, a Page from what is stored.
+ *
+ * `<details>` rather than state: the browser has disclosure, and a preview
+ * open by default pushes the buttons under it below the fold.
+ */
+function PromptDisclosure({
+  title,
+  preview,
+  error,
+  mark,
+  note,
+  controls,
+}: {
+  title: string;
+  preview: TemplatePreview | null;
+  error: string | null;
+  /** Where the layered text begins, highlighted from there on. Omit for none. */
+  mark?: string;
+  note: string | ((marked: boolean) => string);
+  /** Shown above the tabs when open - what the preview is composed *of*. */
+  controls?: React.ReactNode;
+}) {
+  const [tab, setTab] = useState<"writer" | "hero">("writer");
+
+  const text = preview ? (tab === "writer" ? preview.writer : preview.hero) : "";
+  const at = mark ? text.indexOf(mark) : -1;
+  const footer = typeof note === "string" ? note : note(at !== -1);
+
+  return (
+    // No box. The pane is the only card here, and the prompt editor above is a
+    // label row over a bordered field - this reads as the same thing, so it is
+    // built the same way: a row, then one field-level surface under it.
+    <details className="group">
+      <summary className="flex cursor-pointer list-none items-center gap-2 py-2 [&::-webkit-details-marker]:hidden">
+        <ChevronRight className="size-3.5 shrink-0 text-muted-foreground transition-transform duration-150 group-open:rotate-90" />
+        <span className="text-[13px] font-medium">{title}</span>
+        <span className="ml-auto text-[11px] text-muted-foreground">
+          {preview
+            ? `${preview.writer.length.toLocaleString()} chars`
+            : "composing..."}
+        </span>
+      </summary>
+
+      <div className="pt-1 pb-1">
+        {controls ? <div className="pb-2">{controls}</div> : null}
+        <div className="flex items-center gap-1 pb-2">
+          {(
+            [
+              ["writer", "Writer"],
+              ["hero", "Image"],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setTab(value)}
+              className={cn(
+                "rounded-md px-2 py-1 text-[12px] transition-colors duration-100",
+                tab === value
+                  ? "bg-muted font-medium text-foreground"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {label}
+            </button>
+          ))}
+          <span className="ml-auto text-[11px] text-muted-foreground">
+            {tab === "writer"
+              ? "Text model instructions"
+              : "Image model system instruction - a separate request"}
+          </span>
+        </div>
+
+        {error ? (
+          <p className="py-6 text-center text-[12px] text-muted-foreground">{error}</p>
+        ) : preview === null ? (
+          <p className="py-6 text-center text-[12px] text-muted-foreground">Composing...</p>
+        ) : (
+          <pre className="max-h-96 overflow-auto rounded-xl border bg-background p-4 font-mono text-[12px] leading-6 whitespace-pre-wrap">
+            {/* Grey reads as "inherited", which is only true opposite a
+                highlight. With no mark to contrast against it is the whole
+                body, and grey there just reads as disabled. */}
+            {at === -1 ? (
+              mark ? <span className="text-muted-foreground">{text}</span> : text
+            ) : (
+              <>
+                <span className="text-muted-foreground">{text.slice(0, at)}</span>
+                <span className="rounded bg-primary/10 text-foreground">{text.slice(at)}</span>
+              </>
+            )}
+          </pre>
+        )}
+
+        <p className="pt-2 text-[12px] text-muted-foreground">{footer}</p>
+      </div>
+    </details>
+  );
+}
+
+/**
+ * What the agent is sent for this Page, with no style picked.
+ *
+ * The three boxes above are ingredients, and none of them is the string a
+ * model reads. `agent._instructions` joins the system and overlay prompts,
+ * adds the line naming the Page, and - only when this Page has changed one -
+ * a LENGTHS block that overrides whatever the prose above it said. An
+ * operator reading the boxes alone cannot see that joint, and the client has
+ * twice reported its results as the model ignoring their prompt.
+ *
+ * Composed server-side by the functions a run calls (`previewPagePrompts`),
+ * and re-read on every store emit, so saving a prompt or a length above
+ * updates it without a reload. Saved text only: an unsaved textarea is not
+ * what the agent is sent, and showing it here would answer the wrong
+ * question.
+ */
+function AgentPrompt({
+  pageId,
+  templates,
+}: {
+  pageId: number | null;
+  templates: PromptTemplate[] | null;
+}) {
+  // A draft is written either under this Page's prompts alone or under one of
+  // its styles, and the two are different strings. Previewing only the first
+  // would answer the question for a run the operator may never make: the
+  // styles are picked on the generate screen, and a Page that has any uses
+  // them for most of its posts. The picker is the run's own choice, made here.
+  const [styleId, setStyleId] = useState<number | null>(null);
+  const style = templates?.find((one) => one.id === styleId) ?? null;
+
+  const { data: preview, error } = useQuery(
+    () =>
+      style
+        ? previewPromptTemplate({
+            name: style.name,
+            page_id: pageId!,
+            system_prompt: style.system_prompt,
+            overlay_prompt: style.overlay_prompt,
+            image_prompt: style.image_prompt,
+          })
+        : previewPagePrompts(pageId!),
+    [pageId, styleId],
+    { enabled: pageId !== null },
+  );
+
+  return (
+    <Block label="What the agent is sent">
+      <PromptDisclosure
+        title={style ? `With ${style.name}` : "This Page's prompts, composed"}
+        preview={preview}
+        error={error}
+        // Only a style has a block to mark - see `StylePreview` for why the
+        // escape has to be in braces.
+        mark={style ? "\n\nPOST STYLE" : undefined}
+        note={
+          style
+            ? "Grey is the Page's prompt. Highlighted is what this style layers on top."
+            : "What a run sends when no style is picked. Saved text only - edits above appear once saved."
+        }
+        controls={
+          templates && templates.length > 0 ? (
+            <NativeSelect
+              id="preview-style"
+              ariaLabel="Preview with a style"
+              value={styleId === null ? "" : String(styleId)}
+              onValueChange={(value) => setStyleId(value === "" ? null : Number(value))}
+              className="flex max-w-72"
+            >
+              <NativeSelectOption value="">No style</NativeSelectOption>
+              {templates.map((one) => (
+                <NativeSelectOption key={one.id} value={String(one.id)}>
+                  {one.name}
+                </NativeSelectOption>
+              ))}
+            </NativeSelect>
+          ) : null
+        }
+      />
+    </Block>
+  );
+}
+
 function TemplateForm({
   pageId,
   initial,
@@ -1756,9 +2037,11 @@ function TemplateForm({
   }
 
   return (
-    <div className="space-y-3 rounded-2xl border bg-muted/[0.16] p-4">
-      <div className="rounded-xl border bg-background p-3">
-        <Label htmlFor="template-name" className="text-[12px] text-muted-foreground">
+    // Tint, no border: this form is a region of the pane it opens in, and a
+    // card here would be the third surface stacked on the Pane's one.
+    <div className="space-y-5 rounded-2xl bg-muted/[0.16] p-4">
+      <div>
+        <Label htmlFor="template-name" className="text-[13px] font-medium">
           Style name
         </Label>
         <Input
@@ -1771,7 +2054,7 @@ function TemplateForm({
       </div>
 
       {TEMPLATE_FIELDS.map(({ field, label, hint }) => (
-        <div key={field} className="rounded-xl border bg-background p-3">
+        <div key={field}>
           <div className="flex items-baseline justify-between gap-3">
             <Label htmlFor={`template-${field}`} className="text-[13px] font-medium">
               {label}
@@ -1816,6 +2099,14 @@ function TemplateForm({
           </p>
         </div>
       ))}
+
+      <StylePreview
+        pageId={pageId}
+        name={form.name}
+        system={form.system_prompt}
+        overlay={overlay}
+        image={form.image_prompt}
+      />
 
       <div className="flex items-center gap-3">
         <Button size="sm" disabled={!writable || !dirty || busy} onClick={() => void save()}>

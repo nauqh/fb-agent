@@ -27,7 +27,12 @@ function mutated(method?: string): void {
   if (method && method !== "GET") emit();
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function request<T>(
+  path: string,
+  init?: RequestInit,
+  /** This call changes nothing - see `postRead`. */
+  read = false,
+): Promise<T> {
   beginRequest();
   try {
     const response = await fetch(`${BASE}${path}`, {
@@ -44,7 +49,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     if (!response.ok) {
       throw new Error(await detail(response));
     }
-    mutated(init?.method);
+    if (!read) mutated(init?.method);
     return response.json() as Promise<T>;
   } finally {
     endRequest();
@@ -85,6 +90,19 @@ export function get<T>(
 
 export function post<T>(path: string, body: unknown): Promise<T> {
   return request<T>(path, { method: "POST", body: JSON.stringify(body) });
+}
+
+/**
+ * A POST that reads. The body is the query; nothing is stored.
+ *
+ * `mutated` infers a write from the method, which is right for every other
+ * endpoint here and wrong for `/prompts/templates/preview`: it composes two
+ * strings and touches no row. Notifying there refetches every open query on
+ * the screen, and a `useQuery` whose own loader posts refetches **itself** -
+ * the preview fired in a loop for as long as the tab was open.
+ */
+export function postRead<T>(path: string, body: unknown): Promise<T> {
+  return request<T>(path, { method: "POST", body: JSON.stringify(body) }, true);
 }
 
 export function patch<T>(path: string, body: unknown): Promise<T> {
