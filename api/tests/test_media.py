@@ -9,6 +9,9 @@ is an answer. The rest - the URL shape, the content type - is pinned because
 getting it wrong produces a file that uploads fine and is unreadable later.
 """
 
+import json
+from datetime import datetime, timezone
+
 import httpx
 import pytest
 
@@ -212,3 +215,34 @@ def test_two_composites_in_the_same_second_get_different_names():
 
     assert first != second
     assert first.startswith("12-composed-") and first.endswith(".jpg")
+
+
+def test_purge_deletes_only_the_months_older_than_the_cutoff():
+    """Retention is current month plus one: a draft scheduled across a month
+    boundary must still resolve, everything before that is only egress."""
+    seen: list[str] = []
+
+    def handler(request):
+        if "/object/list/fb-agent-media" in request.url.path:
+            prefix = json.loads(request.content)["prefix"]
+            if prefix == "":
+                return httpx.Response(200, json=[
+                    {"name": "2026-07", "id": None},
+                    {"name": "2026-08", "id": None},
+                    {"name": "2026-09", "id": None},
+                ])
+            if prefix == "2026-07/":
+                return httpx.Response(200, json=[
+                    {"name": "42-hero-x-a1b2c3.png", "id": "1"},
+                ])
+            return httpx.Response(200, json=[])
+        seen.append(request.url.path)
+        return httpx.Response(200, json={})
+
+    now = datetime(2026, 9, 20, tzinfo=timezone.utc)
+    deleted = _store(handler).purge_old_months(now=now)
+
+    assert deleted == 1
+    assert [
+        path.removeprefix("https://demo.supabase.co") for path in seen
+    ] == ["/storage/v1/object/fb-agent-media/2026-07/42-hero-x-a1b2c3.png"]

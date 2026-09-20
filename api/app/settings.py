@@ -455,6 +455,12 @@ class Settings(BaseSettings):
     thread never runs against the throwaway database. On in production - a
     single Railway replica is the deploy shape the single-writer code assumes."""
 
+    media_purge_enabled: bool = True
+    """Off in tests (same conftest fixture as the youtube worker) so the purge
+    thread never deletes anything while the suite runs. On in production: it
+    cuts the bucket to the current month and one before, so egress stops
+    accruing on months nobody serves anymore."""
+
 
     unsplash_access_key: str = ""
     """Unsplash, for the Pages whose inset search is set to it (`image.inset`).

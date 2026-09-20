@@ -69,14 +69,17 @@ def no_migrations_at_startup(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def youtube_worker_off(monkeypatch):
-    """The in-process youtube worker must not run against the test database.
+    """The in-process youtube worker and media purge must not run in tests.
 
-    The worker is a daemon thread started by the app lifespan; with this off,
-    `TestClient(app)` boots clean and no thread ever claims a test job row.
-    The worker's own loop is tested by driving `worker._one_pass` directly,
-    which needs no thread.
+    The youtube worker is a daemon thread started by the app lifespan; with
+    this off, `TestClient(app)` boots clean and no thread ever claims a test
+    job row. The purge is the same shape, and it deletes: without this off a
+    startup could sweep the real bucket from inside a test run. The worker's
+    own loop is tested by driving `worker._one_pass` directly, which needs no
+    thread.
     """
     monkeypatch.setattr(settings, "youtube_worker_enabled", False)
+    monkeypatch.setattr(settings, "media_purge_enabled", False)
 
 
 @pytest.fixture(autouse=True)

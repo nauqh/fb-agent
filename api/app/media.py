@@ -20,12 +20,14 @@ with six random hex characters.
 """
 
 import re
+import threading
 import time
 from datetime import datetime, timezone
 from typing import Protocol
 from uuid import uuid4
 
 import httpx
+from loguru import logger
 
 from app.http import shared as http_shared
 from app.settings import settings
@@ -40,6 +42,15 @@ BACKOFF_SECONDS = 0.5
 
 CONTENT_TYPES = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg"}
 """Exactly what the bucket accepts - see `allowed_mime_types` in `supabase/buckets.sql`."""
+
+PURGE_KEEP_MONTHS = 1
+"""Month prefixes the purge keeps beyond the current one. One covers a draft
+scheduled across a month boundary; more is rent on bytes nobody fetches."""
+
+PURGE_POLL_SECONDS = 24 * 60 * 60
+
+LIST_LIMIT = 1000
+"""The list endpoint's own page cap."""
 
 
 class MediaError(RuntimeError):
@@ -123,6 +134,79 @@ class SupabaseMediaStore:
 
     def delete(self, stored: str) -> None:
         self._call("DELETE", stored, missing_ok=True)
+
+    def purge_old_months(
+        self,
+        *,
+        now: datetime | None = None,
+        keep_months: int = PURGE_KEEP_MONTHS,
+    ) -> int:
+        """Delete every file under month prefixes older than the cutoff.
+
+        Retention: the current month plus `keep_months` more. One, because a
+        draft written on the last day of a month can be scheduled into the
+        next, and its picture must still resolve for Facebook's publish-time
+        fetch and the review screen. Older months are kept nowhere here:
+        Metricool holds the published posts, and the trade is that a repost of
+        a deleted month refuses rather than degrading - see `publish.repost`,
+        which already refuses when a copy cannot be made.
+
+        Returns how many files went.
+        """
+        cutoff = _shift_month(now or datetime.now(timezone.utc), -keep_months)
+        deleted = 0
+        for entry in self._list(""):
+            if entry.get("id"):
+                # A file at the top level predates the month prefix; nothing
+                # about its age is knowable, so the purge leaves it alone.
+                continue
+            month = entry["name"]
+            if month < cutoff:
+                deleted += self._delete_prefix(f"{month}/")
+        return deleted
+
+    def _delete_prefix(self, prefix: str) -> int:
+        deleted = 0
+        for entry in self._list(prefix):
+            if entry.get("id"):
+                self.delete(f"{prefix}{entry['name']}")
+                deleted += 1
+            else:
+                deleted += self._delete_prefix(f"{prefix}{entry['name']}/")
+        return deleted
+
+    def _list(self, prefix: str) -> list[dict]:
+        """Everything under `prefix`, following the list endpoint's pages.
+
+        The endpoint caps a page at 1000 entries and a month can hold more
+        files than that, so the walk keeps asking until a short page. Folder
+        entries carry a null `id`; file entries the object's own.
+        """
+        root = settings.supabase_url.rstrip("/")
+        url = f"{root}/storage/v1/object/list/{self.bucket}"
+        headers = {"Authorization": f"Bearer {settings.supabase_service_key}"}
+        client = self._client or http_shared(TIMEOUT)
+
+        entries: list[dict] = []
+        offset = 0
+        while True:
+            response = _attempt(
+                client,
+                "POST",
+                url,
+                headers,
+                {"json": {"prefix": prefix, "limit": LIST_LIMIT, "offset": offset}},
+            )
+            if response.is_error:
+                raise MediaError(
+                    f"Supabase refused listing {prefix!r} "
+                    f"({response.status_code}): {response.text[:200]}"
+                )
+            batch = response.json()
+            entries.extend(batch)
+            if len(batch) < LIST_LIMIT:
+                return entries
+            offset += LIST_LIMIT
 
     def _call(
         self, method: str, stored: str, *, missing_ok: bool = False, **kwargs
@@ -218,6 +302,45 @@ def public_url(stored: str) -> str:
     """
     root = settings.supabase_url.rstrip("/")
     return f"{root}/storage/v1/object/public/{settings.supabase_bucket}/{stored}"
+
+
+def _shift_month(now: datetime, months: int) -> str:
+    """`now` moved by whole months, written the way the bucket prefixes are.
+
+    Month arithmetic rather than a 30-day subtraction: a cutoff that slides
+    with day-of-month would keep a different window every time it ran.
+    """
+    total = now.year * 12 + (now.month - 1) + months
+    return f"{total // 12:04d}-{total % 12 + 1:02d}"
+
+
+def purge_forever() -> None:
+    """Cut the bucket at startup and once a day after.
+
+    Logs only passes that deleted something or raised: the steady no-op lines
+    would be noise forever.
+    """
+    while True:
+        try:
+            deleted = store.purge_old_months()
+            if deleted:
+                logger.info("Purged {} file(s) older than the retention window", deleted)
+        except Exception:  # noqa: BLE001 - one bad pass must not kill the loop
+            logger.exception("Media purge failed")
+        time.sleep(PURGE_POLL_SECONDS)
+
+
+def start_purge_worker() -> threading.Thread | None:
+    """Start the bucket-cutting thread. Called from the app lifespan, and
+    tests disable it by setting `media_purge_enabled` false (conftest autouse
+    fixture - the thread must not delete anything while the suite runs)."""
+    if not settings.media_purge_enabled:
+        logger.info("Media purge disabled (media_purge_enabled=false)")
+        return None
+
+    thread = threading.Thread(target=purge_forever, name="media-purge", daemon=True)
+    thread.start()
+    return thread
 
 
 def watermark_source(upload_path: str | None, asset_path: str | None) -> str | bytes | None:

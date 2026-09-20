@@ -15,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlmodel import Session
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app import generate
+from app import generate, media
 from app.db import get_engine, init_db
 from app.log import logger, setup_logging
 from app.routes import (
@@ -57,6 +57,9 @@ async def lifespan(_app: FastAPI):
     # The one consumer of `youtube_job` rows. Five videos a day; a daemon thread
     # in the API process replaces the old VPS pm2 worker + Redis queue.
     youtube_worker.start()
+    # Cuts the bucket: month prefixes older than the retention window go, at
+    # startup and once a day after. See `media.purge_old_months`.
+    media.start_purge_worker()
     yield
 
 
