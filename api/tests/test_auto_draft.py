@@ -311,6 +311,20 @@ def test_the_monitor_separates_no_competitors_from_nothing_left(
     assert rows[page.name]["assigned_competitors"] == 1
 
 
+def test_the_monitor_carries_each_page_s_logo(client, session, page, pool):
+    """The table draws the Page's mark like Review does, so the fields have to
+    survive the response model - they were added to it and a stale server went
+    on serving a schema without them for two screenshots."""
+    page.avatar_url = "https://static.metricool.com/logo.png"
+    session.add(page)
+    session.commit()
+
+    rows = {row["page_name"]: row for row in client.get("/auto-drafts/status").json()["pages"]}
+
+    assert rows[page.name]["avatar_url"] == "https://static.metricool.com/logo.png"
+    assert "avatar_image_path" in rows[page.name]
+
+
 def test_the_monitor_carries_each_page_s_last_run(client, session, page, pool):
     auto_draft.run(session, page, target=2)
 
