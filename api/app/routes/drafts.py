@@ -168,6 +168,10 @@ class AutoDraftPage(BaseModel):
 
     page_id: int
     page_name: str
+    avatar_url: str | None = None
+    avatar_image_path: str | None = None
+    """The Page's mark, so the table reads like Review's rather than as a list
+    of names. Both fields, because `pageAvatar` picks between them."""
 
     available: int
     """Unused competitor posts left in the window, as at this read. Zero means
@@ -228,6 +232,8 @@ def auto_draft_status(
             AutoDraftPage(
                 page_id=page.id,
                 page_name=page.name,
+                avatar_url=page.avatar_url,
+                avatar_image_path=page.avatar_image_path,
                 available=auto_draft.available(session, page),
                 assigned_competitors=assigned,
                 last_run_at=last.created_at if last else None,

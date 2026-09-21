@@ -325,6 +325,8 @@ export interface ScheduledPost {
 export interface AutoDraftPage {
   page_id: number;
   page_name: string;
+  avatar_url: string | null;
+  avatar_image_path: string | null;
   available: number;
   assigned_competitors: number;
   last_run_at: string | null;
