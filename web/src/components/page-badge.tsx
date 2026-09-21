@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 import { cn } from "@/lib/utils";
 
 /**
@@ -48,12 +50,23 @@ export function PageAvatar({
   // second line is a smudge.
   const box = size === "sm" ? "size-9" : "size-11";
 
-  if (avatarPath) {
+  // A URL that 404s drew a broken-image glyph, which is worse than no logo:
+  // Hot Tub Timeout's Metricool mark is dead and the row showed a torn page
+  // icon. Falling back to the initial is what the rest of this component
+  // already does for a Page with no mark at all.
+  //
+  // The failure is remembered against the URL rather than as a bare boolean,
+  // so a Page whose logo is later fixed - or a different Page rendered through
+  // the same element - retries instead of staying on the letter forever.
+  const [failedFor, setFailedFor] = useState<string | null>(null);
+
+  if (avatarPath && failedFor !== avatarPath) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
         src={avatarPath.startsWith("http") ? avatarPath : `/api/${avatarPath}`}
         alt=""
+        onError={() => setFailedFor(avatarPath)}
         className={cn(box, "shrink-0 rounded-full border bg-white object-contain")}
       />
     );

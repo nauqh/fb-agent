@@ -92,7 +92,7 @@ function pool(page: AutoDraftPage): { tone: StatusTone; label: string; why: stri
       why:
         page.assigned_competitors === 0
           ? "Not in the schedule, and no competitors are ticked for it."
-          : `Not in the schedule. It has ${page.available} unused posts if you add it.`,
+          : `Not in the schedule. It has ${page.available} unused sources if you add it.`,
     };
   }
   if (page.assigned_competitors === 0) {
@@ -106,20 +106,20 @@ function pool(page: AutoDraftPage): { tone: StatusTone; label: string; why: stri
     return {
       tone: "negative",
       label: "Nothing left",
-      why: "Every competitor post in the last 7 days has been written about already.",
+      why: "Every competitor source from the last 7 days has been written about already.",
     };
   }
   if (page.available <= LOW_WATER) {
     return {
       tone: "waiting",
       label: "Running low",
-      why: `${page.available} unused posts left in the last 7 days.`,
+      why: `${page.available} unused competitor sources from the last 7 days.`,
     };
   }
   return {
     tone: "positive",
     label: "Ready",
-    why: `${page.available} unused posts left in the last 7 days.`,
+    why: `${page.available} unused competitor sources from the last 7 days.`,
   };
 }
 
@@ -223,7 +223,7 @@ export default function AutoDraftsScreen() {
           <thead>
             <tr className="border-b bg-muted/30 text-left font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
               <th className="px-5 py-3 font-medium">Page</th>
-              <th className="w-52 px-5 py-3 font-medium">Posts left</th>
+              <th className="w-52 px-5 py-3 font-medium">Sources left</th>
               <th className="w-44 px-5 py-3 font-medium">Last run</th>
               <th className="w-40 px-5 py-3 font-medium">Status</th>
             </tr>
