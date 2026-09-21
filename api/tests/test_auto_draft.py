@@ -1,6 +1,6 @@
-"""Morning auto-drafts: `app.auto_draft` and `POST /generate/auto`.
+"""Auto-drafts: `app.auto_draft` and `POST /generate/auto`.
 
-What is asserted is the picking and the arithmetic - which post a morning takes
+What is asserted is the picking and the arithmetic - which post a run takes
 and how many. The writing itself is `test_generate.py`, so the route test stubs
 `run_drafts` rather than letting a background task reach the writer.
 """
@@ -181,7 +181,7 @@ def test_a_rejected_draft_frees_its_place(session, page, pool):
     assert len(auto_draft.run(session, page, target=1)) == 1
 
 
-def test_nothing_unused_left_is_an_ordinary_morning(session, page):
+def test_nothing_unused_left_is_an_ordinary_run(session, page):
     _assign(session, page.id, LOUD)
 
     assert auto_draft.run(session, page, target=2) == []

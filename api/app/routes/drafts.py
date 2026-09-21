@@ -113,7 +113,7 @@ def start_generate(
 
 
 class AutoGenerateRequest(BaseModel):
-    """What the morning cron sends. See `app/auto_draft.py`."""
+    """What the scheduled cron sends. See `app/auto_draft.py`."""
 
     page_ids: list[int] = Field(min_length=1)
     """The Pages to top up. Named explicitly - there is no per-Page switch, so

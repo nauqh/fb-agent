@@ -1,4 +1,4 @@
-# Morning auto-drafts. Requirements: Obivault/social-agent/PRDs/auto-drafts.md.
+# Auto-drafts, once a day. Requirements: the auto-drafts PRD.
 #
 # PAGE_IDS below is the whole configuration. There is no per-Page switch in the
 # app, deliberately - that would be a column and a migration. Change the list
@@ -17,10 +17,12 @@ name: Auto-drafts
 
 on:
   schedule:
-    # 06:00 in Ho Chi Minh City, which has no DST. GitHub runs scheduled jobs
-    # 10-30 minutes late often enough that it is worth saying: the commitment
-    # is drafts waiting before the working day, not an exact minute.
-    - cron: "0 23 * * *"
+    # 18:00 in Ho Chi Minh City, which has no DST. Drafts are written at the
+    # end of the day and wait overnight, so the team still opens Review to a
+    # full queue. GitHub runs scheduled jobs 10-30 minutes late often enough
+    # that it is worth saying: the commitment is a full queue by morning, not
+    # an exact minute.
+    - cron: "0 11 * * *"
 
   workflow_dispatch:
     inputs:
@@ -37,7 +39,8 @@ permissions: {}
 
 env:
   API: https://fb-agent.up.railway.app
-  PAGE_IDS: "1,2"
+  # The Fact Feed only. 27 competitors assigned, the widest pool of the ten.
+  PAGE_IDS: "2"
   TARGET: "2"
   # The hero is the only variable cost in an unattended run. true reuses the
   # competitor's own picture instead of buying one.
@@ -90,6 +93,6 @@ jobs:
             exit 1
           fi
 
-          # An empty list is an ordinary morning: every queue was already full,
-          # or the Pages have nothing unused left in the window.
+          # An empty list is an ordinary run: every queue was already full, or
+          # the Pages have nothing unused left in the window.
           echo "Queued $(jq 'length' response.json) draft(s): $(cat response.json)"

@@ -1,6 +1,6 @@
-"""Morning auto-drafts: top each Page's queue up from its unused competitor posts.
+"""Auto-drafts: top each Page's queue up from its unused competitor posts.
 
-Requirements: Obivault/social-agent/PRDs/auto-drafts.md.
+Requirements: the auto-drafts PRD.
 
 A cron outside the app POSTs `/generate/auto`. There is no scheduler here and
 no queue table - the Draft row is the job record, so a restart mid-run needs no
@@ -21,7 +21,7 @@ WAITING = (DraftStatus.GENERATING, DraftStatus.REVIEW)
 """What counts against a Page's target.
 
 `failed` is absent deliberately: counting it would stop a Page generating on
-the mornings something is broken. Counting `generating` is what makes the run
+a day when something is broken. Counting `generating` is what makes the run
 safe to call twice, which is why this module has no lock.
 """
 
@@ -81,7 +81,7 @@ def run(
 ) -> list[int]:
     """Top this Page's queue up to `target`. Returns the new Draft ids.
 
-    An empty return is an ordinary morning: the queue was full, or the Page has
+    An empty return is an ordinary run: the queue was full, or the Page has
     nothing unused left in the window.
     """
     short = target - waiting(session, page.id)
