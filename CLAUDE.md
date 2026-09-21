@@ -105,10 +105,16 @@ delete-and-reseed. Say which you are doing.
 
 ## Style
 
+- Short sentences.
+- RFC 2119 keywords (MUST, SHOULD, MAY) for obligations. Use them where a
+  requirement needs strength; plain prose everywhere else.
+- Commit subject: imperative. Body only for a fact the diff cannot show.
+- Comments only where the code needs clarification - never narration.
+
 The user asks for simple approaches and pushes back on over-engineering - they
 are usually right, and several of this codebase's better decisions came from that
-pushback. Match the density of the surrounding file: source carries dense
-explanatory comments, `.env.example` was explicitly asked to stay terse.
+pushback. Match the density of the surrounding file; `.env.example` was
+explicitly asked to stay terse.
 
 ## Integration traps
 
