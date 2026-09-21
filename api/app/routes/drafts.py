@@ -120,7 +120,8 @@ class AutoGenerateRequest(BaseModel):
     this list is the whole of the configuration."""
 
     target: int = Field(2, ge=1, le=10)
-    """How many drafts each Page should have waiting once the run finishes."""
+    """How many drafts to create for each Page. Not a queue depth - drafts
+    already in review are ignored."""
 
     hero_from_source: bool = False
     """Reuse the competitor's own picture instead of buying a hero.

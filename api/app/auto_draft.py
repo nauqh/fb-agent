@@ -13,26 +13,9 @@ from sqlmodel import Session, col, func, select
 
 from app import generate
 from app.log import logger
-from app.models import Draft, DraftStatus, Page, SourceItem
+from app.models import Draft, Page, SourceItem
 from app.routes.sources import _visible_to
 from app.settings import sources as sources_config
-
-WAITING = (DraftStatus.GENERATING, DraftStatus.REVIEW)
-"""What counts against a Page's target.
-
-`failed` is absent deliberately: counting it would stop a Page generating on
-a day when something is broken. Counting `generating` is what makes the run
-safe to call twice, which is why this module has no lock.
-"""
-
-
-def waiting(session: Session, page_id: int) -> int:
-    """How many drafts this Page already has in the queue."""
-    return session.exec(
-        select(func.count(col(Draft.id)))
-        .where(Draft.page_id == page_id)
-        .where(col(Draft.status).in_(WAITING))
-    ).one()
 
 
 def pick(session: Session, page: Page, count: int) -> list[SourceItem]:
@@ -79,16 +62,20 @@ def run(
     target: int,
     hero_from_source: bool = False,
 ) -> list[int]:
-    """Top this Page's queue up to `target`. Returns the new Draft ids.
+    """Generate `target` drafts for this Page. Returns the new Draft ids.
 
-    An empty return is an ordinary run: the queue was full, or the Page has
-    nothing unused left in the window.
+    A flat count, not a top-up. Drafts already in `review` are not a queue
+    here: measured 2026-09-21, the seven Pages with competitors assigned held
+    9 to 247 of them, the oldest 41 days, so a run that subtracted them would
+    never generate anything again.
+
+    Nothing stops two runs an hour apart producing two more drafts each. What
+    they cannot do is produce the *same* draft twice - `pick` excludes every
+    post a draft already came from.
+
+    An empty return means the Page has nothing unused left in the window.
     """
-    short = target - waiting(session, page.id)
-    if short <= 0:
-        return []
-
-    items = pick(session, page, short)
+    items = pick(session, page, target)
     if not items:
         logger.bind(page=page.name).info(
             "No auto-draft for {}: nothing unused in the window", page.name

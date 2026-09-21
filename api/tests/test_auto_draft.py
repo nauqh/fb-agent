@@ -8,7 +8,7 @@ and how many. The writing itself is `test_generate.py`, so the route test stubs
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from sqlmodel import select
+from sqlmodel import col, select
 
 from app import auto_draft, generate
 from app.models import (
@@ -134,51 +134,43 @@ def test_a_competitor_nobody_ticked_is_invisible(session, page, pool):
     assert "unticked" not in [item.external_id for item in picked]
 
 
-# --- the top-up arithmetic ---------------------------------------------------
+# --- how many a run makes ----------------------------------------------------
 
 
-def test_an_empty_queue_fills_to_the_target(session, page, pool):
+def test_a_run_makes_exactly_the_target(session, page, pool):
     ids = auto_draft.run(session, page, target=2)
 
     assert len(ids) == 2
 
 
-def test_a_partly_full_queue_only_makes_up_the_difference(session, page, pool):
-    _draft(session, page.id, DraftStatus.REVIEW)
-
-    ids = auto_draft.run(session, page, target=2)
-
-    assert len(ids) == 1
-
-
-def test_a_full_queue_generates_nothing(session, page, pool):
-    _draft(session, page.id, DraftStatus.REVIEW)
-    _draft(session, page.id, DraftStatus.REVIEW)
-
-    assert auto_draft.run(session, page, target=2) == []
-
-
-def test_calling_it_twice_generates_nothing_the_second_time(session, page, pool):
-    """The double-fire guard, and the reason this module needs no lock: the
-    first run's rows are still `generating` when the second call counts."""
-    first = auto_draft.run(session, page, target=2)
-
-    assert len(first) == 2
-    assert auto_draft.run(session, page, target=2) == []
-
-
-def test_a_failed_draft_does_not_hold_a_place(session, page, pool):
-    """Otherwise a Page stops generating precisely when something is broken."""
-    _draft(session, page.id, DraftStatus.FAILED)
-    _draft(session, page.id, DraftStatus.FAILED)
+def test_drafts_already_in_review_are_ignored(session, page, pool):
+    """`review` is not a queue on these Pages. Measured 2026-09-21, the seven
+    Pages with competitors assigned held 9 to 247 unreviewed drafts, the oldest
+    41 days, so subtracting them would generate nothing ever again."""
+    for _ in range(5):
+        _draft(session, page.id, DraftStatus.REVIEW)
 
     assert len(auto_draft.run(session, page, target=2)) == 2
 
 
-def test_a_rejected_draft_frees_its_place(session, page, pool):
-    _draft(session, page.id, DraftStatus.REJECTED)
+def test_a_second_run_makes_different_drafts_not_the_same_ones(session, page, pool):
+    """Nothing stops two runs both generating. What they cannot do is generate
+    the same post twice - that is `pick`, not a count of the queue."""
+    first = auto_draft.run(session, page, target=2)
+    second = auto_draft.run(session, page, target=1)
 
-    assert len(auto_draft.run(session, page, target=1)) == 1
+    assert len(first) == 2
+    assert len(second) == 1
+
+    rows = session.exec(select(Draft).where(col(Draft.id).in_(first + second))).all()
+    sources = [row.source_item_id for row in rows]
+    assert len(set(sources)) == 3
+
+
+def test_a_run_takes_what_is_left_when_the_pool_runs_short(session, page, pool):
+    auto_draft.run(session, page, target=2)
+
+    assert len(auto_draft.run(session, page, target=5)) == 1
 
 
 def test_nothing_unused_left_is_an_ordinary_run(session, page):
@@ -232,9 +224,8 @@ def test_the_route_needs_at_least_one_page(client, queued):
     assert client.post("/generate/auto", json={"page_ids": []}).status_code == 422
 
 
-def test_a_full_queue_queues_no_background_work(client, session, page, pool, queued):
-    _draft(session, page.id, DraftStatus.REVIEW)
-    _draft(session, page.id, DraftStatus.REVIEW)
+def test_an_exhausted_pool_queues_no_background_work(client, session, page, queued):
+    _assign(session, page.id, LOUD)
 
     response = client.post(
         "/generate/auto", json={"page_ids": [page.id], "target": 2}

@@ -41,6 +41,8 @@ env:
   API: https://fb-agent.up.railway.app
   # The Fact Feed only. 27 competitors assigned, the widest pool of the ten.
   PAGE_IDS: "2"
+  # Drafts created per Page per run. Not a queue depth - what is already in
+  # review is ignored, so this is the whole of the daily spend.
   TARGET: "2"
   # The hero is the only variable cost in an unattended run. true reuses the
   # competitor's own picture instead of buying one.
@@ -93,6 +95,6 @@ jobs:
             exit 1
           fi
 
-          # An empty list is an ordinary run: every queue was already full, or
-          # the Pages have nothing unused left in the window.
+          # An empty list means the Pages have nothing unused left in the
+          # window, which is the cue to look at their competitors in Settings.
           echo "Queued $(jq 'length' response.json) draft(s): $(cat response.json)"
