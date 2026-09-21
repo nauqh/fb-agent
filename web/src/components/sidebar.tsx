@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   BarChart3,
+  Bot,
   CalendarDays,
   Check,
   ChevronDown,
@@ -79,6 +80,7 @@ const LINKS: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/manual", label: "Manual", icon: PenLine },
   { href: "/review", label: "Review", icon: Inbox },
   { href: "/schedule", label: "Schedule", icon: CalendarDays },
+  { href: "/auto-drafts", label: "Auto-drafts", icon: Bot },
 ];
 
 /**

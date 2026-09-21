@@ -1133,3 +1133,40 @@ class YoutubeJob(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=_now)
     started_at: datetime | None = None
     finished_at: datetime | None = None
+
+
+class AutoDraftRun(SQLModel, table=True):
+    """One Page's share of one auto-draft run. The record the screen reads.
+
+    The Draft rows cannot answer "did tonight's run fire": a run that generated
+    nothing leaves no trace on them, and a run that generated two is
+    indistinguishable from an operator pressing Generate twice. So the run gets
+    its own row, written whether or not it produced anything.
+
+    `note` carries the reason a run made fewer drafts than asked - an exhausted
+    pool, or a Page with no competitors ticked. Null when it made what it was
+    asked for. It is the difference between "the automation is broken" and
+    "there was nothing left to write about", which look identical in a count.
+
+    Deliberately not a job queue. Nothing reads this back to decide what to do
+    next; `pick` excluding used posts is what makes a run idempotent, and that
+    is a property of the Draft rows, not of this table.
+    """
+
+    __tablename__ = "auto_draft_run"
+
+    id: int | None = Field(default=None, primary_key=True)
+    page_id: int = Field(foreign_key="page.id", index=True)
+
+    drafts_created: int = 0
+    available: int = 0
+    """Unused posts left in the window *after* this run took its share.
+
+    Stored rather than recomputed on read, because it is the number that says a
+    Page is running dry and it is only true as at the run. Recomputing it later
+    answers a different question - what is left now - and the two diverge as
+    soon as the sync brings more posts in.
+    """
+
+    note: str | None = None
+    created_at: datetime = Field(default_factory=_now, index=True)

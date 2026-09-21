@@ -22,16 +22,18 @@ from fastapi import (
 )
 from PIL import Image
 from pydantic import BaseModel, Field
-from sqlmodel import Session, select
+from sqlmodel import Session, col, func, select
 
 from app import auto_draft, generate, media
 from app.db import get_session
 from app.image import inset
 from app.log import logger
 from app.models import (
+    AutoDraftRun,
     Draft,
     DraftStatus,
     Page,
+    PageCompetitor,
     PromptTemplate,
     SourceItem,
     SourceItemBase,
@@ -159,6 +161,82 @@ def start_auto_generate(
     if draft_ids:
         background.add_task(generate.run_drafts, draft_ids)
     return draft_ids
+
+
+class AutoDraftPage(BaseModel):
+    """One Page's automation health, for the monitor screen."""
+
+    page_id: int
+    page_name: str
+
+    available: int
+    """Unused competitor posts left in the window, as at this read. Zero means
+    the next run writes nothing for this Page."""
+
+    assigned_competitors: int
+    """Why `available` is zero, when it is. A Page with none ticked can never
+    have candidates, and that is a Settings problem rather than a dry spell."""
+
+    last_run_at: datetime | None = None
+    last_run_drafts: int | None = None
+    last_run_note: str | None = None
+
+
+class AutoDraftStatus(BaseModel):
+    pages: list[AutoDraftPage]
+    runs: list[AutoDraftRun]
+    """Most recent first, across every Page."""
+
+
+@router.get("/auto-drafts/status")
+def auto_draft_status(
+    limit: int = Query(20, ge=1, le=100, description="How many recent runs to return"),
+    session: Session = Depends(get_session),
+) -> AutoDraftStatus:
+    """What the automation did last, and which Pages are about to run dry.
+
+    Every Page, not the selected one: the question this answers is "is anything
+    wrong anywhere", which a per-Page scope cannot ask. Pages nobody automates
+    are included deliberately - their `available` is what says whether they
+    *could* be added to the cron line.
+
+    `available` is recomputed here rather than read from the last run's stored
+    copy. The two answer different questions: the row records what was left at
+    the time, this records what is left now, and the sync moves it in between.
+    """
+    pages = session.exec(select(Page).order_by(col(Page.name))).all()
+
+    runs = session.exec(
+        select(AutoDraftRun).order_by(col(AutoDraftRun.created_at).desc()).limit(limit)
+    ).all()
+
+    latest: dict[int, AutoDraftRun] = {}
+    for run in runs:
+        latest.setdefault(run.page_id, run)
+
+    out = []
+    for page in pages:
+        if page.id is None:
+            continue
+        last = latest.get(page.id)
+        assigned = session.exec(
+            select(func.count(col(PageCompetitor.id))).where(
+                PageCompetitor.page_id == page.id
+            )
+        ).one()
+        out.append(
+            AutoDraftPage(
+                page_id=page.id,
+                page_name=page.name,
+                available=auto_draft.available(session, page),
+                assigned_competitors=assigned,
+                last_run_at=last.created_at if last else None,
+                last_run_drafts=last.drafts_created if last else None,
+                last_run_note=last.note if last else None,
+            )
+        )
+
+    return AutoDraftStatus(pages=out, runs=list(runs))
 
 
 MAX_HERO_BYTES = 16 * 1024 * 1024

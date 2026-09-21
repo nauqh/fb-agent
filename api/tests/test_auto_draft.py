@@ -12,6 +12,7 @@ from sqlmodel import col, select
 
 from app import auto_draft, generate
 from app.models import (
+    AutoDraftRun,
     Draft,
     DraftStatus,
     Page,
@@ -234,3 +235,86 @@ def test_an_exhausted_pool_queues_no_background_work(client, session, page, queu
     assert response.status_code == 202
     assert response.json() == []
     assert queued == []
+
+
+# --- the run record and the monitor ------------------------------------------
+
+
+def test_a_run_that_made_nothing_is_still_recorded(session, page):
+    """The whole reason the table exists: a night the cron did not fire and a
+    night it found nothing look identical in the Draft table."""
+    _assign(session, page.id, LOUD)
+
+    auto_draft.run(session, page, target=2)
+
+    runs = session.exec(select(AutoDraftRun)).all()
+    assert len(runs) == 1
+    assert runs[0].drafts_created == 0
+    assert "No unused competitor posts" in (runs[0].note or "")
+
+
+def test_a_short_pool_says_so_on_the_run(session, page, pool):
+    auto_draft.run(session, page, target=2)
+
+    run = auto_draft.run(session, page, target=5)
+
+    assert len(run) == 1
+    latest = session.exec(
+        select(AutoDraftRun).order_by(col(AutoDraftRun.id).desc())
+    ).first()
+    assert latest is not None
+    assert "asked for 5" in (latest.note or "")
+
+
+def test_a_clean_run_records_no_note(session, page, pool):
+    auto_draft.run(session, page, target=2)
+
+    run = session.exec(select(AutoDraftRun)).one()
+    assert run.drafts_created == 2
+    assert run.note is None
+
+
+def test_available_counts_what_is_left(session, page, pool):
+    assert auto_draft.available(session, page) == 3
+
+    auto_draft.run(session, page, target=2)
+
+    assert auto_draft.available(session, page) == 1
+
+
+def test_the_monitor_reports_every_page_not_the_selected_one(client, session, page, pool):
+    other = Page(name="Hot Tub Timeout", facebook_page_id="888")
+    session.add(other)
+    session.commit()
+
+    body = client.get("/auto-drafts/status").json()
+
+    names = [row["page_name"] for row in body["pages"]]
+    assert "Hot Tub Timeout" in names
+    assert page.name in names
+
+
+def test_the_monitor_separates_no_competitors_from_nothing_left(
+    client, session, page, pool
+):
+    """Both are zero available, and they need different actions."""
+    bare = Page(name="Hot Tub Timeout", facebook_page_id="888")
+    session.add(bare)
+    session.commit()
+    auto_draft.run(session, page, target=5)  # drain the pool
+
+    rows = {row["page_name"]: row for row in client.get("/auto-drafts/status").json()["pages"]}
+
+    assert rows["Hot Tub Timeout"]["available"] == 0
+    assert rows["Hot Tub Timeout"]["assigned_competitors"] == 0
+    assert rows[page.name]["available"] == 0
+    assert rows[page.name]["assigned_competitors"] == 1
+
+
+def test_the_monitor_carries_each_page_s_last_run(client, session, page, pool):
+    auto_draft.run(session, page, target=2)
+
+    rows = {row["page_name"]: row for row in client.get("/auto-drafts/status").json()["pages"]}
+
+    assert rows[page.name]["last_run_drafts"] == 2
+    assert rows[page.name]["last_run_at"] is not None

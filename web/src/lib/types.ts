@@ -314,3 +314,35 @@ export interface ScheduledPost {
   /** Ours, when the post came from this app. Null for everything else. */
   draft_id: number | null;
 }
+
+/**
+ * One Page's automation health, for the auto-drafts monitor.
+ *
+ * `available` is what says a Page is about to run dry, and
+ * `assigned_competitors` is what says why: zero of them is a Settings problem,
+ * not a dry spell, and the two look identical in a count of zero.
+ */
+export interface AutoDraftPage {
+  page_id: number;
+  page_name: string;
+  available: number;
+  assigned_competitors: number;
+  last_run_at: string | null;
+  last_run_drafts: number | null;
+  last_run_note: string | null;
+}
+
+/** One Page's share of one run, recorded whether or not it made anything. */
+export interface AutoDraftRun {
+  id: number;
+  page_id: number;
+  drafts_created: number;
+  available: number;
+  note: string | null;
+  created_at: string;
+}
+
+export interface AutoDraftStatus {
+  pages: AutoDraftPage[];
+  runs: AutoDraftRun[];
+}
