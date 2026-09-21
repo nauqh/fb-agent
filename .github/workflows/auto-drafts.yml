@@ -1,0 +1,95 @@
+# Morning auto-drafts. Requirements: Obivault/social-agent/PRDs/auto-drafts.md.
+#
+# PAGE_IDS below is the whole configuration. There is no per-Page switch in the
+# app, deliberately - that would be a column and a migration. Change the list
+# here and commit.
+#
+# A Page with no competitors assigned produces nothing, silently. Fitness Girls
+# (5), GYM Motivation (7) and Hot Tub Timeout (9) were in that state on
+# 2026-09-21. Tick competitors on Settings before adding them here.
+#
+#   1  History Retraced       6  Fitness Recipes
+#   2  The Fact Feed          8  GYM Motivation | quotes | videos | tips|
+#   3  Bible Focus           10  House of Common Sense
+#   4  Bodybuilding Tips N Tricks
+
+name: Auto-drafts
+
+on:
+  schedule:
+    # 06:00 in Ho Chi Minh City, which has no DST. GitHub runs scheduled jobs
+    # 10-30 minutes late often enough that it is worth saying: the commitment
+    # is drafts waiting before the working day, not an exact minute.
+    - cron: "0 23 * * *"
+
+  workflow_dispatch:
+    inputs:
+      page_ids:
+        description: "Page ids, comma separated. Blank uses the scheduled list."
+        required: false
+        default: ""
+      target:
+        description: "Drafts each Page should have waiting. Blank uses 2."
+        required: false
+        default: ""
+
+permissions: {}
+
+env:
+  API: https://fb-agent.up.railway.app
+  PAGE_IDS: "1,2"
+  TARGET: "2"
+  # The hero is the only variable cost in an unattended run. true reuses the
+  # competitor's own picture instead of buying one.
+  HERO_FROM_SOURCE: "false"
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    # The route answers 202 as soon as the rows exist; the writing happens in
+    # the API process afterwards. This waits for the hand-off, not the drafts.
+    timeout-minutes: 5
+
+    steps:
+      - name: Top up each Page's queue
+        env:
+          API_KEY: ${{ secrets.FB_AGENT_API_KEY }}
+          # Through the environment rather than inline `${{ }}`, so a dispatch
+          # input is data and never shell.
+          INPUT_PAGE_IDS: ${{ inputs.page_ids }}
+          INPUT_TARGET: ${{ inputs.target }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${API_KEY:-}" ]; then
+            echo "::error::FB_AGENT_API_KEY is not set in repository secrets"
+            exit 1
+          fi
+
+          ids="${INPUT_PAGE_IDS:-}"
+          ids="${ids:-$PAGE_IDS}"
+          target="${INPUT_TARGET:-}"
+          target="${target:-$TARGET}"
+
+          body=$(jq -nc \
+            --argjson ids "[$ids]" \
+            --argjson target "$target" \
+            --argjson hero "$HERO_FROM_SOURCE" \
+            '{page_ids: $ids, target: $target, hero_from_source: $hero}')
+          echo "Requesting: $body"
+
+          code=$(curl -sS -o response.json -w '%{http_code}' \
+            -X POST "$API/generate/auto" \
+            -H "X-API-Key: $API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "$body")
+
+          if [ "$code" != "202" ]; then
+            echo "::error::/generate/auto answered $code"
+            cat response.json
+            exit 1
+          fi
+
+          # An empty list is an ordinary morning: every queue was already full,
+          # or the Pages have nothing unused left in the window.
+          echo "Queued $(jq 'length' response.json) draft(s): $(cat response.json)"
