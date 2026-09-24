@@ -815,11 +815,12 @@ def test_a_fallback_run_flags_the_result_as_not_read_live(page, monkeypatch):
 
     The warning on the Draft is `generate`'s job; here what is pinned is that
     `write` reports the fallback at all - without it the operator sees a
-    finished-looking draft written from a headline.
+    finished-looking draft written from a headline. RSS only: a web item's
+    text IS the article body, so it never fetches and never falls back.
     """
     source = SourceItem(
         id=1,
-        kind=SourceKind.WEB,
+        kind=SourceKind.RSS,
         external_id="u",
         text="Stub only.",
         url="https://example.com/x",
