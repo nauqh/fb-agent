@@ -2,13 +2,10 @@
 
 Same shape as the Tweets tab: never a browsable list, one paste box, one lookup
 at a time. This module reads the page server-side with stdlib HTMLParser only -
-`<meta>` tags for the stub, and the `<p>` text for the body. The writer still
-fetches the article itself at generate time through URL context, exactly as it
-does for RSS; the body here is the **fallback** that run drops to, in the same
-role the feed summary plays for RSS. That fallback is not decoration: sites
-whose robots.txt blocks AI fetchers (Australian Community Media, the BBC) refuse
-the model's reader but serve plain HTML to this module, and without a body the
-fallback prompt is a headline and the model invents the rest.
+`<meta>` tags for the stub, and the `<p>` text for the body. That body **is**
+the source: the writer does not fetch a WEB item's URL, because Gemini's reader
+is refused by robots.txt on whole publisher networks (Australian Community
+Media, the BBC) that serve plain HTML to this module.
 
 Browsing does not write, like every adapter here: the item becomes a row only
 when a run uses it.
@@ -30,9 +27,12 @@ _META_KEYS = ("og:title", "og:description", "og:site_name", "og:image")
 _SKIP_TAGS = frozenset({"script", "style", "nav", "header", "footer", "aside", "form"})
 # A paragraph shorter than this is a byline, a caption or a menu item.
 _MIN_PARAGRAPH = 40
-# The fallback prompt carries this; a full longread is past 40k characters and
+# The writer's prompt carries this; a full longread is past 40k characters and
 # the model needs the story, not every sentence of it.
 _MAX_BODY_CHARS = 12_000
+# Below this the page is not an article: a JS shell, a cookie or paywall notice.
+# Real articles measured 3,900+ characters; those non-articles 0-80.
+_MIN_BODY_CHARS = 500
 
 
 class WebError(RuntimeError):
@@ -104,8 +104,18 @@ def fetch_article(url: str, client: httpx.Client | None = None) -> SourceItemBas
         ) as session:
             response = session.get(value, headers={"User-Agent": USER_AGENT})
             response.raise_for_status()
+    except httpx.HTTPStatusError as error:
+        # 401/403 is a bot wall (AP, NYT, Smithsonian); a browser user agent
+        # does not get past it either, so the message says so rather than retry.
+        code = error.response.status_code
+        if code in (401, 403):
+            raise WebError(
+                f"The site refused the request ({code}) - it blocks automated "
+                "readers. Try another source for the story."
+            ) from error
+        raise WebError(f"The page did not answer ({code}).") from error
     except httpx.HTTPError as error:
-        raise WebError(f"The page did not answer: {error}") from error
+        raise WebError(f"The page did not answer: {type(error).__name__}") from error
 
     page = _Page()
     page.feed(response.text)
@@ -128,6 +138,13 @@ def fetch_article(url: str, client: httpx.Client | None = None) -> SourceItemBas
             pass
 
     body = "\n\n".join(page.paragraphs)
+    # Refused on screen, not handed to the writer as a headline it would invent
+    # a post around.
+    if len(body) < _MIN_BODY_CHARS:
+        raise WebError(
+            f"Could not read the article text on {final_url} - the page may need "
+            "JavaScript or a login. Try another source for the story."
+        )
     if len(body) > _MAX_BODY_CHARS:
         body = body[:_MAX_BODY_CHARS]
 

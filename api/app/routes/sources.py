@@ -877,7 +877,7 @@ def get_tweet(url: str = Query(...)) -> SourceItemBase:
 
 @router.get("/web")
 def get_web(url: str = Query(...)) -> SourceItemBase:
-    """One live lookup. Nothing is written; the article body is the writer's fetch."""
+    """One live lookup. Nothing is written."""
     try:
         return web.fetch_article(url)
     except web.WebError as error:

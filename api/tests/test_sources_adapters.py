@@ -353,6 +353,9 @@ def test_no_token_is_refused_before_the_request(monkeypatch):
 
 # --- Web ---------------------------------------------------------------------
 
+# Past the adapter's minimum, so a fixture reads as an article.
+ARTICLE_BODY = "<p>" + "Marie Tharp drew the ridge from soundings. " * 15 + "</p>"
+
 PAGE_HTML = """
 <html><head>
   <title>Marie Tharp Drew the Ridge by Hand</title>
@@ -362,7 +365,7 @@ PAGE_HTML = """
   <meta property="og:image" content="https://example.com/tharp.jpg">
   <meta property="article:published_time" content="2026-08-03T09:15:00Z">
   <meta name="og:image" content="second one must not win">
-</head><body>article text the adapter never reads</body></html>
+</head><body>""" + ARTICLE_BODY + """</body></html>
 """
 
 
@@ -374,7 +377,7 @@ class _WebResponse:
 
     def raise_for_status(self):
         if self.status_code >= 400:
-            raise web.httpx.HTTPStatusError("refused", request=None, response=None)
+            raise web.httpx.HTTPStatusError("refused", request=None, response=self)
 
 
 @pytest.fixture
@@ -420,9 +423,25 @@ def test_a_page_maps_onto_the_shared_shape(page_fetch):
 
 
 def test_the_title_tag_fills_in_for_a_missing_og_title(page_fetch):
-    page_fetch("<html><head><title>Just a Title</title></head></html>", "https://a/x")
+    page_fetch(
+        f"<html><head><title>Just a Title</title></head>{ARTICLE_BODY}</html>",
+        "https://a/x",
+    )
 
-    assert web.fetch_article("https://a/x").text == "Just a Title"
+    assert web.fetch_article("https://a/x").text.startswith("Just a Title\n\n")
+
+
+def test_a_page_without_article_text_is_refused(page_fetch):
+    """A JS shell or a cookie notice answers 200 with a title and nothing else;
+    the writer would invent a post around the headline."""
+    page_fetch(
+        "<html><head><title>News</title></head>"
+        "<body><p>Please enable JS and disable any ad blocker</p></body></html>",
+        "https://a/x",
+    )
+
+    with pytest.raises(web.WebError, match="Could not read the article text"):
+        web.fetch_article("https://a/x")
 
 
 def test_a_page_without_any_title_is_refused(page_fetch):
@@ -432,10 +451,17 @@ def test_a_page_without_any_title_is_refused(page_fetch):
         web.fetch_article("https://a/x")
 
 
-def test_a_refused_page_raises(page_fetch):
+def test_a_bot_wall_says_so(page_fetch):
     page_fetch("", "https://a/x", status_code=403)
 
-    with pytest.raises(web.WebError, match="did not answer"):
+    with pytest.raises(web.WebError, match="blocks automated readers"):
+        web.fetch_article("https://a/x")
+
+
+def test_a_missing_page_raises(page_fetch):
+    page_fetch("", "https://a/x", status_code=404)
+
+    with pytest.raises(web.WebError, match=r"did not answer \(404\)"):
         web.fetch_article("https://a/x")
 
 
@@ -459,7 +485,8 @@ def test_the_page_body_is_extracted_for_the_fallback_prompt(page_fetch):
         "<script>var x = 1;</script>"
         "<p>Her maps showed what nobody believed until the 1960s.</p>"
         "<p>short</p>"
-        "</body></html>"
+        + ARTICLE_BODY
+        + "</body></html>"
     )
     page_fetch(html, "https://a/x")
 
@@ -469,4 +496,4 @@ def test_the_page_body_is_extracted_for_the_fallback_prompt(page_fetch):
     assert "what nobody believed" in text
     assert "Menu item" not in text, "chrome is skipped"
     assert "var x" not in text, "script is skipped"
-    assert text.count("\n\n") == 2, "one paragraph per block, separated"
+    assert text.count("\n\n") == 3, "one paragraph per block, separated"
