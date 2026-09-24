@@ -121,6 +121,11 @@ export async function getTweet(url: string): Promise<LiveSourceItem> {
   return get<LiveSourceItem>("/sources/tweet", { url });
 }
 
+/** One page resolved from a pasted URL. Same shape as the Tweets tab. */
+export async function getWeb(url: string): Promise<LiveSourceItem> {
+  return get<LiveSourceItem>("/sources/web", { url });
+}
+
 /** Mirrors `SourcesConfigOut` in api/app/routes/sources.py. */
 export interface SourcesConfig {
   since_days: number;

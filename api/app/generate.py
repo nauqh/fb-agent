@@ -251,6 +251,7 @@ SOURCE_LABEL = {
     SourceKind.RSS: "RSS article",
     SourceKind.TWEET: "tweet",
     SourceKind.COMPETITOR_POST: "competitor post",
+    SourceKind.WEB: "web article",
 }
 
 
@@ -528,13 +529,19 @@ def build_image(session: Session, draft: Draft, page: Page) -> list[str]:
                 if draft.source_item_id
                 else None
             )
-            # **RSS and tweets, never a competitor post.** A competitor's
-            # picture is a rival page's own creative, and reusing it is
-            # reposting their content under our watermark. Tweets were refused
-            # on the same reasoning until the client asked for them
+            # **RSS, tweets and web pages, never a competitor post.** A
+            # competitor's picture is a rival page's own creative, and reusing
+            # it is reposting their content under our watermark. Tweets were
+            # refused on the same reasoning until the client asked for them
             # (2026-09-16): a news account's photo is the picture of the event,
-            # where an AI or stock image would be wrong.
-            if source is None or source.kind not in (SourceKind.RSS, SourceKind.TWEET):
+            # where an AI or stock image would be wrong. A web article's
+            # og:image is the same case - the publisher's own photograph of the
+            # story.
+            if source is None or source.kind not in (
+                SourceKind.RSS,
+                SourceKind.TWEET,
+                SourceKind.WEB,
+            ):
                 return [
                     f"{IMAGE_WARNING}a competitor post's picture is never reused; "
                     "it belongs to whoever published it."

@@ -1,4 +1,4 @@
-"""Sources: browse three kinds. Reads only.
+"""Sources: browse four kinds. Reads only.
 
 **Browsing does not write.** Nothing here creates a Source Item - the Cart
 carries what the operator ticked and `POST /generate` writes only what a run
@@ -33,7 +33,7 @@ from app.models import (
     SourceKind,
 )
 from app.settings import sources as sources_config
-from app.sources import metricool, rss, x
+from app.sources import metricool, rss, web, x
 
 router = APIRouter(prefix="/sources", tags=["sources"])
 
@@ -872,6 +872,15 @@ def get_tweet(url: str = Query(...)) -> SourceItemBase:
     try:
         return x.fetch_tweet(url)
     except x.XError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+
+
+@router.get("/web")
+def get_web(url: str = Query(...)) -> SourceItemBase:
+    """One live lookup. Nothing is written; the article body is the writer's fetch."""
+    try:
+        return web.fetch_article(url)
+    except web.WebError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
 
 

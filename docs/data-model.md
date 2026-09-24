@@ -203,8 +203,8 @@ erDiagram
 
     SOURCE_ITEM {
         int id PK
-        text kind "competitor_post | tweet | rss"
-        text external_id "post id, tweet id, feed guid"
+        text kind "competitor_post | tweet | rss | web"
+        text external_id "post id, tweet id, feed guid, article URL"
         text author "competitor name, handle, publisher"
         int synced_for_page_id FK "competitor_post only"
         text competitor_page_id "Metricool's providerId - joins to page_competitor"
@@ -340,7 +340,7 @@ polls.
 | `kind` | Subject | Instruction to the writer |
 |---|---|---|
 | `competitor_post` | **binding** | same story - and not their wording |
-| `tweet`, `rss` | **binding** | write about this *same* story, people, events |
+| `tweet`, `rss`, `web` | **binding** | write about this *same* story, people, events |
 
 `competitor_post` was "not binding" until 2026-08-18 - borrow the tone, pick your
 own story - and the client reported it as the tool not generating from the

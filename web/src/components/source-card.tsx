@@ -6,6 +6,7 @@ import {
   Check,
   ExternalLink,
   Eye,
+  Globe,
   ImageOff,
   Loader2,
   MessageCircle,
@@ -35,6 +36,7 @@ export const KIND_LABEL: Record<SourceKind, string> = {
   competitor_post: "Competitor post",
   tweet: "Tweet",
   rss: "RSS item",
+  web: "Web page",
 };
 
 /** Stands in for a picture there never was. See `SourceThumbnail`. */
@@ -42,6 +44,7 @@ export const KIND_GLYPH: Record<SourceKind, typeof Users> = {
   competitor_post: Users,
   tweet: Bird,
   rss: Newspaper,
+  web: Globe,
 };
 
 interface SourceCardProps {

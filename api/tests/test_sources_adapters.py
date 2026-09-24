@@ -10,7 +10,7 @@ import pytest
 from sqlmodel import select
 
 from app.models import Feed, Page, SourceKind
-from app.sources import metricool, rss, x
+from app.sources import metricool, rss, web, x
 
 # --- Metricool -------------------------------------------------------------
 
@@ -349,3 +349,100 @@ def test_no_token_is_refused_before_the_request(monkeypatch):
 
     with pytest.raises(x.XError, match="X_BEARER_TOKEN"):
         x.fetch_tweet("https://x.com/a/status/1")
+
+
+# --- Web ---------------------------------------------------------------------
+
+PAGE_HTML = """
+<html><head>
+  <title>Marie Tharp Drew the Ridge by Hand</title>
+  <meta property="og:title" content="Marie Tharp Drew the Ridge by Hand">
+  <meta property="og:description" content="Her maps showed what nobody believed.">
+  <meta property="og:site_name" content="Smithsonian Magazine">
+  <meta property="og:image" content="https://example.com/tharp.jpg">
+  <meta property="article:published_time" content="2026-08-03T09:15:00Z">
+  <meta name="og:image" content="second one must not win">
+</head><body>article text the adapter never reads</body></html>
+"""
+
+
+class _WebResponse:
+    def __init__(self, html: str, url: str, status_code: int = 200):
+        self.text = html
+        self.url = url
+        self.status_code = status_code
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise web.httpx.HTTPStatusError("refused", request=None, response=None)
+
+
+@pytest.fixture
+def page_fetch(monkeypatch):
+    """Serve one canned page from the final URL a redirect chain landed on."""
+    calls: list[str] = []
+
+    def serve(html: str, final_url: str, status_code: int = 200):
+        class Client:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                return False
+
+            def get(self, url, **_):
+                calls.append(url)
+                return _WebResponse(html, final_url, status_code)
+
+        monkeypatch.setattr(web.httpx, "Client", lambda **_: Client())
+        return calls
+
+    return serve
+
+
+def test_a_page_maps_onto_the_shared_shape(page_fetch):
+    page_fetch(
+        PAGE_HTML, "https://www.smithsonianmag.com/history/tharp-180977231/"
+    )
+
+    item = web.fetch_article(
+        "https://smithsonianmag.com/history/tharp-180977231/?utm_source=rss"
+    )
+
+    assert item.kind is SourceKind.WEB
+    # The final URL is the identity, not what was pasted - trackers and
+    # shorteners would otherwise give one article several external_ids.
+    assert item.external_id == "https://www.smithsonianmag.com/history/tharp-180977231/"
+    assert item.author == "Smithsonian Magazine"
+    assert item.text.startswith("Marie Tharp Drew the Ridge by Hand")
+    assert item.image_url == "https://example.com/tharp.jpg"
+    assert item.published_at == datetime(2026, 8, 3, 9, 15, tzinfo=timezone.utc)
+
+
+def test_the_title_tag_fills_in_for_a_missing_og_title(page_fetch):
+    page_fetch("<html><head><title>Just a Title</title></head></html>", "https://a/x")
+
+    assert web.fetch_article("https://a/x").text == "Just a Title"
+
+
+def test_a_page_without_any_title_is_refused(page_fetch):
+    page_fetch("<html><body>no head at all</body></html>", "https://a/x")
+
+    with pytest.raises(web.WebError, match="No title"):
+        web.fetch_article("https://a/x")
+
+
+def test_a_refused_page_raises(page_fetch):
+    page_fetch("", "https://a/x", status_code=403)
+
+    with pytest.raises(web.WebError, match="did not answer"):
+        web.fetch_article("https://a/x")
+
+
+@pytest.mark.parametrize("value", ["not a url", "ftp://a/x", "a/x"])
+def test_a_non_http_url_is_refused_before_the_request(page_fetch, value):
+    calls = page_fetch(PAGE_HTML, "https://a/x")
+
+    with pytest.raises(web.WebError, match="does not look like"):
+        web.fetch_article(value)
+    assert calls == []

@@ -8,7 +8,7 @@
  * they are only ever formatted, in `lib/format.ts`.
  */
 
-export type SourceKind = "competitor_post" | "tweet" | "rss";
+export type SourceKind = "competitor_post" | "tweet" | "rss" | "web";
 
 /** `failed` means the run produced nothing; `error` says why. Never in `review`. */
 export type DraftStatus =

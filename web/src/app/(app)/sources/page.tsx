@@ -19,6 +19,7 @@ import {
   getRss,
   getCompetitorPosts,
   getTweet,
+  getWeb,
 } from "@/lib/api/sources";
 import type { CompetitorReach, LiveSourceItem, SourceSort } from "@/lib/api/sources";
 import { useCart } from "@/lib/cart";
@@ -46,6 +47,7 @@ export default function SourcesScreen() {
         <TabsList className="shrink-0 *:min-w-28 *:px-4">
           <TabsTrigger value="competitors">Competitors</TabsTrigger>
           <TabsTrigger value="tweets">Tweets</TabsTrigger>
+          <TabsTrigger value="web">Web</TabsTrigger>
           <TabsTrigger value="rss">RSS</TabsTrigger>
         </TabsList>
 
@@ -57,6 +59,9 @@ export default function SourcesScreen() {
         </TabsContent>
         <TabsContent value="tweets" className="min-h-0 flex-1 overflow-y-auto pr-3">
           <TweetsTab />
+        </TabsContent>
+        <TabsContent value="web" className="min-h-0 flex-1 overflow-y-auto pr-3">
+          <WebTab />
         </TabsContent>
         <TabsContent value="rss" className="min-h-0 flex-1 overflow-y-auto pr-3">
           <RssTab />
@@ -474,22 +479,37 @@ function RssTab() {
   );
 }
 
-function TweetsTab() {
+/**
+ * The paste box both URL tabs share: type an address, look it up, tick the card.
+ *
+ * One component rather than two copies: Tweets and Web are the same interaction
+ * - one lookup at a time, never a browsable list - and differ only in the API
+ * call and the words on the placeholder.
+ */
+function PasteLookupTab({
+  placeholder,
+  emptyHint,
+  lookup,
+}: {
+  placeholder: string;
+  emptyHint: string;
+  lookup: (url: string) => Promise<LiveSourceItem>;
+}) {
   const cart = useCart();
   const [url, setUrl] = useState("");
   const [looking, setLooking] = useState(false);
   const [found, setFound] = useState<LiveSourceItem[]>([]);
 
-  async function lookup(event: React.FormEvent) {
+  async function handleLookup(event: React.FormEvent) {
     event.preventDefault();
     if (!url.trim()) return;
     setLooking(true);
     try {
-      const tweet = await getTweet(url.trim());
+      const item = await lookup(url.trim());
       setFound((current) =>
-        current.some((item) => item.external_id === tweet.external_id)
+        current.some((entry) => entry.external_id === item.external_id)
           ? current
-          : [tweet, ...current],
+          : [item, ...current],
       );
       setUrl("");
     } catch (cause) {
@@ -501,11 +521,11 @@ function TweetsTab() {
 
   return (
     <>
-      <form onSubmit={lookup} className="flex gap-2 pb-3">
+      <form onSubmit={handleLookup} className="flex gap-2 pb-3">
         <Input
           value={url}
           onChange={(event) => setUrl(event.target.value)}
-          placeholder="https://x.com/HistoryInPics/status/1817449230118928441"
+          placeholder={placeholder}
           className="font-mono text-xs"
         />
         <Button type="submit" variant="outline" disabled={looking || !url.trim()}>
@@ -516,7 +536,7 @@ function TweetsTab() {
 
       {found.length === 0 ? (
         <p className="rounded-2xl border border-dashed p-10 text-center text-sm text-muted-foreground">
-          Paste a tweet URL. There is no feed to browse - a tweet is one lookup at a time.
+          {emptyHint}
         </p>
       ) : (
         <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(360px,1fr))]">
@@ -531,6 +551,26 @@ function TweetsTab() {
         </div>
       )}
     </>
+  );
+}
+
+function TweetsTab() {
+  return (
+    <PasteLookupTab
+      placeholder="https://x.com/HistoryInPics/status/1817449230118928441"
+      emptyHint="Paste a tweet URL. There is no feed to browse - a tweet is one lookup at a time."
+      lookup={getTweet}
+    />
+  );
+}
+
+function WebTab() {
+  return (
+    <PasteLookupTab
+      placeholder="https://www.smithsonianmag.com/smart-news/an-article-180977231/"
+      emptyHint="Paste a page URL - an article, a blog post, anything public. The full page is read when a draft is generated."
+      lookup={getWeb}
+    />
   );
 }
 

@@ -76,6 +76,10 @@ class SourceKind(StrEnum):
     COMPETITOR_POST = "competitor_post"
     TWEET = "tweet"
     RSS = "rss"
+    WEB = "web"
+    """One page pasted as a URL, like the Tweets tab. The `<head>` stub is all
+    the adapter supplies; the writer fetches the article itself, exactly as it
+    does for RSS."""
 
 
 class DraftStatus(StrEnum):

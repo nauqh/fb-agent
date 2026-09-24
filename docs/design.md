@@ -149,12 +149,15 @@ The two schemas agree only because the enum columns are pinned to `VARCHAR`.
 
 ### `Source` - the one real seam
 
-Three adapters behind one interface, which is what makes the seam genuine rather
+Four adapters behind one interface, which is what makes the seam genuine rather
 than hypothetical:
 
 - **`MetricoolCompetitors`** - `fetchMetricoolCompetitors` + `fetchMetricoolCompetitorPosts`,
   windowed by a lookback in days. Writes rows on arrival.
 - **`XTweet`** - `https://api.x.com/2`, one tweet resolved from a pasted URL.
+- **`WebPage`** - `api/app/sources/web.py`, one page resolved from a pasted URL;
+  the `<head>` only, since the writer fetches the article itself, as it does
+  for RSS.
 - **`RssFeeds`** - the Page's curated feeds, read from
   [`config/sources.yml`](../api/config/sources.yml). Per-page, because the beats
   do not overlap: History Retraced draws seven (Smithsonian, Live Science,
@@ -418,6 +421,7 @@ GET    /sources/competitors?page_id=&refresh=&sort=  stored rows; reactions by d
 GET    /sources/competitors/reach   GET /sources/competitors/pages
 GET    /sources/rss?page_id=        the Page's feeds, live, unsaved
 GET    /sources/tweet?url=          single lookup, live, unsaved
+GET    /sources/web?url=            single lookup, live, unsaved
 GET    /sources/items/{id}          what a draft was written from
 GET    /sources/config              the windows
 

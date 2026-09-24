@@ -263,11 +263,12 @@ def source_instruction(kind: SourceKind, summary: bool = False) -> str:
             "theme is the job; reusing the picture itself would be lifting what "
             "the rival shot."
         )
-    if kind is SourceKind.RSS and not summary:
+    if kind in (SourceKind.RSS, SourceKind.WEB) and not summary:
         # The feed's own text is only the fallback for a page the reader cannot
-        # access; the article itself is the source.
+        # access; the article itself is the source. WEB is the same shape: the
+        # adapter supplies the `<head>` stub, the model reads the page.
         return (
-            "The source is the news article at the URL below. Read that URL and "
+            "The source is the article at the URL below. Read that URL and "
             "write about this same story, the same people and the same events, "
             "using only facts from the article. Do not invent a different "
             "subject. Fetch only that URL; do not search for other pages. Do not "
@@ -358,7 +359,7 @@ def user_prompt(
         parts.append(f"Author: {source.author}")
     if source.url:
         parts.append(f"URL: {source.url}")
-    if summary or source.kind is not SourceKind.RSS:
+    if summary or source.kind not in (SourceKind.RSS, SourceKind.WEB):
         parts += ["", source.text]
     return "\n".join(parts)
 
@@ -430,7 +431,7 @@ def _run(
     """
     fetch_url = (
         source.url
-        if source is not None and source.kind is SourceKind.RSS
+        if source is not None and source.kind in (SourceKind.RSS, SourceKind.WEB)
         else None
     )
     try:
