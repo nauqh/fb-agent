@@ -402,6 +402,12 @@ def _run_one(session: Session, draft_id: int) -> None:
             draft.warnings = draft.warnings + [image_warning]
         draft.warnings += _highlight_warnings(content)
 
+        # Said on the row, not in a log: a fallback draft looks finished, and
+        # the operator deciding whether to trust it is the one check there is.
+        # After every reassignment above - each would wipe it.
+        if not getattr(result, "read_live", True):
+            draft.warnings = draft.warnings + [writer.UNREADABLE_WARNING]
+
         # Deliberately still `generating`. Setting `review` here - before the
         # hero exists - put a finished-looking row in the queue with a blank
         # thumbnail, and stopped the client polling, because it polls only while

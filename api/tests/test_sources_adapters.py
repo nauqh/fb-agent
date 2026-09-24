@@ -446,3 +446,27 @@ def test_a_non_http_url_is_refused_before_the_request(page_fetch, value):
     with pytest.raises(web.WebError, match="does not look like"):
         web.fetch_article(value)
     assert calls == []
+
+
+def test_the_page_body_is_extracted_for_the_fallback_prompt(page_fetch):
+    """The stub text is all a blocked fetcher leaves the writer (ACM sites block
+    Google-Extended by name), so the adapter must carry the article itself."""
+    html = (
+        "<html><head><title>T</title></head><body>"
+        "<nav><p>Menu item one and another and a third</p></nav>"
+        "<p>Marie Tharp drew the Mid-Atlantic Ridge by hand, from soundings "
+        "her colleagues collected and rarely credited.</p>"
+        "<script>var x = 1;</script>"
+        "<p>Her maps showed what nobody believed until the 1960s.</p>"
+        "<p>short</p>"
+        "</body></html>"
+    )
+    page_fetch(html, "https://a/x")
+
+    text = web.fetch_article("https://a/x").text
+
+    assert "drew the Mid-Atlantic Ridge by hand" in text
+    assert "what nobody believed" in text
+    assert "Menu item" not in text, "chrome is skipped"
+    assert "var x" not in text, "script is skipped"
+    assert text.count("\n\n") == 2, "one paragraph per block, separated"

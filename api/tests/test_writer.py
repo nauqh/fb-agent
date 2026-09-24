@@ -808,3 +808,51 @@ def test_a_null_hook_breaks_no_rules():
     )
 
     assert reasons == []
+
+
+def test_a_fallback_run_flags_the_result_as_not_read_live(page, monkeypatch):
+    """A refused fetch falls back to the stub, and the run says so.
+
+    The warning on the Draft is `generate`'s job; here what is pinned is that
+    `write` reports the fallback at all - without it the operator sees a
+    finished-looking draft written from a headline.
+    """
+    source = SourceItem(
+        id=1,
+        kind=SourceKind.WEB,
+        external_id="u",
+        text="Stub only.",
+        url="https://example.com/x",
+    )
+
+    def fake_ask(prompt, _output_type, _instructions, model=None, validator=None, fetch_url=None):
+        if fetch_url:
+            raise writer.SourceUnreadable("blocked")
+        result = SimpleNamespace(output=writer.DraftContent(**GOOD))
+        result._read_live = True
+        return result
+
+    monkeypatch.setattr(writer, "ask", fake_ask)
+
+    result = writer.write(page, source, model=object())
+
+    assert result.read_live is False
+
+
+def test_a_live_fetch_flags_the_result_as_read_live(page, monkeypatch):
+    source = SourceItem(
+        id=1,
+        kind=SourceKind.WEB,
+        external_id="u",
+        text="Stub only.",
+        url="https://example.com/x",
+    )
+
+    def fake_ask(prompt, _output_type, _instructions, model=None, validator=None, fetch_url=None):
+        result = SimpleNamespace(output=writer.DraftContent(**GOOD))
+        result._read_live = True
+        return result
+
+    monkeypatch.setattr(writer, "ask", fake_ask)
+
+    assert writer.write(page, source, model=object()).read_live is True

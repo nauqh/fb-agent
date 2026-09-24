@@ -2111,3 +2111,36 @@ def test_a_run_that_finds_an_inset_still_logs_its_outcome(
 
     assert client.get("/drafts/1").json()["status"] == "review"
     assert any(line.startswith("Draft 1 ready for review") for line in lines), lines
+
+
+def test_an_unread_source_page_warns_on_the_draft(client, written, monkeypatch):
+    """A fallback run produces a finished-looking draft - the row must say why.
+
+    The writer refused the URL and fell back to the stub text; without this the
+    only evidence is a post subtly thinner than its source (the juneesoutherncross
+    report, 2026-09-24).
+    """
+
+    class Result:
+        output = GOOD
+        read_live = False
+
+    monkeypatch.setattr(generate.writer, "write", lambda *a, **k: Result())
+
+    client.post("/generate", json={"page_ids": [1], "sources": [_rss().model_dump(mode="json")]})
+    draft = client.get("/drafts/1").json()
+
+    assert any(
+        warning.startswith(generate.writer.UNREADABLE_WARNING)
+        for warning in draft["warnings"]
+    )
+
+
+def test_a_read_source_page_leaves_no_unread_warning(client, written):
+    client.post("/generate", json={"page_ids": [1], "sources": [_rss().model_dump(mode="json")]})
+    draft = client.get("/drafts/1").json()
+
+    assert not any(
+        warning.startswith(generate.writer.UNREADABLE_WARNING)
+        for warning in draft["warnings"]
+    )

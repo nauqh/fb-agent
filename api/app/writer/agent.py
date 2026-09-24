@@ -25,6 +25,16 @@ from app.writer import prompts, validators
 
 __all__ = ["is_transient"]  # re-exported: it was defined here before `image/` needed it too
 
+UNREADABLE_WARNING = "Source: the page could not be read live - the draft was "\
+    "written from the stored summary only, so it may miss the article's details."
+"""Prefix on the warning a refused URL fetch leaves on the Draft.
+
+A failed fetch does not fail the run - it falls back to the item's own text and
+still produces a plausible post, which is exactly why it needs saying: the only
+evidence on screen would otherwise be a draft subtly thinner than its source.
+A prefix, like `generate.IMAGE_WARNING`, so a rebuild can tell one warning from
+another."""
+
 MAX_RETRIES = 2
 """Two, then the residue becomes a Warning on the Draft.
 
@@ -411,6 +421,27 @@ def write(
     )
 
 
+class WriteResult:
+    """The writer's output, plus whether the source page was read live.
+
+    `result.output` keeps working, so every existing caller reads unchanged;
+    the flag is what a run needs to say *how well sourced* the draft is. A
+    plain attribute on the run result was considered and dropped: pydantic-ai
+    owns that object, and re-wrapping it would touch every `.output` site for
+    one field."""
+
+    def __init__(self, run):
+        self.run = run
+
+    @property
+    def output(self):
+        return self.run.output
+
+    @property
+    def read_live(self) -> bool:
+        return getattr(self.run, "_read_live", True)
+
+
 def _run(
     page: Page,
     prompt,
@@ -422,9 +453,9 @@ def _run(
 ):
     """Ask the model, stepping down the fallback chain while it is unavailable.
 
-    An RSS page is read from its link first. If the fetcher is refused, the
-    fallback prompt carries the feed's title and summary rather than failing
-    the draft outright.
+    An RSS or web page is read from its link first. If the fetcher is refused,
+    the fallback prompt carries the item's own text - the feed summary or the
+    web adapter's body - rather than failing the draft outright.
 
     A caller passing `model` gets exactly that model and no fallback: tests
     supply a fake, and silently swapping it for a real one would bill them.
@@ -435,24 +466,32 @@ def _run(
         else None
     )
     try:
-        return ask(
-            prompt,
-            DraftContent,
-            _instructions(page, layout, template),
-            model,
-            validator,
-            fetch_url=fetch_url,
+        return WriteResult(
+            ask(
+                prompt,
+                DraftContent,
+                _instructions(page, layout, template),
+                model,
+                validator,
+                fetch_url=fetch_url,
+            )
         )
     except SourceUnreadable:
         if not fetch_url:
             raise
-        return ask(
-            fallback_prompt,
-            DraftContent,
-            _instructions(page, layout, template),
-            model,
-            validator,
+        # The stub text is all this draft is built on - say so on the result,
+        # where `generate` turns it into a warning on the row.
+        result = WriteResult(
+            ask(
+                fallback_prompt,
+                DraftContent,
+                _instructions(page, layout, template),
+                model,
+                validator,
+            )
         )
+        result.run._read_live = False
+        return result
 
 
 FETCH_TIMEOUT = 90.0
@@ -546,9 +585,11 @@ def ask(
             # ponytail: a flat timeout, because Gemini offers no cap on fetches.
             # An unreadable BBC page kept one request looping server-side for
             # 211-354s until TOO_MANY_TOOL_CALLS; readable articles took 26-40s.
-            return agent.run_sync(
+            result = agent.run_sync(
                 prompt, model_settings={"timeout": FETCH_TIMEOUT} if fetch_url else None
             )
+            result._read_live = True
+            return result
         except httpx.TimeoutException as error:
             if not fetch_url:
                 raise
