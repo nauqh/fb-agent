@@ -992,9 +992,13 @@ def test_a_competitors_picture_is_never_reused_as_our_hero(
     assert draft["hero_image_path"] is None
 
 
-def test_a_tweets_picture_can_be_the_hero(client, written, monkeypatch):
+@pytest.mark.parametrize("kind", ["tweet", "web"])
+def test_a_tweets_or_web_pages_picture_can_be_the_hero(
+    client, written, monkeypatch, kind
+):
     """Refused alongside competitor posts until the client asked (2026-09-16):
-    for a news event, the account's own photo is the only right picture."""
+    for a news event, the account's own photo is the only right picture. A web
+    article's og:image is the same case."""
     png = _feed_png(monkeypatch)
 
     client.post(
@@ -1003,7 +1007,7 @@ def test_a_tweets_picture_can_be_the_hero(client, written, monkeypatch):
             "page_ids": [1],
             "sources": [
                 {
-                    "kind": "tweet",
+                    "kind": kind,
                     "external_id": "2099562860229939678",
                     "text": "Breaking",
                     "image_url": "https://pbs.twimg.com/media/photo.jpg",

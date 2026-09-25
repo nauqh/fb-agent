@@ -100,15 +100,15 @@ export function CartPanel() {
     (template) => template.page_id === page?.id,
   );
   /**
-   * RSS and tweets, mirroring the server, which refuses competitor posts.
+   * Everything but competitor posts, mirroring the server's `build_image`.
    *
    * A competitor's picture is a rival page's own creative, so reusing it is
    * reposting their content under our watermark. Tweets were refused too until
    * the client asked for them (2026-09-16): a news account's photo is the
-   * picture of the event.
+   * picture of the event. A web article's og:image is the same case.
    */
   const withPictures = cart.items.filter(
-    (item) => (item.kind === "rss" || item.kind === "tweet") && item.image_url,
+    (item) => item.kind !== "competitor_post" && item.image_url,
   ).length;
   const offerSourceHero = withPictures > 0;
 
