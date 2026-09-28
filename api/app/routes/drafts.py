@@ -350,11 +350,7 @@ async def create_manual_draft(
                 detail=f"That file is not an image Pillow can read ({error}).",
             ) from error
 
-        buffer = io.BytesIO()
-        picture.convert("RGB").save(buffer, format="PNG")
-        draft.hero_image_path = media.store.save(
-            buffer.getvalue(), media.filename(draft.id or 0, "hero", "png")
-        )
+        generate.store_image(draft, "hero_image_path", data, "hero")
         # Reuses the generate path wholesale, so a hand-written card and a
         # generated one cannot drift apart in how they are drawn.
         warnings += generate.build_image(session, draft, page)
@@ -778,7 +774,7 @@ async def upload_hero(
 
 def _set_hero(session: Session, draft: Draft, page: Page, png: bytes, how: str) -> Draft:
     """Store a picture the operator chose as the hero, and redraw the card on it."""
-    draft.hero_image_path = media.store.save(png, media.filename(draft.id or 0, "hero", "png"))
+    generate.store_image(draft, "hero_image_path", png, "hero")
     draft.hero_from_source = False
     # A chosen picture is a change of mind about text-only. Left set,
     # `build_image` skips the draft, so the hero is stored and shown and no card
@@ -885,11 +881,7 @@ async def upload_inset(
             status_code=422, detail=f"That file is not an image Pillow can read ({error})."
         ) from error
 
-    buffer = io.BytesIO()
-    picture.convert("RGB").save(buffer, format="PNG")
-    draft.inset_image_path = media.store.save(
-        buffer.getvalue(), media.filename(draft_id, "inset", "png")
-    )
+    generate.store_image(draft, "inset_image_path", data, "inset")
     # The circle is no longer one of the offered photos; the offers stay.
     draft.inset_photo_url = None
     return _redrawn(session, draft, page)
@@ -943,9 +935,7 @@ def find_inset(
             data = inset.place(body.candidate, source=swap_source)
         except inset.InsetError as error:
             raise HTTPException(status_code=422, detail=_sentence(error)) from error
-        draft.inset_image_path = media.store.save(
-            data, media.filename(draft_id, "inset", "png")
-        )
+        generate.store_image(draft, "inset_image_path", data, "inset")
         draft.inset_photo_url = body.candidate.url
         return _redrawn(session, draft, page)
 

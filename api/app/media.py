@@ -19,6 +19,7 @@ whoever holds the link": buckets do not list, and `filename` ends every name
 with six random hex characters.
 """
 
+import io
 import re
 import threading
 import time
@@ -28,6 +29,7 @@ from uuid import uuid4
 
 import httpx
 from loguru import logger
+from PIL import Image
 
 from app.http import shared as http_shared
 from app.settings import settings
@@ -140,6 +142,7 @@ class SupabaseMediaStore:
         *,
         now: datetime | None = None,
         keep_months: int = PURGE_KEEP_MONTHS,
+        keep: frozenset[str] = frozenset(),
     ) -> int:
         """Delete every file under month prefixes older than the cutoff.
 
@@ -150,6 +153,10 @@ class SupabaseMediaStore:
         Metricool holds the published posts, and the trade is that a repost of
         a deleted month refuses rather than degrading - see `publish.repost`,
         which already refuses when a copy cannot be made.
+
+        `keep` names files to spare whatever their month: a Page's avatar and
+        watermark live under the month they were uploaded in, and are drawn on
+        every card after it.
 
         Returns how many files went.
         """
@@ -162,17 +169,18 @@ class SupabaseMediaStore:
                 continue
             month = entry["name"]
             if month < cutoff:
-                deleted += self._delete_prefix(f"{month}/")
+                deleted += self._delete_prefix(f"{month}/", keep)
         return deleted
 
-    def _delete_prefix(self, prefix: str) -> int:
+    def _delete_prefix(self, prefix: str, keep: frozenset[str]) -> int:
         deleted = 0
         for entry in self._list(prefix):
-            if entry.get("id"):
-                self.delete(f"{prefix}{entry['name']}")
+            path = f"{prefix}{entry['name']}"
+            if not entry.get("id"):
+                deleted += self._delete_prefix(f"{path}/", keep)
+            elif path not in keep:
+                self.delete(path)
                 deleted += 1
-            else:
-                deleted += self._delete_prefix(f"{prefix}{entry['name']}/")
         return deleted
 
     def _list(self, prefix: str) -> list[dict]:
@@ -314,6 +322,27 @@ def _shift_month(now: datetime, months: int) -> str:
     return f"{total // 12:04d}-{total % 12 + 1:02d}"
 
 
+def _page_files() -> frozenset[str]:
+    """Every file a Page points at. Imported here: `models` imports this module."""
+    from sqlmodel import Session, select
+
+    from app.db import get_engine
+    from app.models import Page
+
+    with Session(get_engine()) as session:
+        pages = session.exec(select(Page)).all()
+    return frozenset(
+        path
+        for page in pages
+        for path in (
+            page.avatar_image_path,
+            page.watermark_image_path,
+            page.watermark_upload_path,
+        )
+        if path
+    )
+
+
 def purge_forever() -> None:
     """Cut the bucket at startup and once a day after.
 
@@ -322,7 +351,7 @@ def purge_forever() -> None:
     """
     while True:
         try:
-            deleted = store.purge_old_months()
+            deleted = store.purge_old_months(keep=_page_files())
             if deleted:
                 logger.info("Purged {} file(s) older than the retention window", deleted)
         except Exception:  # noqa: BLE001 - one bad pass must not kill the loop
@@ -358,6 +387,19 @@ def watermark_source(upload_path: str | None, asset_path: str | None) -> str | b
     if upload_path:
         return store.read(upload_path)
     return asset_path
+
+
+JPEG_QUALITY = 90
+"""Heroes and insets were PNG at ~1.5MB and ~1.1MB each, 92% of the bucket on
+2026-09-28. They are photographs, and only ever read back to draw a card."""
+
+
+def jpeg(data: bytes) -> bytes:
+    """Any image Pillow reads, as an RGB JPEG."""
+    buffer = io.BytesIO()
+    with Image.open(io.BytesIO(data)) as picture:
+        picture.convert("RGB").save(buffer, format="JPEG", quality=JPEG_QUALITY)
+    return buffer.getvalue()
 
 
 def filename(draft_id: int, kind: str, extension: str) -> str:

@@ -246,3 +246,40 @@ def test_purge_deletes_only_the_months_older_than_the_cutoff():
     assert [
         path.removeprefix("https://demo.supabase.co") for path in seen
     ] == ["/storage/v1/object/fb-agent-media/2026-07/42-hero-x-a1b2c3.png"]
+
+
+def test_purge_spares_a_file_it_was_told_to_keep():
+    """A Page's watermark lives under its upload month and is drawn on every card after."""
+    seen: list[str] = []
+
+    def handler(request):
+        if "/object/list/fb-agent-media" in request.url.path:
+            prefix = json.loads(request.content)["prefix"]
+            if prefix == "":
+                return httpx.Response(200, json=[{"name": "2026-07", "id": None}])
+            return httpx.Response(200, json=[
+                {"name": "0-page-watermark-a1b2c3.png", "id": "1"},
+                {"name": "42-hero-x-a1b2c3.png", "id": "2"},
+            ])
+        seen.append(request.url.path.rsplit("/", 1)[-1])
+        return httpx.Response(200, json={})
+
+    deleted = _store(handler).purge_old_months(
+        now=datetime(2026, 9, 20, tzinfo=timezone.utc),
+        keep=frozenset({"2026-07/0-page-watermark-a1b2c3.png"}),
+    )
+
+    assert deleted == 1
+    assert seen == ["42-hero-x-a1b2c3.png"]
+
+
+def test_jpeg_turns_a_png_into_a_jpeg():
+    import io
+
+    from PIL import Image
+
+    buffer = io.BytesIO()
+    Image.new("RGBA", (40, 30), (200, 120, 40, 128)).save(buffer, format="PNG")
+
+    with Image.open(io.BytesIO(media.jpeg(buffer.getvalue()))) as picture:
+        assert (picture.format, picture.mode, picture.size) == ("JPEG", "RGB", (40, 30))

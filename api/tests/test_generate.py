@@ -926,7 +926,7 @@ def test_the_fetched_picture_is_stored_rather_than_hot_linked(
     )
     draft = client.get("/drafts/1").json()
 
-    assert media.store.read(draft["hero_image_path"]) == png
+    assert _same_picture(media.store.read(draft["hero_image_path"]), png)
     assert "example.com" not in (draft["hero_image_path"] or "")
 
 
@@ -1018,7 +1018,7 @@ def test_a_tweets_or_web_pages_picture_can_be_the_hero(
     )
     draft = client.get("/drafts/1").json()
 
-    assert media.store.read(draft["hero_image_path"]) == png
+    assert _same_picture(media.store.read(draft["hero_image_path"]), png)
     assert draft["composed_image_path"], "the card did not compose around it"
 
 
@@ -1372,22 +1372,22 @@ def test_uploading_a_picture_puts_it_in_the_circle(client, written, illustrated,
 def test_the_upload_is_re_encoded_rather_than_stored_as_sent(
     client, written, illustrated, a_photograph
 ):
-    """A JPEG in, a PNG on disk. The container the camera chose decides nothing."""
+    """A PNG in, a JPEG on disk. The container the camera chose decides nothing."""
     import io
 
     from PIL import Image
 
     from app import media
 
-    jpeg = io.BytesIO()
-    Image.open(io.BytesIO(a_photograph)).convert("RGB").save(jpeg, format="JPEG")
+    png = io.BytesIO()
+    Image.open(io.BytesIO(a_photograph)).convert("RGB").save(png, format="PNG")
     _generate(client)
 
-    draft = _upload(client, jpeg.getvalue(), "face.jpg", "image/jpeg").json()
+    draft = _upload(client, png.getvalue(), "face.png", "image/png").json()
 
     stored = media.store.path(draft["inset_image_path"])
-    assert stored.suffix == ".png"
-    assert Image.open(stored).format == "PNG"
+    assert stored.suffix == ".jpg"
+    assert Image.open(stored).format == "JPEG"
 
 
 def test_a_file_that_is_not_an_image_is_refused_at_the_upload(client, written, illustrated):
@@ -1516,22 +1516,22 @@ def test_an_uploaded_hero_is_no_longer_the_feeds_photograph(
 def test_the_uploaded_hero_is_re_encoded_rather_than_stored_as_sent(
     client, written, illustrated, a_photograph
 ):
-    """A JPEG in, a PNG on disk - the camera's container decides nothing."""
+    """A PNG in, a JPEG on disk - the camera's container decides nothing."""
     import io
 
     from PIL import Image
 
     from app import media
 
-    jpeg = io.BytesIO()
-    Image.open(io.BytesIO(a_photograph)).convert("RGB").save(jpeg, format="JPEG")
+    png = io.BytesIO()
+    Image.open(io.BytesIO(a_photograph)).convert("RGB").save(png, format="PNG")
     _generate(client)
 
-    draft = _upload_hero(client, jpeg.getvalue(), "photo.jpg", "image/jpeg").json()
+    draft = _upload_hero(client, png.getvalue(), "photo.png", "image/png").json()
 
     stored = media.store.path(draft["hero_image_path"])
-    assert stored.suffix == ".png"
-    assert Image.open(stored).format == "PNG"
+    assert stored.suffix == ".jpg"
+    assert Image.open(stored).format == "JPEG"
 
 
 def test_a_file_that_is_not_an_image_is_refused_as_a_hero(client, written, illustrated):
@@ -2148,3 +2148,55 @@ def test_a_read_source_page_leaves_no_unread_warning(client, written):
         warning.startswith(generate.writer.UNREADABLE_WARNING)
         for warning in draft["warnings"]
     )
+
+
+def _picture() -> bytes:
+    import io
+
+    from PIL import Image
+
+    buffer = io.BytesIO()
+    Image.new("RGB", (40, 30), (10, 20, 30)).save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
+def test_a_replaced_hero_is_deleted_once_the_new_one_is_committed(session, page, media_root):
+    draft = Draft(page_id=page.id)
+    session.add(draft)
+    session.commit()
+    generate.store_image(draft, "hero_image_path", _picture(), "hero")
+    session.commit()
+    first = draft.hero_image_path
+
+    generate.store_image(draft, "hero_image_path", _picture(), "hero")
+    assert (media_root / first).exists(), "not before the commit"
+    session.commit()
+
+    assert not (media_root / first).exists()
+    assert (media_root / draft.hero_image_path).exists()
+    assert draft.hero_image_path.endswith(".jpg")
+
+
+def test_a_rolled_back_replacement_keeps_the_old_file(session, page, media_root):
+    draft = Draft(page_id=page.id)
+    session.add(draft)
+    session.commit()
+    generate.store_image(draft, "inset_image_path", _picture(), "inset")
+    session.commit()
+    first = draft.inset_image_path
+
+    generate.store_image(draft, "inset_image_path", _picture(), "inset")
+    session.rollback()
+    session.commit()
+
+    assert (media_root / first).exists()
+
+
+def _same_picture(stored: bytes, original: bytes) -> bool:
+    """Stored as a JPEG now, so compared as a picture rather than byte for byte."""
+    import io
+
+    from PIL import Image
+
+    with Image.open(io.BytesIO(stored)) as a, Image.open(io.BytesIO(original)) as b:
+        return a.format == "JPEG" and a.size == b.size

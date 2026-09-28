@@ -24,6 +24,9 @@ from datetime import datetime, timezone
 import httpx
 from loguru import logger
 from pydantic_ai.messages import BinaryImage
+from sqlalchemy import event
+from sqlalchemy.orm import Session as OrmSession
+from sqlalchemy.orm import object_session
 from sqlmodel import Session, select
 
 from app import layout_for, media
@@ -558,9 +561,7 @@ def build_image(session: Session, draft: Draft, page: Page) -> list[str]:
                     "picture and its source has none."
                 ]
             image_bytes = hero.from_url(source.image_url)
-            draft.hero_image_path = media.store.save(
-                image_bytes, media.filename(draft.id or 0, "hero", "png")
-            )
+            store_image(draft, "hero_image_path", image_bytes, "hero")
         else:
             style = None
             if draft.prompt_template_id:
@@ -585,9 +586,7 @@ def build_image(session: Session, draft: Draft, page: Page) -> list[str]:
                     f"{settings.gemini_image_model}, which was unavailable. "
                     "Check it looks right, or rebuild later."
                 )
-            draft.hero_image_path = media.store.save(
-                image_bytes, media.filename(draft.id or 0, "hero", "png")
-            )
+            store_image(draft, "hero_image_path", image_bytes, "hero")
 
         # The mark and the text that stands in for it are one decision, so the
         # Page answers both at once - including "neither", when it is opted out.
@@ -670,9 +669,7 @@ def store_inset(draft: Draft, found: inset.Found) -> None:
     draft.inset_subject = found.subject
     draft.inset_candidates = [c.model_dump() for c in found.candidates]
     draft.inset_photo_url = found.chosen.url
-    draft.inset_image_path = media.store.save(
-        found.png, media.filename(draft.id or 0, "inset", "png")
-    )
+    store_image(draft, "inset_image_path", found.png, "inset")
 
 
 def _discard(stored: str) -> None:
@@ -699,6 +696,40 @@ def _discard(stored: str) -> None:
         media.store.delete(stored)
     except Exception:  # noqa: BLE001 - a leaked file, not a broken draft
         pass
+
+
+SUPERSEDED = "superseded_media"
+"""`Session.info` key: files a pending change replaced, dropped on commit."""
+
+
+def store_image(draft: Draft, field: str, data: bytes, kind: str) -> None:
+    """Save a hero or an inset as JPEG, and drop the file it replaces.
+
+    Every re-find, upload and regenerate used to leave the old file behind:
+    measured 2026-09-28, 465 of them held 672MB, a third of the bucket. The old
+    file goes only once the row pointing at the new one is committed, for the
+    reason `_discard` gives, and a rollback keeps it.
+    """
+    old = getattr(draft, field)
+    setattr(
+        draft,
+        field,
+        media.store.save(media.jpeg(data), media.filename(draft.id or 0, kind, "jpg")),
+    )
+    session = object_session(draft)
+    if old and session is not None:
+        session.info.setdefault(SUPERSEDED, []).append(old)
+
+
+@event.listens_for(OrmSession, "after_commit")
+def _drop_superseded(session: OrmSession) -> None:
+    for stored in session.info.pop(SUPERSEDED, []):
+        _discard(stored)
+
+
+@event.listens_for(OrmSession, "after_soft_rollback")
+def _keep_superseded(session: OrmSession, _transaction) -> None:
+    session.info.pop(SUPERSEDED, None)
 
 
 def _inset(draft: Draft) -> compositor.Inset | None:
