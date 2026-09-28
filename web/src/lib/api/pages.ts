@@ -59,6 +59,12 @@ export interface PageUpdate {
   /** Automatic save and repost. Null is off for both. Days are 1-90. */
   auto_save_min_reactions?: number | null;
   auto_repost_after_days?: number | null;
+
+  /** Auto-drafts. A null count is that source off. Counts are 1-10. */
+  auto_draft_competitor_count?: number | null;
+  auto_draft_competitor_min_reactions?: number | null;
+  auto_draft_rss_count?: number | null;
+  auto_draft_rss_instructions?: string | null;
 }
 
 /**

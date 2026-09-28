@@ -287,6 +287,27 @@ class Page(SQLModel, table=True):
     """Repost an auto-saved post this many days after it first went out, at the
     first free slot. Ignored while `auto_save_min_reactions` is null."""
 
+    # --- auto-drafts ------------------------------------------------------------
+    #
+    # See `app/auto_draft.py`. One switch per source, because the beats differ:
+    # a political Page drafts from its news feeds and not from competitors, a
+    # history Page the other way round. A null count is that source off.
+
+    auto_draft_competitor_count: int | None = None
+    """Drafts per run from unused competitor posts."""
+
+    auto_draft_competitor_min_reactions: int | None = None
+    """Skip competitor posts below this many reactions. Null takes any."""
+
+    auto_draft_rss_count: int | None = None
+    """Drafts per run from this Page's feeds."""
+
+    auto_draft_rss_instructions: str | None = Field(
+        default=None, sa_column=Column(Text, nullable=True)
+    )
+    """What the model picks feed items by ("UK politics only, no sport"). Null
+    takes the newest."""
+
     # --- what this Page tells the model ---------------------------------------
     #
     # Null means the file: `prompts/pages/<slug>/x.txt` if it exists, else
@@ -1166,6 +1187,11 @@ class AutoDraftRun(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     page_id: int = Field(foreign_key="page.id", index=True)
+
+    source: SourceKind = Field(
+        default=SourceKind.COMPETITOR_POST, sa_type=_stored_enum(SourceKind)
+    )
+    """`competitor_post` or `rss`. A Page with both on writes two rows a run."""
 
     drafts_created: int = 0
     available: int = 0

@@ -174,6 +174,8 @@ export default function SettingsScreen() {
                   pageId={pageId}
                   slots={slots}
                   refresh={refreshSlots}
+                  assigned={assignments ? assigned : null}
+                  feeds={sources ? sources.feeds.length : null}
                 />
               ),
             },
@@ -237,11 +239,15 @@ function ThisPage({
   pageId,
   slots,
   refresh,
+  assigned,
+  feeds,
 }: {
   page: Page;
   pageId: number | null;
   slots: Awaited<ReturnType<typeof listSlots>> | null;
   refresh: () => Promise<void> | void;
+  assigned: number | null;
+  feeds: number | null;
 }) {
   return (
     <Pane title={page.name} hint="Identity comes from Metricool. The rest is set here.">
@@ -249,6 +255,7 @@ function ThisPage({
         <Identity page={page} />
         <TimeSlots pageId={pageId} slots={slots} refresh={refresh} />
         <Automation page={page} />
+        <AutoDrafts page={page} assigned={assigned} feeds={feeds} />
         <InsetPictures page={page} />
       </div>
     </Pane>
@@ -478,6 +485,158 @@ function Automation({ page }: { page: Page }) {
         <Button size="sm" disabled={!dirty || busy} onClick={() => void save()}>
           {busy ? <Loader2 className="size-4 animate-spin" /> : null}
           Save automation
+        </Button>
+      </div>
+    </Block>
+  );
+}
+
+/**
+ * Which sources the nightly run drafts from, and how many. One switch per
+ * source because the beats differ: a political Page drafts from its news feeds
+ * and not from competitors, a history Page the other way round.
+ */
+function AutoDrafts({
+  page,
+  assigned,
+  feeds,
+}: {
+  page: Page;
+  assigned: number | null;
+  feeds: number | null;
+}) {
+  const [competitorOn, setCompetitorOn] = useState(page.auto_draft_competitor_count !== null);
+  const [competitorCount, setCompetitorCount] = useState(
+    (page.auto_draft_competitor_count ?? 2).toString(),
+  );
+  const [minReactions, setMinReactions] = useState(
+    page.auto_draft_competitor_min_reactions?.toString() ?? "",
+  );
+  const [rssOn, setRssOn] = useState(page.auto_draft_rss_count !== null);
+  const [rssCount, setRssCount] = useState((page.auto_draft_rss_count ?? 2).toString());
+  const [instructions, setInstructions] = useState(page.auto_draft_rss_instructions ?? "");
+  const [busy, setBusy] = useState(false);
+
+  const next = {
+    auto_draft_competitor_count: competitorOn ? Number(competitorCount) : null,
+    auto_draft_competitor_min_reactions: minReactions.trim() ? Number(minReactions) : null,
+    auto_draft_rss_count: rssOn ? Number(rssCount) : null,
+    auto_draft_rss_instructions: instructions.trim() || null,
+  };
+  const dirty = (Object.keys(next) as (keyof typeof next)[]).some(
+    (key) => next[key] !== page[key],
+  );
+
+  async function save() {
+    setBusy(true);
+    try {
+      await updatePage(page.id, next);
+      toast(competitorOn || rssOn ? "Saved. Runs daily at 18:00." : "Saved. Auto-drafts are off.");
+      emit();
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Could not save");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const box = "flex items-center justify-between gap-3 rounded-2xl border px-3 py-2";
+  const number =
+    "h-7 w-20 border-0 bg-transparent px-1 text-right font-medium tabular-nums shadow-none focus-visible:ring-0";
+
+  return (
+    <Block label="Auto-drafts">
+      <div className="space-y-3">
+        <p className="text-[13px] text-muted-foreground">
+          Writes drafts into Review every day at 18:00, from each source that is on.
+        </p>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className={box}>
+            <Label className="flex items-center gap-2 text-[13px] font-normal text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={competitorOn}
+                onChange={(event) => setCompetitorOn(event.target.checked)}
+              />
+              Facebook posts per day
+            </Label>
+            <Input
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={10}
+              aria-label="Drafts per day from competitor posts"
+              disabled={!competitorOn}
+              className={number}
+              value={competitorCount}
+              onChange={(event) => setCompetitorCount(event.target.value)}
+            />
+          </div>
+          <div className={cn(box, !competitorOn && "opacity-50")}>
+            <Label htmlFor="auto-draft-reactions" className="text-[13px] font-normal text-muted-foreground">
+              Minimum reactions
+            </Label>
+            <Input
+              id="auto-draft-reactions"
+              type="number"
+              inputMode="numeric"
+              min={1}
+              placeholder="Any"
+              disabled={!competitorOn}
+              className={number}
+              value={minReactions}
+              onChange={(event) => setMinReactions(event.target.value)}
+            />
+          </div>
+        </div>
+        {competitorOn && assigned === 0 ? (
+          <Gap title="No competitors are ticked.">Facebook posts will find nothing to draft from.</Gap>
+        ) : null}
+
+        <div className={cn(box, "sm:w-[calc(50%-0.375rem)]")}>
+          <Label className="flex items-center gap-2 text-[13px] font-normal text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={rssOn}
+              onChange={(event) => setRssOn(event.target.checked)}
+            />
+            RSS items per day
+          </Label>
+          <Input
+            type="number"
+            inputMode="numeric"
+            min={1}
+            max={10}
+            aria-label="Drafts per day from RSS"
+            disabled={!rssOn}
+            className={number}
+            value={rssCount}
+            onChange={(event) => setRssCount(event.target.value)}
+          />
+        </div>
+        {rssOn && feeds === 0 ? (
+          <Gap title="No feeds.">RSS will find nothing to draft from.</Gap>
+        ) : null}
+        <div className={cn("space-y-1.5", !rssOn && "opacity-50")}>
+          <Label htmlFor="auto-draft-instructions" className="text-[13px] font-normal text-muted-foreground">
+            Which RSS items to draft
+          </Label>
+          <Textarea
+            id="auto-draft-instructions"
+            rows={3}
+            maxLength={2000}
+            disabled={!rssOn}
+            placeholder="Blank takes the newest. For example: UK politics only, no sport or celebrity news."
+            className="resize-y rounded-xl border bg-background text-[13px] shadow-none"
+            value={instructions}
+            onChange={(event) => setInstructions(event.target.value)}
+          />
+        </div>
+
+        <Button size="sm" disabled={!dirty || busy} onClick={() => void save()}>
+          {busy ? <Loader2 className="size-4 animate-spin" /> : null}
+          Save auto-drafts
         </Button>
       </div>
     </Block>

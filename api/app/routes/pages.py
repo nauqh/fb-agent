@@ -69,6 +69,12 @@ class PageUpdate(BaseModel):
     auto_save_min_reactions: int | None = Field(default=None, ge=1)
     auto_repost_after_days: int | None = Field(default=None, ge=1, le=90)
 
+    # Auto-drafts, per source. A null count is that source off.
+    auto_draft_competitor_count: int | None = Field(default=None, ge=1, le=10)
+    auto_draft_competitor_min_reactions: int | None = Field(default=None, ge=1)
+    auto_draft_rss_count: int | None = Field(default=None, ge=1, le=10)
+    auto_draft_rss_instructions: str | None = Field(default=None, max_length=2000)
+
 
 @router.get("")
 def list_pages(

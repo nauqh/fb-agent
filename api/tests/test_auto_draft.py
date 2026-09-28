@@ -6,6 +6,7 @@ and how many. The writing itself is `test_generate.py`, so the route test stubs
 """
 
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 
 import pytest
 from sqlmodel import col, select
@@ -18,8 +19,11 @@ from app.models import (
     Page,
     PageCompetitor,
     SourceItem,
+    SourceItemBase,
     SourceKind,
 )
+from app.sources import rss
+from app.writer import agent as writer
 
 LOUD = "101151834965447"
 QUIET = "1225577819"
@@ -200,10 +204,18 @@ def queued(monkeypatch):
     return seen
 
 
+def _switch(session, page, competitors=None, rss=None, instructions=None):
+    page.auto_draft_competitor_count = competitors
+    page.auto_draft_rss_count = rss
+    page.auto_draft_rss_instructions = instructions
+    session.add(page)
+    session.commit()
+
+
 def test_the_route_queues_the_drafts_it_created(client, session, page, pool, queued):
-    response = client.post(
-        "/generate/auto", json={"page_ids": [page.id], "target": 2}
-    )
+    _switch(session, page, competitors=2)
+
+    response = client.post("/generate/auto", json={"page_ids": [page.id]})
 
     assert response.status_code == 202
     assert len(response.json()) == 2
@@ -227,10 +239,9 @@ def test_the_route_needs_at_least_one_page(client, queued):
 
 def test_an_exhausted_pool_queues_no_background_work(client, session, page, queued):
     _assign(session, page.id, LOUD)
+    _switch(session, page, competitors=2)
 
-    response = client.post(
-        "/generate/auto", json={"page_ids": [page.id], "target": 2}
-    )
+    response = client.post("/generate/auto", json={"page_ids": [page.id]})
 
     assert response.status_code == 202
     assert response.json() == []
@@ -351,3 +362,169 @@ def test_the_monitor_lists_each_run_s_drafts(client, session, page, pool):
 
     assert sorted(draft["id"] for draft in body["drafts"]) == sorted(ids)
     assert {draft["auto_draft_run_id"] for draft in body["drafts"]} == {body["runs"][0]["id"]}
+
+
+# --- per-Page settings -------------------------------------------------------
+
+
+def test_a_reaction_floor_skips_quieter_posts(session, page, pool):
+    page.auto_draft_competitor_min_reactions = 100
+    session.add(page)
+    session.commit()
+
+    picked = auto_draft.pick(session, page, 3)
+
+    assert [item.external_id for item in picked] == ["post-a", "post-b"]
+    assert auto_draft.available(session, page) == 2
+
+
+def test_the_count_comes_from_the_page(client, session, page, pool, queued):
+    """An older cron still sends `target`. It is ignored, not honoured."""
+    _switch(session, page, competitors=1)
+
+    response = client.post("/generate/auto", json={"page_ids": [page.id], "target": 3})
+
+    assert len(response.json()) == 1
+
+
+def test_no_page_ids_runs_every_page_switched_on(client, session, page, pool, queued):
+    off = Page(name="Hot Tub Timeout", facebook_page_id="888")
+    session.add(off)
+    session.commit()
+    _assign(session, off.id, LOUD)
+    _switch(session, page, competitors=1)
+
+    response = client.post("/generate/auto", json={})
+
+    assert response.status_code == 202
+    drafts = session.exec(select(Draft).where(col(Draft.id).in_(response.json()))).all()
+    assert {draft.page_id for draft in drafts} == {page.id}
+    assert {run.page_id for run in session.exec(select(AutoDraftRun)).all()} == {page.id}
+
+
+def test_a_page_with_both_sources_off_writes_nothing(session, page, pool):
+    assert auto_draft.run_page(session, page) == []
+    assert session.exec(select(AutoDraftRun)).all() == []
+
+
+# --- RSS ---------------------------------------------------------------------
+
+
+def _feed_item(n: int, headline: str) -> SourceItemBase:
+    return SourceItemBase(
+        kind=SourceKind.RSS,
+        external_id=f"https://www.smithsonianmag.com/history/story-{n}/",
+        url=f"https://www.smithsonianmag.com/history/story-{n}/",
+        author="Smithsonian Magazine",
+        text=headline,
+        published_at=NEWEST - timedelta(hours=n),
+    )
+
+
+@pytest.fixture
+def feed(monkeypatch):
+    """Three live items, newest first, as `fetch_rss` returns them."""
+    items = [
+        _feed_item(1, "Parliament votes on the budget"),
+        _feed_item(2, "A football final"),
+        _feed_item(3, "The election result"),
+    ]
+    monkeypatch.setattr(rss, "fetch_rss", lambda feeds: rss.RssFeed(items=list(items)))
+    return items
+
+
+def _answer(monkeypatch, picks):
+    seen = []
+
+    def fake_ask(prompt, output_type, instructions, *args, **kwargs):
+        seen.append(prompt)
+        return SimpleNamespace(output=output_type(picks=picks))
+
+    monkeypatch.setattr(writer, "ask", fake_ask)
+    return seen
+
+
+def _sources(session, ids):
+    drafts = session.exec(select(Draft).where(col(Draft.id).in_(ids))).all()
+    return [session.get(SourceItem, draft.source_item_id).external_id for draft in drafts]
+
+
+def test_rss_without_instructions_takes_the_newest(session, page, feed):
+    _switch(session, page, rss=2)
+
+    ids = auto_draft.run_page(session, page)
+
+    assert sorted(_sources(session, ids)) == sorted([feed[0].external_id, feed[1].external_id])
+    run = session.exec(select(AutoDraftRun)).one()
+    assert run.source == SourceKind.RSS
+    assert run.available == 1
+
+
+def test_rss_instructions_decide_what_is_picked(session, page, feed, monkeypatch):
+    seen = _answer(monkeypatch, [3, 1])
+    _switch(session, page, rss=1, instructions="Politics only, no sport")
+
+    ids = auto_draft.run_page(session, page)
+
+    assert _sources(session, ids) == [feed[2].external_id]
+    assert "Politics only, no sport" in seen[0]
+    assert session.exec(select(AutoDraftRun)).one().available == 1
+
+
+def test_a_model_number_off_the_list_is_dropped(session, page, feed, monkeypatch):
+    _answer(monkeypatch, [9, 2, 2])
+    _switch(session, page, rss=3, instructions="Sport")
+
+    ids = auto_draft.run_page(session, page)
+
+    assert _sources(session, ids) == [feed[1].external_id]
+    assert "Only 1 item(s) fit" in session.exec(select(AutoDraftRun)).one().note
+
+
+def test_rss_never_drafts_the_same_link_twice(session, page, feed):
+    _switch(session, page, rss=2)
+
+    first = auto_draft.run_page(session, page)
+    second = auto_draft.run_page(session, page)
+
+    assert set(_sources(session, first)).isdisjoint(_sources(session, second))
+    assert len(second) == 1
+
+
+def test_nothing_fitting_is_recorded_not_raised(session, page, feed, monkeypatch):
+    _answer(monkeypatch, [])
+    _switch(session, page, rss=2, instructions="Hot tubs")
+
+    assert auto_draft.run_page(session, page) == []
+    assert session.exec(select(AutoDraftRun)).one().note == "No unused feed items fit"
+
+
+def test_a_model_failure_is_recorded_and_the_other_source_still_runs(
+    session, page, pool, feed, monkeypatch
+):
+    def boom(*args, **kwargs):
+        raise RuntimeError("503 from the model")
+
+    monkeypatch.setattr(writer, "ask", boom)
+    _switch(session, page, competitors=1, rss=1, instructions="Anything")
+
+    ids = auto_draft.run_page(session, page)
+
+    assert len(ids) == 1
+    runs = {run.source: run for run in session.exec(select(AutoDraftRun)).all()}
+    assert runs[SourceKind.COMPETITOR_POST].drafts_created == 1
+    assert "503 from the model" in runs[SourceKind.RSS].note
+
+
+def test_the_monitor_carries_both_switches(client, session, page, feed):
+    _switch(session, page, competitors=2, rss=1)
+    auto_draft.run_rss(session, page, 1)
+
+    body = client.get("/auto-drafts/status").json()
+    row = next(row for row in body["pages"] if row["page_name"] == page.name)
+
+    assert row["competitor_count"] == 2
+    assert row["rss_count"] == 1
+    assert row["feeds"] == 2
+    assert row["rss_available"] == 2
+    assert body["runs"][0]["source"] == "rss"

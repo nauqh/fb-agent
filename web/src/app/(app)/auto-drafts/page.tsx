@@ -77,8 +77,10 @@ function until(target: Date, now: Date): string {
   return hours > 0 ? `${hours}h ${minutes % 60}m` : `${minutes}m`;
 }
 
+type PoolState = { tone: StatusTone; label: string; why: string };
+
 /**
- * What a Page's remaining pool means.
+ * What one source's remaining pool means, or null when that source is off.
  *
  * Three states, not a number with a colour: "no competitors" is a Settings
  * problem and "none left this week" is a dry spell, and they are both zero.
@@ -86,44 +88,47 @@ function until(target: Date, now: Date): string {
  * response. The sentence is a tooltip rather than a line under the name -
  * seven rows of explanation competed with the data they were explaining.
  */
-function pool(page: AutoDraftPage): { tone: StatusTone; label: string; why: string } {
-  if (page.last_run_at === null) {
-    return {
-      tone: "neutral",
-      label: "Not automated",
-      why:
-        page.assigned_competitors === 0
-          ? "Not in the schedule, and no competitors are ticked for it."
-          : `Not in the schedule. It has ${page.available} unused sources if you add it.`,
-    };
-  }
+function competitorPool(page: AutoDraftPage): PoolState | null {
+  if (page.competitor_count === null) return null;
   if (page.assigned_competitors === 0) {
     return {
       tone: "neutral",
       label: "Not set up",
-      why: "No competitors are ticked for this Page. Add some on Settings before automating it.",
+      why: "No competitors are ticked for this Page. Add some on Settings.",
     };
   }
-  if (page.available === 0) {
-    return {
-      tone: "negative",
-      label: "Nothing left",
-      why: "Every competitor source from the last 7 days has been written about already.",
-    };
-  }
-  if (page.available <= LOW_WATER) {
-    return {
-      tone: "waiting",
-      label: "Running low",
-      why: `${page.available} unused competitor sources from the last 7 days.`,
-    };
-  }
-  return {
-    tone: "positive",
-    label: "Ready",
-    why: `${page.available} unused competitor sources from the last 7 days.`,
-  };
+  return left(page.available, "unused competitor posts from the last 7 days");
 }
+
+/** RSS is counted at the last run, not now: re-reading every feed and asking
+ *  the model again on each poll is not worth a fresher number. */
+function rssPool(page: AutoDraftPage): PoolState | null {
+  if (page.rss_count === null) return null;
+  if (page.feeds === 0) {
+    return { tone: "neutral", label: "Not set up", why: "This Page has no feeds. Add some on Settings." };
+  }
+  if (page.rss_available === null) {
+    return { tone: "neutral", label: "Not run yet", why: "Counted at the first RSS run." };
+  }
+  return left(page.rss_available, "more feed items fit, as at the last run");
+}
+
+function left(count: number, what: string): PoolState {
+  if (count === 0) return { tone: "negative", label: "Nothing left", why: `No ${what}.` };
+  if (count <= LOW_WATER) return { tone: "waiting", label: "Running low", why: `${count} ${what}.` };
+  return { tone: "positive", label: "Ready", why: `${count} ${what}.` };
+}
+
+const WORST: StatusTone[] = ["negative", "waiting", "neutral", "positive"];
+
+/** The Page's pill: its worst switched-on source. */
+function worst(states: (PoolState | null)[]): PoolState | null {
+  const on = states.filter((state): state is PoolState => state !== null);
+  on.sort((a, b) => WORST.indexOf(a.tone) - WORST.indexOf(b.tone));
+  return on[0] ?? null;
+}
+
+const isOn = (page: AutoDraftPage) => page.competitor_count !== null || page.rss_count !== null;
 
 export default function AutoDraftsScreen() {
   const { data, error } = useQuery<AutoDraftStatus>(
@@ -158,12 +163,16 @@ export default function AutoDraftsScreen() {
         .reduce((sum, run) => sum + run.drafts_created, 0)
     : 0;
 
-  const automated = data.pages.filter((page) => page.last_run_at !== null);
-  const attention = automated.filter((page) => page.available <= LOW_WATER);
-  // The bar is relative to the healthiest Page, the way the Overview scales
-  // engagement against its best row. An absolute scale would need a ceiling
-  // nobody could defend.
-  const best = Math.max(1, ...data.pages.map((page) => page.available));
+  const automated = data.pages.filter(isOn);
+  const attention = automated.filter((page) => {
+    const tone = worst([competitorPool(page), rssPool(page)])?.tone;
+    return tone === "negative" || tone === "waiting";
+  });
+  // Each bar is relative to the healthiest Page for that source, the way the
+  // Overview scales engagement against its best row. An absolute scale would
+  // need a ceiling nobody could defend.
+  const bestCompetitor = Math.max(1, ...data.pages.map((page) => page.available));
+  const bestRss = Math.max(1, ...data.pages.map((page) => page.rss_available ?? 0));
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto pb-10">
@@ -220,25 +229,28 @@ export default function AutoDraftsScreen() {
         </p>
       ) : null}
 
-      <section className="shrink-0 overflow-hidden rounded-xl border">
-        <table className="w-full">
+      <section className="shrink-0 overflow-x-auto rounded-xl border">
+        <table className="w-full min-w-[44rem]">
           <thead>
             <tr className="border-b bg-muted/30 text-left font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
               <th className="px-5 py-3 font-medium">Page</th>
-              <th className="w-52 px-5 py-3 font-medium">Sources left</th>
+              <th className="w-44 px-5 py-3 font-medium">Facebook left</th>
+              <th className="w-44 px-5 py-3 font-medium">RSS left</th>
               <th className="w-44 px-5 py-3 font-medium">Last run</th>
               <th className="w-40 px-5 py-3 font-medium">Status</th>
             </tr>
           </thead>
           <tbody>
             {data.pages.map((page) => {
-              const state = pool(page);
+              const competitor = competitorPool(page);
+              const rss = rssPool(page);
+              const state = worst([competitor, rss]);
               return (
                 <tr
                   key={page.page_id}
                   className={cn(
                     "border-b transition-colors last:border-0 hover:bg-muted/30",
-                    page.last_run_at === null && "opacity-60",
+                    !isOn(page) && "opacity-60",
                   )}
                 >
                   <td className="px-5 py-3">
@@ -249,21 +261,8 @@ export default function AutoDraftsScreen() {
                     />
                   </td>
 
-                  <td className="px-5 py-3" title={state.why}>
-                    <div className="flex items-center gap-2.5">
-                      <span
-                        className={cn(
-                          "w-8 shrink-0 text-right text-[13px] font-medium tabular-nums",
-                          page.available === 0 && page.assigned_competitors > 0
-                            ? "text-destructive"
-                            : null,
-                        )}
-                      >
-                        {page.available}
-                      </span>
-                      <Bar share={page.available / best} tone={state.tone} />
-                    </div>
-                  </td>
+                  <Left count={page.available} best={bestCompetitor} state={competitor} />
+                  <Left count={page.rss_available} best={bestRss} state={rss} />
 
                   <td className="whitespace-nowrap px-5 py-3 text-[13px] text-muted-foreground">
                     {page.last_run_at ? (
@@ -273,15 +272,19 @@ export default function AutoDraftsScreen() {
                         {timeAgo(page.last_run_at)}
                       </>
                     ) : (
-                      <span className="text-muted-foreground/70">Not automated</span>
+                      <span className="text-muted-foreground/70">Never run</span>
                     )}
                   </td>
 
                   <td className="px-5 py-3">
-                    {page.last_run_at === null ? (
-                      <span className="text-[13px] text-muted-foreground/60">-</span>
+                    {state === null ? (
+                      <span className="text-[13px] text-muted-foreground/60" title="Switch auto-drafts on in Settings.">
+                        Off
+                      </span>
                     ) : (
-                      <StatusPill tone={state.tone} label={state.label} />
+                      <span title={state.why}>
+                        <StatusPill tone={state.tone} label={state.label} />
+                      </span>
                     )}
                   </td>
                 </tr>
@@ -404,8 +407,13 @@ function Day({
               key={run.id}
               className={cn(RUN_GRID, "py-2.5 text-[13px] transition-colors hover:bg-muted/30")}
             >
-              <span className="truncate font-medium">
-                {page?.page_name ?? `Page ${run.page_id}`}
+              <span className="min-w-0">
+                <span className="block truncate font-medium">
+                  {page?.page_name ?? `Page ${run.page_id}`}
+                </span>
+                <span className="block text-xs text-muted-foreground">
+                  {run.source === "rss" ? "RSS" : "Facebook posts"}
+                </span>
               </span>
 
               <span className="text-right tabular-nums text-muted-foreground sm:order-last">
@@ -446,6 +454,36 @@ function Day({
         })}
       </ul>
     </div>
+  );
+}
+
+/** One source's cell: what is left, drawn, or "Off" when the source is off. */
+function Left({
+  count,
+  best,
+  state,
+}: {
+  count: number | null;
+  best: number;
+  state: PoolState | null;
+}) {
+  if (state === null) {
+    return <td className="px-5 py-3 text-[13px] text-muted-foreground/60">Off</td>;
+  }
+  return (
+    <td className="px-5 py-3" title={state.why}>
+      <div className="flex items-center gap-2.5">
+        <span
+          className={cn(
+            "w-8 shrink-0 text-right text-[13px] font-medium tabular-nums",
+            state.tone === "negative" ? "text-destructive" : null,
+          )}
+        >
+          {count ?? "-"}
+        </span>
+        <Bar share={(count ?? 0) / best} tone={state.tone} />
+      </div>
+    </td>
   );
 }
 

@@ -32,11 +32,13 @@ from app.models import (
     AutoDraftRun,
     Draft,
     DraftStatus,
+    Feed,
     Page,
     PageCompetitor,
     PromptTemplate,
     SourceItem,
     SourceItemBase,
+    SourceKind,
 )
 from app.publish import metricool as publisher
 from app.settings import layout, settings
@@ -115,18 +117,17 @@ def start_generate(
 
 
 class AutoGenerateRequest(BaseModel):
-    """What the scheduled cron sends. See `app/auto_draft.py`."""
+    """What the scheduled cron sends. See `app/auto_draft.py`.
 
-    page_ids: list[int] = Field(min_length=1)
-    """The Pages to top up. Named explicitly - there is no per-Page switch, so
-    this list is the whole of the configuration."""
+    How many drafts, and from which sources, is each Page's own setting now.
+    An older cron that still sends `target` has it ignored.
+    """
 
-    target: int = Field(2, ge=1, le=10)
-    """How many drafts to create for each Page. Not a queue depth - drafts
-    already in review are ignored."""
+    page_ids: list[int] | None = Field(default=None, min_length=1)
+    """Narrow the run to these Pages. Null runs every Page with a source on."""
 
     hero_from_source: bool = False
-    """Reuse the competitor's own picture instead of buying a hero.
+    """Reuse the source's own picture instead of buying a hero.
 
     False matches the Generate button. It is the only variable cost in the run,
     so it is a field rather than a constant: the cron can flip it without a
@@ -139,24 +140,29 @@ def start_auto_generate(
     background: BackgroundTasks,
     session: Session = Depends(get_session),
 ) -> list[int]:
-    """Top up each named Page and queue the drafts. 202, like `/generate`.
+    """Run each Page's switched-on sources and queue the drafts. 202, like `/generate`.
 
     Every Page is resolved before any run starts. Resolving inside the loop
     would leave the Pages before a bad id with committed drafts and no writer
     queued for them, because `start_run` commits per call.
     """
-    pages = []
-    for page_id in dict.fromkeys(request.page_ids):
-        page = session.get(Page, page_id)
-        if page is None:
-            raise HTTPException(status_code=404, detail=f"No page {page_id}")
-        pages.append(page)
+    if request.page_ids is None:
+        pages = [
+            page
+            for page in session.exec(select(Page).order_by(col(Page.id))).all()
+            if auto_draft.is_on(page)
+        ]
+    else:
+        pages = []
+        for page_id in dict.fromkeys(request.page_ids):
+            page = session.get(Page, page_id)
+            if page is None:
+                raise HTTPException(status_code=404, detail=f"No page {page_id}")
+            pages.append(page)
 
     draft_ids: list[int] = []
     for page in pages:
-        draft_ids += auto_draft.run(
-            session, page, request.target, request.hero_from_source
-        )
+        draft_ids += auto_draft.run_page(session, page, request.hero_from_source)
 
     if draft_ids:
         background.add_task(generate.run_drafts, draft_ids)
@@ -181,6 +187,15 @@ class AutoDraftPage(BaseModel):
     """Why `available` is zero, when it is. A Page with none ticked can never
     have candidates, and that is a Settings problem rather than a dry spell."""
 
+    competitor_count: int | None = None
+    rss_count: int | None = None
+    """The Page's two switches, from Settings. Null is that source off."""
+
+    feeds: int = 0
+    rss_available: int | None = None
+    """Feed items that still fit, as at the last RSS run. Not re-read here: that
+    would fetch every feed and ask the model again on each poll."""
+
     last_run_at: datetime | None = None
     last_run_drafts: int | None = None
     last_run_note: str | None = None
@@ -204,7 +219,7 @@ def auto_draft_status(
     Every Page, not the selected one: the question this answers is "is anything
     wrong anywhere", which a per-Page scope cannot ask. Pages nobody automates
     are included deliberately - their `available` is what says whether they
-    *could* be added to the cron line.
+    *could* be switched on in Settings.
 
     `available` is recomputed here rather than read from the last run's stored
     copy. The two answer different questions: the row records what was left at
@@ -216,19 +231,25 @@ def auto_draft_status(
         select(AutoDraftRun).order_by(col(AutoDraftRun.created_at).desc()).limit(limit)
     ).all()
 
-    latest: dict[int, AutoDraftRun] = {}
+    latest: dict[tuple[int, str], AutoDraftRun] = {}
     for run in runs:
-        latest.setdefault(run.page_id, run)
+        latest.setdefault((run.page_id, run.source), run)
 
     out = []
     for page in pages:
         if page.id is None:
             continue
-        last = latest.get(page.id)
+        last_competitor = latest.get((page.id, SourceKind.COMPETITOR_POST))
+        last_rss = latest.get((page.id, SourceKind.RSS))
+        lasts = [run for run in (last_competitor, last_rss) if run is not None]
+        last = max(lasts, key=lambda run: run.created_at) if lasts else None
         assigned = session.exec(
             select(func.count(col(PageCompetitor.id))).where(
                 PageCompetitor.page_id == page.id
             )
+        ).one()
+        feeds = session.exec(
+            select(func.count(col(Feed.id))).where(Feed.page_id == page.id)
         ).one()
         out.append(
             AutoDraftPage(
@@ -238,8 +259,12 @@ def auto_draft_status(
                 avatar_image_path=page.avatar_image_path,
                 available=auto_draft.available(session, page),
                 assigned_competitors=assigned,
+                competitor_count=page.auto_draft_competitor_count,
+                rss_count=page.auto_draft_rss_count,
+                feeds=feeds,
+                rss_available=last_rss.available if last_rss else None,
                 last_run_at=last.created_at if last else None,
-                last_run_drafts=last.drafts_created if last else None,
+                last_run_drafts=sum(run.drafts_created for run in lasts) if last else None,
                 last_run_note=last.note if last else None,
             )
         )

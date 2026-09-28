@@ -89,6 +89,14 @@ export interface Page {
   /** Repost an auto-saved post this many days after it went out. Null is off. */
   auto_repost_after_days: number | null;
 
+  /** Auto-drafts per run from competitor posts, and from RSS. Null is that source off. */
+  auto_draft_competitor_count: number | null;
+  /** Skip competitor posts below this many reactions. Null takes any. */
+  auto_draft_competitor_min_reactions: number | null;
+  auto_draft_rss_count: number | null;
+  /** What the model picks feed items by. Null takes the newest. */
+  auto_draft_rss_instructions: string | null;
+
   /** This Page's own prompt text, or null to inherit the file. Edited through
    *  `setPromptFile`, and read back through `listPromptFiles`. */
   system_prompt: string | null;
@@ -331,6 +339,12 @@ export interface AutoDraftPage {
   avatar_image_path: string | null;
   available: number;
   assigned_competitors: number;
+  /** The Page's two switches. Null is that source off. */
+  competitor_count: number | null;
+  rss_count: number | null;
+  feeds: number;
+  /** Feed items that still fit, as at the last RSS run. Null before one. */
+  rss_available: number | null;
   last_run_at: string | null;
   last_run_drafts: number | null;
   last_run_note: string | null;
@@ -340,6 +354,7 @@ export interface AutoDraftPage {
 export interface AutoDraftRun {
   id: number;
   page_id: number;
+  source: "competitor_post" | "rss";
   drafts_created: number;
   available: number;
   note: string | null;
