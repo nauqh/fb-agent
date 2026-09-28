@@ -335,31 +335,41 @@ function RunLog({
   return (
     <section className="shrink-0 space-y-2">
       <h2 className="px-0.5 text-sm font-medium text-muted-foreground">Run history</h2>
+      {/* A grid list, not a table. A table sizes its columns to their content,
+          so one long draft title widened the whole log past its border and the
+          Time column was clipped off. `minmax(0, 1fr)` lets a title truncate. */}
       <div className="overflow-hidden rounded-xl border">
-      <table className="w-full">
-        <thead>
-          <tr className="border-b bg-muted/30 text-left font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
-            <th className="w-56 px-5 py-3 font-medium">Page</th>
-            <th className="px-5 py-3 font-medium">Drafts</th>
-            <th className="w-24 px-5 py-3 text-right font-medium">Time</th>
-          </tr>
-        </thead>
-        <tbody>
-          {days.map((day) => (
-            <Day
-              key={day.heading}
-              heading={day.heading}
-              rows={day.rows}
-              named={named}
-              made={made}
-            />
-          ))}
-        </tbody>
-      </table>
+        <div
+          aria-hidden
+          className={cn(
+            RUN_GRID,
+            "hidden border-b bg-muted/30 py-3 font-mono text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground sm:grid",
+          )}
+        >
+          <span>Page</span>
+          <span>Drafts</span>
+          <span className="text-right">Time</span>
+        </div>
+        {days.map((day) => (
+          <Day
+            key={day.heading}
+            heading={day.heading}
+            rows={day.rows}
+            named={named}
+            made={made}
+          />
+        ))}
       </div>
     </section>
   );
 }
+
+/**
+ * Page | Drafts | Time from `sm` up. Below it the row stacks: Page and Time on
+ * one line, the drafts under them at full width, where a title has room.
+ */
+const RUN_GRID =
+  "grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-1.5 px-5 sm:grid-cols-[11rem_minmax(0,1fr)_4rem]";
 
 function Day({
   heading,
@@ -375,68 +385,67 @@ function Day({
   const total = rows.reduce((sum, run) => sum + run.drafts_created, 0);
 
   return (
-    <>
+    <div className="border-b last:border-0">
       {/* The Review queue's day heading, verbatim in style: the count beside it
           is what makes the group worth having. */}
-      <tr className="border-b bg-muted/20">
-        <td
-          colSpan={3}
-          className="px-5 py-1.5 font-mono text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground"
-        >
-          {heading}{" "}
-          <span className="text-muted-foreground/60">
-            {total} {total === 1 ? "draft" : "drafts"}
-          </span>
-        </td>
-      </tr>
+      <h3 className="border-b bg-muted/20 px-5 py-1.5 font-mono text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+        {heading}{" "}
+        <span className="text-muted-foreground/60">
+          {total} {total === 1 ? "draft" : "drafts"}
+        </span>
+      </h3>
 
-      {rows.map((run) => {
-        const page = named(run.page_id);
-        return (
-          <tr
-            key={run.id}
-            className="border-b transition-colors last:border-0 hover:bg-muted/30"
-          >
-            <td className="px-5 py-2.5 align-top text-[13px] font-medium">
-              {page?.page_name ?? `Page ${run.page_id}`}
-            </td>
+      <ul className="divide-y">
+        {rows.map((run) => {
+          const page = named(run.page_id);
+          const drafts = made(run.id);
+          return (
+            <li
+              key={run.id}
+              className={cn(RUN_GRID, "py-2.5 text-[13px] transition-colors hover:bg-muted/30")}
+            >
+              <span className="truncate font-medium">
+                {page?.page_name ?? `Page ${run.page_id}`}
+              </span>
 
-            <td className="px-5 py-2.5 text-[13px]">
-              {/* Drafts made before runs were linked to them have no rows here,
-                  so the count is the fallback. */}
-              {made(run.id).length > 0 ? (
-                <ul className="space-y-1.5">
-                  {made(run.id).map((draft) => (
-                    <li key={draft.id} className="flex items-center gap-3">
-                      <Link
-                        href={`/review/${draft.id}`}
-                        className="min-w-0 flex-1 truncate hover:underline"
-                      >
-                        {draft.status === "generating" ? "Writing..." : title(draft)}
-                      </Link>
-                      <StatusBadge draft={draft} />
-                    </li>
-                  ))}
-                </ul>
-              ) : run.drafts_created > 0 ? (
-                <span className="tabular-nums">
-                  {run.drafts_created} {run.drafts_created === 1 ? "draft" : "drafts"}
-                </span>
-              ) : (
-                <span className="text-muted-foreground">Nothing to write about</span>
-              )}
-              {run.note && run.drafts_created > 0 ? (
-                <p className="pt-1 text-xs text-muted-foreground">{run.note}</p>
-              ) : null}
-            </td>
+              <span className="text-right tabular-nums text-muted-foreground sm:order-last">
+                {timeOfDay(run.created_at)}
+              </span>
 
-            <td className="whitespace-nowrap px-5 py-2.5 text-right align-top text-[13px] tabular-nums text-muted-foreground">
-              {timeOfDay(run.created_at)}
-            </td>
-          </tr>
-        );
-      })}
-    </>
+              <div className="col-span-2 min-w-0 sm:col-span-1">
+                {/* Drafts made before runs were linked to them have no rows
+                    here, so the count is the fallback. */}
+                {drafts.length > 0 ? (
+                  <ul className="space-y-1.5">
+                    {drafts.map((draft) => (
+                      <li key={draft.id} className="flex min-w-0 items-center gap-3">
+                        <Link
+                          href={`/review/${draft.id}`}
+                          title={title(draft)}
+                          className="min-w-0 flex-1 truncate hover:underline"
+                        >
+                          {draft.status === "generating" ? "Writing..." : title(draft)}
+                        </Link>
+                        <StatusBadge draft={draft} />
+                      </li>
+                    ))}
+                  </ul>
+                ) : run.drafts_created > 0 ? (
+                  <span className="tabular-nums">
+                    {run.drafts_created} {run.drafts_created === 1 ? "draft" : "drafts"}
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground">Nothing to write about</span>
+                )}
+                {run.note && run.drafts_created > 0 ? (
+                  <p className="pt-1 text-xs text-muted-foreground">{run.note}</p>
+                ) : null}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }
 
