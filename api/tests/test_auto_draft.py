@@ -332,3 +332,22 @@ def test_the_monitor_carries_each_page_s_last_run(client, session, page, pool):
 
     assert rows[page.name]["last_run_drafts"] == 2
     assert rows[page.name]["last_run_at"] is not None
+
+
+def test_a_run_s_drafts_point_at_the_run(session, page, pool):
+    ids = auto_draft.run(session, page, target=2)
+
+    run = session.exec(select(AutoDraftRun)).one()
+    drafts = session.exec(select(Draft).where(col(Draft.id).in_(ids))).all()
+    assert {draft.auto_draft_run_id for draft in drafts} == {run.id}
+
+
+def test_the_monitor_lists_each_run_s_drafts(client, session, page, pool):
+    ids = auto_draft.run(session, page, target=2)
+    session.add(Draft(page_id=page.id, topic="Asked for by hand"))
+    session.commit()
+
+    body = client.get("/auto-drafts/status").json()
+
+    assert sorted(draft["id"] for draft in body["drafts"]) == sorted(ids)
+    assert {draft["auto_draft_run_id"] for draft in body["drafts"]} == {body["runs"][0]["id"]}

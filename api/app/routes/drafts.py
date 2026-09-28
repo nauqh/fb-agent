@@ -190,6 +190,8 @@ class AutoDraftStatus(BaseModel):
     pages: list[AutoDraftPage]
     runs: list[AutoDraftRun]
     """Most recent first, across every Page."""
+    drafts: list[Draft]
+    """What those runs made, so the log can say what became of each one."""
 
 
 @router.get("/auto-drafts/status")
@@ -242,7 +244,13 @@ def auto_draft_status(
             )
         )
 
-    return AutoDraftStatus(pages=out, runs=list(runs))
+    drafts = session.exec(
+        select(Draft)
+        .where(col(Draft.auto_draft_run_id).in_([run.id for run in runs]))
+        .order_by(col(Draft.id))
+    ).all()
+
+    return AutoDraftStatus(pages=out, runs=list(runs), drafts=list(drafts))
 
 
 MAX_HERO_BYTES = 16 * 1024 * 1024

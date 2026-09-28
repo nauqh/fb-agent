@@ -154,6 +154,8 @@ export interface Draft {
   page_id: number;
   /** Null means the Draft came from a topic rather than a Source Item. */
   source_item_id: number | null;
+  /** The auto-draft run that made this. Null is a draft someone asked for. */
+  auto_draft_run_id: number | null;
   topic: string | null;
   status: DraftStatus;
 
@@ -347,4 +349,6 @@ export interface AutoDraftRun {
 export interface AutoDraftStatus {
   pages: AutoDraftPage[];
   runs: AutoDraftRun[];
+  /** What those runs made. */
+  drafts: Draft[];
 }

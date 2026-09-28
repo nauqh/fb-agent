@@ -1,17 +1,19 @@
 "use client";
 
+import Link from "next/link";
 import { useSyncExternalStore } from "react";
 import { AlertTriangle } from "lucide-react";
 
 import { Loading } from "@/components/loading";
 import { PageBadge } from "@/components/page-badge";
 import { QueryError } from "@/components/query-error";
+import { StatusBadge, title } from "@/components/review-list";
 import { ScreenHeader } from "@/components/screen";
 import { StatusPill, type StatusTone } from "@/components/status-pill";
 import { getAutoDraftStatus } from "@/lib/api/auto-drafts";
 import { asUtc, dayHeading, timeAgo, timeOfDay } from "@/lib/format";
 import { pageAvatarRaw } from "@/lib/page-avatar";
-import type { AutoDraftPage, AutoDraftRun, AutoDraftStatus } from "@/lib/types";
+import type { AutoDraftPage, AutoDraftRun, AutoDraftStatus, Draft } from "@/lib/types";
 import { useQuery } from "@/lib/use-query";
 import { cn } from "@/lib/utils";
 
@@ -289,7 +291,7 @@ export default function AutoDraftsScreen() {
         </table>
       </section>
 
-      <RunLog runs={data.runs} pages={data.pages} />
+      <RunLog runs={data.runs} pages={data.pages} drafts={data.drafts} />
     </div>
   );
 }
@@ -302,7 +304,15 @@ export default function AutoDraftsScreen() {
  * turns it into what it actually is: a history, where the useful reading is
  * "every night this week ran" rather than any single row.
  */
-function RunLog({ runs, pages }: { runs: AutoDraftRun[]; pages: AutoDraftPage[] }) {
+function RunLog({
+  runs,
+  pages,
+  drafts,
+}: {
+  runs: AutoDraftRun[];
+  pages: AutoDraftPage[];
+  drafts: Draft[];
+}) {
   if (runs.length === 0) {
     return (
       <section className="shrink-0 rounded-xl border px-5 py-8 text-center text-sm text-muted-foreground">
@@ -312,6 +322,7 @@ function RunLog({ runs, pages }: { runs: AutoDraftRun[]; pages: AutoDraftPage[] 
   }
 
   const named = (id: number) => pages.find((page) => page.page_id === id) ?? null;
+  const made = (runId: number) => drafts.filter((draft) => draft.auto_draft_run_id === runId);
 
   const days: { heading: string; rows: AutoDraftRun[] }[] = [];
   for (const run of runs) {
@@ -328,14 +339,20 @@ function RunLog({ runs, pages }: { runs: AutoDraftRun[]; pages: AutoDraftPage[] 
       <table className="w-full">
         <thead>
           <tr className="border-b bg-muted/30 text-left font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
-            <th className="px-5 py-3 font-medium">Page</th>
-            <th className="w-56 px-5 py-3 font-medium">Result</th>
+            <th className="w-56 px-5 py-3 font-medium">Page</th>
+            <th className="px-5 py-3 font-medium">Drafts</th>
             <th className="w-24 px-5 py-3 text-right font-medium">Time</th>
           </tr>
         </thead>
         <tbody>
           {days.map((day) => (
-            <Day key={day.heading} heading={day.heading} rows={day.rows} named={named} />
+            <Day
+              key={day.heading}
+              heading={day.heading}
+              rows={day.rows}
+              named={named}
+              made={made}
+            />
           ))}
         </tbody>
       </table>
@@ -348,10 +365,12 @@ function Day({
   heading,
   rows,
   named,
+  made,
 }: {
   heading: string;
   rows: AutoDraftRun[];
   named: (id: number) => AutoDraftPage | null;
+  made: (runId: number) => Draft[];
 }) {
   const total = rows.reduce((sum, run) => sum + run.drafts_created, 0);
 
@@ -378,21 +397,40 @@ function Day({
             key={run.id}
             className="border-b transition-colors last:border-0 hover:bg-muted/30"
           >
-            <td className="px-5 py-2.5 text-[13px] font-medium">
+            <td className="px-5 py-2.5 align-top text-[13px] font-medium">
               {page?.page_name ?? `Page ${run.page_id}`}
             </td>
 
             <td className="px-5 py-2.5 text-[13px]">
-              {run.drafts_created > 0 ? (
+              {/* Drafts made before runs were linked to them have no rows here,
+                  so the count is the fallback. */}
+              {made(run.id).length > 0 ? (
+                <ul className="space-y-1.5">
+                  {made(run.id).map((draft) => (
+                    <li key={draft.id} className="flex items-center gap-3">
+                      <Link
+                        href={`/review/${draft.id}`}
+                        className="min-w-0 flex-1 truncate hover:underline"
+                      >
+                        {draft.status === "generating" ? "Writing..." : title(draft)}
+                      </Link>
+                      <StatusBadge draft={draft} />
+                    </li>
+                  ))}
+                </ul>
+              ) : run.drafts_created > 0 ? (
                 <span className="tabular-nums">
                   {run.drafts_created} {run.drafts_created === 1 ? "draft" : "drafts"}
                 </span>
               ) : (
                 <span className="text-muted-foreground">Nothing to write about</span>
               )}
+              {run.note && run.drafts_created > 0 ? (
+                <p className="pt-1 text-xs text-muted-foreground">{run.note}</p>
+              ) : null}
             </td>
 
-            <td className="whitespace-nowrap px-5 py-2.5 text-right text-[13px] tabular-nums text-muted-foreground">
+            <td className="whitespace-nowrap px-5 py-2.5 text-right align-top text-[13px] tabular-nums text-muted-foreground">
               {timeOfDay(run.created_at)}
             </td>
           </tr>

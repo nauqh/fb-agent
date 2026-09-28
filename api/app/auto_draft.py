@@ -114,14 +114,16 @@ def run(
         if len(items) < target:
             note = f"Only {len(items)} post(s) left to write about, asked for {target}"
 
-    session.add(
-        AutoDraftRun(
-            page_id=page.id,
-            drafts_created=len(draft_ids),
-            available=available(session, page),
-            note=note,
-        )
+    record = AutoDraftRun(
+        page_id=page.id,
+        drafts_created=len(draft_ids),
+        available=available(session, page),
+        note=note,
     )
+    session.add(record)
+    session.flush()
+    for draft_id in draft_ids:
+        session.get_one(Draft, draft_id).auto_draft_run_id = record.id
     session.commit()
 
     return draft_ids

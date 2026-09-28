@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import {
   AlertTriangle,
+  Bot,
   Loader2,
   MoreHorizontal,
   Pencil,
@@ -289,6 +290,15 @@ function Row({
           twenty times. */}
       <td className="whitespace-nowrap px-5 py-4 align-middle text-[13px] tabular-nums text-muted-foreground">
         {timeOfDay(draft.created_at)}
+        {draft.auto_draft_run_id !== null ? (
+          <span
+            title="Written by the daily auto-draft run"
+            className="ml-2 inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px]"
+          >
+            <Bot className="size-3" />
+            Auto
+          </span>
+        ) : null}
       </td>
 
       <td className="px-5 py-4 align-middle">
@@ -536,7 +546,7 @@ const STATUS: Record<string, { label: string; tone: StatusTone }> = {
  * will never go out. `PUBLISHED` / `Draft` / `Error` are the Schedule screen's
  * to say - it reads the planner, this screen reads a column.
  */
-function StatusBadge({ draft }: { draft: Draft }) {
+export function StatusBadge({ draft }: { draft: Draft }) {
   const { label, tone } = draft.metricool_post_id
     ? { label: "In Metricool", tone: "positive" as const }
     : (STATUS[draft.status] ?? {
@@ -548,7 +558,7 @@ function StatusBadge({ draft }: { draft: Draft }) {
 }
 
 /** The hook is a paragraph; a row wants its first sentence. */
-function title(draft: Draft): string {
+export function title(draft: Draft): string {
   // A no-overlay draft has no hook by design (a Page's emptied overlay prompt,
   // or a style's "No overlay text"), and it read as "Untitled" in the queue.
   // The caption is what Facebook shows first, so it names the post next.

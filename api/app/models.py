@@ -811,6 +811,11 @@ class Draft(SQLModel, table=True):
     )
     """Null means the draft came from a topic rather than a Source Item."""
 
+    auto_draft_run_id: int | None = Field(
+        default=None, foreign_key="auto_draft_run.id", index=True
+    )
+    """The auto-draft run that made this. Null is a draft someone asked for."""
+
     topic: str | None = None
     status: DraftStatus = Field(
         default=DraftStatus.GENERATING, index=True, sa_type=_stored_enum(DraftStatus)
