@@ -400,16 +400,16 @@ function SearchQuota({ searches_left: left, searches_per_month: total, renews_on
  * Automatic save and repost, per Page (H2). See `api/app/publish/auto_repost.py`.
  *
  * One Save for both, like the lengths: the repost box means nothing while save
- * is off, and saving them one at a time would store a half-made decision. An
- * empty reactions box sends null for both, which is off.
+ * is off, and saving them one at a time would store a half-made decision. Save
+ * unticked sends null for both, which is off.
  */
 function Automation({ page }: { page: Page }) {
-  const [reactions, setReactions] = useState(page.auto_save_min_reactions?.toString() ?? "");
+  const [saveOn, setSaveOn] = useState(page.auto_save_min_reactions !== null);
+  const [reactions, setReactions] = useState((page.auto_save_min_reactions ?? 1000).toString());
   const [repost, setRepost] = useState(page.auto_repost_after_days !== null);
   const [days, setDays] = useState((page.auto_repost_after_days ?? 30).toString());
   const [busy, setBusy] = useState(false);
 
-  const saveOn = reactions.trim() !== "";
   const next = {
     auto_save_min_reactions: saveOn ? Number(reactions) : null,
     auto_repost_after_days: saveOn && repost ? Number(days) : null,
@@ -417,6 +417,7 @@ function Automation({ page }: { page: Page }) {
   const dirty =
     next.auto_save_min_reactions !== page.auto_save_min_reactions ||
     next.auto_repost_after_days !== page.auto_repost_after_days;
+  const valid = !saveOn || Number(reactions) >= 1;
 
   async function save() {
     setBusy(true);
@@ -444,15 +445,20 @@ function Automation({ page }: { page: Page }) {
         </p>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className={box}>
-            <Label htmlFor="auto-save" className="text-[13px] font-normal text-muted-foreground">
+            <Label className="flex items-center gap-2 text-[13px] font-normal text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={saveOn}
+                onChange={(event) => setSaveOn(event.target.checked)}
+              />
               Save posts at reactions
             </Label>
             <Input
-              id="auto-save"
               type="number"
               inputMode="numeric"
               min={1}
-              placeholder="Off"
+              aria-label="Reactions to save a post at"
+              disabled={!saveOn}
               className={number}
               value={reactions}
               onChange={(event) => setReactions(event.target.value)}
@@ -482,7 +488,7 @@ function Automation({ page }: { page: Page }) {
           </div>
         </div>
 
-        <Button size="sm" disabled={!dirty || busy} onClick={() => void save()}>
+        <Button size="sm" disabled={!dirty || !valid || busy} onClick={() => void save()}>
           {busy ? <Loader2 className="size-4 animate-spin" /> : null}
           Save automation
         </Button>
