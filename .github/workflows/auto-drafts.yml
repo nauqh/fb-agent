@@ -8,12 +8,11 @@ name: Auto-drafts
 
 on:
   schedule:
-    # 18:00 in Ho Chi Minh City, which has no DST. Drafts are written at the
-    # end of the day and wait overnight, so the team still opens Review to a
-    # full queue. GitHub runs scheduled jobs 10-30 minutes late often enough
-    # that it is worth saying: the commitment is a full queue by morning, not
-    # an exact minute.
-    - cron: "0 11 * * *"
+    # 06:00 in Ho Chi Minh City, which has no DST, so the queue is fresh when
+    # the working day starts. GitHub runs scheduled jobs 10-30 minutes late
+    # often enough that it is worth saying: the commitment is a full queue by
+    # the start of the morning, not an exact minute.
+    - cron: "0 23 * * *"
 
   workflow_dispatch:
     inputs:

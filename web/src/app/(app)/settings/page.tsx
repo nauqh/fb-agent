@@ -492,7 +492,7 @@ function Automation({ page }: { page: Page }) {
 }
 
 /**
- * Which sources the nightly run drafts from, and how many. One switch per
+ * Which sources the daily run drafts from, and how many. One switch per
  * source because the beats differ: a political Page drafts from its news feeds
  * and not from competitors, a history Page the other way round.
  */
@@ -531,7 +531,7 @@ function AutoDrafts({
     setBusy(true);
     try {
       await updatePage(page.id, next);
-      toast(competitorOn || rssOn ? "Saved. Runs daily at 18:00." : "Saved. Auto-drafts are off.");
+      toast(competitorOn || rssOn ? "Saved. Runs daily at 06:00." : "Saved. Auto-drafts are off.");
       emit();
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : "Could not save");
@@ -548,7 +548,7 @@ function AutoDrafts({
     <Block label="Auto-drafts">
       <div className="space-y-3">
         <p className="text-[13px] text-muted-foreground">
-          Writes drafts into Review every day at 18:00, from each source that is on.
+          Writes drafts into Review every day at 06:00, from each source that is on.
         </p>
 
         <div className="grid gap-3 sm:grid-cols-2">

@@ -33,9 +33,9 @@ import { cn } from "@/lib/utils";
  * and the day headings the Review queue groups by.
  */
 
-const RUN_HOUR_UTC = 11;
+const RUN_HOUR_UTC = 23;
 /**
- * When the cron fires. 11:00 UTC is 18:00 in Ho Chi Minh City, which has no
+ * When the cron fires. 23:00 UTC is 06:00 in Ho Chi Minh City, which has no
  * DST. **The schedule itself lives in `.github/workflows/auto-drafts.yml`** and
  * this is a copy of it, which is the honest cost of the schedule living outside
  * the app: change one and the other is wrong. Nothing enforces the pair.
@@ -319,7 +319,7 @@ function RunLog({
   if (runs.length === 0) {
     return (
       <section className="shrink-0 rounded-xl border px-5 py-8 text-center text-sm text-muted-foreground">
-        Nothing has run yet. The first run writes its rows at 18:00.
+        Nothing has run yet. The first run writes its rows at 06:00.
       </section>
     );
   }
