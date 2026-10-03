@@ -217,7 +217,17 @@ def start_run(
             # topic-only draft has no feed and no image_url, so carrying the
             # flag would guarantee the warning above on every one of them.
             hero_from_source=hero_from_source and row is not None,
-            template=template,
+            # A style with no overlay text is a plain photo post. Set as the
+            # form rather than left to a null hook, which the writer can fail
+            # to return.
+            template=template
+            or (
+                "photo"
+                if post_style is not None
+                and post_style.overlay_prompt is not None
+                and not post_style.overlay_prompt.strip()
+                else None
+            ),
             no_image=no_image,
             # A text-only post has no card to put a circle on.
             find_inset=find_inset and not no_image,
@@ -519,8 +529,13 @@ def build_image(session: Session, draft: Draft, page: Page) -> list[str]:
 
         # A null hook is the no-overlay opt-out (client, 2026-09-11), not a
         # failure: the card is the hero and the logo, full bleed, no panel.
-        # `plan` is None exactly when there is nothing to draw on it.
-        plan = overlay.plan(draft.hook, layout) if (draft.hook or "").strip() else None
+        # `plan` is None exactly when there is nothing to draw on it. A `photo`
+        # card draws nothing whatever the hook says, and its hero fills the card.
+        plan = (
+            overlay.plan(draft.hook, layout)
+            if (draft.hook or "").strip() and layout.template != "photo"
+            else None
+        )
         warnings: list[str] = []
 
         if draft.hero_image_path:

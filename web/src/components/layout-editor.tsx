@@ -134,14 +134,16 @@ export function LayoutEditor() {
             <Choice
               label="Card form"
               value={shown.template}
-              options={["card", "full_overlay"]}
+              options={["card", "full_overlay", "photo"]}
               changed={data.overridden.includes("template")}
-              onChange={(v) => set("template", v as "card" | "full_overlay")}
+              onChange={(v) => set("template", v as "card" | "full_overlay" | "photo")}
             />
             <p className="pt-1 text-[0.7rem] text-muted-foreground">
               {shown.template === "card"
                 ? "Hero on top, panel below it, dividing the height between them."
-                : "The photograph fills the card and the panel lies over its bottom."}
+                : shown.template === "photo"
+                  ? "The picture at its own shape with the logo. No panel."
+                  : "The photograph fills the card and the panel lies over its bottom."}
             </p>
           </div>
 

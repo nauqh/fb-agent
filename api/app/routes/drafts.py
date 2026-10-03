@@ -7,7 +7,7 @@ is the job record, which is why progress lives on it.
 
 import io
 from datetime import datetime, timezone
-from typing import Literal
+from typing import Literal, get_args
 
 import httpx
 from fastapi import (
@@ -41,7 +41,7 @@ from app.models import (
     SourceKind,
 )
 from app.publish import metricool as publisher
-from app.settings import layout, settings
+from app.settings import Template, layout, settings
 from app.writer import agent as writer
 from app.writer import validators
 
@@ -61,7 +61,7 @@ class GenerateRequest(BaseModel):
     topic: str | None = None
 
     template: str | None = None
-    """`card` or `full_overlay` for the drafts this run produces. Null takes
+    """`card`, `full_overlay` or `photo` for the drafts this run produces. Null takes
     the Page's, which is what a run that does not care should send."""
 
     prompt_template_id: int | None = None
@@ -852,7 +852,7 @@ def place_hero(
     return _set_hero(session, draft, page, png, f"placed from {source}")
 
 
-TEMPLATES = ("card", "full_overlay")
+TEMPLATES = get_args(Template)
 """The card forms the compositor knows. Checked on write as well as at draw time,
 because a bad one does not fail in resvg - it renders the wrong card and returns
 a perfectly valid PNG."""

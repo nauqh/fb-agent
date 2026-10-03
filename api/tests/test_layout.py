@@ -356,3 +356,50 @@ def test_a_no_overlay_draft_composes_full_bleed_with_no_panel():
     # Bottom strip: photograph red, never the panel's black.
     bottom = card.getpixel((width // 2, height - 10))
     assert bottom[0] > 120 and sum(bottom[:3]) > 200
+
+
+def _photo_card(size: tuple[int, int]) -> "Image.Image":
+    from app.image import compositor
+    from app.image import text as overlay
+
+    hero = io.BytesIO()
+    Image.new("RGB", size, (200, 40, 40)).save(hero, format="PNG")
+    layout = _templated("photo")
+    # A plan is passed on purpose: the form decides, not whether a hook exists.
+    jpeg = compositor.compose(
+        hero.getvalue(), overlay.plan(SAMPLE, layout), [], None, None, layout
+    )
+    return Image.open(io.BytesIO(jpeg)).convert("RGB")
+
+
+def test_a_photo_card_keeps_a_landscape_shape_and_draws_no_panel():
+    card = _photo_card((1600, 900))
+
+    assert card.size == (896, 504)
+    bottom = card.getpixel((448, 494))
+    assert bottom[0] > 120, "a panel was drawn on a photo card"
+
+
+def test_a_photo_card_cuts_a_tall_picture_back_to_4_5():
+    """Facebook crops anything taller in the feed; here the hero crop can choose."""
+    assert _photo_card((900, 1600)).size == (896, 1120)
+
+
+def test_a_style_with_no_overlay_text_starts_drafts_as_photo_cards(session, page):
+    from app import generate
+    from app.models import PromptTemplate
+
+    style = PromptTemplate(name="Infographic", page_id=page.id, overlay_prompt="")
+    plain = PromptTemplate(name="Plain", page_id=page.id)
+    session.add_all([style, plain])
+    session.commit()
+
+    [photo] = generate.start_run(
+        session, [page.id], [], topic="Stretches", prompt_template_id=style.id
+    )
+    [card] = generate.start_run(
+        session, [page.id], [], topic="Stretches", prompt_template_id=plain.id
+    )
+
+    assert session.get(Draft, photo).template == "photo"
+    assert session.get(Draft, card).template is None

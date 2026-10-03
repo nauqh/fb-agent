@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 import type { ResolvedLayout } from "@/lib/api/layout";
 import { watermarkUrl } from "@/lib/api/pages";
@@ -132,7 +132,15 @@ export function ComposedImage({
   /** The no-overlay card (client, 2026-09-11): no panel, no badge, no gold -
       the hero is full bleed and the logo is the only overlay. Matches the
       compositor's `plan=None`, so the preview beside the PNG stays honest. */
-  const noPanel = !(overlayText ?? "").trim();
+  const photo = layout.template === "photo";
+  const noPanel = photo || !(overlayText ?? "").trim();
+  /** A photo card's shape is its hero's, clamped as the compositor clamps it
+      (4:5 to 1.91:1). Null until the hero has loaded. */
+  const [heroShape, setHeroShape] = useState<number | null>(null);
+  const aspectRatio =
+    photo && heroShape
+      ? Math.min(Math.max(heroShape, 4 / 5), 1.91)
+      : layout.image.width / layout.image.height;
 
   /** A card pixel as a percentage of the card's width. */
   const scale = (px: number) => `${(px / layout.image.width) * 100}%`;
@@ -192,6 +200,9 @@ export function ComposedImage({
       src={heroSrc}
       alt=""
       data-hero-image
+      onLoad={(event) =>
+        setHeroShape(event.currentTarget.naturalWidth / event.currentTarget.naturalHeight)
+      }
       className="absolute inset-0 size-full object-cover"
       style={{
         objectPosition: `${cropX * 100}% ${cropY * 100}%`,
@@ -216,7 +227,7 @@ export function ComposedImage({
         "@container relative flex flex-col overflow-hidden rounded-2xl border bg-black",
         className,
       )}
-      style={{ aspectRatio: `${layout.image.width} / ${layout.image.height}` }}
+      style={{ aspectRatio }}
     >
       {/* On a full overlay the photograph *is* the card and the panel lies over
           its bottom, so the hero is painted behind everything and the flex

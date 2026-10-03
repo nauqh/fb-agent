@@ -226,7 +226,7 @@ export interface Draft {
    */
   hero_from_source: boolean;
   /** `card` or `full_overlay` for this draft alone. Null follows the Page. */
-  template: "card" | "full_overlay" | null;
+  template: "card" | "full_overlay" | "photo" | null;
   /**
    * The post style this run was generated under, or null for the Page's own
    * prompts unlayered. Stored on the row, not re-read at rewrite time - a

@@ -20,7 +20,7 @@ export interface ResolvedLayout {
    * `full_overlay` fills the card with the hero and lays the panel over its
    * bottom, which only reads as one picture if `panel.opacity` is below 1.
    */
-  template: "card" | "full_overlay";
+  template: "card" | "full_overlay" | "photo";
   image: { width: number; height: number; edge_margin_ratio: number };
   panel: { ratio: number; max_ratio: number; color: string; opacity: number };
   text: {
@@ -70,7 +70,7 @@ export interface LayoutResult {
 
 /** The flat column names `PATCH` takes. Null clears one back to the default. */
 export interface LayoutPatch {
-  template?: "card" | "full_overlay" | null;
+  template?: "card" | "full_overlay" | "photo" | null;
   panel_ratio?: number | null;
   panel_max_ratio?: number | null;
   panel_color?: string | null;

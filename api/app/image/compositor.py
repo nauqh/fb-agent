@@ -374,6 +374,11 @@ def inset_centre(
     return round(x), round(y)
 
 
+PHOTO_TALLEST = 4 / 5
+PHOTO_WIDEST = 1.91
+"""The shapes the Facebook feed shows without cropping, for a `photo` card."""
+
+
 def compose(
     hero: bytes,
     plan: OverlayPlan | None,
@@ -399,8 +404,17 @@ def compose(
     full bleed, there is no panel, no badge and no gold - the image and the
     logo are the whole visual. The badge sits just above a panel and has no
     home without one, so it does not draw.
+
+    **A `photo` card drops the plan** and keeps the picture's own shape: the
+    width is the layout's and the height follows the hero, clamped to what the
+    Facebook feed shows uncropped (4:5 to 1.91:1). A phone shot taller than
+    4:5 is cut back to it here, where the hero crop can choose the frame,
+    rather than by Facebook, where nothing can.
     """
     layout = layout or default_layout
+    photo = layout.template == "photo"
+    if photo:
+        plan = None
     full_overlay = plan is not None and layout.template == "full_overlay"
 
     if plan is not None:
@@ -412,16 +426,20 @@ def compose(
                 f"maximum is {plan.panel_height_px}px; it would be cut off mid-word"
             )
 
-    width = layout.image.width
-    canvas = Image.new("RGBA", (width, layout.image.height))
-
     try:
         source = Image.open(io.BytesIO(hero)).convert("RGBA")
     except OSError as error:
         raise CompositeError(f"the hero image did not decode ({error})") from error
 
+    width = layout.image.width
+    height = layout.image.height
+    if photo:
+        shape = min(max(source.width / source.height, PHOTO_TALLEST), PHOTO_WIDEST)
+        height = round(width / shape)
+    canvas = Image.new("RGBA", (width, height))
+
     hero_height = (
-        layout.image.height
+        height
         if full_overlay or plan is None
         else plan.hero_height_px
     )
@@ -489,7 +507,7 @@ def compose(
             inset.border_color,
         )
         if plan is None:
-            x, y = width // 2, layout.image.height // 2
+            x, y = width // 2, height // 2
         else:
             x, y = inset_centre(inset, plan, layout)
         canvas.alpha_composite(disc, (x - disc.width // 2, y - disc.height // 2))

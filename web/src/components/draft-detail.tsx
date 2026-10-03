@@ -86,7 +86,7 @@ interface Form {
   inset_border_width_px: number | null;
   inset_border_color: string | null;
   /** `card` or `full_overlay` for this draft. Null follows the Page. */
-  template: "card" | "full_overlay" | null;
+  template: "card" | "full_overlay" | "photo" | null;
 }
 
 export function DraftDetail({
@@ -797,7 +797,11 @@ export function DraftDetail({
                 {picture}
               </div>
               <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                <span className="font-mono">896 × 1120</span>
+                <span className="font-mono">
+                  {(form?.template ?? draft.template ?? layout.template) === "photo"
+                    ? "picture's own shape"
+                    : `${layout.image.width} × ${layout.image.height}`}
+                </span>
                 <span>
                   {published
                     ? "the published image"
@@ -1064,12 +1068,13 @@ export function DraftDetail({
               <Tabs
                 value={form.template ?? layout.template}
                 onValueChange={(next) =>
-                  setForm({ ...form, template: next as "card" | "full_overlay" })
+                  setForm({ ...form, template: next as "card" | "full_overlay" | "photo" })
                 }
               >
                 <TabsList className="w-full *:flex-1">
                   <TabsTrigger value="card">Card</TabsTrigger>
                   <TabsTrigger value="full_overlay">Full overlay</TabsTrigger>
+                  <TabsTrigger value="photo">Photo only</TabsTrigger>
                 </TabsList>
               </Tabs>
             </section>

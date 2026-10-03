@@ -94,7 +94,7 @@ export interface GenerateRequest {
    */
   hero_from_source?: boolean;
   /** `card` or `full_overlay` for the drafts this run makes. Null takes the Page's. */
-  template?: "card" | "full_overlay" | null;
+  template?: "card" | "full_overlay" | "photo" | null;
   /**
    * The post style this run generates under, from the library on Settings.
    * Null or omitted writes with the Page's own prompts, unlayered.

@@ -159,7 +159,7 @@ erDiagram
     PAGE_LAYOUT {
         int id PK
         int page_id FK "unique - one row per Page"
-        text template "card | full_overlay"
+        text template "card | full_overlay | photo"
         float panel_ratio "…and ~24 more, every one nullable"
         text text_color "null means layout.yml, never a copy of it"
         ts updated_at
@@ -244,7 +244,7 @@ erDiagram
         json highlight_phrases
         json hashtags "retained; nothing writes it since E1"
         text image_prompt
-        text template "card | full_overlay; null takes the Page's"
+        text template "card | full_overlay | photo; null takes the Page's"
         bool no_image "text-only post, no composite at all"
         bool hero_from_source "use the source's own picture, not a paid one"
         text hero_image_path

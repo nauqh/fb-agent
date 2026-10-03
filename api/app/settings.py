@@ -92,17 +92,21 @@ class TextLayout(Frozen):
     padding: PaddingLayout
 
 
-Template = Literal["card", "full_overlay"]
-"""Which of the two card forms a Page draws.
+Template = Literal["card", "full_overlay", "photo"]
+"""Which card form a Page draws.
 
 `card` is the original: hero on top, panel below it, the two dividing the height
 between them. `full_overlay` is the old app's Template 2 - the photograph fills
 the card and the panel is laid over its bottom, which only reads as one picture
-if the panel is translucent (`panel.opacity`).
+if the panel is translucent (`panel.opacity`). `photo` is a plain Facebook post
+(client, 2026-10-03): the picture at its own shape and the logo, no panel even
+when the draft has a hook - the form decides, so a stray hook cannot bring the
+panel back.
 
-Two, and closed. A third would be a `template` table rather than a value, which
-is what the old system had: `facebook_post_templates`, a row per page, every
-field doubled with a `_full_overlay` twin.
+Closed. `photo` adds no fields; a form that needed its own copy of the panel
+settings would be a `template` table rather than a value, which is what the old
+system had: `facebook_post_templates`, a row per page, every field doubled with
+a `_full_overlay` twin.
 """
 
 
