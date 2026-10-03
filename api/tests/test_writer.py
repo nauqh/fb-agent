@@ -278,6 +278,17 @@ def test_a_competitor_instruction_tells_the_model_to_mirror_the_shape():
     assert "never their actual photograph" in instruction
 
 
+def test_matching_a_competitors_shape_never_brings_back_a_removed_part():
+    """Thanh's Workout Infographic, 2026-10-03: a style with no overlay text
+    still got a panel, because this paragraph listed a hook for every shape and
+    sits in the user turn, nearer the model than the instructions it overrode."""
+    instruction = writer.source_instruction(SourceKind.COMPETITOR_POST)
+
+    assert "hook, recap, first comment" not in instruction
+    assert "in the caption when this post has NO OVERLAY TEXT" in instruction
+    assert "NO OVERLAY TEXT, NO FIRST COMMENT and the post style still hold" in instruction
+
+
 def test_the_prompt_carries_the_source_text_and_its_instruction():
     source = SourceItem(
         id=1,
