@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Loader2, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 
@@ -22,6 +22,7 @@ import {
   uploadWatermark,
   watermarkUrl,
 } from "@/lib/api/pages";
+import { listDrafts } from "@/lib/api/drafts";
 import { usePageScope } from "@/lib/page-scope";
 import type { Page } from "@/lib/types";
 import { emit } from "@/lib/store";
@@ -447,26 +448,44 @@ function Preview({ layout, page }: { layout: ResolvedLayout; page: Page }) {
   // No panel, and the hero is the whole card - as on a full overlay, which is
   // why the mark below hangs from the same place on both.
   const photo = layout.template === "photo";
-  // A stand-in subject, centred in whatever box the hero is cropped to. A plain
-  // gradient looks the same in every frame, so at 100% opacity a card and a
-  // full overlay were indistinguishable here; the subject is what shows that a
-  // card's hero stops at the panel and a full overlay's runs behind it.
-  const subject = (
-    <div
-      className="absolute inset-0"
-      style={{
-        background:
-          "radial-gradient(circle at 50% 50%, rgb(226 232 240) 0, rgb(148 163 184) 16%, transparent 34%)",
-      }}
+  // A real picture from one of this Page's drafts, picked at random per visit,
+  // so each form shows how it crops an actual photograph: a card's hero stops
+  // at the panel, a full overlay's runs behind it. The circle gets a draft's
+  // inset, or a second hero when no draft has one. The Page's own files, so
+  // nothing is fetched from outside the app.
+  const { data: drafts } = useQuery(() => listDrafts({ page_id: page.id }), [page.id]);
+  const [seed] = useState(() => Math.random());
+  const { heroSrc, insetSrc } = useMemo(() => {
+    const heroes = (drafts ?? []).flatMap((one) => one.hero_image_url ?? []);
+    const insets = (drafts ?? []).flatMap((one) => one.inset_image_url ?? []);
+    const at = (list: string[], offset = 0) =>
+      list.length ? list[(Math.floor(seed * list.length) + offset) % list.length] : null;
+    return { heroSrc: at(heroes), insetSrc: at(insets) ?? at(heroes, 1) };
+  }, [drafts, seed]);
+  // A photo card is the hero's own shape, clamped as the compositor clamps it.
+  const [heroShape, setHeroShape] = useState<number | null>(null);
+  const aspect =
+    photo && heroSrc && heroShape
+      ? Math.min(Math.max(heroShape, 4 / 5), 1.91)
+      : layout.image.width / layout.image.height;
+  const hero = heroSrc ? (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={heroSrc}
+      alt=""
+      onLoad={(event) =>
+        setHeroShape(event.currentTarget.naturalWidth / event.currentTarget.naturalHeight)
+      }
+      className="absolute inset-0 size-full object-cover"
     />
-  );
+  ) : null;
   // The compositor's own second cap, applied to the box the logo fits inside.
   const markBox = Math.min(layout.watermark.max_px, layout.image.width * 0.22);
   // `top_ratio` is a fraction of the hero, and on a full overlay the hero is
   // the whole card - so the mark hangs from the card's top rather than from the
   // bottom of the space above the panel. Same number, different denominator.
   const markTop = full || photo
-    ? `${layout.watermark.top_ratio * 1.25 * 100}cqw`
+    ? `${(layout.watermark.top_ratio / aspect) * 100}cqw`
     : `${layout.watermark.top_ratio * 100}%`;
   // The third renderer of the same panel, after the compositor and
   // `ComposedImage`. It takes the case the same way both of those do - text and
@@ -484,7 +503,7 @@ function Preview({ layout, page }: { layout: ResolvedLayout; page: Page }) {
           five times its real size, overflowing the card entirely. */}
       <div
         className="relative w-full overflow-hidden rounded-2xl border bg-muted [container-type:inline-size]"
-        style={{ aspectRatio: `${layout.image.width} / ${layout.image.height}` }}
+        style={{ aspectRatio: aspect }}
       >
         {/* Stands in for the hero, and fills the *whole* card rather than only
             the space above the panel. A real one would need a draft, and this is
@@ -498,14 +517,14 @@ function Preview({ layout, page }: { layout: ResolvedLayout; page: Page }) {
             through - the panel simply covers the bottom of it, which is what the
             compositor does anyway. */}
         <div className="absolute inset-0 bg-gradient-to-br from-slate-600 to-slate-800" />
-        {photo || full ? subject : null}
+        {photo || full ? hero : null}
 
         <div className="absolute inset-0 flex flex-col">
           {/* The hero's share of the height. Transparent - the gradient is
               behind it - and here only to hang the watermark off, whose
               `top_ratio` is a fraction of the hero rather than of the card. */}
           <div className="relative min-h-0 flex-1">
-            {photo || full ? null : subject}
+            {photo || full ? null : hero}
             {/* The chip, bottom-left of the hero share - whose bottom edge *is*
                 the top of the panel, on either template. `cqw` throughout
                 because the container query resolves against the width, and the
@@ -594,7 +613,12 @@ function Preview({ layout, page }: { layout: ResolvedLayout; page: Page }) {
                 padding: scale(layout.portrait.border_width_px),
               }}
             >
-              <div className="size-full rounded-full bg-gradient-to-br from-slate-300 to-slate-500" />
+              {insetSrc ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={insetSrc} alt="" className="size-full rounded-full object-cover" />
+              ) : (
+                <div className="size-full rounded-full bg-gradient-to-br from-slate-300 to-slate-500" />
+              )}
             </div>
           </div>
 
