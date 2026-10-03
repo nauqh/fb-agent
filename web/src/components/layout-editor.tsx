@@ -444,12 +444,28 @@ function Preview({ layout, page }: { layout: ResolvedLayout; page: Page }) {
   const scale = (px: number) => `${(px / layout.image.width) * 100}%`;
   const mark = watermarkUrl(page);
   const full = layout.template === "full_overlay";
+  // No panel, and the hero is the whole card - as on a full overlay, which is
+  // why the mark below hangs from the same place on both.
+  const photo = layout.template === "photo";
+  // A stand-in subject, centred in whatever box the hero is cropped to. A plain
+  // gradient looks the same in every frame, so at 100% opacity a card and a
+  // full overlay were indistinguishable here; the subject is what shows that a
+  // card's hero stops at the panel and a full overlay's runs behind it.
+  const subject = (
+    <div
+      className="absolute inset-0"
+      style={{
+        background:
+          "radial-gradient(circle at 50% 50%, rgb(226 232 240) 0, rgb(148 163 184) 16%, transparent 34%)",
+      }}
+    />
+  );
   // The compositor's own second cap, applied to the box the logo fits inside.
   const markBox = Math.min(layout.watermark.max_px, layout.image.width * 0.22);
   // `top_ratio` is a fraction of the hero, and on a full overlay the hero is
   // the whole card - so the mark hangs from the card's top rather than from the
   // bottom of the space above the panel. Same number, different denominator.
-  const markTop = full
+  const markTop = full || photo
     ? `${layout.watermark.top_ratio * 1.25 * 100}cqw`
     : `${layout.watermark.top_ratio * 100}%`;
   // The third renderer of the same panel, after the compositor and
@@ -482,12 +498,14 @@ function Preview({ layout, page }: { layout: ResolvedLayout; page: Page }) {
             through - the panel simply covers the bottom of it, which is what the
             compositor does anyway. */}
         <div className="absolute inset-0 bg-gradient-to-br from-slate-600 to-slate-800" />
+        {photo || full ? subject : null}
 
         <div className="absolute inset-0 flex flex-col">
           {/* The hero's share of the height. Transparent - the gradient is
               behind it - and here only to hang the watermark off, whose
               `top_ratio` is a fraction of the hero rather than of the card. */}
           <div className="relative min-h-0 flex-1">
+            {photo || full ? null : subject}
             {/* The chip, bottom-left of the hero share - whose bottom edge *is*
                 the top of the panel, on either template. `cqw` throughout
                 because the container query resolves against the width, and the
@@ -561,11 +579,17 @@ function Preview({ layout, page }: { layout: ResolvedLayout; page: Page }) {
                 A neutral fill, not a photo: the picture is chosen per draft;
                 the size and ring are what this Page sets. */}
             <div
-              className="absolute bottom-0 z-10 aspect-square rounded-full"
+              className="absolute z-10 aspect-square rounded-full"
               style={{
                 width: scale(clampInset(null, layout) + layout.portrait.border_width_px * 2),
-                right: `${layout.image.edge_margin_ratio * 100}%`,
-                translate: "0 50%",
+                // With no panel there is no seam, so the compositor centres it.
+                ...(photo
+                  ? { left: "50%", top: "50%", translate: "-50% -50%" }
+                  : {
+                      bottom: 0,
+                      right: `${layout.image.edge_margin_ratio * 100}%`,
+                      translate: "0 50%",
+                    }),
                 backgroundColor: layout.portrait.border_color,
                 padding: scale(layout.portrait.border_width_px),
               }}
@@ -577,6 +601,7 @@ function Preview({ layout, page }: { layout: ResolvedLayout; page: Page }) {
           {/* `maxHeight` is `panel.max_ratio`, the same cap the compositor
               applies. Without it the panel grew past the top of the card as the
               sample text got longer, which is not what the real one does. */}
+          {photo ? null : (
           <div
             className="relative shrink-0 overflow-hidden"
             style={{
@@ -584,12 +609,16 @@ function Preview({ layout, page }: { layout: ResolvedLayout; page: Page }) {
               maxHeight: `${layout.panel.max_ratio * 100}%`,
             }}
           >
-            {/* Its own layer, so `opacity` never reaches the words. */}
+            {/* Its own layer, so `opacity` never reaches the words. Opacity
+                only on a full overlay: on a card nothing is under the panel,
+                and the compositor's RGB save drops the alpha, so the panel is
+                solid however the slider is set. Showing the gradient through it
+                is what made Card and Full overlay look the same here. */}
             <div
               className="absolute inset-0"
               style={{
                 backgroundColor: layout.panel.color,
-                opacity: layout.panel.opacity,
+                opacity: full ? layout.panel.opacity : 1,
               }}
             />
             <p
@@ -621,6 +650,7 @@ function Preview({ layout, page }: { layout: ResolvedLayout; page: Page }) {
               ))}
             </p>
           </div>
+          )}
         </div>
       </div>
 
@@ -633,13 +663,19 @@ function Preview({ layout, page }: { layout: ResolvedLayout; page: Page }) {
           holds here: a typed phrase has to match the text exactly or it colours
           nothing, and retyping words that are already on screen is the one way
           to get that wrong. Select the words, press Highlight. */}
-      <HookField
-        value={sample}
-        phrases={phrases}
-        rows={6}
-        onChange={setSample}
-        onPhrasesChange={setPhrases}
-      />
+      {photo ? (
+        <p className="text-xs text-muted-foreground">
+          A photo card takes its shape from the picture, between 4:5 and 1.91:1.
+        </p>
+      ) : (
+        <HookField
+          value={sample}
+          phrases={phrases}
+          rows={6}
+          onChange={setSample}
+          onPhrasesChange={setPhrases}
+        />
+      )}
     </div>
   );
 }
