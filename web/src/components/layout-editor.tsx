@@ -462,20 +462,15 @@ function Preview({ layout, page }: { layout: ResolvedLayout; page: Page }) {
       list.length ? list[(Math.floor(seed * list.length) + offset) % list.length] : null;
     return { heroSrc: at(heroes), insetSrc: at(insets) ?? at(heroes, 1) };
   }, [drafts, seed]);
-  // A photo card is the hero's own shape, clamped as the compositor clamps it.
-  const [heroShape, setHeroShape] = useState<number | null>(null);
-  const aspect =
-    photo && heroSrc && heroShape
-      ? Math.min(Math.max(heroShape, 4 / 5), 1.91)
-      : layout.image.width / layout.image.height;
+  // Always the layout's 4:5, a photo card included: a real one takes its
+  // picture's shape, but a random landscape hero made the preview read as a
+  // banner rather than a post (client, 2026-10-03).
+  const aspect = layout.image.width / layout.image.height;
   const hero = heroSrc ? (
     // eslint-disable-next-line @next/next/no-img-element
     <img
       src={heroSrc}
       alt=""
-      onLoad={(event) =>
-        setHeroShape(event.currentTarget.naturalWidth / event.currentTarget.naturalHeight)
-      }
       className="absolute inset-0 size-full object-cover"
     />
   ) : null;
@@ -601,9 +596,13 @@ function Preview({ layout, page }: { layout: ResolvedLayout; page: Page }) {
               className="absolute z-10 aspect-square rounded-full"
               style={{
                 width: scale(clampInset(null, layout) + layout.portrait.border_width_px * 2),
-                // With no panel there is no seam, so the compositor centres it.
+                // With no panel there is no seam: the compositor puts it in the
+                // bottom-right corner at the edge margin.
                 ...(photo
-                  ? { left: "50%", top: "50%", translate: "-50% -50%" }
+                  ? {
+                      bottom: `${layout.image.edge_margin_ratio * 100}cqw`,
+                      right: `${layout.image.edge_margin_ratio * 100}%`,
+                    }
                   : {
                       bottom: 0,
                       right: `${layout.image.edge_margin_ratio * 100}%`,
@@ -689,7 +688,7 @@ function Preview({ layout, page }: { layout: ResolvedLayout; page: Page }) {
           to get that wrong. Select the words, press Highlight. */}
       {photo ? (
         <p className="text-xs text-muted-foreground">
-          A photo card takes its shape from the picture, between 4:5 and 1.91:1.
+          A photo card takes its shape from the picture, between 4:5 and 1.91:1. Shown here at 4:5.
         </p>
       ) : (
         <HookField

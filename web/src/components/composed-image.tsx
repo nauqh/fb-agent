@@ -179,7 +179,14 @@ export function ComposedImage({
           ? { right: `${layout.image.edge_margin_ratio * 100}%` }
           : { left: `${insetXRatio * 100}%`, translate: "-50%" }),
         ...(insetYRatio == null
-          ? { bottom: 0, translate: `${insetXRatio == null ? "0" : "-50%"} 50%` }
+          ? noPanel
+            ? // No seam: the bottom-right corner at the edge margin, as the
+              // compositor places it.
+              {
+                bottom: `${layout.image.edge_margin_ratio * 100}cqw`,
+                translate: `${insetXRatio == null ? "0" : "-50%"} 0`,
+              }
+            : { bottom: 0, translate: `${insetXRatio == null ? "0" : "-50%"} 50%` }
           : { top: `${insetYRatio * 100}%`, translate: `${insetXRatio == null ? "0" : "-50%"} -50%` }),
       }}
     >

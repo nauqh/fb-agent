@@ -33,7 +33,9 @@ panel:
     ratio: 0.20
     max_ratio: 0.85
     color: "#000000"
-    opacity: 1.0
+    # Full overlay only; a card's panel is always solid. 0 is type straight on
+    # the photograph (client, 2026-10-03).
+    opacity: 0.0
 
 text:
     # Fixed. There is no autofit - `planOverlayLayout` reads `fontSizePx` once

@@ -10,6 +10,8 @@ are asserted here rather than left to the reading.
 import base64
 import io
 
+import pytest
+
 from PIL import Image
 from sqlmodel import select
 
@@ -403,3 +405,31 @@ def test_a_style_with_no_overlay_text_starts_drafts_as_photo_cards(session, page
 
     assert session.get(Draft, photo).template == "photo"
     assert session.get(Draft, card).template is None
+
+
+def test_a_cards_panel_is_solid_whatever_the_opacity():
+    """Opacity is a full overlay's alone; the default is 0 now (2026-10-03)."""
+    from app.settings import Layout
+    from app.settings import layout as defaults
+
+    values = defaults.model_dump()
+    values["template"] = "card"
+    values["panel"].update(opacity=0.0, color="#1e3a8a")
+    card = _drawn(Layout.model_validate(values))
+
+    assert card.getpixel((448, 1080)) == pytest.approx((30, 58, 138), abs=6)
+
+
+def test_an_inset_without_a_panel_sits_in_the_bottom_right_corner():
+    from app.image import compositor
+
+    hero, disc = io.BytesIO(), io.BytesIO()
+    Image.new("RGB", (1280, 1600), (200, 40, 40)).save(hero, format="PNG")
+    Image.new("RGB", (400, 400), (0, 200, 0)).save(disc, format="PNG")
+    inset = compositor.Inset(data=disc.getvalue(), border_width_px=0)
+
+    jpeg = compositor.compose(hero.getvalue(), None, [], None, inset, None)
+    card = Image.open(io.BytesIO(jpeg)).convert("RGB")
+
+    assert card.getpixel((448, 560))[1] < 100, "the disc is still centred"
+    assert card.getpixel((896 - 18 - 115, 1120 - 18 - 115))[1] > 150, "not in the corner"

@@ -68,7 +68,11 @@ def panel_svg(plan: OverlayPlan, phrases: list[str], layout: Layout) -> str:
     unmatched family; it substitutes a system face and returns a valid PNG of
     the wrong font, which then disagrees with every width `text.py` measured.
     `render_panel` asserts the ink width for that reason.
+
+    Opacity is a full overlay's alone. A card has nothing under its panel, so
+    a translucent one would only be the panel colour lost to the RGB save.
     """
+    opacity = layout.panel.opacity if layout.template == "full_overlay" else 1
     padding = layout.text.padding
     width = layout.image.width
     height = plan.panel_height_px
@@ -101,7 +105,7 @@ def panel_svg(plan: OverlayPlan, phrases: list[str], layout: Layout) -> str:
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}">'
         f'<rect width="{width}" height="{height}" fill="{layout.panel.color}" '
-        f'fill-opacity="{layout.panel.opacity}"/>'
+        f'fill-opacity="{opacity}"/>'
         f'<clipPath id="panel"><rect x="{padding.left_px}" y="{padding.top_px}" '
         f'width="{width - padding.left_px - padding.right_px}" '
         f'height="{height - padding.top_px - padding.bottom_px}"/></clipPath>'
@@ -497,8 +501,7 @@ def compose(
         # Default is centred on the seam: half on the photograph, half on the
         # panel. That overlap is the effect - a disc wholly inside the hero is a
         # sticker, and one wholly inside the panel is an avatar. The operator
-        # can drag it anywhere from there. With no panel there is no seam, so
-        # the disc centres on the card.
+        # can drag it anywhere from there.
         disc = circular_portrait(
             inset.data,
             layout,
@@ -507,7 +510,18 @@ def compose(
             inset.border_color,
         )
         if plan is None:
-            x, y = width // 2, height // 2
+            # No panel, so no seam: bottom-right, inside the card at the edge
+            # margin, unless the operator has placed it.
+            x = (
+                width - margin - disc.width // 2
+                if inset.x_ratio is None
+                else round(inset.x_ratio * width)
+            )
+            y = (
+                height - margin - disc.height // 2
+                if inset.y_ratio is None
+                else round(inset.y_ratio * height)
+            )
         else:
             x, y = inset_centre(inset, plan, layout)
         canvas.alpha_composite(disc, (x - disc.width // 2, y - disc.height // 2))
