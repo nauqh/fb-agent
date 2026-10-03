@@ -83,6 +83,8 @@ export interface Page {
    */
   recap_max_points: number | null;
   recap_emoji: boolean | null;
+  /** False writes no first comment on this Page. Null is the house rule: one is written. */
+  write_first_comment: boolean | null;
 
   /** Save a published post automatically at this many reactions. Null is off. */
   auto_save_min_reactions: number | null;
@@ -298,6 +300,8 @@ export interface PromptTemplate {
   system_prompt: string | null;
   overlay_prompt: string | null;
   image_prompt: string | null;
+  /** Null follows the Page; a bool overrides it for this style. */
+  write_first_comment: boolean | null;
 }
 
 /**

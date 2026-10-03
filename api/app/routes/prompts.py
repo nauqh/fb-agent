@@ -160,6 +160,8 @@ class TemplateBody(BaseModel):
     system_prompt: str | None = None
     overlay_prompt: str | None = None
     image_prompt: str | None = None
+    write_first_comment: bool | None = None
+    """Null follows the Page; a bool overrides it for this style."""
 
 
 class TemplateOut(TemplateBody):
@@ -175,6 +177,7 @@ def _template_out(row: PromptTemplate) -> TemplateOut:
         system_prompt=row.system_prompt,
         overlay_prompt=row.overlay_prompt,
         image_prompt=row.image_prompt,
+        write_first_comment=row.write_first_comment,
     )
 
 
@@ -210,9 +213,11 @@ def create_template(
     name = body.name.strip()
     if not name:
         raise HTTPException(422, "A template needs a name.")
-    # "No overlay text" is a change on its own, so `""` counts here.
-    if _overlay(body.overlay_prompt) is None and not any(
-        (text or "").strip() for text in (body.system_prompt, body.image_prompt)
+    # "No overlay text" and a first comment setting are changes on their own.
+    if (
+        _overlay(body.overlay_prompt) is None
+        and body.write_first_comment is None
+        and not any((text or "").strip() for text in (body.system_prompt, body.image_prompt))
     ):
         raise HTTPException(
             422,
@@ -232,6 +237,7 @@ def create_template(
         system_prompt=body.system_prompt,
         overlay_prompt=body.overlay_prompt,
         image_prompt=body.image_prompt,
+        write_first_comment=body.write_first_comment,
     )
     session.add(row)
     session.commit()
@@ -261,6 +267,7 @@ def update_template(
     row.system_prompt = body.system_prompt
     row.overlay_prompt = _overlay(body.overlay_prompt)
     row.image_prompt = body.image_prompt
+    row.write_first_comment = body.write_first_comment
     session.add(row)
     session.commit()
     session.refresh(row)
@@ -326,6 +333,7 @@ def preview_template(
         system_prompt=body.system_prompt,
         overlay_prompt=_overlay(body.overlay_prompt),
         image_prompt=body.image_prompt,
+        write_first_comment=body.write_first_comment,
     )
     image_layer = (body.image_prompt or "").strip()
     return TemplatePreview(

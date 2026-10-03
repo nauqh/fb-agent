@@ -30,6 +30,7 @@ export interface TemplateBody {
   system_prompt?: string | null;
   overlay_prompt?: string | null;
   image_prompt?: string | null;
+  write_first_comment?: boolean | null;
 }
 
 export async function createPromptTemplate(body: TemplateBody): Promise<PromptTemplate> {

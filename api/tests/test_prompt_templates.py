@@ -200,3 +200,11 @@ def test_preview_matches_what_the_run_actually_sends(client, session):
     style = PromptTemplate(**body)
     assert preview["writer"] == agent.instructions_for(page, style)
     assert preview["hero"] == hero.brief(layout, page.name, page, "Flat light.")
+
+
+def test_turning_the_first_comment_off_is_a_style_of_its_own(client, session):
+    response = _create(client, system_prompt=None, write_first_comment=False)
+
+    assert response.status_code == 201
+    assert response.json()["write_first_comment"] is False
+    assert session.exec(select(PromptTemplate)).one().write_first_comment is False

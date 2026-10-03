@@ -86,6 +86,7 @@ class DraftContent(BaseModel):
         description=(
             "The main body, as paragraphs separated by a blank line. Length and "
             "paragraph count are stated in the prompt. Leave it out (null) ONLY "
+            "when the instructions say this post has NO FIRST COMMENT, or "
             "when the instruction says the source is a minimal post - a meme, "
             "quote, recipe card or motivational image with little or no caption "
             "text - and the post must mirror that shape. For a minimal post an "
@@ -147,15 +148,19 @@ def _instructions(page: Page, layout: Layout, template=None) -> str:
     ]
     house = validators.Limits()
     limits = validators.Limits.for_page(page)
+    first_comment = writes_first_comment(page, template)
     if limits != house:
         low, high = limits.paragraphs
-        lines = [
-            f"- The hook must be at most {limits.hook_max_words} words.",
-            f"- The first comment must be between {limits.body_min_chars:,} and "
-            f"{limits.body_max_chars:,} characters.",
-            f"- The first comment must be {low}-{high} paragraphs.",
-            f"- The caption must be at most {limits.recap_max_points} points.",
-        ]
+        lines = [f"- The hook must be at most {limits.hook_max_words} words."]
+        if first_comment:
+            # Not stated for a post that has none: a length for a field the
+            # model is told to drop is two instructions that disagree.
+            lines += [
+                f"- The first comment must be between {limits.body_min_chars:,} and "
+                f"{limits.body_max_chars:,} characters.",
+                f"- The first comment must be {low}-{high} paragraphs.",
+            ]
+        lines.append(f"- The caption must be at most {limits.recap_max_points} points.")
         if not limits.recap_emoji:
             # Stated only when it is off. The house rule is already in the
             # prompt prose, and repeating it here would be the second copy
@@ -201,10 +206,27 @@ def _instructions(page: Page, layout: Layout, template=None) -> str:
             "NO OVERLAY TEXT. This post carries no text panel on the image - "
             "the picture and the page logo are the whole visual. Return null "
             "for `hook` and an empty list for `highlight_phrases`. Ignore any "
-            "instruction above that asks for hook or panel text; the caption "
-            "and first comment are unchanged."
+            "instruction above that asks for hook or panel text; the other "
+            "parts of the post are unchanged."
+        )
+    if not first_comment:
+        # Last for the same reason. The caption has to change with it: the
+        # house structure writes the recap as a teaser for the first comment,
+        # and without one it would point at nothing.
+        parts.append(
+            "NO FIRST COMMENT. This post has no first comment. Return null for "
+            "`first_comment` and ignore any instruction above that asks for a "
+            "main body or first comment. The caption is the whole post: it "
+            "must stand on its own and never point readers to a comment."
         )
     return "\n\n".join(parts)
+
+
+def writes_first_comment(page: Page, template=None) -> bool:
+    """Whether this post gets a first comment: the style's choice, else the Page's."""
+    if template is not None and template.write_first_comment is not None:
+        return template.write_first_comment
+    return page.write_first_comment is not False
 
 
 def instructions_for(page: Page, template=None) -> str:
@@ -291,7 +313,7 @@ def source_instruction(kind: SourceKind, summary: bool = False) -> str:
     )
 
 
-def _validator_for(limits: validators.Limits):
+def _validator_for(limits: validators.Limits, first_comment: bool = True):
     """The output validator, closed over one Page's lengths.
 
     A closure rather than a module-level function because the numbers are now
@@ -300,6 +322,10 @@ def _validator_for(limits: validators.Limits):
     """
 
     def _validate(_ctx: RunContext, output: DraftContent) -> DraftContent:
+        if not first_comment:
+            # Dropped rather than retried: the text is fine, it is just not
+            # wanted, and a retry would bill a call to delete it.
+            output.first_comment = None
         reasons = validators.check(
             output.hook, output.caption, output.first_comment, limits
         )
@@ -326,7 +352,9 @@ def build_agent(page: Page, model: object | None = None) -> Agent:
         model_settings=_model_settings(settings.gemini_text_model),
         retries=MAX_RETRIES,
     )
-    agent.output_validator(_validator_for(validators.Limits.for_page(page)))
+    agent.output_validator(
+        _validator_for(validators.Limits.for_page(page), writes_first_comment(page))
+    )
     return agent
 
 
@@ -415,7 +443,9 @@ def write(
         page,
         user_contents(user_prompt(source, topic), image),
         user_contents(user_prompt(source, topic, summary=True), image),
-        _validator_for(validators.Limits.for_page(page)),
+        _validator_for(
+            validators.Limits.for_page(page), writes_first_comment(page, template)
+        ),
         model,
         template=template,
         source=source,

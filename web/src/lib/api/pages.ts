@@ -55,6 +55,7 @@ export interface PageUpdate {
    */
   recap_max_points?: number | null;
   recap_emoji?: boolean | null;
+  write_first_comment?: boolean | null;
 
   /** Automatic save and repost. Null is off for both. Days are 1-90. */
   auto_save_min_reactions?: number | null;

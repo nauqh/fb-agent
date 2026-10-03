@@ -145,6 +145,7 @@ erDiagram
         int first_comment_max_chars "null = 2100"
         int first_comment_min_paragraphs "null = 2"
         int first_comment_max_paragraphs "null = 3"
+        bool write_first_comment "false = none, the caption is the whole post; null = write one"
         int auto_draft_competitor_count "drafts a day; null = off"
         int auto_draft_competitor_min_reactions "null = any"
         int auto_draft_rss_count "drafts a day; null = off"
@@ -228,6 +229,7 @@ erDiagram
         text name UK
         text system_prompt "a delta, null = nothing layered"
         text overlay_prompt "null = the Page's; empty = no overlay text"
+        bool write_first_comment "null = the Page's"
         text image_prompt
     }
 

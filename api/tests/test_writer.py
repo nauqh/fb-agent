@@ -164,6 +164,7 @@ def test_a_post_template_layers_last_and_says_it_outranks(page):
         system_prompt="The post is one image and one line. No essay.",
         overlay_prompt="The panel holds the line, in capitals.",
         image_prompt=None,
+        write_first_comment=None,
     )
 
     instructions = writer._instructions(page, layout, template)
@@ -182,6 +183,7 @@ def test_a_post_template_with_only_an_image_layer_changes_no_text_instructions(p
         # a text instruction. None is the style that changes nothing but the image.
         overlay_prompt=None,
         image_prompt="Bright daylight.",
+        write_first_comment=None,
     )
 
     assert "POST STYLE" not in writer._instructions(page, layout, template)
@@ -761,6 +763,7 @@ def test_an_emptied_overlay_prompt_instructs_no_overlay_and_skips_the_template_l
         system_prompt=None,
         overlay_prompt="The panel holds the line, in capitals.",
         image_prompt=None,
+        write_first_comment=None,
     )
 
     instructions = writer._instructions(page, layout, template)
@@ -776,10 +779,12 @@ def test_a_style_with_no_overlay_text_instructs_no_overlay_on_its_own(page):
     panel. A style's overlay stored as `""` opts its drafts out even though the
     Page itself has an overlay prompt; `None` uses the Page's and does not."""
     no_panel = SimpleNamespace(
-        name="Photo", system_prompt=None, overlay_prompt="", image_prompt="Bright."
+        name="Photo", system_prompt=None, overlay_prompt="", image_prompt="Bright.",
+        write_first_comment=None,
     )
     inherits = SimpleNamespace(
-        name="Photo", system_prompt=None, overlay_prompt=None, image_prompt="Bright."
+        name="Photo", system_prompt=None, overlay_prompt=None, image_prompt="Bright.",
+        write_first_comment=None,
     )
 
     assert "NO OVERLAY TEXT" in writer._instructions(page, layout, no_panel)
@@ -788,7 +793,8 @@ def test_a_style_with_no_overlay_text_instructs_no_overlay_on_its_own(page):
 
 def test_a_page_with_an_overlay_prompt_never_sees_the_no_overlay_instruction(page):
     template = SimpleNamespace(
-        name="Meme", system_prompt=None, overlay_prompt="Panel rules.", image_prompt=None
+        name="Meme", system_prompt=None, overlay_prompt="Panel rules.", image_prompt=None,
+        write_first_comment=None,
     )
 
     instructions = writer._instructions(page, layout, template)
@@ -857,3 +863,49 @@ def test_a_live_fetch_flags_the_result_as_read_live(page, monkeypatch):
     monkeypatch.setattr(writer, "ask", fake_ask)
 
     assert writer.write(page, source, model=object()).read_live is True
+
+
+def _style(write_first_comment):
+    return SimpleNamespace(
+        name="Infographic",
+        system_prompt=None,
+        overlay_prompt=None,
+        image_prompt="Bright.",
+        write_first_comment=write_first_comment,
+    )
+
+
+def test_a_page_with_the_first_comment_off_is_told_the_caption_is_the_whole_post():
+    from app.settings import layout
+
+    assert "NO FIRST COMMENT" not in writer._instructions(_page(), layout)
+    off = writer._instructions(_page(write_first_comment=False), layout)
+    assert off.rstrip().endswith("never point readers to a comment."), "it must go last"
+
+
+def test_a_style_overrides_the_pages_first_comment_setting_either_way():
+    from app.settings import layout
+
+    on_page, off_page = _page(), _page(write_first_comment=False)
+
+    assert "NO FIRST COMMENT" in writer._instructions(on_page, layout, _style(False))
+    assert "NO FIRST COMMENT" not in writer._instructions(off_page, layout, _style(True))
+    assert "NO FIRST COMMENT" in writer._instructions(off_page, layout, _style(None))
+
+
+def test_no_first_comment_lengths_are_stated_for_a_post_without_one():
+    from app.settings import layout
+
+    page = _page(first_comment_max_chars=1_500, write_first_comment=False)
+    lengths = writer._instructions(page, layout).split("LENGTHS FOR THIS PAGE")[1]
+
+    assert "The first comment must" not in lengths
+    assert "points" in lengths, "the rest of the block is still stated"
+
+
+def test_a_first_comment_written_anyway_is_dropped_not_retried():
+    validate = writer._validator_for(validators.Limits(), first_comment=False)
+
+    assert validate(None, writer.DraftContent(**GOOD)).first_comment is None
+    kept = writer._validator_for(validators.Limits())(None, writer.DraftContent(**GOOD))
+    assert kept.first_comment == GOOD["first_comment"]

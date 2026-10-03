@@ -1389,16 +1389,20 @@ function WritingLimits({ page }: { page: Page }) {
   // Null and true are the same thing on screen - the house rule is emoji - so
   // the box is ticked for both and unticking it is what gets stored.
   const [emoji, setEmoji] = useState(page.recap_emoji ?? HOUSE_RECAP_EMOJI);
+  const [firstComment, setFirstComment] = useState(page.write_first_comment !== false);
   const [busy, setBusy] = useState(false);
 
   const dirty =
     LIMIT_ROWS.some(
       ({ field }) => form[field] !== (page[field]?.toString() ?? ""),
-    ) || emoji !== (page.recap_emoji ?? HOUSE_RECAP_EMOJI);
+    ) ||
+    emoji !== (page.recap_emoji ?? HOUSE_RECAP_EMOJI) ||
+    firstComment !== (page.write_first_comment !== false);
 
   function revert() {
     setForm(initial);
     setEmoji(page.recap_emoji ?? HOUSE_RECAP_EMOJI);
+    setFirstComment(page.write_first_comment !== false);
   }
 
   async function save() {
@@ -1410,7 +1414,12 @@ function WritingLimits({ page }: { page: Page }) {
           form[field].trim() === "" ? null : Number(form[field]),
         ]),
       );
-      await updatePage(page.id, { ...update, recap_emoji: emoji });
+      await updatePage(page.id, {
+        ...update,
+        recap_emoji: emoji,
+        // Null rather than true: on is the house rule, so only off is stored.
+        write_first_comment: firstComment ? null : false,
+      });
       toast("Saved. New drafts for this Page use these lengths.");
       emit();
     } catch (cause) {
@@ -1472,6 +1481,17 @@ function WritingLimits({ page }: { page: Page }) {
                 className="size-3.5 cursor-pointer accent-primary"
               />
               Every point starts with an emoji
+            </label>
+          ) : null}
+          {group === "First comment" ? (
+            <label className="flex cursor-pointer items-center gap-2 pt-2 text-xs">
+              <input
+                type="checkbox"
+                checked={firstComment}
+                onChange={(event) => setFirstComment(event.target.checked)}
+                className="size-3.5 cursor-pointer accent-primary"
+              />
+              Write a first comment. Off, the caption is the whole post.
             </label>
           ) : null}
         </Block>
@@ -1762,7 +1782,15 @@ function PostStyles({
                     // An empty overlay is a choice, not a missing layer.
                     if (text.trim() === "") return field === "overlay_prompt" ? ["No overlay"] : [];
                     return [label];
-                  }).map((chip) => (
+                  })
+                    .concat(
+                      template.write_first_comment === false
+                        ? ["No first comment"]
+                        : template.write_first_comment
+                          ? ["First comment"]
+                          : [],
+                    )
+                    .map((chip) => (
                     <span
                       key={chip}
                       className="rounded-full border bg-muted/40 px-1.5 py-0.5 text-[11px] text-muted-foreground"
@@ -1883,12 +1911,14 @@ function StylePreview({
   system,
   overlay,
   image,
+  firstComment,
 }: {
   pageId: number;
   name: string;
   system: string;
   overlay: string | null;
   image: string;
+  firstComment: boolean | null;
 }) {
   const [preview, setPreview] = useState<TemplatePreview | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -1907,6 +1937,7 @@ function StylePreview({
           system_prompt: system.trim() || null,
           overlay_prompt: overlay,
           image_prompt: image.trim() || null,
+          write_first_comment: firstComment,
         });
         if (live) {
           setPreview(next);
@@ -1922,7 +1953,7 @@ function StylePreview({
       live = false;
       clearTimeout(timer);
     };
-  }, [pageId, name, system, overlay, image]);
+  }, [pageId, name, system, overlay, image, firstComment]);
 
   return (
     <PromptDisclosure
@@ -2089,6 +2120,7 @@ function AgentPrompt({
             system_prompt: style.system_prompt,
             overlay_prompt: style.overlay_prompt,
             image_prompt: style.image_prompt,
+            write_first_comment: style.write_first_comment,
           })
         : previewPagePrompts(pageId!),
     [pageId, styleId],
@@ -2163,6 +2195,10 @@ function TemplateForm({
   );
   const overlay =
     overlayMode === "none" ? "" : overlayMode === "own" ? form.overlay_prompt.trim() || null : null;
+  // null = the Page's setting, false = none for this style, true = always one.
+  const [firstComment, setFirstComment] = useState<boolean | null>(
+    initial?.write_first_comment ?? null,
+  );
 
   // The same rule the API enforces, checked here so the button can say no
   // before a round trip does: a style with no name, or nothing in any layer,
@@ -2170,13 +2206,17 @@ function TemplateForm({
   // change on its own.
   const writable =
     form.name.trim() !== "" &&
-    (overlay !== null || form.system_prompt.trim() !== "" || form.image_prompt.trim() !== "");
+    (overlay !== null ||
+      firstComment !== null ||
+      form.system_prompt.trim() !== "" ||
+      form.image_prompt.trim() !== "");
   const dirty =
     initial === undefined ||
     form.name !== initial.name ||
     form.system_prompt !== (initial.system_prompt ?? "") ||
     form.image_prompt !== (initial.image_prompt ?? "") ||
-    overlay !== (initial.overlay_prompt == null ? null : initial.overlay_prompt.trim());
+    overlay !== (initial.overlay_prompt == null ? null : initial.overlay_prompt.trim()) ||
+    firstComment !== (initial.write_first_comment ?? null);
 
   async function save() {
     setBusy(true);
@@ -2187,6 +2227,7 @@ function TemplateForm({
         system_prompt: form.system_prompt.trim() || null,
         overlay_prompt: overlay,
         image_prompt: form.image_prompt.trim() || null,
+        write_first_comment: firstComment,
       };
       if (initial) {
         await updatePromptTemplate(initial.id, body);
@@ -2265,12 +2306,35 @@ function TemplateForm({
         </div>
       ))}
 
+      <div>
+        <div className="flex items-baseline justify-between gap-3">
+          <Label htmlFor="template-first-comment" className="text-[13px] font-medium">
+            First comment
+          </Label>
+          <span className="text-[11px] text-muted-foreground">The main body under the post.</span>
+        </div>
+        <NativeSelect
+          id="template-first-comment"
+          ariaLabel="First comment for this style"
+          value={firstComment === null ? "page" : firstComment ? "on" : "off"}
+          onValueChange={(value) =>
+            setFirstComment(value === "page" ? null : value === "on")
+          }
+          className="mt-2 flex max-w-72"
+        >
+          <NativeSelectOption value="page">Use this Page&apos;s setting</NativeSelectOption>
+          <NativeSelectOption value="on">Write one</NativeSelectOption>
+          <NativeSelectOption value="off">No first comment</NativeSelectOption>
+        </NativeSelect>
+      </div>
+
       <StylePreview
         pageId={pageId}
         name={form.name}
         system={form.system_prompt}
         overlay={overlay}
         image={form.image_prompt}
+        firstComment={firstComment}
       />
 
       <div className="flex items-center gap-3">

@@ -255,6 +255,15 @@ class Page(SQLModel, table=True):
     first_comment_max_paragraphs: int | None = None
     """C7: "3-4 short paragraphs". The house range is 2-3."""
 
+    write_first_comment: bool | None = None
+    """False writes no first comment; the caption is the whole post. Null is
+    the house rule, which writes one.
+
+    The client, 2026-10-03: a first comment that adds nothing is a spam signal
+    to Facebook, and on Bible Focus and House of Common Sense it was deleted
+    about half the time. A post style can override it either way.
+    """
+
     recap_max_points: int | None = None
     """The caption's point cap. The house number is 5.
 
@@ -810,6 +819,9 @@ class PromptTemplate(SQLModel, table=True):
     under this style carry no overlay text, and text is the style's own rules. A
     blank here cannot mean "inherit" alone, because many styles are image-only
     posts with nothing drawn on them (client, 2026-09-14)."""
+
+    write_first_comment: bool | None = None
+    """Null follows the Page's `write_first_comment`; a bool overrides it."""
 
     image_prompt: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
     """Layered onto the hero brief, not the writer - the image model never sees
