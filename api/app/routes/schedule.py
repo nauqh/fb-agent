@@ -265,14 +265,14 @@ def get_schedule(
         # says so rather than pretending the schedule is empty.
         raise HTTPException(status_code=502, detail=str(error)) from error
 
+    # Two columns, not the row: every draft ever pushed, read on each visit,
+    # was the largest share of the database's egress (2026-10-03).
     pushed = session.exec(
-        select(Draft).where(Draft.metricool_post_id.is_not(None))  # type: ignore[union-attr]
+        select(Draft.metricool_post_id, Draft.id).where(
+            Draft.metricool_post_id.is_not(None)  # type: ignore[union-attr]
+        )
     ).all()
-    ours = {
-        draft.metricool_post_id: draft.id
-        for draft in pushed
-        if draft.metricool_post_id and draft.id
-    }
+    ours = {post_id: draft_id for post_id, draft_id in pushed if post_id and draft_id}
 
     posts = [_flatten(row, ours) for row in rows]
     posts.sort(key=lambda post: post.published_at, reverse=True)

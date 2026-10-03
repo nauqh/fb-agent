@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   Bot,
@@ -83,17 +83,37 @@ export function ReviewList() {
    * A run in flight is not "needs review" yet, but hiding it means pressing
    * Generate appears to do nothing - the queue has to show the work arriving.
    */
-  const { data: drafts, refresh } = useQuery(() => listDrafts({ page_id: pageId! }), [pageId], {
+  const { data: queue, refresh } = useQuery(() => listDrafts({ page_id: pageId! }), [pageId], {
     enabled: pageId !== null,
     // Back from a draft's drawer, the queue is there on the first frame.
     cacheKey: "review-drafts",
-    intervalMs: 2_000,
-    // Only while something is in flight. With a settled queue the store
-    // notification is enough, and a timer that never stops keeps the page
-    // from ever going idle.
-    pollWhile: (rows) =>
-      rows === null || rows.some((row) => row.status === "generating"),
   });
+
+  /**
+   * While something is in flight, poll only the `generating` rows: their
+   * progress is laid over the queue's copies, and the queue itself is re-read
+   * only when that set changes (a run started or finished). Polling the whole
+   * queue every 2s was ~1.4MB a read for a 400-draft Page (2026-10-03).
+   */
+  const generating = queue?.some((row) => row.status === "generating") ?? false;
+  const { data: inFlight } = useQuery(
+    () => listDrafts({ status: "generating", page_id: pageId! }),
+    [pageId],
+    { enabled: pageId !== null && generating, intervalMs: 2_000 },
+  );
+  const inFlightIds = inFlight?.map((row) => row.id).join(",") ?? null;
+  useEffect(() => {
+    if (inFlightIds !== null) void refresh();
+  }, [inFlightIds, refresh]);
+  const drafts = useMemo(
+    () =>
+      queue?.map((row) =>
+        row.status === "generating"
+          ? (inFlight?.find((live) => live.id === row.id) ?? row)
+          : row,
+      ) ?? null,
+    [queue, inFlight],
+  );
 
   /**
    * Whether Publish reaches an audience. Fetched here and passed down, not read

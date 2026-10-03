@@ -13,12 +13,15 @@ export interface DraftFilter {
   /** `"all"` means every status - the server takes no filter rather than one. */
   status?: DraftStatus | "all";
   page_id?: number;
+  /** Newest this many. The server's default is 500. */
+  limit?: number;
 }
 
 export async function listDrafts(filter: DraftFilter = {}): Promise<Draft[]> {
   const params: Record<string, string | number> = {};
   if (filter.status && filter.status !== "all") params.status = filter.status;
   if (filter.page_id !== undefined) params.page_id = filter.page_id;
+  if (filter.limit !== undefined) params.limit = filter.limit;
   return get<Draft[]>("/drafts", params);
 }
 

@@ -453,7 +453,10 @@ function Preview({ layout, page }: { layout: ResolvedLayout; page: Page }) {
   // at the panel, a full overlay's runs behind it. The circle gets a draft's
   // inset, or a second hero when no draft has one. The Page's own files, so
   // nothing is fetched from outside the app.
-  const { data: drafts } = useQuery(() => listDrafts({ page_id: page.id }), [page.id]);
+  const { data: drafts } = useQuery(
+    () => listDrafts({ page_id: page.id, limit: 20 }),
+    [page.id],
+  );
   const [seed] = useState(() => Math.random());
   const { heroSrc, insetSrc } = useMemo(() => {
     const heroes = (drafts ?? []).flatMap((one) => one.hero_image_url ?? []);
