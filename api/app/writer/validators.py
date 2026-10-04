@@ -49,8 +49,7 @@ class Limits:
     body_max_chars: int = BODY_MAX_CHARS
     paragraphs: tuple[int, int] = FIRST_COMMENT_PARAGRAPHS
     recap_max_points: int = RECAP_MAX_POINTS
-    recap_emoji: bool = True
-    """The caption's two rules, per Page since 2026-09-19.
+    """The caption's point cap, per Page since 2026-09-19.
 
     They were the only part of a post no Page could change, and the gap was
     not theoretical: `prompts/pages/fitness-recipes/system.txt` says "no limit
@@ -77,9 +76,6 @@ class Limits:
                 page.first_comment_max_paragraphs or high,
             ),
             recap_max_points=page.recap_max_points or RECAP_MAX_POINTS,
-            # `or` would read False as unset, which is the one value this
-            # column exists to carry.
-            recap_emoji=True if page.recap_emoji is None else page.recap_emoji,
         )
 
     def disagrees(self) -> str | None:
@@ -109,8 +105,6 @@ class Limits:
 META_PHRASES = ("look back", "as of today", "as we look back")
 """Verbatim from the old repo, minus "2026 look back" - a special case of
 "look back" that would have dated itself anyway."""
-
-_EMOJI_START = re.compile(r"^[\s•\-*]*[\U0001F000-\U0001FAFF☀-➿⬀-⯿]")
 
 
 def _words(text: str) -> int:
@@ -144,16 +138,6 @@ def recap_point_count(recap: str, limits: Limits | None = None) -> str | None:
     count = len(_lines(recap))
     if count > cap:
         return f"The recap has {count} points; keep it to {cap} or fewer."
-    return None
-
-
-def recap_lines_start_with_emoji(recap: str) -> str | None:
-    bad = [line for line in _lines(recap) if not _EMOJI_START.match(line)]
-    if bad:
-        return (
-            f"{len(bad)} recap line(s) do not start with an emoji, beginning: "
-            f"{bad[0][:40]!r}. Every point needs a related emoji in front."
-        )
     return None
 
 
@@ -202,8 +186,8 @@ def check(
     All of them are reported at once rather than the first - a retry costs a
     model call either way, so it should carry everything that needs fixing.
 
-    Every rule here is one the model can *act on and verify*: a word count, an
-    emoji, a paragraph break, a character count, a banned phrase. That is the
+    Every rule here is one the model can *act on and verify*: a word count, a
+    paragraph break, a character count, a banned phrase. That is the
     admission price for blocking, because a rule that raises `ModelRetry` and
     cannot be satisfied does not warn - it kills the run at
     `Exceeded maximum output retries`.
@@ -211,12 +195,11 @@ def check(
     A blank first comment is not a broken draft - it is a minimal post (see
     `source_instruction`): image plus a short caption, no body. The essay rules
     cannot judge a shape with no essay in it, so only the hook, the caption's
-    line count and the meta-phrase ban are enforced; the emoji rule is a
-    story-post convention and a character floor on a quote would be a dead run.
+    line count and the meta-phrase ban are enforced; a character floor on a
+    quote would be a dead run.
 
-    A Page that has turned the emoji rule off skips it everywhere, for the
-    same reason the numbers are per-Page: a rule the operator did not ask for,
-    enforced against the prompt they wrote, is not a brand rule.
+    Whether caption points open with an emoji is not checked (client,
+    2026-10-05): the Page's prompt says, and a check could only overrule it.
 
     A blank hook is not a broken draft either (client, 2026-09-11): it is the
     no-overlay opt-out, a post whose image carries no text panel. The hook rules
@@ -229,7 +212,6 @@ def check(
         if not has_hook
         else [hook_length(hook, limits), hook_has_no_question(hook)]
     )
-    emoji_rule = (limits or Limits()).recap_emoji
     if not (first_comment or "").strip():
         results = [
             *hook_rules,
@@ -240,7 +222,6 @@ def check(
         results = [
             *hook_rules,
             recap_point_count(recap, limits),
-            recap_lines_start_with_emoji(recap) if emoji_rule else None,
             first_comment_paragraphs(first_comment, limits),
             body_length(first_comment, limits),
             no_meta_phrases(recap, first_comment),

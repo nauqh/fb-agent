@@ -1332,7 +1332,7 @@ export function DraftDetail({
                       onProposal={applyProposal}
                     />
                   }
-                  hint={`${form.caption.split("\n").filter(Boolean).length} recap lines · max 5, each opening with an emoji`}
+                  hint={`${form.caption.split("\n").filter(Boolean).length} recap lines · max 5`}
                 >
                   <Textarea
                     value={form.caption}

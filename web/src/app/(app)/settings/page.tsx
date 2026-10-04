@@ -1225,9 +1225,6 @@ const HOUSE = {
   first_comment_max_paragraphs: 3,
 } as const;
 
-/** The house answer for the one caption rule that is not a number. */
-const HOUSE_RECAP_EMOJI = true;
-
 type LimitField = keyof typeof HOUSE;
 
 const LIMIT_ROWS: { field: LimitField; label: string; group: string }[] = [
@@ -1296,10 +1293,6 @@ function WritingLimits({ page }: { page: Page }) {
     ) as Record<LimitField, string>;
 
   const [form, setForm] = useState(initial);
-  // The one caption rule that is not a number, so it cannot live in `form`.
-  // Null and true are the same thing on screen - the house rule is emoji - so
-  // the box is ticked for both and unticking it is what gets stored.
-  const [emoji, setEmoji] = useState(page.recap_emoji ?? HOUSE_RECAP_EMOJI);
   const [firstComment, setFirstComment] = useState(page.write_first_comment !== false);
   const [busy, setBusy] = useState(false);
 
@@ -1307,12 +1300,10 @@ function WritingLimits({ page }: { page: Page }) {
     LIMIT_ROWS.some(
       ({ field }) => form[field] !== (page[field]?.toString() ?? ""),
     ) ||
-    emoji !== (page.recap_emoji ?? HOUSE_RECAP_EMOJI) ||
     firstComment !== (page.write_first_comment !== false);
 
   function revert() {
     setForm(initial);
-    setEmoji(page.recap_emoji ?? HOUSE_RECAP_EMOJI);
     setFirstComment(page.write_first_comment !== false);
   }
 
@@ -1327,7 +1318,6 @@ function WritingLimits({ page }: { page: Page }) {
       );
       await updatePage(page.id, {
         ...update,
-        recap_emoji: emoji,
         // Null rather than true: on is the house rule, so only off is stored.
         write_first_comment: firstComment ? null : false,
       });
@@ -1383,17 +1373,6 @@ function WritingLimits({ page }: { page: Page }) {
               ),
             )}
           </div>
-          {group === "Caption" ? (
-            <label className="flex cursor-pointer items-center gap-2 pt-2 text-xs">
-              <input
-                type="checkbox"
-                checked={emoji}
-                onChange={(event) => setEmoji(event.target.checked)}
-                className="size-3.5 cursor-pointer accent-primary"
-              />
-              Every point starts with an emoji
-            </label>
-          ) : null}
           {group === "First comment" ? (
             <label className="flex cursor-pointer items-center gap-2 pt-2 text-xs">
               <input

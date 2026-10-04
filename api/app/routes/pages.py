@@ -61,9 +61,6 @@ class PageUpdate(BaseModel):
     first_comment_min_paragraphs: int | None = Field(default=None, ge=1, le=12)
     first_comment_max_paragraphs: int | None = Field(default=None, ge=1, le=12)
     recap_max_points: int | None = Field(default=None, ge=1, le=50)
-    recap_emoji: bool | None = None
-    """Null clears the override like the numbers above. False is a choice,
-    not a clear: the caption's points carry no emoji on this Page."""
     write_first_comment: bool | None = None
     """False writes no first comment on this Page. Null is the house rule."""
 

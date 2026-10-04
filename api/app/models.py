@@ -275,14 +275,6 @@ class Page(SQLModel, table=True):
     the draft is held to, so a Page that wants long captions sets a high
     number rather than switching the rule off."""
 
-    recap_emoji: bool | None = None
-    """Whether every caption point must open with an emoji. Null is the house
-    rule, which is yes.
-
-    Nullable for the reason the numbers above are, and one more: false is a
-    real choice here, so this column cannot use `or` to resolve and cannot be
-    defaulted to True in the table without losing the difference between a
-    Page that chose the house rule and one that never looked."""
 
     # --- automatic save and repost (H2) ---------------------------------------
     #

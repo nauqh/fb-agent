@@ -80,11 +80,6 @@ def test_more_than_five_recap_points_is_caught():
     assert reason and "6 points" in reason
 
 
-def test_a_recap_line_without_an_emoji_is_caught():
-    reason = validators.recap_lines_start_with_emoji("🌊 With one.\nWithout one.")
-    assert reason and "do not start with an emoji" in reason
-
-
 @pytest.mark.parametrize("phrase", ["as we look back", "As Of Today", "a look back at"])
 def test_meta_phrases_are_caught_case_insensitively(phrase):
     assert validators.no_meta_phrases("", f"And {phrase}, the map endures.")
@@ -94,7 +89,7 @@ def test_every_violation_is_reported_at_once():
     """A retry costs a call either way, so it should carry the whole list."""
     reasons = validators.check("Why did she do it?", "no emoji here", "short")
 
-    assert len(reasons) >= 4
+    assert len(reasons) >= 3
 
 
 def test_a_story_naming_no_people_blocks_nothing():
@@ -700,20 +695,11 @@ def test_a_page_can_ask_for_more_caption_points_than_the_house():
     assert validators.recap_point_count(seven), "the house caps at 5"
 
 
-def test_a_page_can_turn_the_caption_emoji_rule_off():
-    limits = validators.Limits.for_page(_page(recap_emoji=False))
-    plain = "A point.\nAnother point."
+def test_a_caption_without_emoji_is_not_blocked():
+    """Client, 2026-10-05: the Page's prompt decides, not a check."""
     body = "x" * 1_600 + "\n\n" + "y" * 300
 
-    assert validators.check("A hook.", plain, body, limits) == []
-    assert validators.check("A hook.", plain, body), "the house wants an emoji"
-
-
-def test_turning_the_emoji_rule_off_is_not_the_same_as_leaving_it_alone():
-    """`or` would read False as unset, which is the one value it has to carry."""
-    assert validators.Limits.for_page(_page()).recap_emoji is True
-    assert validators.Limits.for_page(_page(recap_emoji=True)).recap_emoji is True
-    assert validators.Limits.for_page(_page(recap_emoji=False)).recap_emoji is False
+    assert validators.check("A hook.", "A point.\nAnother point.", body) == []
 
 
 def test_the_schema_does_not_restate_the_house_caption_rule():
@@ -731,12 +717,8 @@ def test_the_prompt_states_this_pages_caption_rules_too():
     from app.settings import layout
 
     capped = writer._instructions(_page(recap_max_points=8), layout)
-    no_emoji = writer._instructions(_page(recap_emoji=False), layout)
 
     assert "at most 8 points" in capped
-    assert "must NOT start with an emoji" in no_emoji
-    # Off is worth saying; on is already in the prompt prose, and a second copy
-    # is the drift this block is written against.
     assert "emoji" not in capped.split("LENGTHS FOR THIS PAGE")[1]
 
 

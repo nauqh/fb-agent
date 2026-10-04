@@ -46,15 +46,8 @@ export interface PageUpdate {
   first_comment_min_paragraphs?: number | null;
   first_comment_max_paragraphs?: number | null;
 
-  /**
-   * The caption's two rules, per Page since 2026-09-19. Null clears both back
-   * to the house rule: 5 points, each opening with an emoji.
-   *
-   * `recap_emoji` false is a choice rather than a clear, which is why the form
-   * sends it on every save instead of only when it is off.
-   */
+  /** The caption's point cap, per Page since 2026-09-19. Null is the house 5. */
   recap_max_points?: number | null;
-  recap_emoji?: boolean | null;
   write_first_comment?: boolean | null;
 
   /** Automatic save and repost. Null is off for both. Days are 1-90. */

@@ -167,11 +167,6 @@ def _instructions(page: Page, layout: Layout, template=None) -> str:
                 f"- The first comment must be {low}-{high} paragraphs.",
             ]
         lines.append(f"- The caption must be at most {limits.recap_max_points} points.")
-        if not limits.recap_emoji:
-            # Stated only when it is off. The house rule is already in the
-            # prompt prose, and repeating it here would be the second copy
-            # this block exists to avoid.
-            lines.append("- The caption's points must NOT start with an emoji.")
         parts.append(
             "LENGTHS FOR THIS PAGE. These override any length given above.\n"
             + "\n".join(lines)
@@ -659,13 +654,10 @@ def _field_rules(field: str, limits: validators.Limits | None = None):
                 validators.hook_has_no_question(content.hook),
             ]
         elif field == "caption":
-            # A minimal post's caption is plain lines; the emoji convention only
-            # exists on a story post, signalled by the body being present.
-            minimal = not (content.first_comment or "").strip()
-            found = [validators.recap_point_count(content.caption, limits)]
-            if not minimal and limits.recap_emoji:
-                found.append(validators.recap_lines_start_with_emoji(content.caption))
-            found.append(validators.no_meta_phrases(content.caption, ""))
+            found = [
+                validators.recap_point_count(content.caption, limits),
+                validators.no_meta_phrases(content.caption, ""),
+            ]
         else:
             found = [
                 validators.first_comment_paragraphs(content.first_comment, limits),

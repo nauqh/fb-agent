@@ -77,12 +77,10 @@ export interface Page {
   first_comment_max_paragraphs: number | null;
 
   /**
-   * The caption's two rules. Null is the house rule: 5 points, each opening
-   * with an emoji. Per Page since 2026-09-19 - the caption was the one part of
-   * a post a Page's own prompt could not change.
+   * The caption's point cap. Null is the house 5. Per Page since 2026-09-19 -
+   * the caption was the one part of a post a Page's own prompt could not change.
    */
   recap_max_points: number | null;
-  recap_emoji: boolean | null;
   /** False writes no first comment on this Page. Null is the house rule: one is written. */
   write_first_comment: boolean | null;
 
