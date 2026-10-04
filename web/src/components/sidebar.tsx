@@ -85,9 +85,9 @@ const LINKS: { href: string; label: string; icon: LucideIcon }[] = [
 
 /**
  * The two configuration screens, kept apart because they answer different
- * questions. Settings is "this Page" - its feeds, its watermark, which
- * competitors it reads. Global is "the account" - the competitor pool and its
- * Metricool budget, the image layout, the prompts. Neither is scoped by the
+ * questions. Settings is "this Page" - its times, sources, prompts and image
+ * layout. Global is "the account" - the competitor pool and its Metricool
+ * budget. Neither is scoped by the
  * Page switcher in the same way, and mixing them put an account-wide number
  * under a per-Page heading.
  */

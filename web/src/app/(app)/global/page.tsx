@@ -11,9 +11,7 @@ import {
 import { toast } from "sonner";
 
 import { CompetitorMark } from "@/components/competitor-mark";
-import { ConfigShell, Pane } from "@/components/config-shell";
-import { LayoutEditor } from "@/components/layout-editor";
-import { PageSwitcher } from "@/components/page-switcher";
+import { ConfigShell } from "@/components/config-shell";
 import { QueuePagination } from "@/components/queue-pagination";
 import { ScreenHeader } from "@/components/screen";
 import { Loading } from "@/components/loading";
@@ -46,8 +44,9 @@ import { cn } from "@/lib/utils";
  * them put an account-wide number under a per-Page heading - "48 configured"
  * beside a Page name, when 48 was neither that Page's nor the account's total.
  *
- * Here: the competitor pool and its Metricool budget. On Settings: which of
- * this pool a given Page reads, plus that Page's feeds and watermark.
+ * Here: the competitor pool and its Metricool budget, and nothing else. The
+ * image layout was here until 2026-10-05, per-Page behind its own switcher; it
+ * is on Settings now with the Page's other settings.
  *
  * **Prompts left this screen on 2026-08-17.** They were here read-only, under a
  * hint saying they are "edited in your editor" - which stopped being true the
@@ -71,8 +70,7 @@ export default function GlobalScreen() {
   return (
     <ConfigShell
       // No switcher in the title row. The pool is account-wide, and a Page name
-      // up there read as the scope of the whole screen. Composed Image carries
-      // its own switcher, beside the sentence saying it is per-Page.
+      // up there read as the scope of the whole screen.
       header={<ScreenHeader title="Global" switcher={false} />}
       groups={[
         {
@@ -92,24 +90,6 @@ export default function GlobalScreen() {
                   error={poolError}
                   loading={poolLoading}
                 />
-              ),
-            },
-            {
-              id: "card",
-              label: "Composed Image",
-              body: (
-                <Pane
-                  title="Composed Image"
-                  hint={
-                    <>
-                      <code>api/config/layout.yml</code> holds the defaults; what
-                      you change here applies to the Page in the switcher only.
-                    </>
-                  }
-                  action={<PageSwitcher />}
-                >
-                  <LayoutEditor />
-                </Pane>
               ),
             },
           ],
@@ -204,8 +184,7 @@ function CompetitorPool({
               Competitor pool
             </h2>
             <p className="pt-1 text-[13px] text-muted-foreground">
-              Every page Metricool is watching, on one allowance shared by every
-              brand. Which of your Pages read one is set on Settings.
+              Every page Metricool watches, on one shared allowance.
             </p>
           </div>
 

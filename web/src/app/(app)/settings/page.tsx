@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import {
+  ChevronRight,
   ExternalLink,
   Loader2,
   Plus,
@@ -14,6 +15,7 @@ import { toast } from "sonner";
 
 import { CompetitorMark } from "@/components/competitor-mark";
 import { Block, ConfigShell, Gap, Pane, PENDING } from "@/components/config-shell";
+import { LayoutEditor } from "@/components/layout-editor";
 import { Loading } from "@/components/loading";
 import { ScreenHeader } from "@/components/screen";
 import { Button } from "@/components/ui/button";
@@ -129,60 +131,52 @@ export default function SettingsScreen() {
   return (
     <ConfigShell
       header={<ScreenHeader title="Settings" />}
-      // Four sections, one group. It was seven in three, and four of them -
-      // Identity, Publishing times, Automation, Inset pictures - were each
-      // under 200px of content behind their own rail entry (measured at
-      // 1600px: 196px for Inset pictures, a title and two pills). The rail was
-      // charging a click apiece for panes that fit on one screen together, so
-      // they are `Block`s of one pane now: what this Page is, when it posts,
-      // what it does on its own, where it looks for pictures. 748px, one screen.
-      //
-      // Feeds and Competitors stay apart, and that is still deliberate: folding
-      // them together would cost 1,200px of scroll and two of the counts below,
-      // and the counts are the point of this rail (`config-shell.tsx`).
-      //
-      // One group, like Global's "Account". Three group headings over seven
-      // sections was structure the rail did not need once the sections were
-      // this few, and "Output" over a single entry is a heading that groups
-      // nothing.
+      // Six sections, one job each. Identity, times, automation, auto-drafts
+      // and inset pictures were merged into one pane on 2026-09-18 when each
+      // was under 200px; auto-drafts then grew it to five blocks and three
+      // Save buttons, which is what read as confusing. The image layout moved
+      // here from Global (2026-10-05): it was per-Page there too, behind a
+      // second Page switcher.
       groups={[
         {
           label: "This Page",
           sections: [
             {
               id: "page",
-              label: "This Page",
+              label: "Publishing",
               meta: slots ? `${slots.length}/day` : PENDING,
-              // The two things on this pane that stop something else working:
-              // no publishing times means "Schedule next available" cannot run,
-              // no mark means an unstampable composite. A watermark that is
-              // switched off is a decision, not a gap.
-              gap: slots
-                ? slots.length === 0 ||
-                  (page.watermark_enabled &&
-                    !page.watermark_image_path &&
-                    !page.watermark_upload_path)
-                : false,
+              // No publishing times means "Schedule next available" cannot run.
+              gap: slots ? slots.length === 0 : false,
               body: (
-                <ThisPage
-                  key={page.id}
-                  page={page}
-                  pageId={pageId}
-                  slots={slots}
-                  refresh={refreshSlots}
-                  assigned={assignments ? assigned : null}
-                  feeds={sources ? sources.feeds.length : null}
-                />
+                <Pane title={page.name} hint={<Ids page={page} />}>
+                  <TimeSlots pageId={pageId} slots={slots} refresh={refreshSlots} />
+                </Pane>
+              ),
+            },
+            {
+              id: "automation",
+              label: "Automation",
+              body: (
+                <Pane title="Automation" hint="What this Page does on its own.">
+                  <div className="space-y-8">
+                    <AutoDrafts
+                      page={page}
+                      assigned={assignments ? assigned : null}
+                      feeds={sources ? sources.feeds.length : null}
+                    />
+                    <div className="border-t pt-6">
+                      <Automation page={page} />
+                    </div>
+                  </div>
+                </Pane>
               ),
             },
             {
               id: "competitors",
               label: "Competitors",
               meta: assignments ? `${assigned} read` : PENDING,
-              // Triangle when nothing is ticked. Since `_visible_to` reads the
-              // tick list and only the tick list, that is a Page whose
-              // Competitors grid is empty - and every other screen renders it
-              // as a quiet week.
+              // Nothing ticked is a Page whose Competitors grid is empty, and
+              // every other screen renders that as a quiet week.
               gap: assignments !== null && assigned === 0,
               body: (
                 <Competitors
@@ -214,6 +208,22 @@ export default function SettingsScreen() {
                 />
               ),
             },
+            {
+              id: "image",
+              label: "Image",
+              // No watermark gap here: the editor's own Watermark section says
+              // when the fallback text is what gets stamped.
+              body: (
+                <Pane title="Image" hint="How this Page's cards are drawn.">
+                  <div className="space-y-8">
+                    <LayoutEditor />
+                    <div className="border-t pt-6">
+                      <InsetPictures page={page} />
+                    </div>
+                  </div>
+                </Pane>
+              ),
+            },
           ],
         },
       ]}
@@ -221,80 +231,13 @@ export default function SettingsScreen() {
   );
 }
 
-/**
- * What this Page is, when it posts, what it does on its own, and where it looks
- * for pictures.
- *
- * Four sections until 2026-09-18, each with its own rail entry and each under
- * 200px of content - two ids and a logo, one time input, two number boxes, two
- * pills. As `Block`s of one pane they read as what they are: the Page's own
- * standing settings, in the order you set them up.
- */
-function ThisPage({
-  page,
-  pageId,
-  slots,
-  refresh,
-  assigned,
-  feeds,
-}: {
-  page: Page;
-  pageId: number | null;
-  slots: Awaited<ReturnType<typeof listSlots>> | null;
-  refresh: () => Promise<void> | void;
-  assigned: number | null;
-  feeds: number | null;
-}) {
+/** The two ids, one muted line: wanted when something needs looking up, not
+ *  worth a block of their own. */
+function Ids({ page }: { page: Page }) {
   return (
-    <Pane title={page.name} hint="Identity comes from Metricool. The rest is set here.">
-      <div className="space-y-7">
-        <Identity page={page} />
-        <TimeSlots pageId={pageId} slots={slots} refresh={refresh} />
-        <Automation page={page} />
-        <AutoDrafts page={page} assigned={assigned} feeds={feeds} />
-        <InsetPictures page={page} />
-      </div>
-    </Pane>
-  );
-}
-
-/** What this Page is, all of it from Metricool except the mark. */
-function Identity({ page }: { page: Page }) {
-  const mark = page.watermark_upload_url
-    ? page.watermark_upload_url
-    : page.watermark_image_path
-      ? `/api/${page.watermark_image_path}`
-      : null;
-
-  return (
-    <div className="grid min-w-0 gap-6 sm:grid-cols-2">
-      <Block label="Ids" className="min-w-0">
-        <dl className="max-w-xs space-y-2 text-[13px]">
-          <Row label="Facebook">{page.facebook_page_id}</Row>
-          <Row label="Metricool">{page.metricool_blog_id ?? "-"}</Row>
-        </dl>
-      </Block>
-
-      <Block label="Watermark" className="min-w-0">
-        {mark ? (
-          <div className="flex min-h-28 w-full items-center justify-center rounded-xl bg-black px-4 py-3">
-            {/* The source files are transparent white marks. A dark preview
-                surface keeps them visible without changing the asset itself. */}
-            {/* eslint-disable-next-line @next/next/no-img-element -- a
-                committed asset at a preview size, not a content image. */}
-            <img
-              src={mark}
-              alt={`${page.name} watermark`}
-              className="max-h-28 max-w-full object-contain"
-            />
-          </div>
-        ) : page.watermark_enabled ? (
-          <Gap title="No watermark.">Cards are stamped with the Page name as text.</Gap>
-        ) : (
-          <p className="text-[13px] text-muted-foreground">Off. Cards carry no mark.</p>
-        )}
-      </Block>
-    </div>
+    <span className="font-mono text-[12px]">
+      Facebook {page.facebook_page_id} · Metricool {page.metricool_blog_id ?? "-"}
+    </span>
   );
 }
 
@@ -433,11 +376,10 @@ function Automation({ page }: { page: Page }) {
     "h-7 w-20 border-0 bg-transparent px-1 text-right font-medium tabular-nums shadow-none focus-visible:ring-0";
 
   return (
-    <Block label="Automation">
+    <Block label="Save and repost">
       <div className="space-y-3">
         <p className="text-[13px] text-muted-foreground">
-          Saves this Page&rsquo;s best posts and reposts them at the first free
-          time. Reposts go straight to Schedule, not Review.
+          Reposts this Page&rsquo;s best posts. They skip Review.
         </p>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className={box}>
@@ -460,12 +402,12 @@ function Automation({ page }: { page: Page }) {
               onChange={(event) => setReactions(event.target.value)}
             />
           </div>
-          <div className={cn(box, !saveOn && "opacity-50")}>
+          {saveOn ? (
+          <div className={box}>
             <Label className="flex items-center gap-2 text-[13px] font-normal text-muted-foreground">
               <input
                 type="checkbox"
-                disabled={!saveOn}
-                checked={saveOn && repost}
+                checked={repost}
                 onChange={(event) => setRepost(event.target.checked)}
               />
               Repost after days
@@ -476,12 +418,13 @@ function Automation({ page }: { page: Page }) {
               min={1}
               max={90}
               aria-label="Days after publishing"
-              disabled={!saveOn || !repost}
+              disabled={!repost}
               className={number}
               value={days}
               onChange={(event) => setDays(event.target.value)}
             />
           </div>
+          ) : null}
         </div>
 
         <Button size="sm" disabled={!dirty || !valid || busy} onClick={() => void save()}>
@@ -550,7 +493,7 @@ function AutoDrafts({
     <Block label="Auto-drafts">
       <div className="space-y-3">
         <p className="text-[13px] text-muted-foreground">
-          Writes drafts into Review every day at 06:00, from each source that is on.
+          New drafts in Review every day at 06:00.
         </p>
 
         <div className="grid gap-3 sm:grid-cols-2">
@@ -575,7 +518,8 @@ function AutoDrafts({
               onChange={(event) => setCompetitorCount(event.target.value)}
             />
           </div>
-          <div className={cn(box, !competitorOn && "opacity-50")}>
+          {competitorOn ? (
+          <div className={box}>
             <Label htmlFor="auto-draft-reactions" className="text-[13px] font-normal text-muted-foreground">
               Minimum reactions
             </Label>
@@ -585,12 +529,12 @@ function AutoDrafts({
               inputMode="numeric"
               min={1}
               placeholder="Any"
-              disabled={!competitorOn}
               className={number}
               value={minReactions}
               onChange={(event) => setMinReactions(event.target.value)}
             />
           </div>
+          ) : null}
         </div>
         {competitorOn && assigned === 0 ? (
           <Gap title="No competitors are ticked.">Facebook posts will find nothing to draft from.</Gap>
@@ -620,7 +564,8 @@ function AutoDrafts({
         {rssOn && feeds === 0 ? (
           <Gap title="No feeds.">RSS will find nothing to draft from.</Gap>
         ) : null}
-        <div className={cn("space-y-1.5", !rssOn && "opacity-50")}>
+        {rssOn ? (
+        <div className="space-y-1.5">
           <Label htmlFor="auto-draft-instructions" className="text-[13px] font-normal text-muted-foreground">
             Which RSS items to draft
           </Label>
@@ -628,13 +573,13 @@ function AutoDrafts({
             id="auto-draft-instructions"
             rows={3}
             maxLength={2000}
-            disabled={!rssOn}
             placeholder="Blank takes the newest. For example: UK politics only, no sport or celebrity news."
             className="resize-y rounded-xl border bg-background text-[13px] shadow-none"
             value={instructions}
             onChange={(event) => setInstructions(event.target.value)}
           />
         </div>
+        ) : null}
 
         <Button size="sm" disabled={!dirty || busy} onClick={() => void save()}>
           {busy ? <Loader2 className="size-4 animate-spin" /> : null}
@@ -642,16 +587,6 @@ function AutoDrafts({
         </Button>
       </div>
     </Block>
-  );
-}
-
-/** A label/value line: name left, value right, the way a spec sheet reads. */
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex items-baseline justify-between gap-4 border-b border-dashed pb-2 last:border-0">
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className="truncate font-mono">{children}</dd>
-    </div>
   );
 }
 
@@ -665,7 +600,7 @@ function Feeds({
   return (
     <Pane
       title="Feeds"
-      hint="A feed is probed before it is saved. One that does not answer is refused."
+      hint="RSS feeds this Page drafts from."
       meta={
         sources
           ? `${sources.feeds.length} feeds · ${sources.since_days}d window`
@@ -847,8 +782,8 @@ function Competitors({
 
   return (
     <Pane
-      title="Competitors this Page reads"
-      hint="The Competitors grid on Sources shows exactly what is ticked here. The pool is shared, so one competitor can feed several Pages."
+      title="Competitors"
+      hint="The Facebook pages this Page drafts from."
       meta={assignments ? `${assignments.length} read` : undefined}
       // The one action this section has, in the header rather than under an
       // 800px list. `Pane` has carried an `action` slot beside the count since
@@ -878,7 +813,7 @@ function Competitors({
               Its Competitors grid on Sources is empty. Assign from the pool.
             </Gap>
           ) : (
-            <Block label={`Reading - ${assignedIds.length} assigned`}>
+            <Block label={`Reading ${assignedIds.length}`}>
               <div className="grid gap-2 sm:grid-cols-2 2xl:grid-cols-3">
                 {assignments.map((one) => (
                   <div
@@ -1216,33 +1151,24 @@ function TimeSlots({
       ) : (
         <div className="space-y-3">
           <p className="text-[13px] text-muted-foreground">
-            The same times every day, GMT+7. “Schedule next available” walks
-            them in order.
+            Every day, GMT+7.
           </p>
-          <form
-            onSubmit={add}
-            className="flex flex-wrap items-end gap-3 rounded-2xl border bg-muted/20 p-3"
-          >
-            <div className="min-w-36 space-y-1.5">
-              <Label htmlFor="publishing-time" className="text-[12px] text-muted-foreground">
-                Add a daily time
-              </Label>
-              <div className="relative">
-                <Clock className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  id="publishing-time"
-                  type="time"
-                  value={time}
-                  onChange={(event) => setTime(event.target.value)}
-                  aria-label="Publishing time"
-                  className="h-9 w-36 pl-8 text-[13px] tabular-nums"
-                />
-              </div>
+          <form onSubmit={add} className="flex items-center gap-2">
+            <div className="relative">
+              <Clock className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                type="time"
+                value={time}
+                onChange={(event) => setTime(event.target.value)}
+                aria-label="Publishing time"
+                className="h-8 w-36 pl-8 text-[13px] tabular-nums"
+              />
             </div>
             <Button
               type="submit"
               size="sm"
-              className="h-9"
+              variant="outline"
+              className="h-8"
               disabled={saving || !time || pageId === null}
             >
               {saving ? <Loader2 className="size-3 animate-spin" /> : <Plus className="size-3.5" />}
@@ -1263,10 +1189,7 @@ function TimeSlots({
                   key={slot.id}
                   className="group flex items-center justify-between gap-3 rounded-xl border bg-background px-3 py-2.5 transition-colors hover:bg-muted/30"
                 >
-                  <div className="min-w-0">
-                    <p className="font-mono text-sm font-medium tabular-nums">{slot.label}</p>
-                    <p className="text-[11px] text-muted-foreground">Every day</p>
-                  </div>
+                  <p className="font-mono text-sm font-medium tabular-nums">{slot.label}</p>
                   <button
                     type="button"
                     onClick={() => void drop(slot.id, slot.label)}
@@ -1316,15 +1239,7 @@ const LIMIT_ROWS: { field: LimitField; label: string; group: string }[] = [
   { field: "first_comment_max_paragraphs", label: "Max ¶", group: "First comment" },
 ];
 
-/**
- * What this Page is told to write, and what it is held to. One section.
- *
- * They were two - Writing and Prompts - and were merged onto one screen so the
- * request and its enforcement sit together: the numbers first because they are
- * five inputs and a Save, the prompt editor below because it is 700px and its
- * own tabs. The pane runs long. That is the cost, and it is cheaper than the
- * seam.
- */
+/** What this Page is told to write, and what it is held to. */
 function Writing({
   page,
   pageId,
@@ -1339,21 +1254,25 @@ function Writing({
   refreshTemplates: () => Promise<void>;
 }) {
   return (
-    <Pane
-      title="How this Page writes"
-      hint="The prompts say what to aim for; the lengths are what a draft is checked against. Empty inherits the default."
-      meta={files ? `${files.length} prompts` : undefined}
-    >
+    <Pane title="Writing" hint="What this Page is told to write.">
       <div className="space-y-6">
-        <WritingLimits page={page} />
-
-        <div className="border-t pt-6">
-          <Prompts pageId={pageId} files={files} />
-        </div>
+        <Prompts pageId={pageId} files={files} />
 
         <div className="border-t pt-6">
           <PostStyles pageId={pageId!} templates={templates} refresh={refreshTemplates} />
         </div>
+
+        {/* Folded: the house numbers suit most Pages, and six number boxes
+            above the prompts were the first thing an operator met here. */}
+        <details className="group border-t pt-6">
+          <summary className="flex cursor-pointer list-none items-center gap-1.5 font-mono text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase [&::-webkit-details-marker]:hidden">
+            <ChevronRight className="size-3 transition-transform group-open:rotate-90" />
+            Lengths and limits
+          </summary>
+          <div className="pt-4">
+            <WritingLimits page={page} />
+          </div>
+        </details>
       </div>
     </Pane>
   );
@@ -1512,13 +1431,6 @@ function WritingLimits({ page }: { page: Page }) {
   );
 }
 
-/** Where a prompt's text came from, in the words the operator needs. */
-const SOURCE_LABEL: Record<PromptFile["source"], string> = {
-  page: "This Page",
-  "file-override": "File override",
-  global: "Default",
-};
-
 /**
  * The three prompts, editable per Page (F5).
  *
@@ -1626,25 +1538,14 @@ function PromptEditor({ pageId, file }: { pageId: number; file: PromptFile }) {
   // it, which put three borders between the pane edge and the prompt text.
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0">
-          <p className="font-mono text-[12px] font-medium tracking-[0.08em] text-foreground uppercase">
-            {file.filename}
-          </p>
-          <p className="pt-1 text-[12px] text-muted-foreground">{sourceDescription}</p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2 text-[11px] text-muted-foreground">
-          <span className={cn(
-            "rounded-full border px-2 py-1 font-medium",
-            file.source === "page"
-              ? "border-gold/40 bg-gold/10 text-foreground"
-              : "bg-background",
-          )}>
-            {SOURCE_LABEL[file.source]}
-          </span>
-          <span className="tabular-nums">{file.chars.toLocaleString()} chars</span>
-        </div>
-      </div>
+      {/* The tab above already names the file; this line says only whose
+          text it is. */}
+      <p className="text-[12px] text-muted-foreground">
+        <span className={cn(file.source === "page" && "font-medium text-foreground")}>
+          {sourceDescription}
+        </span>
+        <span className="tabular-nums"> · {file.chars.toLocaleString()} chars</span>
+      </p>
 
       <div className="space-y-3">
         {/* The no-overlay opt-out stays next to the editor: it is a deliberate

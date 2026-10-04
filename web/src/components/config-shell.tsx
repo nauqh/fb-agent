@@ -115,43 +115,46 @@ export function ConfigShell({
       {/* Below `lg` the rail is a horizontal strip: a 200px column beside a form
           on a phone leaves neither enough room. */}
       <div className="flex flex-col gap-5 lg:min-h-0 lg:flex-1 lg:flex-row lg:gap-6 lg:overflow-y-auto lg:pr-3">
-        {/* `self-start` is what makes `sticky` work: a stretched flex item is
+        {/* No rail for one section: a menu of one entry groups nothing.
+            `self-start` is what makes `sticky` work: a stretched flex item is
             already as tall as the row it is in, so it has nothing to stick
             within and would scroll away with the pane. */}
-        <nav
-          data-config-rail
-          className="shrink-0 lg:sticky lg:top-0 lg:w-52 lg:self-start lg:pb-10"
-        >
-          <div className="flex gap-1 overflow-x-auto lg:block lg:space-y-6 lg:overflow-visible">
-            {groups.map((group) => (
-              <div key={group.label} className="flex shrink-0 gap-1 lg:block lg:space-y-0.5">
-                <p className="hidden px-2 pb-1.5 font-mono text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase lg:block">
-                  {group.label}
-                </p>
-                {group.sections.map((section) => (
-                  <button
-                    key={section.id}
-                    type="button"
-                    onClick={() => open(section.id)}
-                    aria-current={section.id === shown?.id ? "page" : undefined}
-                    className={cn(
-                      // The press is on pointer-*down*, which is the whole
-                      // point: feedback that waits for the click has already
-                      // lost the feeling of directness. 100ms and a hair under
-                      // 1.0 - enough to feel, not enough to notice.
-                      "group flex shrink-0 items-center gap-2 rounded-md px-2.5 py-1.5 text-[13px] whitespace-nowrap transition-[transform,background-color,color] duration-100 active:scale-[0.98] lg:w-full",
-                      section.id === shown?.id
-                        ? "bg-accent font-medium text-foreground"
-                        : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
-                    )}
-                  >
-                    <RailLabel section={section} />
-                  </button>
-                ))}
-              </div>
-            ))}
-          </div>
-        </nav>
+        {local.length > 1 ? (
+          <nav
+            data-config-rail
+            className="shrink-0 lg:sticky lg:top-0 lg:w-52 lg:self-start lg:pb-10"
+          >
+            <div className="flex gap-1 overflow-x-auto lg:block lg:space-y-6 lg:overflow-visible">
+              {groups.map((group) => (
+                <div key={group.label} className="flex shrink-0 gap-1 lg:block lg:space-y-0.5">
+                  <p className="hidden px-2 pb-1.5 font-mono text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase lg:block">
+                    {group.label}
+                  </p>
+                  {group.sections.map((section) => (
+                    <button
+                      key={section.id}
+                      type="button"
+                      onClick={() => open(section.id)}
+                      aria-current={section.id === shown?.id ? "page" : undefined}
+                      className={cn(
+                        // The press is on pointer-*down*, which is the whole
+                        // point: feedback that waits for the click has already
+                        // lost the feeling of directness. 100ms and a hair under
+                        // 1.0 - enough to feel, not enough to notice.
+                        "group flex shrink-0 items-center gap-2 rounded-md px-2.5 py-1.5 text-[13px] whitespace-nowrap transition-[transform,background-color,color] duration-100 active:scale-[0.98] lg:w-full",
+                        section.id === shown?.id
+                          ? "bg-accent font-medium text-foreground"
+                          : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
+                      )}
+                    >
+                      <RailLabel section={section} />
+                    </button>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </nav>
+        ) : null}
 
         {/* No scroller of its own: the pane is as tall as its section, and the
             row around it does the scrolling. */}
