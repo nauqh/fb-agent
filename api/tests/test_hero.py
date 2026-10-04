@@ -201,13 +201,8 @@ def test_a_page_with_its_own_brief_is_not_drawn_under_history_retraceds(transpor
     assert "BRIGHT lighting" in asked_for
 
 
-def test_the_post_style_image_layer_rides_on_the_brief(transport):
-    """A post style's image delta is layered after the brief, outranking it.
-
-    Same shape as the writer's POST STYLE block: the layer carries only what
-    the style changes, and the outranking line is what makes the contradiction
-    with the brief resolvable rather than a coin flip.
-    """
+def test_the_post_style_image_prompt_replaces_the_brief(transport):
+    """Client, 2026-10-04: a style is not an add-on to the default prompt."""
     models = transport(_drawn())
 
     REAL_GENERATE(
@@ -215,11 +210,7 @@ def test_the_post_style_image_layer_rides_on_the_brief(transport):
     )
 
     [(_, config)] = models.sent
-    assert "POST STYLE" in config.system_instruction
-    assert "Bright daylight only" in config.system_instruction
-    assert config.system_instruction.index("photorealistic") < config.system_instruction.index(
-        "POST STYLE"
-    ), "the layer comes after the brief, so its outranking claim reads correctly"
+    assert config.system_instruction == "Bright daylight only, no mood lighting."
 
 
 def test_the_panel_share_in_the_prompt_comes_from_the_layout(transport):

@@ -16,7 +16,7 @@ from pydantic_ai.models.function import AgentInfo, FunctionModel
 from app.models import Page, SourceItem, SourceKind
 from app.settings import layout
 from app.writer import agent as writer
-from app.writer import validators
+from app.writer import prompts, validators
 
 # A draft that breaks nothing, used as the baseline every test mutates.
 GOOD = {
@@ -151,14 +151,8 @@ def test_a_compliant_draft_passes_on_the_first_call(page):
     assert len(calls) == 1, "the happy path must cost exactly one call"
 
 
-def test_a_post_template_layers_last_and_says_it_outranks(page):
-    """The client's named post styles: delta only, layered last, last wins.
-
-    Layering rather than replacement is the drift defence - the template
-    carries the few lines its style changes, never a copy of the house prose
-    (see `models.PromptTemplate`). Last-wins is the same mechanism the page
-    lengths use.
-    """
+def test_a_post_style_replaces_the_page_prompts(page):
+    """Client, 2026-10-04: a style is not an add-on to the default prompt."""
     template = SimpleNamespace(
         name="Meme",
         system_prompt="The post is one image and one line. No essay.",
@@ -166,27 +160,28 @@ def test_a_post_template_layers_last_and_says_it_outranks(page):
         image_prompt=None,
         write_first_comment=None,
     )
+    default = writer._instructions(page, layout)
 
     instructions = writer._instructions(page, layout, template)
 
-    assert "POST STYLE: Meme" in instructions
-    assert "one image and one line" in instructions
+    assert instructions.startswith("The post is one image and one line.")
     assert "The panel holds the line" in instructions
-    assert instructions.strip().endswith("in capitals.")
+    assert prompts.system_prompt(layout, page.name, page) not in instructions
+    assert prompts.overlay_prompt(layout, page.name, page) not in instructions
+    assert prompts.system_prompt(layout, page.name, page) in default
 
 
-def test_a_post_template_with_only_an_image_layer_changes_no_text_instructions(page):
+def test_a_post_style_with_only_an_image_prompt_changes_no_text_instructions(page):
     template = SimpleNamespace(
         name="Bright",
         system_prompt=None,
-        # None, not "": a style's empty string is "no overlay text" now, which is
-        # a text instruction. None is the style that changes nothing but the image.
+        # None, not "": a style's empty string is "no overlay text".
         overlay_prompt=None,
         image_prompt="Bright daylight.",
         write_first_comment=None,
     )
 
-    assert "POST STYLE" not in writer._instructions(page, layout, template)
+    assert writer._instructions(page, layout, template) == writer._instructions(page, layout)
 
 
 def test_a_violation_is_retried_and_corrected(page):
@@ -763,11 +758,12 @@ def test_the_prompt_states_this_pages_lengths_so_the_check_cannot_surprise_it():
     ), "the override has to come last to win"
 
 
-def test_an_emptied_overlay_prompt_instructs_no_overlay_and_skips_the_template_layer(page):
+def test_an_emptied_overlay_prompt_instructs_no_overlay_unless_the_style_has_its_own(page):
     """The client's 2026-09-11 rule: an overlay prompt emptied in Settings means
     the post carries no text panel - the image and the logo only. The NO OVERLAY
-    instruction goes last so last-wins over the structure above, and a template's
-    panel rules are not layered for a post that must not carry a panel."""
+    instruction goes last so last-wins over the structure above. A style with
+    its own panel rules replaces the Page's overlay prompt, emptied or not
+    (client, 2026-10-04)."""
     page.overlay_prompt = "   "
     template = SimpleNamespace(
         name="Meme",
@@ -777,12 +773,13 @@ def test_an_emptied_overlay_prompt_instructs_no_overlay_and_skips_the_template_l
         write_first_comment=None,
     )
 
-    instructions = writer._instructions(page, layout, template)
+    instructions = writer._instructions(page, layout)
+    styled = writer._instructions(page, layout, template)
 
     assert "NO OVERLAY TEXT" in instructions
     assert "null" in instructions and "highlight_phrases" in instructions
-    # The page-level switch is authoritative: no panel rules for a panel-less post.
-    assert "The panel holds the line" not in instructions
+    assert "NO OVERLAY TEXT" not in styled
+    assert "The panel holds the line" in styled
 
 
 def test_a_style_with_no_overlay_text_instructs_no_overlay_on_its_own(page):

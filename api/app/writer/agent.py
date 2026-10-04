@@ -134,16 +134,22 @@ def _instructions(page: Page, layout: Layout, template=None) -> str:
     Page that has asked for 30 words gets a line saying so, and it goes last, so
     it wins over whatever the inherited prose says.
 
-    **A post template layers last of all**, for the same reason the lengths do:
-    last wins. It carries only its delta - the fields the style actually
-    changes - and says it outranks, which is the same mechanism the minimal-post
-    instruction uses and the one that has survived contact with the model. The
-    template's text is a delta by construction (see `models.PromptTemplate`),
-    so there is no second copy of the house prose here to drift.
+    **A post style replaces, it does not layer** (client, 2026-10-04). A style
+    with system text is sent instead of the Page's system prompt, and its
+    overlay instead of the Page's overlay prompt. A blank field falls back to
+    the Page's.
     """
+    system = prompts.system_prompt(layout, page.name, page)
+    overlay = prompts.overlay_prompt(layout, page.name, page)
+    if template is not None:
+        if (template.system_prompt or "").strip():
+            system = prompts.substitute(template.system_prompt, layout)
+        # None uses the Page's overlay prompt; "" is "no overlay text".
+        if template.overlay_prompt is not None:
+            overlay = prompts.substitute(template.overlay_prompt, layout)
     parts = [
-        prompts.system_prompt(layout, page.name, page),
-        prompts.overlay_prompt(layout, page.name, page),
+        system,
+        overlay,
         f"You are writing for the Facebook page {page.name}.",
     ]
     house = validators.Limits()
@@ -170,34 +176,9 @@ def _instructions(page: Page, layout: Layout, template=None) -> str:
             "LENGTHS FOR THIS PAGE. These override any length given above.\n"
             + "\n".join(lines)
         )
-    # Two ways to opt out, one outcome. The Page's overlay prompt emptied is
-    # every draft on the Page; a style's overlay stored as `""` is only the drafts
-    # written under that style (client, 2026-09-14). A style's `None` is neither:
-    # it uses the Page's overlay prompt, which is what an image-only style that
-    # still wants a panel means.
-    no_overlay = not prompts.overlay_prompt(layout, page.name, page).strip() or (
-        template is not None
-        and template.overlay_prompt is not None
-        and not template.overlay_prompt.strip()
-    )
-    if template is not None:
-        layers = []
-        for label, text in (
-            ("SYSTEM", template.system_prompt),
-            # Skipped for a no-overlay post, whichever switch said so: layering
-            # panel rules for a post that must not carry a panel would only
-            # confuse the model.
-            ("OVERLAY (text panel rules)", None if no_overlay else template.overlay_prompt),
-        ):
-            if (text or "").strip():
-                layers.append(f"{label}:\n{prompts.substitute(text, layout)}")
-        if layers:
-            parts.append(
-                f"POST STYLE: {template.name}. These instructions outrank "
-                "everything above for this draft. Where they change the "
-                "structure, lengths or rules above, follow them.\n\n"
-                + "\n\n".join(layers)
-            )
+    # Either the Page's overlay prompt emptied or a style's stored as `""`
+    # (client, 2026-09-11 and 2026-09-14): the image and the logo only.
+    no_overlay = not overlay.strip()
     if no_overlay:
         # Last, so last wins over the structure above (client, 2026-09-11: an
         # emptied overlay prompt means the post carries no text panel - the
@@ -229,14 +210,7 @@ def writes_first_comment(page: Page, template=None) -> bool:
     return page.write_first_comment is not False
 
 
-def instructions_for(page: Page, template=None) -> str:
-    """`_instructions` for callers outside the writer.
 
-    The Settings preview needs the exact string a run would send, and must
-    not rebuild it - a preview assembled separately is a second copy of the
-    layering rules, free to drift from the one the model is actually given.
-    """
-    return _instructions(page, layout, template)
 
 
 def source_instruction(kind: SourceKind, summary: bool = False) -> str:
@@ -430,7 +404,7 @@ def write(
 
     `image` is the competitor post's own picture, fetched by `generate` and
     sent alongside the text so the model can read it - never a style sample.
-    `template` is the run's post style row, layered last in the instructions;
+    `template` is the run's post style row, whose prompts replace the Page's;
     None is the normal case.
 
     Two different retries live here and they are not the same thing.

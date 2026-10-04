@@ -782,18 +782,12 @@ class SourceItem(SourceItemBase, table=True):
 
 
 class PromptTemplate(SQLModel, table=True):
-    """A named post style: an extra prompt layer the operator selects at run time.
+    """A named post style the operator selects at run time.
 
-    The client's 2026-08-20 request. Each field is a **delta**, never a copy:
-    blank means the draft inherits the Page's prompt chain unchanged, and a
-    template that restates the whole house prompt is the old tool's drift
-    disaster returning - three Pages once held 2,030 byte-identical characters
-    of one prompt and all three went stale (see `writer/prompts.py`). A Meme
-    template is a dozen lines of "ignore the essay structure above", not three
-    full prompts.
-
-    The layering, not replacement, is also why the fields can be independent:
-    a template that only changes the image brief carries no system text at all.
+    The client's 2026-08-20 request. Each prompt **replaces** the Page's
+    (client, 2026-10-04: a style must not be an add-on to the default prompt);
+    a blank field falls back to the Page's. The fields are independent, so a
+    style that only changes the image carries no system text at all.
     """
 
     __tablename__ = "prompt_template"
@@ -809,10 +803,10 @@ class PromptTemplate(SQLModel, table=True):
     the only shared layer."""
 
     system_prompt: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
-    """Layered onto the writer's instructions, outranking the Page's own."""
+    """Sent instead of the Page's system prompt."""
 
     overlay_prompt: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
-    """Panel-text rules, layered beside the system layer for this style.
+    """Panel-text rules, sent instead of the Page's overlay prompt.
 
     The one field with three states rather than two, mirroring
     `Page.overlay_prompt`: null uses the Page's overlay prompt, `""` means drafts
@@ -824,8 +818,8 @@ class PromptTemplate(SQLModel, table=True):
     """Null follows the Page's `write_first_comment`; a bool overrides it."""
 
     image_prompt: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
-    """Layered onto the hero brief, not the writer - the image model never sees
-    the writer's instructions (see `image/hero.py`)."""
+    """Sent instead of the Page's image brief - the image model never sees the
+    writer's instructions (see `image/hero.py`)."""
 
 
 class Draft(SQLModel, table=True):

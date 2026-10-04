@@ -37,19 +37,10 @@ it, so a headline in the picture is a headline on the post.
 
 
 def brief(layout, page_name: str | None, page=None, style: str | None = None) -> str:
-    """The hero's system instruction: the page's image brief, then the style.
-
-    Split out of `generate` so the Settings screen can show the operator the
-    exact text a style produces. Composed in one place for the same reason
-    `_instructions` is: a preview assembled separately would be a second copy,
-    and a preview that drifts from the real call is worse than none.
-    """
-    text = prompts.image_prompt(layout, page_name, page)
+    """The hero's system instruction: the style's image prompt, else the Page's."""
     if style and style.strip():
-        text += (
-            f"\n\nPOST STYLE (these rules outrank the brief above):\n{style}"
-        )
-    return text
+        return style
+    return prompts.image_prompt(layout, page_name, page)
 
 
 SUPPORTED_RATIOS: dict[str, float] = {
