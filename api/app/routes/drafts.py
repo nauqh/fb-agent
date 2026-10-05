@@ -731,6 +731,9 @@ def rebuild_image(
 
     if new_hero:
         draft.hero_image_path = None
+        # Otherwise `build_image` fetches the feed's photograph again: the same
+        # picture, free, with the prompt ignored.
+        draft.hero_from_source = False
 
     # Rebound rather than appended: `warnings` is a plain JSON column, so an
     # in-place edit does not mark the row dirty and never persists.

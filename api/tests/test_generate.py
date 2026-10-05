@@ -1513,6 +1513,29 @@ def test_an_uploaded_hero_is_no_longer_the_feeds_photograph(
     assert draft["hero_from_source"] is False
 
 
+def test_regenerating_a_feed_photograph_buys_an_ai_hero(
+    client, written, illustrated, monkeypatch
+):
+    """Client report: prompt typed, Regenerate pressed, nothing happened.
+
+    The row still claimed the feed's photograph, so the rebuild fetched it again.
+    """
+    feed = _feed_png(monkeypatch)
+    client.post(
+        "/generate",
+        json={
+            "page_ids": [1],
+            "sources": [{**_rss().model_dump(mode="json"), "image_url": "https://e.com/p.jpg"}],
+            "hero_from_source": True,
+        },
+    )
+
+    draft = client.post("/drafts/1/image?new_hero=true").json()
+
+    assert draft["hero_from_source"] is False
+    assert not _same_picture(media.store.read(draft["hero_image_path"]), feed)
+
+
 def test_the_uploaded_hero_is_re_encoded_rather_than_stored_as_sent(
     client, written, illustrated, a_photograph
 ):

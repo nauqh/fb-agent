@@ -458,6 +458,7 @@ export function DraftDetail({
       if (dirty && form) await updateDraft(draftId, form);
 
       await regenerateHero(draftId);
+      await refresh();
       toast.success("New hero generated and composited.", {
         description: "That was a paid image generation.",
       });
