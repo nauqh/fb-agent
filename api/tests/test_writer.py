@@ -713,6 +713,14 @@ def test_the_schema_does_not_restate_the_house_caption_rule():
     assert "5" not in described and "emoji" not in described.lower()
 
 
+def test_the_schema_does_not_order_a_photograph():
+    """Sent with every request, so a style asking for an infographic could not
+    outrank it. The Page's image brief is where photorealism lives."""
+    described = writer.DraftContent.model_fields["image_prompt"].description
+
+    assert "photorealistic" not in described.lower()
+
+
 def test_the_prompt_states_this_pages_caption_rules_too():
     from app.settings import layout
 

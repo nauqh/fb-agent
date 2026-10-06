@@ -579,12 +579,23 @@ def build_image(session: Session, draft: Draft, page: Page) -> list[str]:
             store_image(draft, "hero_image_path", image_bytes, "hero")
         else:
             style = None
+            subject = draft.image_prompt or ""
             if draft.prompt_template_id:
                 post_style = session.get(PromptTemplate, draft.prompt_template_id)
                 if post_style and (post_style.image_prompt or "").strip():
                     style = prompts.substitute(post_style.image_prompt, layout)
+            # Under a style the image model gets the source's text too: an
+            # infographic of a competitor's five exercises has to know which
+            # five. The Page's photo brief keeps the one-line subject.
+            source = (
+                session.get(SourceItem, draft.source_item_id)
+                if style and draft.source_item_id
+                else None
+            )
+            if source is not None and source.text.strip():
+                subject += f"\n\nSOURCE POST:\n{source.text}"
             drawn = hero.generate(
-                draft.image_prompt or "",
+                subject,
                 plan.hero_height_px if plan else layout.image.height,
                 layout,
                 page.name,

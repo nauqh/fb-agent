@@ -98,9 +98,10 @@ class DraftContent(BaseModel):
     )
     image_prompt: str = Field(
         description=(
-            "A photorealistic hero prompt for this story. For a competitor post, "
-            "depict the theme of their image - same subject, scene and mood - "
-            "composed fresh; never their actual photograph."
+            "What the picture should show, following any image instructions "
+            "above. For a competitor post, depict the theme of their image - "
+            "same subject, scene and mood - composed fresh; never their actual "
+            "photograph."
         )
     )
     inset_subject: str | None = Field(

@@ -147,6 +147,41 @@ def test_a_run_can_generate_under_a_post_style(client, engine, session, written)
     assert client.get(f"/drafts/{draft_id}").json()["prompt_template_id"] == style.id
 
 
+def test_a_style_image_is_drawn_from_the_source_text(
+    client, session, written, illustrated, monkeypatch
+):
+    """An infographic of a competitor's exercises has to know which ones. The
+    image model used to get only the writer's one-line subject."""
+    from app.image import hero
+
+    session.add(
+        SourceItem(kind=SourceKind.COMPETITOR_POST, external_id="1_2", text="Squat 5x5.")
+    )
+    style = PromptTemplate(name="Infographic", page_id=1, image_prompt="An infographic.")
+    session.add(style)
+    session.commit()
+    session.refresh(style)
+    asked: list[str] = []
+    monkeypatch.setattr(
+        hero,
+        "generate",
+        lambda subject, *a, **k: asked.append(subject)
+        or hero.Hero(illustrated, settings.gemini_image_model),
+    )
+
+    body = SourceItemBase(
+        kind=SourceKind.COMPETITOR_POST, external_id="1_2", text="ignored"
+    ).model_dump(mode="json")
+    client.post(
+        "/generate",
+        json={"page_ids": [1], "sources": [body], "prompt_template_id": style.id},
+    )
+
+    [subject] = asked
+    assert subject.startswith(GOOD.image_prompt)
+    assert subject.endswith("SOURCE POST:\nSquat 5x5.")
+
+
 def test_a_run_with_an_unknown_post_style_is_refused(client, written):
     response = client.post(
         "/generate", json={"page_ids": [1], "topic": "x", "prompt_template_id": 99}
