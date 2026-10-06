@@ -141,8 +141,11 @@ def _instructions(page: Page, layout: Layout, template=None) -> str:
     """
     system = prompts.system_prompt(layout, page.name, page)
     overlay = prompts.overlay_prompt(layout, page.name, page)
+    # The house lengths live in the Page's prompt prose, so a style replacing
+    # it takes them away and the check fails a rule the model was never given.
+    own_system = template is not None and bool((template.system_prompt or "").strip())
     if template is not None:
-        if (template.system_prompt or "").strip():
+        if own_system:
             system = prompts.substitute(template.system_prompt, layout)
         # None uses the Page's overlay prompt; "" is "no overlay text".
         if template.overlay_prompt is not None:
@@ -155,7 +158,7 @@ def _instructions(page: Page, layout: Layout, template=None) -> str:
     house = validators.Limits()
     limits = validators.Limits.for_page(page)
     first_comment = writes_first_comment(page, template)
-    if limits != house:
+    if limits != house or own_system:
         low, high = limits.paragraphs
         lines = [f"- The hook must be at most {limits.hook_max_words} words."]
         if first_comment:

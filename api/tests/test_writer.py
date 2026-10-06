@@ -883,6 +883,19 @@ def test_a_style_overrides_the_pages_first_comment_setting_either_way():
     assert "NO FIRST COMMENT" in writer._instructions(off_page, layout, _style(None))
 
 
+def test_a_style_replacing_the_system_prompt_is_still_told_the_lengths():
+    """Draft 1078 failed after two retries on a 2,380-character first comment:
+    the style's prompt replaced the one that carries the house numbers."""
+    from app.settings import layout
+
+    style = _style(None)
+    style.system_prompt = "Write a workout infographic."
+
+    assert "LENGTHS FOR THIS PAGE" not in writer._instructions(_page(), layout, _style(None))
+    told = writer._instructions(_page(), layout, style)
+    assert "between 1,500 and 2,100 characters" in told
+
+
 def test_no_first_comment_lengths_are_stated_for_a_post_without_one():
     from app.settings import layout
 
