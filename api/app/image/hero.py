@@ -216,7 +216,9 @@ def generate(
         response_modalities=["IMAGE"],
         image_config=types.ImageConfig(aspect_ratio=ratio),
     )
-    contents = prompt + NO_TEXT_REMINDER
+    # A style's own brief decides whether the picture carries text: an
+    # infographic is nothing but labels, and this reminder would undo it.
+    contents = prompt if style and style.strip() else prompt + NO_TEXT_REMINDER
 
     last: Exception | None = None
     for model in settings.image_fallback_chain:

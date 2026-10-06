@@ -213,6 +213,17 @@ def test_the_post_style_image_prompt_replaces_the_brief(transport):
     assert config.system_instruction == "Bright daylight only, no mood lighting."
 
 
+def test_a_post_style_image_prompt_may_ask_for_text_in_the_picture(transport):
+    """Draft 1078: the Workout Infographic style drew photos, because the
+    no-text reminder rode on every prompt and outranked a brief made of labels."""
+    models = transport(_drawn())
+
+    REAL_GENERATE("a squat", 800, None, None, None, style="A labelled infographic.")
+
+    [(contents, _)] = models.sent
+    assert contents == "a squat"
+
+
 def test_the_panel_share_in_the_prompt_comes_from_the_layout(transport):
     """`{panel_pct}` is substituted, not sent as a literal brace.
 
