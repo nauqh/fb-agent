@@ -51,6 +51,9 @@ scheduled across a month boundary; more is rent on bytes nobody fetches."""
 
 PURGE_POLL_SECONDS = 24 * 60 * 60
 
+PICTURE_KEEP_DAYS = 14
+"""How long a published draft keeps its hero and inset - see `reap_published_pictures`."""
+
 LIST_LIMIT = 1000
 """The list endpoint's own page cap."""
 
@@ -386,6 +389,50 @@ def prune_drafts(now: datetime | None = None) -> int:
     return result.rowcount
 
 
+def reap_published_pictures(now: datetime | None = None) -> int:
+    """Delete the hero and inset of drafts published `PICTURE_KEEP_DAYS` ago.
+
+    They exist only to redraw the card, a published draft cannot redraw, and
+    Facebook fetches the composite. They were 702 MB of a 956 MB bucket on
+    2026-10-06, against a 1 GB tier. The days are slack for an unschedule: past
+    them, a new picture means writing the story again. The rows are cleared
+    first, so a failed delete leaves a file for the month purge, never a row
+    pointing at nothing. Returns how many files went.
+    """
+    from datetime import timedelta
+
+    from sqlalchemy import or_, update
+    from sqlmodel import Session, col, select
+
+    from app.db import get_engine
+    from app.models import Draft
+
+    cutoff = (now or datetime.now(timezone.utc)).replace(tzinfo=None) - timedelta(
+        days=PICTURE_KEEP_DAYS
+    )
+    with Session(get_engine()) as session:
+        rows = session.exec(
+            select(Draft.id, Draft.hero_image_path, Draft.inset_image_path).where(
+                col(Draft.metricool_post_id).is_not(None),
+                col(Draft.created_at) < cutoff,
+                or_(
+                    col(Draft.hero_image_path).is_not(None),
+                    col(Draft.inset_image_path).is_not(None),
+                ),
+            )
+        ).all()
+        session.exec(
+            update(Draft)
+            .where(col(Draft.id).in_([row[0] for row in rows]))
+            .values(hero_image_path=None, inset_image_path=None)
+        )
+        session.commit()
+    paths = [path for row in rows for path in row[1:] if path]
+    for path in paths:
+        store.delete(path)
+    return len(paths)
+
+
 def purge_forever() -> None:
     """Cut the bucket, and the drafts it leaves as shells, at startup and daily.
 
@@ -405,6 +452,12 @@ def purge_forever() -> None:
                 logger.info("Pruned {} rejected or failed draft(s)", pruned)
         except Exception:  # noqa: BLE001 - one bad pass must not kill the loop
             logger.exception("Draft prune failed")
+        try:
+            reaped = reap_published_pictures()
+            if reaped:
+                logger.info("Reaped {} published hero/inset file(s)", reaped)
+        except Exception:  # noqa: BLE001 - one bad pass must not kill the loop
+            logger.exception("Published picture reap failed")
         time.sleep(PURGE_POLL_SECONDS)
 
 

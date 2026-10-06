@@ -321,3 +321,36 @@ def test_prune_drops_old_finished_drafts_and_the_sources_only_they_used(session,
     assert [i.external_id for i in session.exec(select(SourceItem))] == ["post"], (
         "competitor posts are the sync's to drop"
     )
+
+
+def test_reap_drops_the_hero_and_inset_of_drafts_published_long_ago(session, page):
+    from app.models import Draft
+
+    now = datetime(2026, 10, 6, tzinfo=timezone.utc)
+    old, fresh = datetime(2026, 9, 1), datetime(2026, 10, 1)
+
+    def draft(name, created_at, post_id):
+        return Draft(
+            page_id=page.id,
+            created_at=created_at,
+            metricool_post_id=post_id,
+            hero_image_path=media.store.save(b"h", f"{name}-hero.jpg"),
+            inset_image_path=media.store.save(b"i", f"{name}-inset.jpg"),
+            composed_image_path=media.store.save(b"c", f"{name}-composed.jpg"),
+        )
+
+    drafts = [draft("old", old, "1"), draft("fresh", fresh, "2"), draft("review", old, None)]
+    session.add_all(drafts)
+    session.commit()
+    files = {d.id: (d.hero_image_path, d.inset_image_path, d.composed_image_path) for d in drafts}
+
+    assert media.reap_published_pictures(now=now) == 2
+    session.expire_all()
+    reaped, *kept = drafts
+    assert (reaped.hero_image_path, reaped.inset_image_path) == (None, None)
+    assert reaped.composed_image_path, "the composite is what Facebook fetched"
+    hero, inset, composed = files[reaped.id]
+    assert not media.store.path(hero).exists() and not media.store.path(inset).exists()
+    assert media.store.path(composed).exists()
+    for one in kept:
+        assert all(media.store.path(p).exists() for p in files[one.id])

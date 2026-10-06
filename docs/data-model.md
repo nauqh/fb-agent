@@ -468,6 +468,7 @@ by a timer of its own:
 | A `rejected` or `failed` draft | it was last touched before the bucket's month cutoff, so its images are already gone. Not if a saved post links to it | `media.prune_drafts`, in the daily purge |
 | An RSS, tweet or web item | no draft points at it any more | `media.prune_drafts`, after the drafts |
 | `draft.inset_candidates` | the draft is published, since a published draft cannot redraw | `publish_draft` |
+| A published draft's hero and inset files | 14 days after the draft was made. They only redraw the card, and Facebook fetched the composite | `media.reap_published_pictures`, in the daily purge |
 
 Competitor posts were 51 MB of a 72 MB database on 2026-10-06, with nothing
 removing them. The table is a copy of Metricool's window, and only a sync adds
@@ -477,6 +478,9 @@ to it, so the sync is what trims it.
 whose competitors went quiet keeps its last fortnight rather than an empty grid.
 **Twice the window**, so a post ticked into the Cart from an older grid read
 still resolves at generate, which accepts a competitor post by id only.
+
+The bucket, not the database, is the tight limit: 1 GB on the free tier. On
+2026-10-06 published drafts' heroes and insets were 702 MB of 956 MB.
 
 Approved and published drafts are never removed. They are the record of what
 went out.
