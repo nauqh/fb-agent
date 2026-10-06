@@ -431,8 +431,8 @@ items.
 Competitor posts are the standing exception: they arrive through a Metricool sync
 the operator pressed rather than through a tab opening, so they are written on
 arrival. The rule exists to stop the table filling with items nobody looked twice
-at, and a sync is not that - it is bounded by the seven-day window, and
-re-syncing updates the same rows rather than adding more.
+at, and a sync is not that - it updates the posts it already holds, and drops
+the ones that have aged out (see "How long rows live" below).
 
 Storage is also what makes a competitor post checkable. There is no
 `is_curated_url` equivalent for a Facebook post, so `POST /generate` accepts one
@@ -455,6 +455,34 @@ paid model output and review state, and it cannot be ephemeral. A Source Item is
 elsewhere and can be re-fetched, kept only so a Draft can say where it came from.
 That is why a Source Item need not exist until a Draft points at it, and why a
 Draft must exist from the moment its run starts.
+
+## How long rows live
+
+Settings rows live until someone edits them. Three kinds of row stop being
+useful on their own, and each is removed by the code that ends that stage, not
+by a timer of its own:
+
+| What | Removed when | By |
+|---|---|---|
+| A competitor post | it is more than twice `lookback_days` older than the Page's newest post, and no draft came from it | `_sync`, after it writes the fresh window |
+| A `rejected` or `failed` draft | it was last touched before the bucket's month cutoff, so its images are already gone. Not if a saved post links to it | `media.prune_drafts`, in the daily purge |
+| An RSS, tweet or web item | no draft points at it any more | `media.prune_drafts`, after the drafts |
+| `draft.inset_candidates` | the draft is published, since a published draft cannot redraw | `publish_draft` |
+
+Competitor posts were 51 MB of a 72 MB database on 2026-10-06, with nothing
+removing them. The table is a copy of Metricool's window, and only a sync adds
+to it, so the sync is what trims it.
+
+**Anchored to the newest post, not the clock**, as the grid's window is. A Page
+whose competitors went quiet keeps its last fortnight rather than an empty grid.
+**Twice the window**, so a post ticked into the Cart from an older grid read
+still resolves at generate, which accepts a competitor post by id only.
+
+Approved and published drafts are never removed. They are the record of what
+went out.
+
+Postgres reuses the space of deleted rows but does not hand it back, so the
+database's reported size only falls after a `VACUUM FULL`.
 
 ## Flow
 

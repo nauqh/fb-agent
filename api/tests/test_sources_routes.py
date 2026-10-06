@@ -155,16 +155,16 @@ def test_a_reactions_sort_cannot_be_frozen_by_an_old_viral_post(
 ):
     """The reason the old order existed, and the reason the window has to stay.
 
-    Nothing prunes `source_item`, so ranking the whole table by reactions and
-    taking `grid_limit` would pin the top of the grid to whatever went viral
-    weeks ago - measured on History Retraced's real pool, 42 of the top 60
-    unwindowed were already older than the window. A genuinely new post could
-    never enter the grid again.
+    The sync keeps twice the window, so ranking the whole table by reactions
+    and taking `grid_limit` would fill the top of the grid with posts the window
+    has left - measured on History Retraced's real pool before the sync pruned,
+    42 of the top 60 unwindowed were already older than the window.
 
-    Fifty days apart is well outside `lookback_days`, so the loud one is out of
-    the window and must not be shown *despite* having 750x the reactions.
+    Ten days apart is outside `lookback_days` but inside what the sync keeps, so
+    the loud one is still stored and must not be shown *despite* having 750x the
+    reactions.
     """
-    _two_posts(monkeypatch, session, apart_days=50)
+    _two_posts(monkeypatch, session, apart_days=10)
 
     rows = client.get("/sources/competitors", params={"page_ids": 1}).json()
 
@@ -240,6 +240,33 @@ def test_a_resync_refreshes_the_image_url_and_metrics_but_not_the_text(
     assert rows[0]["reactions"] == 4_200
     assert rows[0]["text"] == "As posted"
     assert _count(engine) == 1
+
+
+def test_a_sync_drops_posts_past_twice_the_window_unless_a_draft_used_one(
+    client, engine, session, page, monkeypatch
+):
+    recent = datetime.now(timezone.utc)
+    old = recent - timedelta(days=2 * sources_config.competitors.lookback_days + 1)
+    rows = {
+        name: SourceItem(
+            kind=SourceKind.COMPETITOR_POST,
+            external_id=name,
+            synced_for_page_id=page.id,
+            published_at=at,
+        )
+        for name, at in [("old", old), ("used", old), ("recent", recent)]
+    }
+    session.add_all(rows.values())
+    session.commit()
+    session.add(Draft(page_id=page.id, source_item_id=rows["used"].id))
+    session.commit()
+    monkeypatch.setattr(routes.metricool, "fetch_competitor_posts", lambda page, **_: [])
+
+    client.get("/sources/competitors", params={"page_ids": page.id, "refresh": True})
+
+    with Session(engine) as fresh:
+        left = fresh.exec(select(SourceItem.external_id)).all()
+    assert sorted(left) == ["recent", "used"]
 
 
 def test_a_plain_read_does_not_sync(client, monkeypatch):

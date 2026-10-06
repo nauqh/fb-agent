@@ -244,6 +244,18 @@ def test_publishing_schedules_against_the_composite_itself(client, ready, publis
     assert response.json()["metricool_post_id"] == "8891"
 
 
+def test_publishing_clears_the_inset_candidates(client, session, ready, published):
+    """A published draft cannot redraw, so the swap row has nothing left to do."""
+    ready.inset_candidates = [{"url": "https://example.com/a.jpg"}]
+    session.add(ready)
+    session.commit()
+
+    response = client.post(f"/drafts/{ready.id}/publish")
+
+    assert response.status_code == 200
+    assert response.json()["inset_candidates"] == []
+
+
 def test_a_chosen_time_reaches_the_scheduler_naive(client, ready, published):
     """The drawer's "Publish at" is the whole of this app's scheduling.
 

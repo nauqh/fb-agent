@@ -343,8 +343,51 @@ def _page_files() -> frozenset[str]:
     )
 
 
+def prune_drafts(now: datetime | None = None) -> int:
+    """Delete rejected and failed drafts whose files the purge has taken.
+
+    Untouched since before the purge's month cutoff means every file the row
+    names is gone, so the row is a shell. A saved post's draft stays: it is the
+    link back to what was kept, and a repost's is the claim that stops a second.
+    Then the RSS, tweet and web items nothing points at any more, which exist
+    only so a draft can say where it came from. Competitor posts are `_sync`'s.
+    """
+    from sqlalchemy import delete
+    from sqlmodel import Session, col, select
+
+    from app.db import get_engine
+    from app.models import Draft, DraftStatus, SavedPost, SourceItem, SourceKind
+
+    cutoff = datetime.strptime(
+        _shift_month(now or datetime.now(timezone.utc), -PURGE_KEEP_MONTHS), "%Y-%m"
+    )
+    kept = select(col(SavedPost.draft_id)).where(col(SavedPost.draft_id).is_not(None))
+    reposts = select(col(SavedPost.repost_draft_id)).where(
+        col(SavedPost.repost_draft_id).is_not(None)
+    )
+    used = select(col(Draft.source_item_id)).where(col(Draft.source_item_id).is_not(None))
+    with Session(get_engine()) as session:
+        result = session.exec(
+            delete(Draft).where(
+                col(Draft.status).in_([DraftStatus.REJECTED, DraftStatus.FAILED]),
+                col(Draft.updated_at) < cutoff,
+                col(Draft.id).not_in(kept),
+                col(Draft.id).not_in(reposts),
+            )
+        )
+        session.exec(
+            delete(SourceItem).where(
+                col(SourceItem.kind) != SourceKind.COMPETITOR_POST,
+                col(SourceItem.created_at) < cutoff,
+                col(SourceItem.id).not_in(used),
+            )
+        )
+        session.commit()
+    return result.rowcount
+
+
 def purge_forever() -> None:
-    """Cut the bucket at startup and once a day after.
+    """Cut the bucket, and the drafts it leaves as shells, at startup and daily.
 
     Logs only passes that deleted something or raised: the steady no-op lines
     would be noise forever.
@@ -356,6 +399,12 @@ def purge_forever() -> None:
                 logger.info("Purged {} file(s) older than the retention window", deleted)
         except Exception:  # noqa: BLE001 - one bad pass must not kill the loop
             logger.exception("Media purge failed")
+        try:
+            pruned = prune_drafts()
+            if pruned:
+                logger.info("Pruned {} rejected or failed draft(s)", pruned)
+        except Exception:  # noqa: BLE001 - one bad pass must not kill the loop
+            logger.exception("Draft prune failed")
         time.sleep(PURGE_POLL_SECONDS)
 
 

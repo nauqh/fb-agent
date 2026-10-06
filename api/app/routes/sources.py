@@ -20,6 +20,7 @@ from enum import Enum
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from loguru import logger
 from pydantic import BaseModel
+from sqlalchemy import delete
 from sqlmodel import Session, col, func, select
 
 from app.db import get_engine, get_session
@@ -130,8 +131,29 @@ def _sync(session: Session, pages: list[Page]) -> None:
     why it is not threaded. Shared by the two callers that sync, so that the
     button and the automatic refresh cannot drift apart in what they fetch.
     """
+    used = select(col(Draft.source_item_id)).where(col(Draft.source_item_id).is_not(None))
     for page in pages:
         _upsert(session, metricool.fetch_competitor_posts(page), refresh_volatile=True)
+        # The table is a copy of the vendor's window, so the sync that refills
+        # it also drops what fell out. Twice the lookback, so a post ticked into
+        # the Cart from an older grid read still resolves at generate. Anchored
+        # to the newest post, as the grid's window is, so a quiet pool keeps its
+        # last fortnight. Posts a draft came from stay.
+        mine = [
+            col(SourceItem.kind) == SourceKind.COMPETITOR_POST,
+            col(SourceItem.synced_for_page_id) == page.id,
+        ]
+        newest = session.exec(select(func.max(SourceItem.published_at)).where(*mine)).one()
+        if newest is None:
+            continue
+        cutoff = newest - 2 * timedelta(days=sources_config.competitors.lookback_days)
+        session.exec(
+            delete(SourceItem).where(
+                *mine,
+                col(SourceItem.published_at) < cutoff,
+                col(SourceItem.id).not_in(used),
+            )
+        )
     session.commit()
 
 
@@ -382,9 +404,9 @@ def get_competitor_posts(
         #
         # The window is the whole reason this is safe, and dropping it brings
         # back the failure the old newest-only order existed to avoid. Reactions
-        # is a *stable* ranking and nothing prunes `source_item` - History
-        # Retraced's pool is 1,244 rows and grows daily - so ranking the whole
-        # table and taking 60 freezes the grid on whatever went viral in July.
+        # is a *stable* ranking and the pool holds twice the window (`_sync`
+        # drops the rest), so ranking the whole table and taking 60 fills half
+        # the grid with posts the window has already left behind.
         # Measured on that pool: 42 of the top 60 unwindowed were already older
         # than the window, against 0 windowed.
         #

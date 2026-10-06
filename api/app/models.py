@@ -981,6 +981,7 @@ class Draft(SQLModel, table=True):
     """The photos the last find or search offered, as `inset.Candidate` dicts -
     the drawer's swap row. On the row rather than in the browser, so a run's
     alternatives are there when the draft is opened (client, 2026-09-15).
+    Cleared at publish: a published draft cannot redraw.
 
     Not null, with a server default, for the reason `find_inset` has one: the
     database is shared with production, whose older code omits the column on

@@ -412,7 +412,8 @@ def list_drafts(
     # Newest `limit` rows, not every row ever. The queue paginates client-side
     # and re-polls the whole filtered list every 2s while anything is
     # generating, so unbounded meant the poll grew a megabyte at a time,
-    # forever - nothing prunes `draft`. Five hundred covers a month of daily
+    # forever - only rejected and failed drafts are ever pruned
+    # (`media.prune_drafts`). Five hundred covers a month of daily
     # runs; beyond it the oldest fall off the *queue*, not out of existence:
     # each is still addressable by id, and Metricool holds what it published.
     return list(
@@ -1245,6 +1246,8 @@ def publish_draft(
         # 502: the failure is upstream, and the draft is untouched and still
         # publishable once whatever broke is fixed.
         raise HTTPException(status_code=502, detail=str(error)) from error
+    # The swap row's photos: a published draft cannot redraw, so nothing reads them.
+    draft.inset_candidates = []
 
     logger.bind(
         draft_id=draft_id,

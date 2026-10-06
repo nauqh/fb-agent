@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 
 import httpx
 import pytest
+from sqlmodel import select
 
 from app import media
 from app.settings import settings
@@ -283,3 +284,40 @@ def test_jpeg_turns_a_png_into_a_jpeg():
 
     with Image.open(io.BytesIO(media.jpeg(buffer.getvalue()))) as picture:
         assert (picture.format, picture.mode, picture.size) == ("JPEG", "RGB", (40, 30))
+
+
+def test_prune_drops_old_finished_drafts_and_the_sources_only_they_used(session, page):
+    from app.models import Draft, DraftStatus, SavedPost, SourceItem, SourceKind
+
+    now = datetime(2026, 10, 6, tzinfo=timezone.utc)
+    old, fresh = datetime(2026, 8, 20), datetime(2026, 9, 2)
+    rss = SourceItem(kind=SourceKind.RSS, external_id="rss", created_at=old)
+    post = SourceItem(kind=SourceKind.COMPETITOR_POST, external_id="post", created_at=old)
+    session.add_all([rss, post])
+    session.commit()
+    drafts = {
+        name: Draft(page_id=page.id, status=status, updated_at=at, source_item_id=source)
+        for name, status, at, source in [
+            ("rejected", DraftStatus.REJECTED, old, rss.id),
+            ("failed", DraftStatus.FAILED, old, post.id),
+            ("recent", DraftStatus.REJECTED, fresh, None),
+            ("approved", DraftStatus.APPROVED, old, None),
+            ("kept", DraftStatus.FAILED, old, None),
+        ]
+    }
+    session.add_all(drafts.values())
+    session.commit()
+    session.add(
+        SavedPost(page_id=page.id, metricool_post_id="1_2", repost_draft_id=drafts["kept"].id)
+    )
+    session.commit()
+    ids = {draft.id: name for name, draft in drafts.items()}
+
+    assert media.prune_drafts(now=now) == 2
+    session.expire_all()
+    assert sorted(ids[d.id] for d in session.exec(select(Draft))) == [
+        "approved", "kept", "recent",
+    ]
+    assert [i.external_id for i in session.exec(select(SourceItem))] == ["post"], (
+        "competitor posts are the sync's to drop"
+    )
