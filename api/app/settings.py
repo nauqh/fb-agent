@@ -347,7 +347,7 @@ class Settings(BaseSettings):
     alias `gemini-flash-latest` answered a ping and then 503'd on a real rewrite
     in the same minute - it points at a busy model, so it is no answer to a 503.
     """
-    gemini_image_model: str = "gemini-2.5-flash-image"
+    gemini_image_model: str = "gemini-3.1-flash-image"
     gemini_image_fallback_models: str = ""
     """Comma-separated, tried in order after the configured model. Empty disables.
 
@@ -358,9 +358,9 @@ class Settings(BaseSettings):
     old repo already shipped `fix(gemini): replace retired image fallback model`
     once - see design.md on why model ids are deployment config.
 
-    `gemini-2.5-flash-image` is the default because it is the model this brand's
-    heroes have actually shipped on, so its output is known to be acceptable
-    rather than merely available.
+    `gemini-3.1-flash-image` since 2026-10-05, at the client's request. It
+    replaced `gemini-2.5-flash-image`, which the brand's heroes shipped on
+    until then. Verified with a real hero call, not the model list.
     """
 
     api_key: str = ""

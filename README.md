@@ -373,7 +373,7 @@ ids that 404 on use.
 | | Now | Chain |
 |---|---|---|
 | Writer | `gemini-3.5-flash` | `gemini-3.6-flash` |
-| Image | `gemini-2.5-flash-image` | *none* |
+| Image | `gemini-3.1-flash-image` | *none* |
 
 Text has a fallback chain tried on 503/429; the image does not because
 `image/hero.py` already retries a single model three times. Only 503/429 walk
