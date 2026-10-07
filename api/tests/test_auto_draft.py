@@ -528,3 +528,14 @@ def test_the_monitor_carries_both_switches(client, session, page, feed):
     assert row["feeds"] == 2
     assert row["rss_available"] == 2
     assert body["runs"][0]["source"] == "rss"
+
+
+def test_auto_drafts_never_buy_a_picture(session, page, pool):
+    """Pictures on: the source's photo, else Google. Off: text only."""
+    [searched] = auto_draft.run(session, page, target=1)
+    page.auto_draft_images = False
+    [text_only] = auto_draft.run(session, page, target=1)
+
+    assert session.get(Draft, searched).hero_search is True
+    assert session.get(Draft, text_only).no_image is True
+    assert session.get(Draft, text_only).hero_search is False

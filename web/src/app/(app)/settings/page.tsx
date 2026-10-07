@@ -460,6 +460,7 @@ function AutoDrafts({
   const [rssOn, setRssOn] = useState(page.auto_draft_rss_count !== null);
   const [rssCount, setRssCount] = useState((page.auto_draft_rss_count ?? 2).toString());
   const [instructions, setInstructions] = useState(page.auto_draft_rss_instructions ?? "");
+  const [images, setImages] = useState(page.auto_draft_images);
   const [busy, setBusy] = useState(false);
 
   const next = {
@@ -467,6 +468,7 @@ function AutoDrafts({
     auto_draft_competitor_min_reactions: minReactions.trim() ? Number(minReactions) : null,
     auto_draft_rss_count: rssOn ? Number(rssCount) : null,
     auto_draft_rss_instructions: instructions.trim() || null,
+    auto_draft_images: images,
   };
   const dirty = (Object.keys(next) as (keyof typeof next)[]).some(
     (key) => next[key] !== page[key],
@@ -580,6 +582,20 @@ function AutoDrafts({
           />
         </div>
         ) : null}
+
+        <div className={cn(box, "sm:w-[calc(50%-0.375rem)]")}>
+          <Label className="flex items-center gap-2 text-[13px] font-normal text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={images}
+              onChange={(event) => setImages(event.target.checked)}
+            />
+            With a picture
+          </Label>
+          <span className="text-[12px] text-muted-foreground">
+            {images ? "Source photo or Google" : "Text only"}
+          </span>
+        </div>
 
         <Button size="sm" disabled={!dirty || busy} onClick={() => void save()}>
           {busy ? <Loader2 className="size-4 animate-spin" /> : null}

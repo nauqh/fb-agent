@@ -309,6 +309,14 @@ class Page(SQLModel, table=True):
     """What the model picks feed items by ("UK politics only, no sport"). Null
     takes the newest."""
 
+    auto_draft_images: bool = Field(default=True)
+    """Whether auto-drafts carry a picture. False makes them text-only.
+
+    On, the picture is the source's own photo where that may be reused, else a
+    Google image (`Draft.hero_search`) - never the image model. Auto-drafts are
+    written before anyone reviews them, and on 2026-10-06 19 of 58 paid heroes
+    went on drafts that were rejected or never scheduled."""
+
     # --- what this Page tells the model ---------------------------------------
     #
     # Null means the file: `prompts/pages/<slug>/x.txt` if it exists, else
@@ -930,6 +938,13 @@ class Draft(SQLModel, table=True):
     False is the default and means the Gemini call. `image_prompt` stays
     populated either way: the writer produced it, it costs nothing to keep, and
     it is what a later "buy one after all" would use.
+    """
+
+    hero_search: bool = Field(default=False)
+    """Take the hero from the source's photo, else a Google image; never Gemini.
+
+    What auto-drafts set (`Page.auto_draft_images`). Unlike `hero_from_source`
+    a source with no reusable photo is not a dead end: the search runs instead.
     """
 
     hero_image_path: str | None = None

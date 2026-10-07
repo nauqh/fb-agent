@@ -151,6 +151,7 @@ erDiagram
         int auto_draft_competitor_min_reactions "null = any"
         int auto_draft_rss_count "drafts a day; null = off"
         text auto_draft_rss_instructions "what the model picks by; null = newest"
+        bool auto_draft_images "false = text-only auto-drafts; true = source photo, else Google"
         text system_prompt "null = the file"
         text first_comment_prompt "null = the file"
         text overlay_prompt "null = the file"
@@ -252,6 +253,7 @@ erDiagram
         text template "card | full_overlay | photo; null takes the Page's"
         bool no_image "text-only post, no composite at all"
         bool hero_from_source "use the source's own picture, not a paid one"
+        bool hero_search "source photo, else a Google image; never the image model"
         text hero_image_path
         text composed_image_path
         text inset_image_path "the uploaded circular inset, or null"

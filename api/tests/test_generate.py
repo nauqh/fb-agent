@@ -1,5 +1,7 @@
 """The run. Generate is the only thing that writes a Source Item."""
 
+from types import SimpleNamespace
+
 import httpx
 import pytest
 from pydantic_ai.messages import BinaryImage
@@ -2258,3 +2260,57 @@ def _same_picture(stored: bytes, original: bytes) -> bool:
 
     with Image.open(io.BytesIO(stored)) as a, Image.open(io.BytesIO(original)) as b:
         return a.format == "JPEG" and a.size == b.size
+
+
+# --- hero_search: the source's photo, else Google; never the image model -----
+
+
+def _searched(session, page, monkeypatch, source: SourceItemBase) -> tuple[Draft, list]:
+    from app.image import hero
+
+    def no_model(*a, **k):
+        raise AssertionError("hero_search must not call the image model")
+
+    png = _feed_png(monkeypatch)
+    searches = []
+
+    def found(post, subject=None, **k):
+        searches.append(subject)
+        return SimpleNamespace(png=png)
+
+    monkeypatch.setattr(hero, "generate", no_model)
+    monkeypatch.setattr(generate.inset, "find_for_post", found)
+    monkeypatch.setattr(generate, "competitor_image", lambda *a, **k: None)
+    [draft_id] = generate.start_run(session, [page.id], [source], hero_search=True)
+    session.commit()
+    generate.run_drafts([draft_id])
+    session.expire_all()
+    return session.get(Draft, draft_id), searches
+
+
+def test_a_searched_hero_takes_a_google_image_for_a_competitor_post(
+    session, page, written, monkeypatch
+):
+    competitor = SourceItem(
+        kind=SourceKind.COMPETITOR_POST,
+        external_id="rival-2",
+        text="A story",
+        image_url="https://example.com/theirs.jpg",
+    )
+    session.add(competitor)
+    session.commit()
+
+    draft, searches = _searched(session, page, monkeypatch, competitor)
+
+    assert len(searches) == 1
+    assert draft.hero_image_path and draft.composed_image_path
+
+
+def test_a_searched_hero_prefers_the_feeds_own_photo(session, page, written, monkeypatch):
+    source = _rss()
+    source.image_url = "https://example.com/photo.jpg"
+
+    draft, searches = _searched(session, page, monkeypatch, source)
+
+    assert searches == []
+    assert draft.hero_image_path

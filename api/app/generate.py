@@ -182,6 +182,7 @@ def start_run(
     prompt_template_id: int | None = None,
     find_inset: bool = False,
     inset_source: str | None = None,
+    hero_search: bool = False,
 ) -> list[int]:
     """Insert one placeholder Draft per (source × page) and return the ids.
 
@@ -229,6 +230,7 @@ def start_run(
                 else None
             ),
             no_image=no_image,
+            hero_search=hero_search and not no_image,
             # A text-only post has no card to put a circle on.
             find_inset=find_inset and not no_image,
             # Only meaningful beside a find; stored otherwise it would read as a
@@ -540,7 +542,7 @@ def build_image(session: Session, draft: Draft, page: Page) -> list[str]:
 
         if draft.hero_image_path:
             image_bytes = media.store.read(draft.hero_image_path)
-        elif draft.hero_from_source:
+        elif draft.hero_from_source or draft.hero_search:
             # The publisher's own photograph. Free, and the rights are whatever
             # the feed already carried - which is the whole reason this is worth
             # having beside a model that cannot browse.
@@ -561,21 +563,29 @@ def build_image(session: Session, draft: Draft, page: Page) -> list[str]:
             # where an AI or stock image would be wrong. A web article's
             # og:image is the same case - the publisher's own photograph of the
             # story.
-            if source is None or source.kind not in (
+            reusable = source is not None and source.kind in (
                 SourceKind.RSS,
                 SourceKind.TWEET,
                 SourceKind.WEB,
-            ):
+            )
+            if draft.hero_search and not (reusable and source.image_url):
+                # ponytail: the inset's pick instructions, written for a small
+                # circle; a hero-specific prompt if the choices look wrong.
+                image_bytes = inset.find_for_post(
+                    post_text(draft), draft.inset_subject, source="google"
+                ).png
+            elif not reusable:
                 return [
                     f"{IMAGE_WARNING}a competitor post's picture is never reused; "
                     "it belongs to whoever published it."
                 ]
-            if not source.image_url:
+            elif not source.image_url:
                 return [
                     f"{IMAGE_WARNING}this draft was set to use the feed's "
                     "picture and its source has none."
                 ]
-            image_bytes = hero.from_url(source.image_url)
+            else:
+                image_bytes = hero.from_url(source.image_url)
             store_image(draft, "hero_image_path", image_bytes, "hero")
         else:
             style = None

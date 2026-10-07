@@ -733,8 +733,9 @@ def rebuild_image(
     if new_hero:
         draft.hero_image_path = None
         # Otherwise `build_image` fetches the feed's photograph again: the same
-        # picture, free, with the prompt ignored.
+        # picture, free, with the prompt ignored. A search would run again too.
         draft.hero_from_source = False
+        draft.hero_search = False
 
     # Rebound rather than appended: `warnings` is a plain JSON column, so an
     # in-place edit does not mark the row dirty and never persists.
@@ -805,6 +806,7 @@ def _set_hero(session: Session, draft: Draft, page: Page, png: bytes, how: str) 
     """Store a picture the operator chose as the hero, and redraw the card on it."""
     generate.store_image(draft, "hero_image_path", png, "hero")
     draft.hero_from_source = False
+    draft.hero_search = False
     # A chosen picture is a change of mind about text-only. Left set,
     # `build_image` skips the draft, so the hero is stored and shown and no card
     # is ever drawn - a picture that looks ready and cannot be published.

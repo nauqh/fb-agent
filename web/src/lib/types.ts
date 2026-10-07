@@ -96,6 +96,8 @@ export interface Page {
   auto_draft_rss_count: number | null;
   /** What the model picks feed items by. Null takes the newest. */
   auto_draft_rss_instructions: string | null;
+  /** False makes auto-drafts text-only. True: the source's photo, else a Google image. */
+  auto_draft_images: boolean;
 
   /** This Page's own prompt text, or null to inherit the file. Edited through
    *  `setPromptFile`, and read back through `listPromptFiles`. */
@@ -226,6 +228,8 @@ export interface Draft {
    * took.
    */
   hero_from_source: boolean;
+  /** Source photo, else a Google image. What auto-drafts use. */
+  hero_search: boolean;
   /** `card` or `full_overlay` for this draft alone. Null follows the Page. */
   template: "card" | "full_overlay" | "photo" | null;
   /**

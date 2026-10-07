@@ -117,16 +117,20 @@ def run(
         logger.bind(page=page.name).info("No auto-draft for {}: {}", page.name, note)
     else:
         draft_ids = generate.start_run(
-            session,
-            [page.id],
-            list(items),
-            hero_from_source=hero_from_source,
+            session, [page.id], list(items), hero_from_source=hero_from_source, **_pictures(page)
         )
         if len(items) < target:
             note = f"Only {len(items)} post(s) left to write about, asked for {target}"
 
     _record(session, page, SourceKind.COMPETITOR_POST, draft_ids, available(session, page), note)
     return draft_ids
+
+
+def _pictures(page: Page) -> dict:
+    """Text-only, or the source's photo else a Google image. Never the image model."""
+    if not page.auto_draft_images:
+        return {"no_image": True}
+    return {"hero_search": True}
 
 
 def _record(
@@ -240,7 +244,11 @@ def run_rss(
             notes.insert(0, "No unused feed items fit" if unused else "No unused feed items left")
         else:
             draft_ids = generate.start_run(
-                session, [page.id], list(items), hero_from_source=hero_from_source
+                session,
+                [page.id],
+                list(items),
+                hero_from_source=hero_from_source,
+                **_pictures(page),
             )
             if len(items) < target:
                 notes.insert(0, f"Only {len(items)} item(s) fit, asked for {target}")
