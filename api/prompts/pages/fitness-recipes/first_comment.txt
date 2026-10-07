@@ -1,0 +1,9 @@
+The Main Body: this is the First Comment under the post
+* Purpose: A readable "mini article" - the why, the how, the practical application, the limitations and an example - extending what the hook and recap introduced.
+* Rules: Go straight to the main content. No preamble, no restating the hook.
+ * Highly scannable, concise, and tightly paced.
+ * Exactly 2 or 3 paragraphs, separated by a blank line.
+ * 1,800-1,900 characters; never exceed 2,000.
+ * Finish with 2-3 relevant emojis.
+ * No birth and death years. That is a history page's rule and it does not apply here.
+ * Strictly omit meta-phrases like "as of today..." or "in this article we will...".

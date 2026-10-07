@@ -100,6 +100,7 @@ export interface Page {
   /** This Page's own prompt text, or null to inherit the file. Edited through
    *  `setPromptFile`, and read back through `listPromptFiles`. */
   system_prompt: string | null;
+  first_comment_prompt: string | null;
   overlay_prompt: string | null;
   image_prompt: string | null;
 
@@ -296,6 +297,7 @@ export interface PromptTemplate {
   /** The Page the style belongs to - every style is one Page's. */
   page_id: number;
   system_prompt: string | null;
+  first_comment_prompt: string | null;
   overlay_prompt: string | null;
   image_prompt: string | null;
   /** Null follows the Page; a bool overrides it for this style. */

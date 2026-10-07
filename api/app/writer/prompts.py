@@ -146,10 +146,11 @@ def source_of(name: str, page_name: str | None = None):
 
 COLUMN = {
     "system.txt": "system_prompt",
+    "first_comment.txt": "first_comment_prompt",
     "overlay.txt": "overlay_prompt",
     "image.txt": "image_prompt",
 }
-"""Which `Page` column overrides which file, for the three known prompts.
+"""Which `Page` column overrides which file, for the known prompts.
 
 A prompt with no column here can only be a file. That is deliberate: the column
 exists to be edited from the Settings screen, and a prompt nothing edits does
@@ -201,6 +202,10 @@ def system_prompt(layout: Layout, page_name: str | None = None, page=None) -> st
     return _read("system.txt", layout, page_name, page)
 
 
+def first_comment_prompt(layout: Layout, page_name: str | None = None, page=None) -> str:
+    return _read("first_comment.txt", layout, page_name, page)
+
+
 def overlay_prompt(layout: Layout, page_name: str | None = None, page=None) -> str:
     return _read("overlay.txt", layout, page_name, page)
 
@@ -209,7 +214,7 @@ def image_prompt(layout: Layout, page_name: str | None = None, page=None) -> str
     return _read("image.txt", layout, page_name, page)
 
 
-ORDER = ("system.txt", "overlay.txt", "image.txt")
+ORDER = ("system.txt", "first_comment.txt", "overlay.txt", "image.txt")
 """Reading order, which is also the order the run uses them in."""
 
 

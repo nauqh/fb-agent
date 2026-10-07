@@ -68,7 +68,7 @@ class PromptEdit(BaseModel):
     """The Page's own text. `null` clears the override and returns the Page to
     the inherited file. A non-null blank keeps the new overlay semantics: for
     `overlay.txt` an empty string is the explicit no-overlay opt-out (see
-    `prompts.stored`), for the other two it clears like `null`."""
+    `prompts.stored`), for the others it clears like `null`."""
 
 
 @router.get("")
@@ -120,7 +120,7 @@ def set_prompt(
 
     # Three states, and they have to stay distinct: `None` is "back to the
     # file", `""` on overlay.txt is the no-overlay opt-out (`prompts.stored`),
-    # and text is the override. For system/image an empty box clears like
+    # and text is the override. For the others an empty box clears like
     # `None` - an emptied textarea there has never meant anything else.
     if edit.body is None:
         setattr(page, column, None)
@@ -140,8 +140,9 @@ def set_prompt(
 # --- the template library ----------------------------------------------------
 #
 # The client's 2026-08-20 request: named post styles, each carrying its own
-# system/overlay/image text, selectable at run time. A style's text replaces
-# the Page's prompt of the same kind (client, 2026-10-04); blank uses the Page's.
+# system, first comment, overlay and image text, selectable at run time. A
+# style's text replaces the Page's prompt of the same kind (client,
+# 2026-10-04); blank uses the Page's.
 #
 # Its own sub-router, registered before `router` in `main.py`: `PUT
 # /templates/{id}` under the router above would match `/{page_id}/{filename}`
@@ -155,6 +156,7 @@ class TemplateBody(BaseModel):
     page_id: int
     """The Page the style belongs to - every style is one Page's."""
     system_prompt: str | None = None
+    first_comment_prompt: str | None = None
     overlay_prompt: str | None = None
     image_prompt: str | None = None
     write_first_comment: bool | None = None
@@ -172,6 +174,7 @@ def _template_out(row: PromptTemplate) -> TemplateOut:
         name=row.name,
         page_id=row.page_id,
         system_prompt=row.system_prompt,
+        first_comment_prompt=row.first_comment_prompt,
         overlay_prompt=row.overlay_prompt,
         image_prompt=row.image_prompt,
         write_first_comment=row.write_first_comment,
@@ -214,11 +217,13 @@ def create_template(
     if (
         _overlay(body.overlay_prompt) is None
         and body.write_first_comment is None
-        and not any((text or "").strip() for text in (body.system_prompt, body.image_prompt))
+        and not any((text or "").strip() for text in (
+            body.system_prompt, body.first_comment_prompt, body.image_prompt
+        ))
     ):
         raise HTTPException(
             422,
-            "A template with all three prompts blank changes nothing - it "
+            "A template with every prompt blank changes nothing - it "
             "would only add a dropdown entry. Leave the prompts blank by not "
             "creating it.",
         )
@@ -232,6 +237,7 @@ def create_template(
         name=name,
         page_id=body.page_id,
         system_prompt=body.system_prompt,
+        first_comment_prompt=body.first_comment_prompt,
         overlay_prompt=body.overlay_prompt,
         image_prompt=body.image_prompt,
         write_first_comment=body.write_first_comment,
@@ -262,6 +268,7 @@ def update_template(
 
     row.name = name
     row.system_prompt = body.system_prompt
+    row.first_comment_prompt = body.first_comment_prompt
     row.overlay_prompt = _overlay(body.overlay_prompt)
     row.image_prompt = body.image_prompt
     row.write_first_comment = body.write_first_comment

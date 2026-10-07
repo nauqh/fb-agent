@@ -538,7 +538,8 @@ prompt, one loader each.
 
 | File | Model | What it does |
 |---|---|---|
-| `system.txt` | text | The post: hook ≤65 words no questions, recap of ≤5 emoji-led points, first comment of 2-3 paragraphs and no meta-phrases. The lengths are the house numbers, and a Page that sets its own gets them appended as an overriding block |
+| `system.txt` | text | The post: hook ≤65 words no questions, recap of ≤5 emoji-led points. The lengths are the house numbers, and a Page that sets its own gets them appended as an overriding block |
+| `first_comment.txt` | text | The first comment: 2-3 paragraphs, its length, no meta-phrases. Not sent when the post has no first comment |
 | `overlay.txt` | text | The panel copy, then 5-8 short substrings quoted verbatim out of it |
 | `image.txt` | image | How the photo should look, which layer to draw, and what must not appear in it |
 

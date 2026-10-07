@@ -28,6 +28,7 @@ export interface TemplateBody {
   page_id: number;
   /** Blank clears the field - the template then inherits that prompt. */
   system_prompt?: string | null;
+  first_comment_prompt?: string | null;
   overlay_prompt?: string | null;
   image_prompt?: string | null;
   write_first_comment?: boolean | null;

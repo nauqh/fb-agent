@@ -1589,9 +1589,10 @@ function PromptEditor({ pageId, file }: { pageId: number; file: PromptFile }) {
   );
 }
 
-/** The three prompts a style can replace, in the order the writer reads them. */
+/** The prompts a style can replace, in the order the writer reads them. */
 const TEMPLATE_FIELDS = [
   { field: "system_prompt", label: "System", hint: "The post's shape and voice." },
+  { field: "first_comment_prompt", label: "First comment", hint: "Rules for the main body." },
   { field: "overlay_prompt", label: "Overlay", hint: "Rules for the text panel." },
   { field: "image_prompt", label: "Image", hint: "Photography rules for the hero." },
 ] as const;
@@ -1656,7 +1657,7 @@ function PostStyles({
                     .concat(
                       template.write_first_comment === false
                         ? ["No first comment"]
-                        : template.write_first_comment
+                        : template.write_first_comment && !template.first_comment_prompt?.trim()
                           ? ["First comment"]
                           : [],
                     )
@@ -1776,6 +1777,7 @@ function TemplateForm({
   const [form, setForm] = useState<Record<TemplateField | "name", string>>(() => ({
     name: initial?.name ?? "",
     system_prompt: initial?.system_prompt ?? "",
+    first_comment_prompt: initial?.first_comment_prompt ?? "",
     overlay_prompt: initial?.overlay_prompt ?? "",
     image_prompt: initial?.image_prompt ?? "",
   }));
@@ -1807,11 +1809,13 @@ function TemplateForm({
     (overlay !== null ||
       firstComment !== null ||
       form.system_prompt.trim() !== "" ||
+      form.first_comment_prompt.trim() !== "" ||
       form.image_prompt.trim() !== "");
   const dirty =
     initial === undefined ||
     form.name !== initial.name ||
     form.system_prompt !== (initial.system_prompt ?? "") ||
+    form.first_comment_prompt !== (initial.first_comment_prompt ?? "") ||
     form.image_prompt !== (initial.image_prompt ?? "") ||
     overlay !== (initial.overlay_prompt == null ? null : initial.overlay_prompt.trim()) ||
     firstComment !== (initial.write_first_comment ?? null);
@@ -1823,6 +1827,7 @@ function TemplateForm({
         name: form.name.trim(),
         page_id: pageId,
         system_prompt: form.system_prompt.trim() || null,
+        first_comment_prompt: form.first_comment_prompt.trim() || null,
         overlay_prompt: overlay,
         image_prompt: form.image_prompt.trim() || null,
         write_first_comment: firstComment,
@@ -1877,8 +1882,23 @@ function TemplateForm({
               <NativeSelectOption value="none">No overlay text</NativeSelectOption>
               <NativeSelectOption value="own">Own rules for this style</NativeSelectOption>
             </NativeSelect>
+          ) : field === "first_comment_prompt" ? (
+            <NativeSelect
+              id="template-first-comment"
+              ariaLabel="First comment for this style"
+              value={firstComment === null ? "page" : firstComment ? "on" : "off"}
+              onValueChange={(value) =>
+                setFirstComment(value === "page" ? null : value === "on")
+              }
+              className="flex max-w-72"
+            >
+              <NativeSelectOption value="page">Use this Page&apos;s setting</NativeSelectOption>
+              <NativeSelectOption value="on">Write one</NativeSelectOption>
+              <NativeSelectOption value="off">No first comment</NativeSelectOption>
+            </NativeSelect>
           ) : null}
-          {field !== "overlay_prompt" || overlayMode === "own" ? (
+          {(field !== "overlay_prompt" || overlayMode === "own") &&
+          (field !== "first_comment_prompt" || firstComment !== false) ? (
             <Textarea
               id={`template-${field}`}
               rows={4}
@@ -1893,7 +1913,9 @@ function TemplateForm({
             />
           ) : null}
           <p className="pt-1 text-[12px] text-muted-foreground">
-            {field === "overlay_prompt" && overlayMode === "none"
+            {field === "first_comment_prompt" && firstComment === false
+              ? "Drafts in this style get no first comment."
+              : field === "overlay_prompt" && overlayMode === "none"
               ? "Drafts in this style get the image and logo only."
               : field === "overlay_prompt" && overlayMode === "page"
                 ? "This style follows the Page's overlay prompt."
@@ -1903,28 +1925,6 @@ function TemplateForm({
           </p>
         </div>
       ))}
-
-      <div>
-        <div className="flex items-baseline justify-between gap-3">
-          <Label htmlFor="template-first-comment" className="text-[13px] font-medium">
-            First comment
-          </Label>
-          <span className="text-[11px] text-muted-foreground">The main body under the post.</span>
-        </div>
-        <NativeSelect
-          id="template-first-comment"
-          ariaLabel="First comment for this style"
-          value={firstComment === null ? "page" : firstComment ? "on" : "off"}
-          onValueChange={(value) =>
-            setFirstComment(value === "page" ? null : value === "on")
-          }
-          className="mt-2 flex max-w-72"
-        >
-          <NativeSelectOption value="page">Use this Page&apos;s setting</NativeSelectOption>
-          <NativeSelectOption value="on">Write one</NativeSelectOption>
-          <NativeSelectOption value="off">No first comment</NativeSelectOption>
-        </NativeSelect>
-      </div>
 
       <div className="flex items-center gap-3">
         <Button size="sm" disabled={!writable || !dirty || busy} onClick={() => void save()}>

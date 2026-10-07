@@ -151,6 +151,7 @@ def test_a_post_style_replaces_the_page_prompts(page):
     template = SimpleNamespace(
         name="Meme",
         system_prompt="The post is one image and one line. No essay.",
+        first_comment_prompt=None,
         overlay_prompt="The panel holds the line, in capitals.",
         image_prompt=None,
         write_first_comment=None,
@@ -170,6 +171,7 @@ def test_a_post_style_with_only_an_image_prompt_changes_no_text_instructions(pag
     template = SimpleNamespace(
         name="Bright",
         system_prompt=None,
+        first_comment_prompt=None,
         # None, not "": a style's empty string is "no overlay text".
         overlay_prompt=None,
         image_prompt="Bright daylight.",
@@ -758,6 +760,7 @@ def test_an_emptied_overlay_prompt_instructs_no_overlay_unless_the_style_has_its
     template = SimpleNamespace(
         name="Meme",
         system_prompt=None,
+        first_comment_prompt=None,
         overlay_prompt="The panel holds the line, in capitals.",
         image_prompt=None,
         write_first_comment=None,
@@ -777,11 +780,11 @@ def test_a_style_with_no_overlay_text_instructs_no_overlay_on_its_own(page):
     panel. A style's overlay stored as `""` opts its drafts out even though the
     Page itself has an overlay prompt; `None` uses the Page's and does not."""
     no_panel = SimpleNamespace(
-        name="Photo", system_prompt=None, overlay_prompt="", image_prompt="Bright.",
+        name="Photo", system_prompt=None, first_comment_prompt=None, overlay_prompt="", image_prompt="Bright.",
         write_first_comment=None,
     )
     inherits = SimpleNamespace(
-        name="Photo", system_prompt=None, overlay_prompt=None, image_prompt="Bright.",
+        name="Photo", system_prompt=None, first_comment_prompt=None, overlay_prompt=None, image_prompt="Bright.",
         write_first_comment=None,
     )
 
@@ -791,7 +794,7 @@ def test_a_style_with_no_overlay_text_instructs_no_overlay_on_its_own(page):
 
 def test_a_page_with_an_overlay_prompt_never_sees_the_no_overlay_instruction(page):
     template = SimpleNamespace(
-        name="Meme", system_prompt=None, overlay_prompt="Panel rules.", image_prompt=None,
+        name="Meme", system_prompt=None, first_comment_prompt=None, overlay_prompt="Panel rules.", image_prompt=None,
         write_first_comment=None,
     )
 
@@ -867,6 +870,7 @@ def _style(write_first_comment):
     return SimpleNamespace(
         name="Infographic",
         system_prompt=None,
+        first_comment_prompt=None,
         overlay_prompt=None,
         image_prompt="Bright.",
         write_first_comment=write_first_comment,
@@ -889,6 +893,22 @@ def test_a_style_overrides_the_pages_first_comment_setting_either_way():
     assert "NO FIRST COMMENT" in writer._instructions(on_page, layout, _style(False))
     assert "NO FIRST COMMENT" not in writer._instructions(off_page, layout, _style(True))
     assert "NO FIRST COMMENT" in writer._instructions(off_page, layout, _style(None))
+
+
+def test_a_style_replaces_the_first_comment_rules_and_none_are_sent_without_one():
+    from app.settings import layout
+
+    page = _page()
+    house = prompts.first_comment_prompt(layout, page.name, page)
+    style = _style(None)
+    style.first_comment_prompt = "Three short tips, one per paragraph."
+
+    styled = writer._instructions(page, layout, style)
+    assert house in writer._instructions(page, layout)
+    assert house not in styled
+    assert "Three short tips, one per paragraph." in styled
+    assert "LENGTHS FOR THIS PAGE" in styled, "the house lengths went with the house rules"
+    assert house not in writer._instructions(_page(write_first_comment=False), layout)
 
 
 def test_a_style_replacing_the_system_prompt_is_still_told_the_lengths():

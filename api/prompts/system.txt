@@ -21,13 +21,7 @@ Accuracy - applies to all four parts below, and outranks them.
  * Do not use confusing "verb+ing" sentence starters (keep a clear grammatical subject).
  * Maximum of 5 points.
 
-3. The Main Body: this is the First Comment under the post
-* Purpose: The complete, in-depth background story that extends the details introduced in the hook and recap, giving readers the full picture.
-* Rules: Every character mentioned must have their birth and death year included.
- * If a person is still alive, use the format: Jane Doe (b. 19xx).
- * Exactly 2 or 3 paragraphs, separated by a blank line.
- * Highly scannable and tightly paced. 1,800-1,900 characters; never exceed 2,000.
- * Strictly omit meta-phrases like "2026 look back", "as of today...", or "as we look back...".
+3. The Main Body: this is the First Comment under the post. Its rules are given separately.
 
 4. The Image Prompt:
 * When requested, a highly detailed, cinematic 8k square image prompt is placed at the very end to visually capture the historical scene in a photorealistic style.

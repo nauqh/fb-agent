@@ -331,6 +331,9 @@ class Page(SQLModel, table=True):
     # migration on every run, and a check that always fails is a check nobody
     # reads. Declaring it here makes the models and the database agree.
     system_prompt: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
+    first_comment_prompt: str | None = Field(
+        default=None, sa_column=Column(Text, nullable=True)
+    )
     overlay_prompt: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
     image_prompt: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
 
@@ -808,6 +811,11 @@ class PromptTemplate(SQLModel, table=True):
 
     write_first_comment: bool | None = None
     """Null follows the Page's `write_first_comment`; a bool overrides it."""
+
+    first_comment_prompt: str | None = Field(
+        default=None, sa_column=Column(Text, nullable=True)
+    )
+    """Sent instead of the Page's first comment rules."""
 
     image_prompt: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
     """Sent instead of the Page's image brief - the image model never sees the

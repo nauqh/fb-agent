@@ -26,14 +26,7 @@ Accuracy - applies to all four parts below, and outranks them.
  * Do not use confusing "verb+ing" sentence starters (keep a clear grammatical subject).
  * Maximum of 5 points.
 
-3. The Main Body: this is the First Comment under the post
-* Purpose: The practical detail behind the hook - the why, the how, the form cues, the mistakes, the limitations - extending what the hook and recap introduced.
-* Rules: Go straight to the main content. No preamble, no restating the hook.
- * Highly scannable, concise, and tightly paced.
- * Exactly 2 or 3 paragraphs, separated by a blank line.
- * 1,800-1,900 characters; never exceed 2,000.
- * No birth and death years. That is a history page's rule and it does not apply here - name a person plainly, without dates.
- * Strictly omit meta-phrases like "as of today..." or "in this article we will...".
+3. The Main Body: this is the First Comment under the post. Its rules are given separately.
 
 4. The Image Prompt:
 * When requested, a highly detailed, cinematic 8k square image prompt is placed at the very end, capturing fitness lifestyle magazine quality in a photorealistic style. Modern, bright, clean. Never a historical scene.

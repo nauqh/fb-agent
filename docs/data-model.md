@@ -68,7 +68,8 @@ that should not publish does not get generated for.
 Three tiers, resolved in this order by
 [`app/writer/prompts.py`](../api/app/writer/prompts.py) on every call:
 
-1. `page.system_prompt` / `overlay_prompt` / `image_prompt` - a `TEXT` column,
+1. `page.system_prompt` / `first_comment_prompt` / `overlay_prompt` /
+   `image_prompt` - a `TEXT` column,
    null unless somebody typed into Settings
 2. `api/prompts/pages/<slug>/*.txt` - a committed per-Page file. Two exist:
    `bodybuilding-tips-n-tricks/` and `fitness-recipes/`
@@ -151,6 +152,7 @@ erDiagram
         int auto_draft_rss_count "drafts a day; null = off"
         text auto_draft_rss_instructions "what the model picks by; null = newest"
         text system_prompt "null = the file"
+        text first_comment_prompt "null = the file"
         text overlay_prompt "null = the file"
         text image_prompt "null = the file"
         ts created_at
@@ -230,6 +232,7 @@ erDiagram
         text system_prompt "a delta, null = nothing layered"
         text overlay_prompt "null = the Page's; empty = no overlay text"
         bool write_first_comment "null = the Page's"
+        text first_comment_prompt "null = the Page's"
         text image_prompt
     }
 

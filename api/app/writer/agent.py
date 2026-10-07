@@ -136,30 +136,35 @@ def _instructions(page: Page, layout: Layout, template=None) -> str:
     it wins over whatever the inherited prose says.
 
     **A post style replaces, it does not layer** (client, 2026-10-04). A style
-    with system text is sent instead of the Page's system prompt, and its
-    overlay instead of the Page's overlay prompt. A blank field falls back to
-    the Page's.
+    with system text is sent instead of the Page's system prompt, and likewise
+    its first comment and overlay text. A blank field falls back to the Page's.
     """
     system = prompts.system_prompt(layout, page.name, page)
+    body = prompts.first_comment_prompt(layout, page.name, page)
     overlay = prompts.overlay_prompt(layout, page.name, page)
     # The house lengths live in the Page's prompt prose, so a style replacing
     # it takes them away and the check fails a rule the model was never given.
     own_system = template is not None and bool((template.system_prompt or "").strip())
+    own_body = template is not None and bool((template.first_comment_prompt or "").strip())
     if template is not None:
         if own_system:
             system = prompts.substitute(template.system_prompt, layout)
+        if own_body:
+            body = prompts.substitute(template.first_comment_prompt, layout)
         # None uses the Page's overlay prompt; "" is "no overlay text".
         if template.overlay_prompt is not None:
             overlay = prompts.substitute(template.overlay_prompt, layout)
+    first_comment = writes_first_comment(page, template)
     parts = [
         system,
+        # A post with no first comment is not sent its rules at all.
+        *([body] if first_comment else []),
         overlay,
         f"You are writing for the Facebook page {page.name}.",
     ]
     house = validators.Limits()
     limits = validators.Limits.for_page(page)
-    first_comment = writes_first_comment(page, template)
-    if limits != house or own_system:
+    if limits != house or own_system or own_body:
         low, high = limits.paragraphs
         lines = [f"- The hook must be at most {limits.hook_max_words} words."]
         if first_comment:
