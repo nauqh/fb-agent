@@ -1445,11 +1445,15 @@ function Prompts({
       ) : (
         <div className="space-y-4">
           {/* The shared pill shell (`ui/tabs.tsx`) rather than a second
-              hand-rolled one: the three are alternatives, not a list, and
+              hand-rolled one: the files are alternatives, not a list, and
               which one you are editing has to stay visible while the textarea
-              is 400px tall. */}
+              is 400px tall. One column per file, so a new prompt file cannot
+              wrap onto a second row. */}
           <Tabs value={active?.filename ?? ""} onValueChange={setOpen}>
-            <TabsList className="grid w-full max-w-xl grid-cols-3">
+            <TabsList
+              className="grid w-full max-w-2xl"
+              style={{ gridTemplateColumns: `repeat(${files.length}, minmax(0, 1fr))` }}
+            >
               {files.map((file) => (
                 <TabsTrigger
                   key={file.filename}
