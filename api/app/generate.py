@@ -588,7 +588,9 @@ def build_image(session: Session, draft: Draft, page: Page) -> list[str]:
             store_image(draft, "hero_image_path", image_bytes, "hero")
         else:
             style = None
-            subject = draft.image_prompt or ""
+            # Text-only and hand-written drafts can have no prompt. Empty, the
+            # model is sent only the brief and draws something unrelated.
+            subject = (draft.image_prompt or "").strip() or post_text(draft)[:1000]
             if draft.prompt_template_id:
                 post_style = session.get(PromptTemplate, draft.prompt_template_id)
                 if post_style and (post_style.image_prompt or "").strip():

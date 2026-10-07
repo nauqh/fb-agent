@@ -1529,6 +1529,32 @@ def test_an_uploaded_hero_ends_text_only(client, written, a_photograph):
     assert draft["composed_image_path"], "the hero was kept but no card was drawn"
 
 
+def test_regenerating_a_text_only_draft_draws_a_card(client, written, illustrated):
+    """The same skip as above, through Regenerate: the button reported a new
+    hero while `build_image` returned early on `no_image` and drew nothing."""
+    client.post("/generate", json={"page_ids": [1], "topic": "x", "no_image": True})
+
+    draft = client.post("/drafts/1/image?new_hero=true").json()
+
+    assert draft["no_image"] is False
+    assert draft["hero_image_path"] and draft["composed_image_path"]
+
+
+def test_a_hero_with_no_prompt_is_drawn_from_the_post(client, written, monkeypatch):
+    from app.image import hero
+
+    asked = []
+    monkeypatch.setattr(
+        hero, "generate", lambda prompt, *a, **k: asked.append(prompt) or (_ for _ in ()).throw(hero.HeroError("stop"))
+    )
+    client.post("/generate", json={"page_ids": [1], "topic": "x", "no_image": True})
+    client.patch("/drafts/1", json={"image_prompt": ""})
+
+    client.post("/drafts/1/image?new_hero=true")
+
+    assert asked and GOOD.hook in asked[0]
+
+
 def test_an_uploaded_hero_is_no_longer_the_feeds_photograph(
     client, written, illustrated, a_photograph, monkeypatch
 ):
