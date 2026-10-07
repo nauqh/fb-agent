@@ -1,555 +1,366 @@
 # Data model
 
-Supabase Postgres, via SQLModel. No `user_id` (ADR-0002). No schedule table
-(ADR-0001). No `brand_key` (ADR-0003).
+What fb-agent stores, why it stores it, and how data moves through the app.
+The reasoning for each column is in its docstring in
+[`api/app/models.py`](../api/app/models.py). This page is the map.
 
-Enum columns are stored as `VARCHAR`, never as a native Postgres enum - see
-`models._stored_enum`, which carries the reasoning. That predates Alembic and
-survived it: `ALTER TYPE` is now a migration we could write, but a new enum
-member is a fact about the Python class, and making it a schema change as well
-buys nothing. It also keeps the SQLite test fixture building the same schema
-Postgres has.
+## Where data lives
 
-Schema changes are Alembic revisions in `api/alembic/versions/`.
+fb-agent owns only part of its data. Before adding a table, check which of
+these four places the data belongs in.
 
-**Eleven tables**, and it started at three. Nothing here is configuration
-duplicated across rows, external state mirrored locally, or tenancy ceremony -
-the three shapes this model is built to avoid. Each row docstring in `models.py`
-argues its own case:
-
-| | Revision | Why it could not stay out of the database |
+| Place | Holds | Why there |
 |---|---|---|
-| `PAGE_LAYOUT` | `3a5c60b49f2f` | per-Page overrides to the card. Null means the `layout.yml` value |
-| `FEED` | `103581b4d2f1` | the RSS list, editable without a deploy. A container has no writable `sources.yml` |
-| `PAGE_COMPETITOR` | `5dd689a49084` | which competitors feed which Pages. Metricool caps an *account* at 100 and has no such concept |
-| `PAGE_TIME_SLOT` | `e95cf1ff6545` | the times a Page publishes at. Policy, not schedule state - see ADR-0001 |
-| `SAVED_POST` | `85d4da17f9d6` | a published post kept on purpose. Metricool's stats take a date range, so a reference found there stops being readable once it ages out |
-| `PROMPT_TEMPLATE` | | a named post style the operator picks at run time. Each field is a *delta* over the Page's prompts, never a copy - see below |
-| `CTA_TEMPLATE` | | the Shorts tool's clip library. [youtube-tool.md](youtube-tool.md) |
-| `YOUTUBE_JOB` | | one processed Short. The row *is* the job record, exactly as `DRAFT` is for generation. [youtube-tool.md](youtube-tool.md) |
+| **Postgres** | Settings, drafts, the posts we read from, records of decisions | The only copy. Nothing else can rebuild it |
+| **Supabase bucket** (`fb-agent-media`, public) | Pictures: heroes, composites, insets, uploaded watermarks, Shorts | Facebook fetches the picture by URL when the post goes out, days later. Rows store a bucket-relative path, never a URL |
+| **Metricool** | The schedule, published posts, stats, the competitor list | Theirs. We ask, we never mirror it |
+| **Git** | Default prompts (`api/prompts/`), card layout (`api/config/layout.yml`), feed windows (`api/config/sources.yml`), the two committed watermarks | Reviewed and versioned. The database stores only a Page's overrides on top |
 
-The last two belong to the Shorts tool and touch nothing above them: no foreign
-key crosses between a Draft and a Short, and the two halves share only the
-process and the Metricool account.
+Three rules follow from this:
 
-The rule the first five share, and the reason none of them reverses ADR-0001:
-**nothing points *into* a row in any of them.** They all carry a `page_id`
-outward; none is the target of a foreign key. No `feed_id` on a Source Item, no
-slot id on a scheduled post, no competitor table for an assignment to key into.
-So deleting a Feed, a slot or an assignment changes tomorrow and nothing that
-already happened - which is the property that makes them safe to edit from a
-form.
+- **No schedule table.** When a post goes out is Metricool's answer.
+  `draft.metricool_post_id` is the only link we keep.
+- **No competitor table.** The list is configured in Metricool. We store only
+  which Page reads which competitor.
+- **No stats table.** Reactions and impressions are read live. A saved post
+  keeps the numbers it had when it was saved, and nothing else does.
 
-`PROMPT_TEMPLATE` is the one deliberate exception: `DRAFT.prompt_template_id` is
-a real foreign key into it, because a regenerate or a hero rebuild has to use the
-voice the draft was written in. Re-reading the operator's *current* selection
-would let a dropdown change retroactively rewrite half a draft in another voice.
-The price is that a style is not freely deletable once something has been
-generated under it, and that price is what the other five are avoiding.
+## What we store
 
-## Ten pages
+Twelve tables, in three groups. The group decides what happens to a row when
+the database moves, and whether anything ever deletes it.
 
-History Retraced, The Fact Feed, Bible Focus, Bodybuilding Tips N Tricks,
-Fitness Girls, Fitness Recipes, GYM Motivation, `GYM Motivation | quotes |
-videos | tips|`, Hot Tub Timeout, House of Common Sense.
+### Settings: the operator's decisions
 
-The eighth is why `watermark_text` is a column: `name` is the Metricool brand's
-name, and `GYM Motivation | quotes | videos | tips|` is not what anyone wants
-stamped on a photograph.
+Permanent. Only an edit on the Settings screen changes them. Moving to a new
+database MUST copy all of these.
 
-`PAGE` is a table rather than a constant, so each of the nine after the first was
-an insert - no schema change, no query rewritten (ADR-0003).
+| Table | One row is | Why we store it |
+|---|---|---|
+| `page` | One Facebook page we publish to | Identity (`facebook_page_id`, `metricool_blog_id`), the watermark, how long it writes, its prompt overrides, and its automation switches |
+| `page_layout` | One Page's changes to the card | Only the values the Page changed. Null means `layout.yml`. Deleting the row resets the Page |
+| `page_time_slot` | One time of day a Page publishes at | Publishing policy ("08:00 and 19:00"). Metricool has nowhere to keep it |
+| `feed` | One RSS feed a Page reads | The feed list has to change without a deploy, and the container's files are read-only |
+| `page_competitor` | One competitor assigned to one Page | Metricool allows 100 competitors per account, so one competitor is added once and assigned to every Page that should read it |
+| `prompt_template` | One named post style for one Page | A style picked at generate time. Each field replaces the Page's prompt; blank keeps the Page's |
+| `cta_template` | One end clip for Shorts | The Shorts tool's clip library |
 
-`is_active` is absent. Ten Pages and the flag would still never be false: a Page
-that should not publish does not get generated for.
+**Null means inherit.** Most settings columns are nullable. Null is not "the
+same value as the default", it is a pointer to the default, so changing a
+default moves every Page that never overrode it. A copied default would freeze
+the Page at today's value with nothing recording that anyone chose it. This
+applies to the prompt overrides, the writing lengths, `page_layout` and
+`prompt_template`.
 
-## Prompts are files, with per-Page overrides in the database
+**Prompts resolve in three tiers**, on every call, in
+[`app/writer/prompts.py`](../api/app/writer/prompts.py):
 
-Three tiers, resolved in this order by
-[`app/writer/prompts.py`](../api/app/writer/prompts.py) on every call:
+1. The Page's column (`page.system_prompt` and its siblings), if someone typed one.
+2. A committed per-Page file, `api/prompts/pages/<slug>/*.txt`.
+3. The house file, `api/prompts/*.txt`.
 
-1. `page.system_prompt` / `first_comment_prompt` / `overlay_prompt` /
-   `image_prompt` - a `TEXT` column,
-   null unless somebody typed into Settings
-2. `api/prompts/pages/<slug>/*.txt` - a committed per-Page file. Two exist:
-   `bodybuilding-tips-n-tricks/` and `fitness-recipes/`
-3. `api/prompts/*.txt` - the house prompts
+A post style, when one is picked, is applied on top of whichever tier won.
 
-The house prompts stay files: in git, reviewable, revertable, not editable from
-the screen. Only the overrides are rows, and the forcing reason is deployment -
-**Railway's filesystem is ephemeral**, so a Settings editor that wrote
-`prompts/pages/<slug>/system.txt` would lose every edit on the next redeploy.
+**The watermark** resolves the same way: an uploaded file
+(`watermark_upload_path`, in the bucket) wins over a committed one
+(`watermark_image_path`, under `api/assets/`). With neither, the card prints
+`watermark_text`, or the Page's name. `watermark_enabled = false` draws nothing
+at all. A configured file that will not load fails the draft rather than
+quietly printing the name.
 
-**A nullable override cannot drift, because it never holds a copy of what it
-inherits.** Null is not "the same text as the file" - it is a live pointer at
-the file, and editing the file moves every Page that has not overridden one.
-That property is the whole design: a stored *copy* of a prompt goes stale
-against the code it was pasted from, silently, and keeps generating.
+### Records: what happened, kept on purpose
 
-On top of the three tiers sits a fourth **layer**: a `PROMPT_TEMPLATE` row, the
-named post style chosen at run time. It is a delta laid over the resolved text,
-never a replacement for it, and it is per-Page.
+Small, and not rebuildable. Moving to a new database SHOULD copy these.
 
-Two numbers appear in both a prompt and the compositor and are substituted from
-`layout.yml` at read time rather than typed twice: `{panel_pct}` and
-`{highlight_color}`. Substitution happens after resolution, so a stored override
-and a template delta both get it, and no tier can contradict the compositor.
+| Table | One row is | Why we store it |
+|---|---|---|
+| `saved_post` | A published post someone, or auto-repost, decided to keep | Metricool's stats cover a date range, so a post drops out of every read as it ages. The row also carries auto-repost's memory: `repost_draft_id` (already reposted), `dismissed_at` (unsaved by hand, never save again) and `repost_error` (will never repost) |
+| `auto_draft_run` | One Page's share of one auto-draft run | A run that made nothing leaves no draft behind. This row is how the screen tells "the cron did not fire" from "there was nothing left to write about" |
 
-## How long a Page writes
+Without `saved_post`, the next auto-repost run would save the top posts again
+and schedule reposts the operator already has or already refused.
 
-Five nullable columns on `PAGE` - `hook_max_words`, `first_comment_min_chars`,
-`first_comment_max_chars`, `first_comment_min_paragraphs`,
-`first_comment_max_paragraphs` - read by `writer/validators.Limits`. Null means
-the house number: 65 words, 1,500-2,100 characters, 2-3 paragraphs.
+### Work: drafts and their inputs
 
-They are columns rather than prose in a prompt because **the prompt and the
-validator have to move together.** A prompt asking for 30 words while the
-validator accepts 65 does not produce 30-word hooks; it produces a rule nothing
-enforces. `Limits.disagrees()` also refuses an unsatisfiable band with a 422: a
-Page setting a 1,500 ceiling against a 1,500 floor would fail every draft at
-whichever end it missed.
+Disposable once published. A new database MAY start without these; the cost is
+in "Moving the database" below.
 
-Nullable rather than defaulted, for `PAGE_LAYOUT`'s reason: a copied default
-cannot be told from a chosen one, so changing the house number would leave every
-Page pinned to the old value with nothing recording that anyone meant it.
+| Table | One row is | Why we store it |
+|---|---|---|
+| `draft` | One generated post for one Page | It holds paid model output and the review state, and it is the job record: the row exists before generation starts, and progress is written to it |
+| `source_item` | One competitor post, tweet, RSS item or web page used as input | Competitor posts are stored on sync so the grid and the generator can read them by id. Tweets, RSS and web pages are fetched live and stored only when a draft is written from them |
+| `youtube_job` | One processed Short | The row is the job: queued, processing, completed or failed, with progress |
+
+**Draft status:**
+
+```
+generating ──> review ──> rejected
+     │           │  ▲          │
+     ▼           │  └──────────┘  (unapprove)
+   failed        ▼
+           published = metricool_post_id is set (status stays review)
+```
+
+`approved` is still a valid value for old rows. Nothing sets it any more.
+
+A published draft is **frozen**. Metricool holds a link to its composite, and
+a redraw would delete that file before Facebook fetches it. Caption, first
+comment and time can still change; the picture cannot. To change the picture,
+unschedule first.
+
+`metricool_post_id` changes on every edit, because Metricool has no in-place
+update: an edit deletes the post and creates a new one. Every edit writes the
+new id back. The value `queued` means Metricool accepted the post without
+naming it, so it can only be changed in Metricool's planner.
 
 ## ERD
 
+Key columns only. `models.py` has the full list.
+
 ```mermaid
 erDiagram
-    PAGE ||--o{ DRAFT : "targets"
-    PAGE ||--o{ SOURCE_ITEM : "surfaced for"
-    SOURCE_ITEM ||--o{ DRAFT : "seeds"
-    PAGE ||--o| PAGE_LAYOUT : "overrides the card"
-    PAGE ||--o{ FEED : "reads"
-    PAGE ||--o{ PAGE_COMPETITOR : "watches"
+    PAGE ||--o| PAGE_LAYOUT : "changes the card"
     PAGE ||--o{ PAGE_TIME_SLOT : "publishes at"
+    PAGE ||--o{ FEED : "reads"
+    PAGE ||--o{ PAGE_COMPETITOR : "reads"
+    PAGE ||--o{ PROMPT_TEMPLATE : "its styles"
+    PAGE ||--o{ DRAFT : "targets"
     PAGE ||--o{ SAVED_POST : "kept from"
-    PAGE ||--o{ PROMPT_TEMPLATE : "its post styles"
+    PAGE ||--o{ AUTO_DRAFT_RUN : "ran for"
+    SOURCE_ITEM ||--o{ DRAFT : "seeds"
     PROMPT_TEMPLATE ||--o{ DRAFT : "written under"
+    AUTO_DRAFT_RUN ||--o{ DRAFT : "made"
     DRAFT ||--o| SAVED_POST : "became, if ours"
+    DRAFT ||--o| SAVED_POST : "is the repost of"
+    CTA_TEMPLATE ||--o{ YOUTUBE_JOB : "appended to"
 
     PAGE {
         int id PK
-        text name UK "History Retraced"
+        text name UK
         text facebook_page_id UK "from Metricool"
         text metricool_blog_id
-        text avatar_image_path "committed; UI only, never the composite"
-        text avatar_url "Metricool's, unsigned - the other eight Pages"
-        text watermark_image_path "committed file under api/assets/"
-        text watermark_upload_path "bucket-relative; wins over the committed one"
-        text watermark_text "null = the Page's name"
-        bool watermark_enabled "off = a clean image"
-        text badge_text "the chip's word; null draws none"
-        int hook_max_words "null = the house 65"
-        int first_comment_min_chars "null = 1500"
-        int first_comment_max_chars "null = 2100"
-        int first_comment_min_paragraphs "null = 2"
-        int first_comment_max_paragraphs "null = 3"
-        bool write_first_comment "false = none, the caption is the whole post; null = write one"
-        int auto_draft_competitor_count "drafts a day; null = off"
-        int auto_draft_competitor_min_reactions "null = any"
-        int auto_draft_rss_count "drafts a day; null = off"
-        text auto_draft_rss_instructions "what the model picks by; null = newest"
-        text auto_draft_competitor_picture "none | google | generate"
-        text auto_draft_rss_picture "none | source | google | generate"
+        text watermark_upload_path "bucket; wins"
+        text watermark_image_path "committed file"
+        int hook_max_words "null = house number"
         text system_prompt "null = the file"
-        text first_comment_prompt "null = the file"
-        text overlay_prompt "null = the file"
-        text image_prompt "null = the file"
-        ts created_at
-        ts updated_at
+        int auto_save_min_reactions "null = off"
+        int auto_repost_after_days "null = off"
+        int auto_draft_competitor_count "null = off"
+        int auto_draft_rss_count "null = off"
     }
-
-    PAGE_LAYOUT {
-        int id PK
-        int page_id FK "unique - one row per Page"
-        text template "card | full_overlay | photo"
-        float panel_ratio "…and ~24 more, every one nullable"
-        text text_color "null means layout.yml, never a copy of it"
-        ts updated_at
-    }
-
-    FEED {
-        int id PK
-        int page_id FK
-        text name "the byline, curated - not the feed's own title"
-        text url
-        text note "why it earns its place; the probe result"
-        ts created_at
-    }
-
     PAGE_COMPETITOR {
-        int id PK
         int page_id FK
-        text competitor_page_id "Metricool's providerId - no FK, no competitor table"
-        text name "display name when assigned; never joined on"
-        text note "why this Page reads it"
-        ts created_at
+        text competitor_page_id "Metricool providerId, no FK"
     }
-
     PAGE_TIME_SLOT {
-        int id PK
         int page_id FK
-        int minute_of_day "0-1439, the Page's zone. Not a TIME, not a string"
-        ts created_at
+        int minute_of_day "0-1439, Asia/Ho_Chi_Minh"
     }
-
-    SAVED_POST {
-        int id PK
+    FEED {
         int page_id FK
-        text metricool_post_id "pageId_postId"
-        int draft_id FK "ours, when it came from this app"
-        text text
-        text permalink_url
-        text picture_url "Facebook CDN - expected to expire"
-        int reactions "what it scored WHEN SAVED. Never refreshed"
-        int impressions
-        text note "why it was worth keeping"
-        ts published_at
-        ts created_at
+        text name "the byline"
+        text url
     }
-
     SOURCE_ITEM {
         int id PK
         text kind "competitor_post | tweet | rss | web"
-        text external_id "post id, tweet id, feed guid, article URL"
-        text author "competitor name, handle, publisher"
-        int synced_for_page_id FK "competitor_post only"
-        text competitor_page_id "Metricool's providerId - joins to page_competitor"
-        text text
-        text url
-        text image_url
-        ts published_at
+        text external_id "unique with kind"
+        text competitor_page_id "joins page_competitor"
         int reactions
-        int comments
-        int shares
-        ts created_at
     }
-
-    PROMPT_TEMPLATE {
-        int id PK
-        int page_id FK "styles are one Page's, never global"
-        text name UK
-        text system_prompt "a delta, null = nothing layered"
-        text overlay_prompt "null = the Page's; empty = no overlay text"
-        bool write_first_comment "null = the Page's"
-        text first_comment_prompt "null = the Page's"
-        text image_prompt
-    }
-
     DRAFT {
         int id PK
         int page_id FK
-        int source_item_id FK "null = topic-only"
-        text topic
-        text status "generating | review | approved | rejected | failed"
-        int prompt_template_id FK "the style it was written under; stored, not re-derived"
-        text hook
-        text caption "the recap"
+        int source_item_id FK "null = from a topic"
+        int auto_draft_run_id FK "null = asked for by hand"
+        int prompt_template_id FK
+        text status
+        text hook "drawn on the card"
+        text caption
         text first_comment
-        json highlight_phrases
-        json hashtags "retained; nothing writes it since E1"
-        text image_prompt
-        text template "card | full_overlay | photo; null takes the Page's"
-        bool no_image "text-only post, no composite at all"
-        bool hero_from_source "use the source's own picture, not a paid one"
-        bool hero_search "a Google image, not the image model"
-        text hero_image_path
-        text composed_image_path
-        text inset_image_path "the uploaded circular inset, or null"
-        int inset_size_px "its diameter; null takes the layout default"
-        int inset_border_width_px "null takes the Page's"
-        text inset_border_color
-        float inset_x_ratio "its centre, as a fraction of the card"
-        float inset_y_ratio "null on either axis means the seam, not zero"
-        text metricool_post_id "the planner post. CHANGES ON EVERY EDIT"
-        json warnings
-        text progress_step
-        int progress_pct
-        text error
-        ts created_at
-        ts updated_at
+        text composed_image_path "bucket"
+        text metricool_post_id "set = published"
+    }
+    SAVED_POST {
+        int page_id FK
+        text metricool_post_id
+        int reactions "when saved, never refreshed"
+        bool auto_saved
+        int repost_draft_id FK
+        ts dismissed_at
+    }
+    AUTO_DRAFT_RUN {
+        int page_id FK
+        text source "competitor_post | rss"
+        int drafts_created
+        int available "left after this run"
+        text note "why fewer than asked"
+    }
+    YOUTUBE_JOB {
+        int cta_template_id FK
+        text status
+        text processed_video_path "bucket"
     }
 ```
 
-`UNIQUE (kind, external_id)` on `SOURCE_ITEM` - ticking the same RSS item twice
-must not create a second row.
+**Nothing points into the settings tables**, apart from `prompt_template`.
+`source_item` carries the publisher's name, not a `feed_id`; a scheduled post
+carries its own time, not a slot id. So deleting a feed, a slot or an
+assignment changes tomorrow and nothing that already happened.
+`draft.prompt_template_id` is the exception, on purpose: a regenerate has to
+use the style the draft was written in, not whatever is selected now.
 
-## Layout is config, with per-Page overrides
+## Flows
 
-Every layout and image-size setting lives in
-[`api/config/layout.yml`](../api/config/layout.yml), taken from **History
-Retraced**. The file is loaded once into a frozen Pydantic model at startup, so
-a bad value fails the boot rather than the render.
+Each flow says what starts it, what it reads and what it writes.
 
-**`PAGE_LAYOUT` holds only what a Page *changed*.** Every column is nullable and
-the renderer resolves `{**yaml, **row}`; resetting a Page is deleting its row.
-The columns are never seeded with the current values, because a row full of
-copied defaults would silently stop tracking a change to the file - the same
-argument the writing lengths make above.
+### 1. Set up a Page
 
-Image dimensions and the font stay out of it: one shape, 896×1120, for every
-Page. 4:5 is the tallest ratio Facebook renders in feed.
+- **Trigger:** `scripts/seed_page.py` (two hand-checked Pages with
+  watermarks) or `scripts/import_metricool_pages.py` (every Metricool brand with
+  a Facebook page).
+- **Writes:** `page`.
+- Then, on Settings: feeds, competitor assignments, time slots, layout, prompts,
+  post styles and automation switches. Each is one settings table above.
 
-Model ids do **not** live there - they are deployment config and get retired
-upstream without warning. `GEMINI_TEXT_MODEL`, `GEMINI_IMAGE_MODEL` and
-`GEMINI_IMAGE_FALLBACK_MODELS` go to env.
+### 2. Competitor sync
 
-**The watermark is a committed file, and that is the whole point.**
-`watermark_image_path` is relative to `API_DIR` and the file lives in
-`api/assets/` beside the font, **not** in the media bucket. A bucket key can be
-cleared, and a compositor that treats a failed download as "no logo" then prints
-the page name as text instead - no error, no log, no failed post, just every
-image shipping without its logo until somebody looks. A committed asset is
-present on a fresh clone and cannot 404.
+- **Trigger:** opening the Competitors grid, when the stored posts are older
+  than `stale_after_hours` (6), or the Sync button.
+- **Reads:** Metricool's competitor posts for the last `lookback_days` (7), for
+  every brand.
+- **Writes:** `source_item` rows of kind `competitor_post`. Updates the
+  reactions on posts it already has. Deletes posts more than twice the window
+  older than the newest post, unless a draft came from one.
 
-`watermark_image_path` is genuinely per-Page rather than layout, and has since
-been joined by `watermark_upload_path`, `watermark_text`, `watermark_enabled`,
-`badge_text`, the two avatar columns, the five writing lengths and the three
-prompt overrides - all of them answers to "the other nine Pages are not History
-Retraced", which is the question `PAGE_LAYOUT` answers for style.
-
-`daily_quota` was cut on 2026-08-06. The cap counted against **Approve**, and
-Approve is a queue movement `unapprove` can undo - a cap that only warns, over a
-number the operator can move by clicking twice, is decoration rather than policy.
-
-Config in a module is safe here in a way `brand_key` was not: **nothing points at
-it**. ADR-0003's failure was rows carrying a foreign key into a code constant that
-could not grow with the data. A padding value has no referent, so it cannot rot.
-
-## Why the original three
-
-**`PAGE`** is the unit of identity, and of the per-Page configuration that
-survived the layout cut above. Pages are rows, so adding one is an insert - see
-ADR-0003 for what the code-constant version cost.
-
-It is deliberately **not** split into `page` + `page_style`. That relationship
-would be strictly 1:1, so the split buys a join and nothing else, and it rebuilds
-the exact shape ADR-0003 destroyed, where one setting lived in two rows and
-drifted.
-
-Adding Pages two through ten moved the schema anyway - additively, one nullable
-column at a time: a Page's own watermark, badge word, card proportions, hook
-length. Each was a constant while there was one Page.
-
-**`SOURCE_ITEM`** is one table for all three source kinds. They differ only at
-ingest; generation reads `text`, `image_url`, and whether the subject is binding.
-
-`reactions`, `comments` and `shares` are null for tweets and RSS items and stay
-three typed columns anyway: reactions is the *default* sort on the Competitors
-tab, and they are populated in 144-147 of 150 competitor rows. The blob
-alternative was tried in production and its `metrics` jsonb was populated in
-**0 of 150 rows**.
-
-**`DRAFT`** carries its own progress (`status`, `progress_step`, `progress_pct`,
-`error`) because the row is created *before* generation starts. That placeholder
-is how the UI shows a run in flight: background task fills the row in, client
-polls.
-
-## Every kind binds the subject
-
-| `kind` | Subject | Instruction to the writer |
-|---|---|---|
-| `competitor_post` | **binding** | same story - and not their wording |
-| `tweet`, `rss`, `web` | **binding** | write about this *same* story, people, events |
-
-`competitor_post` was "not binding" until 2026-08-18 - borrow the tone, pick your
-own story - and the client reported it as the tool not generating from the
-competitor posts they had chosen. It had. The prompt told the model to write
-about something else, and **a run that does that still reports success**, because
-nothing about it failed. That is the failure mode worth remembering here: wrong
-subject, well-formed output, no error anywhere.
-
-What survives of the distinction is one extra sentence for competitor posts: the
-story is shared, the writing is ours. Their *picture* is a separate rule and did
-not move - `hero_from_source` is RSS-only in `generate.build_image`, because
-retelling a story is sourcing and reusing a rival's photograph is not.
-
-It is a pure function of `kind`, so it is computed. A stored copy is a second
-truth to keep in sync, and when it drifts the model still returns confident,
-well-formed output about the wrong story - the failure is invisible until a
-human reads the post.
-
-## What was considered and rejected
-
-**A `competitor` table.** Rejected by ADR-0001's own logic: don't mirror state you
-don't own. All 161 competitors in production came from Metricool sync - **zero manual
-adds** - and `listCachedCompetitors` was already just a cache with a 60-second
-cooldown (`competitorMetricoolSyncService.ts:22`). The competitor list is configured
-in Metricool and read live from there. `author` and `external_id` denormalized
-onto `SOURCE_ITEM` cover everything generation and display need.
-
-**A `page_competitor` join table.** Rejected on the data, and **later built
-anyway** - the rejection is kept because it was right about the data and wrong
-about the constraint.
-
-The data said: of 92 competitor rows carrying a real `source_page_id`, there
-were **92 distinct `external_id`s and zero competitors tracked by more than one
-page**. Each page had a disjoint competitor set. (The apparent duplication in
-production - 161 rows - is 65 legacy rows with `source_page_id = NULL`,
-predating migration `20260702150000` that added the column.)
-
-What that measured was the old tool's *behaviour*, not what it could afford.
-A Metricool account may configure **100 competitors in total**, not per page.
-Five Pages that should each watch the same twenty sources would spend the whole
-allowance on twenty distinct sources. So a competitor is added once, under
-whichever Page has room, and `PAGE_COMPETITOR` assigns it to every Page that
-should read it. Still no competitor table: `competitor_page_id` is Metricool's
-`providerId`, there is no foreign key, and an assignment naming a competitor
-since removed there simply matches no posts.
-
-**A `feed` table.** Rejected, and **later built** for one reason the original
-argument never considered: where the process runs.
-
-The rejection was sound on coupling - `brand_key` corrupted because rows pointed
-at it, and nothing points at a feed. `FEED` keeps that property: `SOURCE_ITEM`
-still carries the publisher as `author`, never a `feed_id`, so an item outlives
-the feed it arrived through and deleting a feed cannot cascade through published
-work.
-
-What changed is that the API runs from a **container image**. `config/sources.yml`
-is baked in and read-only in effect: a write lasts until the next deploy and
-disagrees with the committed copy in the meantime. The feed list is the one part
-of that file an operator has to change without a deploy. The `note` column is
-what the move had to buy back - `sources.yml` carried a probe result above every
-entry ("31 items, 179-char summaries, every item imaged"), and the seed migration
-brings the twelve original notes across verbatim rather than losing them to a
-`git rm`.
-
-The windows stayed in the file. `since_days` is a judgement about a beat, made
-once, and reading it as a diff is the point.
-
-**A `generation_event` table.** Rejected. Progress needs a step and a
-percentage, both columns on `DRAFT`. The old scrolling log was already capped at
-40 entries and is cosmetic.
-
-**A cart table.** Rejected. The Cart is a list of Source Items held by the
-client - the items themselves, not ids, since most of them are not rows yet.
-Nothing about it needs to survive that is not already a row.
-
-## Ingest rule: browsing does not write
-
-Tweets and RSS items are fetched live and become rows **only when they are
-generated from**. This keeps the table from filling with hundreds of unread
-items.
-
-Competitor posts are the standing exception: they arrive through a Metricool sync
-the operator pressed rather than through a tab opening, so they are written on
-arrival. The rule exists to stop the table filling with items nobody looked twice
-at, and a sync is not that - it updates the posts it already holds, and drops
-the ones that have aged out (see "How long rows live" below).
-
-Storage is also what makes a competitor post checkable. There is no
-`is_curated_url` equivalent for a Facebook post, so `POST /generate` accepts one
-by **id only**, resolved against a row the sync owns. Removing the storage was
-considered and rejected: it would require confirming the id against Metricool at
-the front of a run that is already 60 seconds deep in paid model calls, against
-an API that has timed out and returned 502 in normal use, so a cart of competitor
-posts would fail for reasons unrelated to the posts or the writer.
-
-**The write happens at generate, not at tick.** Writing at tick leaves unticked
-rows referenced by nothing, since removing an item from the Cart issues no
-`DELETE`, and it gives one gesture two meanings - a tick on a competitor post is
-a local cart add, a tick on an RSS item would be a network write. The Cart
-therefore carries the item itself and `POST /generate` writes only what a run
-uses.
-
-A Source Item is worth contrasting with a Draft here, because the two are saved
-for opposite reasons. A Draft is **load-bearing**: it is the job record, it holds
-paid model output and review state, and it cannot be ephemeral. A Source Item is **bookkeeping** - a pointer to something that exists
-elsewhere and can be re-fetched, kept only so a Draft can say where it came from.
-That is why a Source Item need not exist until a Draft points at it, and why a
-Draft must exist from the moment its run starts.
-
-## How long rows live
-
-Settings rows live until someone edits them. Three kinds of row stop being
-useful on their own, and each is removed by the code that ends that stage, not
-by a timer of its own:
-
-| What | Removed when | By |
-|---|---|---|
-| A competitor post | it is more than twice `lookback_days` older than the Page's newest post, and no draft came from it | `_sync`, after it writes the fresh window |
-| A `rejected` or `failed` draft | it was last touched before the bucket's month cutoff, so its images are already gone. Not if a saved post links to it | `media.prune_drafts`, in the daily purge |
-| An RSS, tweet or web item | no draft points at it any more | `media.prune_drafts`, after the drafts |
-| `draft.inset_candidates` | the draft is published, since a published draft cannot redraw | `publish_draft` |
-| A published draft's hero and inset files | 14 days after the draft was made. They only redraw the card, and Facebook fetched the composite | `media.reap_published_pictures`, in the daily purge |
-
-Competitor posts were 51 MB of a 72 MB database on 2026-10-06, with nothing
-removing them. The table is a copy of Metricool's window, and only a sync adds
-to it, so the sync is what trims it.
-
-**Anchored to the newest post, not the clock**, as the grid's window is. A Page
-whose competitors went quiet keeps its last fortnight rather than an empty grid.
-**Twice the window**, so a post ticked into the Cart from an older grid read
-still resolves at generate, which accepts a competitor post by id only.
-
-The bucket, not the database, is the tight limit: 1 GB on the free tier. On
-2026-10-06 published drafts' heroes and insets were 702 MB of 956 MB.
-
-Approved and published drafts are never removed. They are the record of what
-went out.
-
-Postgres reuses the space of deleted rows but does not hand it back, so the
-database's reported size only falls after a `VACUUM FULL`.
-
-## Flow
+### 3. Generate by hand
 
 ```
-Metricool sync ──> SOURCE_ITEM(kind=competitor_post, sync'd_page)  [on sync]
-Tweet URL      ──> live lookup, unsaved
-Curated feeds  ──> live read, unsaved
-                              │
-                    Cart - client-side, the items themselves
-                              │
-                    Generate: pick Pages
-                              │
-              SOURCE_ITEM(kind=tweet | rss)              [written here, if used]
-                              │
-              DRAFT per (source × page), status=generating
-                              │
-      Pydantic AI writer ──> text + highlight phrases + image prompt
-      google-genai      ──> hero image
-      resvg + Pillow    ──> composed image
-                              │
-                    status=review ──> operator edits, free redraws
-                              │
-                    Publish ──> Metricool planner
-              DRAFT.metricool_post_id set; the row FREEZES
+Grid (competitor posts, RSS, tweets, web)
+  └─> Cart                          in the browser, not stored
+        └─> Generate: pick Pages, style, picture choice
+              ├─> source_item       tweets, RSS and web written now, if used
+              └─> draft             one per source x Page, status generating
+                    └─> writer      text, highlights, image prompt
+                    └─> picture     source photo, Google, image model, or none
+                    └─> compositor  composed card into the bucket
+                    └─> status review (or failed, with error)
 ```
 
-## What happens after Publish
+`POST /drafts/manual` skips the writer: the operator types the text and may
+upload the hero.
 
-The row stops being editable in the ordinary way, and the reason is a link.
-Metricool stores the **URL** of `composed_image_path` and Facebook fetches it
-when the post is due, days later. A redraw deletes the file that URL points at
-(`generate._discard`), so a queued post whose image was rebuilt publishes a
-broken picture, or none.
+### 4. Auto-drafts (daily)
 
-What is still possible, and what is not:
+- **Trigger:** GitHub Actions, `auto-drafts.yml`, 06:00 Ho Chi Minh City.
+  It POSTs `/generate/auto`.
+- **Reads:** each Page with a source switched on. Competitor posts: the
+  highest-reaction posts from assigned competitors, above
+  `auto_draft_competitor_min_reactions`, that no draft has come from yet. RSS:
+  the Page's feeds, fetched live, filtered by `auto_draft_rss_instructions`.
+- **Writes:** one `auto_draft_run` per Page and source, then drafts as in
+  flow 3, landing in Review.
+- A post is never drafted twice, because a draft already points at it. That
+  check reads `draft`, so it only holds while the drafts exist.
+
+### 5. Review and edit
+
+- **Trigger:** the operator, on Review.
+- **Writes:** `draft` only. Text edits, regenerate, a new hero, crop, inset,
+  template. A redraw replaces the composite in the bucket and deletes the old
+  file. Reject and unapprove move the status.
+
+### 6. Publish
 
 ```
-queued post ──> PATCH /drafts/{id}          caption + first comment  ── allowed
-            ──> POST  /drafts/{id}/reschedule   move the time        ── allowed
-            ──> POST  /drafts/{id}/unschedule   out of the planner   ── allowed
-            ──> POST  /drafts/{id}/image        redraw               ── 409
+draft (review) ──> POST /drafts/{id}/publish
+                     ├─ Metricool: caption, first comment, picture URL, time
+                     └─ draft.metricool_post_id = Metricool's id   (frozen)
+
+then:  PATCH       caption, first comment   allowed, id changes
+       reschedule  move the time            allowed, id changes
+       unschedule  delete in Metricool      draft is editable again
+       redraw                               refused (409)
 ```
 
-Unschedule is the way through: it deletes the planner post *first*, clears
-`metricool_post_id`, and the row is an ordinary draft again with nothing
-pointing at its file.
+The time comes from the Page's free slots: `page_time_slot` minus what
+Metricool already has queued. When Facebook publishes, it fetches the picture
+from the bucket.
 
-**`metricool_post_id` is not stable, and that is Metricool's doing.** They have
-no in-place update. `PUT /v2/scheduler/posts/{id}` with `id` in the body deletes
-the old post and creates a new one; without it, it creates a second post and
-leaves the first. Either way the id changes, so every edit writes the returned id
-back to the row. The old app does not, which is why its "edit" leaves a duplicate
-in the planner and a draft pointing at a post that no longer exists.
+### 7. Overview: save, reuse, repost
 
-The value `"queued"` is a marker rather than a handle: Metricool accepted the
-post but did not name it, so nothing can be edited or cancelled through it. Every
-route above answers 409 and says to open the planner.
+- **Reads:** Metricool stats, live, last 30 days.
+- **Save:** writes `saved_post` with the post's text and scores at that moment.
+- **Write again (reuse):** a new draft from a saved post, through flow 3.
+- **Repost:** a new draft copying the post as it went out, picture included,
+  into Review. Published through flow 6 like any other.
+- **Unsave:** deletes a hand-saved row. An auto-saved row is kept with
+  `dismissed_at` set, so auto-repost never saves it again.
 
-`SAVED_POST` is the only row written after publication, and it is written by a
-person deciding a post was worth keeping - never automatically.
+### 8. Auto-repost (weekly)
+
+- **Trigger:** GitHub Actions, `auto-repost.yml`, Monday 06:00 Ho Chi Minh
+  City. It POSTs `/pages/auto-repost`.
+- **Reads:** for each Page with `auto_save_min_reactions` set, the last 30 days
+  of Metricool stats, and that Page's `saved_post` rows.
+- **Writes:** `saved_post` for each post over the threshold that is not saved,
+  dismissed, or a caption already saved. Then, if `auto_repost_after_days` is
+  set, up to three reposts per Page: a draft each, scheduled at the first free
+  slot after publish date plus N days, with `repost_draft_id` set on the saved
+  post first so no run builds a second.
+- This skips Review. The repost is visible and cancellable on Schedule.
+
+### 9. Clean-up (daily)
+
+- **Trigger:** a thread in the API process, at startup and every 24 hours.
+- **Deletes:**
+  - bucket files older than the retention window, except Page files;
+  - `rejected` and `failed` drafts whose pictures are gone, unless a saved post
+    links to them;
+  - tweet, RSS and web `source_item` rows no draft points at any more;
+  - a published draft's hero and inset files after 14 days. Only the
+    composite is needed once Facebook has it.
+- Published drafts are never deleted. They are the record of what went out.
+
+### 10. Shorts
+
+```
+POST /youtube/jobs ──> youtube_job (queued)
+  worker thread, every 5s ──> download, trim to N seconds, append the CTA clip
+                          ──> mp4 into the bucket, job completed (or failed)
+```
+
+Separate from everything above: no key crosses between a draft and a Short.
+Publishing Shorts was cut; the operator downloads the file.
+
+## Moving the database
+
+What a fresh database costs, by group:
+
+- **Settings missing:** every Page loses its feeds, competitors, times, layout,
+  prompts, styles and automation. The seed scripts bring back Pages only.
+- **Records missing:** auto-repost reposts again, and hand-saved notes are gone.
+- **Work missing:** the queue starts empty. Auto-drafts may draft competitor
+  posts that were already used, once, because the drafts that marked them used
+  are gone. Posts already scheduled in Metricool still go out, but show as
+  posts not made in this app.
+
+Whatever moves, the bucket MUST stay. Posts already queued in Metricool point
+at files in it.
+
+Copy with ids kept, then move each table's sequence past the highest id
+(`setval`), or the first new row collides. `scripts/seed_local.py` does exactly
+this for a local copy.
+
+## Conventions
+
+- **Enums are `VARCHAR`**, never native Postgres enums. A new member is a change
+  to the Python class only. See `models._stored_enum`.
+- **Paths, not URLs**, for anything in the bucket. The URL is built at read
+  time (`media.public_url`), so a new bucket or project is a config change.
+- **Every time is `Asia/Ho_Chi_Minh`.** Metricool takes naive local time with
+  the zone as a separate field.
+- **Schema changes are Alembic revisions** in `api/alembic/versions/`. The
+  test suite builds its schema from the models, so only `alembic check` against
+  the live database proves a revision exists.
+- **No `user_id`.** One operator, one shared API key.
