@@ -34,6 +34,7 @@ export function HookField({
   rows = 5,
   onChange,
   onPhrasesChange,
+  tools = true,
 }: {
   value: string;
   phrases: string[];
@@ -42,6 +43,8 @@ export function HookField({
   rows?: number;
   onChange: (value: string) => void;
   onPhrasesChange: (phrases: string[]) => void;
+  /** False drops the highlight buttons: Settings' sample is a preview, not a draft. */
+  tools?: boolean;
 }) {
   const textarea = useRef<HTMLTextAreaElement>(null);
   const backdrop = useRef<HTMLDivElement>(null);
@@ -99,6 +102,8 @@ export function HookField({
         />
       </div>
 
+      {tools ? (
+      <>
       <div className="flex flex-wrap items-center gap-2">
         <Button type="button" variant="outline" size="sm" disabled={!selection} onClick={toggle}>
           <Highlighter className="size-3.5" />
@@ -128,6 +133,8 @@ export function HookField({
           {absent.length} phrase(s) are not in the hook and render nothing:{" "}
           <span className="line-through">{absent.slice(0, 3).join(", ")}</span>
         </p>
+      ) : null}
+      </>
       ) : null}
     </div>
   );

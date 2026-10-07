@@ -427,10 +427,14 @@ function Automation({ page }: { page: Page }) {
           ) : null}
         </div>
 
-        <Button size="sm" disabled={!dirty || !valid || busy} onClick={() => void save()}>
-          {busy ? <Loader2 className="size-4 animate-spin" /> : null}
-          Save automation
-        </Button>
+        {/* Only once something has changed: a greyed button at rest is one more
+            thing to read on a screen that is mostly being looked at. */}
+        {dirty ? (
+          <Button size="sm" disabled={!valid || busy} onClick={() => void save()}>
+            {busy ? <Loader2 className="size-4 animate-spin" /> : null}
+            Save automation
+          </Button>
+        ) : null}
       </div>
     </Block>
   );
@@ -600,10 +604,12 @@ function AutoDrafts({
           </NativeSelect>
         </div>
 
-        <Button size="sm" disabled={!dirty || busy} onClick={() => void save()}>
-          {busy ? <Loader2 className="size-4 animate-spin" /> : null}
-          Save auto-drafts
-        </Button>
+        {dirty ? (
+          <Button size="sm" disabled={busy} onClick={() => void save()}>
+            {busy ? <Loader2 className="size-4 animate-spin" /> : null}
+            Save auto-drafts
+          </Button>
+        ) : null}
       </div>
     </Block>
   );
@@ -1407,19 +1413,16 @@ function WritingLimits({ page }: { page: Page }) {
       ))}
 
       <div className="flex items-center gap-3">
-        <Button size="sm" disabled={!dirty || busy} onClick={() => void save()}>
-          {busy ? <Loader2 className="size-4 animate-spin" /> : null}
-          Save lengths
-        </Button>
         {dirty ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={busy}
-            onClick={revert}
-          >
-            Revert
-          </Button>
+          <>
+            <Button size="sm" disabled={busy} onClick={() => void save()}>
+              {busy ? <Loader2 className="size-4 animate-spin" /> : null}
+              Save lengths
+            </Button>
+            <Button variant="ghost" size="sm" disabled={busy} onClick={revert}>
+              Revert
+            </Button>
+          </>
         ) : null}
         <p className="text-[13px] text-muted-foreground">
           Empty inherits the default, shown greyed.
@@ -1568,14 +1571,12 @@ function PromptEditor({ pageId, file }: { pageId: number; file: PromptFile }) {
               onChange={(event) => setText(event.target.value)}
             />
             <div className="flex flex-wrap items-center gap-2">
-              <Button
-                size="sm"
-                disabled={!dirty || busy}
-                onClick={() => void save(text)}
-              >
-                {busy ? <Loader2 className="size-4 animate-spin" /> : null}
-                Save for this Page
-              </Button>
+              {dirty ? (
+                <Button size="sm" disabled={busy} onClick={() => void save(text)}>
+                  {busy ? <Loader2 className="size-4 animate-spin" /> : null}
+                  Save for this Page
+                </Button>
+              ) : null}
               {dirty ? (
                 <Button
                   variant="ghost"

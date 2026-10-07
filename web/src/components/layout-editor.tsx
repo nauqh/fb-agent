@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Loader2, RotateCcw } from "lucide-react";
+import { ChevronRight, Loader2, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 
 import { clampInset, splitOnHighlights } from "@/components/composed-image";
@@ -54,7 +54,8 @@ const MAX_RING_PX = 48;
  * the right, both driven by the *unsaved* values so a slider moves the card
  * rather than the last save. Its sample text is editable for the same reason:
  * the thing being judged is how a real hook sits in the panel, and a fixed
- * string cannot show you the two-line case.
+ * string cannot show you the two-line case. Its highlights are fixed: marking
+ * phrases is a draft's job, and the buttons for it were noise here.
  *
  * The preview is drawn in the browser rather than fetched. That is how the
  * queue and the draft sheet already work (`ComposedImage`), and it is why
@@ -83,6 +84,12 @@ export function LayoutEditor() {
 
   const shown = preview(data.layout, draft);
   const dirty = Object.keys(draft).length > 0;
+  const padding = [
+    ["Pad left", "text_padding_left_px", shown.text.padding.left_px],
+    ["Pad right", "text_padding_right_px", shown.text.padding.right_px],
+    ["Pad top", "text_padding_top_px", shown.text.padding.top_px],
+    ["Pad bottom", "text_padding_bottom_px", shown.text.padding.bottom_px],
+  ] as const;
 
   function set<K extends keyof LayoutPatch>(key: K, value: LayoutPatch[K]) {
     setDraft((current) => ({ ...current, [key]: value }));
@@ -309,46 +316,52 @@ export function LayoutEditor() {
             changed={data.overridden.includes("highlight_color")}
             onChange={(v) => set("highlight_color", v)}
           />
-          {/* The four paddings are cells of the same grid as the rest, not a
-              grid of their own inside one cell - nested, they were half the
-              width of every other control and read as a different kind of
-              thing. */}
-          {(
-            [
-              ["Pad left", "text_padding_left_px", shown.text.padding.left_px],
-              ["Pad right", "text_padding_right_px", shown.text.padding.right_px],
-              ["Pad top", "text_padding_top_px", shown.text.padding.top_px],
-              ["Pad bottom", "text_padding_bottom_px", shown.text.padding.bottom_px],
-            ] as const
-          ).map(([label, key, value]) => (
-            <Range
-              key={key}
-              label={label}
-              value={value}
-              min={0}
-              max={80}
-              step={1}
-              format={(v) => `${v}px`}
-              changed={data.overridden.includes(key)}
-              onChange={(v) => set(key, v)}
-            />
-          ))}
+          {/* Folded: four sliders that are rarely touched were a third of
+              this section. The inner grid spans both columns, so each slider
+              keeps the width of every other control. Open whenever one is
+              overridden, so a changed value is never hidden. */}
+          <details
+            className="group sm:col-span-2"
+            open={padding.some(([, key]) => data.overridden.includes(key)) || undefined}
+          >
+            <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[13px] text-muted-foreground hover:text-foreground [&::-webkit-details-marker]:hidden">
+              <ChevronRight className="size-3 transition-transform group-open:rotate-90" />
+              Padding
+              <span className="tabular-nums">
+                {padding.map(([, , value]) => value).join(" · ")}px
+              </span>
+            </summary>
+            <div className="grid gap-x-4 gap-y-3 pt-3 sm:grid-cols-2">
+              {padding.map(([label, key, value]) => (
+                <Range
+                  key={key}
+                  label={label}
+                  value={value}
+                  min={0}
+                  max={80}
+                  step={1}
+                  format={(v) => `${v}px`}
+                  changed={data.overridden.includes(key)}
+                  onChange={(v) => set(key, v)}
+                />
+              ))}
+            </div>
+          </details>
         </Group>
 
         <div className="flex flex-wrap items-center gap-2 border-t pt-4">
-          <Button size="sm" onClick={save} disabled={!dirty || saving}>
-            {saving ? <Loader2 className="size-3.5 animate-spin" /> : null}
-            Save
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={reset}
-            disabled={saving || (data.overridden.length === 0 && !dirty)}
-          >
-            <RotateCcw className="size-3.5" />
-            Reset to defaults
-          </Button>
+          {dirty ? (
+            <Button size="sm" onClick={save} disabled={saving}>
+              {saving ? <Loader2 className="size-3.5 animate-spin" /> : null}
+              Save
+            </Button>
+          ) : null}
+          {data.overridden.length > 0 || dirty ? (
+            <Button size="sm" variant="ghost" onClick={reset} disabled={saving}>
+              <RotateCcw className="size-3.5" />
+              Reset to defaults
+            </Button>
+          ) : null}
           <p className="text-xs text-muted-foreground">
             {data.overridden.length === 0
               ? "On the defaults from config/layout.yml."
@@ -700,6 +713,7 @@ function Preview({ layout, page }: { layout: ResolvedLayout; page: Page }) {
           rows={6}
           onChange={setSample}
           onPhrasesChange={setPhrases}
+          tools={false}
         />
       )}
     </div>
