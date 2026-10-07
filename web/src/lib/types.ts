@@ -96,8 +96,10 @@ export interface Page {
   auto_draft_rss_count: number | null;
   /** What the model picks feed items by. Null takes the newest. */
   auto_draft_rss_instructions: string | null;
-  /** Where an auto-draft's picture comes from. `none` is text only. */
-  auto_draft_picture: "none" | "source" | "google" | "generate";
+  /** Where a competitor auto-draft's picture comes from. `none` is text only. */
+  auto_draft_competitor_picture: "none" | "google" | "generate";
+  /** The same for RSS auto-drafts, which can also take the feed's own photo. */
+  auto_draft_rss_picture: "none" | "source" | "google" | "generate";
 
   /** This Page's own prompt text, or null to inherit the file. Edited through
    *  `setPromptFile`, and read back through `listPromptFiles`. */

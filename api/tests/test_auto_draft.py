@@ -530,18 +530,48 @@ def test_the_monitor_carries_both_switches(client, session, page, feed):
     assert body["runs"][0]["source"] == "rss"
 
 
-@pytest.mark.parametrize(
-    "choice, flags",
-    [
-        ("none", (True, False, False)),
-        ("source", (False, True, False)),
-        ("google", (False, False, True)),
-        ("generate", (False, False, False)),
-    ],
-)
-def test_the_page_chooses_where_the_picture_comes_from(session, page, pool, choice, flags):
-    page.auto_draft_picture = choice
+FLAGS = {
+    "none": (True, False, False),
+    "source": (False, True, False),
+    "google": (False, False, True),
+    "generate": (False, False, False),
+}
+
+
+def _flags(session, draft_id):
+    draft = session.get(Draft, draft_id)
+    return (draft.no_image, draft.hero_from_source, draft.hero_search)
+
+
+@pytest.mark.parametrize("choice", ["none", "google", "generate"])
+def test_the_page_chooses_a_competitor_draft_s_picture(session, page, pool, choice):
+    page.auto_draft_competitor_picture = choice
     [draft_id] = auto_draft.run(session, page, target=1)
 
-    draft = session.get(Draft, draft_id)
-    assert (draft.no_image, draft.hero_from_source, draft.hero_search) == flags
+    assert _flags(session, draft_id) == FLAGS[choice]
+
+
+@pytest.mark.parametrize("choice", list(FLAGS))
+def test_the_page_chooses_an_rss_draft_s_picture(session, page, feed, choice):
+    page.auto_draft_rss_picture = choice
+    [draft_id] = auto_draft.run_rss(session, page, 1)
+
+    assert _flags(session, draft_id) == FLAGS[choice]
+
+
+def test_each_source_takes_its_own_picture_choice(session, page, pool, feed):
+    """Client, 2026-10-07: no picture for Facebook posts, the feed's for RSS."""
+    page.auto_draft_competitor_picture = "none"
+    page.auto_draft_rss_picture = "source"
+
+    [competitor] = auto_draft.run(session, page, target=1)
+    [from_feed] = auto_draft.run_rss(session, page, 1)
+
+    assert _flags(session, competitor) == FLAGS["none"]
+    assert _flags(session, from_feed) == FLAGS["source"]
+
+
+def test_a_competitor_picture_cannot_be_the_source_s(client, page):
+    response = client.patch(f"/pages/{page.id}", json={"auto_draft_competitor_picture": "source"})
+
+    assert response.status_code == 422

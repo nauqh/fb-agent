@@ -464,7 +464,8 @@ function AutoDrafts({
   const [rssOn, setRssOn] = useState(page.auto_draft_rss_count !== null);
   const [rssCount, setRssCount] = useState((page.auto_draft_rss_count ?? 2).toString());
   const [instructions, setInstructions] = useState(page.auto_draft_rss_instructions ?? "");
-  const [picture, setPicture] = useState(page.auto_draft_picture);
+  const [competitorPicture, setCompetitorPicture] = useState(page.auto_draft_competitor_picture);
+  const [rssPicture, setRssPicture] = useState(page.auto_draft_rss_picture);
   const [busy, setBusy] = useState(false);
 
   const next = {
@@ -472,7 +473,8 @@ function AutoDrafts({
     auto_draft_competitor_min_reactions: minReactions.trim() ? Number(minReactions) : null,
     auto_draft_rss_count: rssOn ? Number(rssCount) : null,
     auto_draft_rss_instructions: instructions.trim() || null,
-    auto_draft_picture: picture,
+    auto_draft_competitor_picture: competitorPicture,
+    auto_draft_rss_picture: rssPicture,
   };
   const dirty = (Object.keys(next) as (keyof typeof next)[]).some(
     (key) => next[key] !== page[key],
@@ -497,11 +499,14 @@ function AutoDrafts({
 
   return (
     <Block label="Auto-drafts">
-      <div className="space-y-3">
+      {/* One group per source, spaced wider than the rows inside it, and the
+          Picture choice in the same cell for both - beside the count. */}
+      <div className="space-y-5">
         <p className="text-[13px] text-muted-foreground">
           New drafts in Review every day at 06:00.
         </p>
 
+        <div className="space-y-3">
         <div className="grid gap-3 sm:grid-cols-2">
           <div className={box}>
             <Label className="flex items-center gap-2 text-[13px] font-normal text-muted-foreground">
@@ -525,6 +530,17 @@ function AutoDrafts({
             />
           </div>
           {competitorOn ? (
+            <PictureChoice
+              className={box}
+              label="Picture for Facebook post drafts"
+              value={competitorPicture}
+              // The select offers no `source` here, so nothing else arrives.
+              onChange={(value) =>
+                setCompetitorPicture(value as Page["auto_draft_competitor_picture"])
+              }
+            />
+          ) : null}
+          {competitorOn ? (
           <div className={box}>
             <Label htmlFor="auto-draft-reactions" className="text-[13px] font-normal text-muted-foreground">
               Minimum reactions
@@ -545,27 +561,40 @@ function AutoDrafts({
         {competitorOn && assigned === 0 ? (
           <Gap title="No competitors are ticked.">Facebook posts will find nothing to draft from.</Gap>
         ) : null}
+        </div>
 
-        <div className={cn(box, "sm:w-[calc(50%-0.375rem)]")}>
-          <Label className="flex items-center gap-2 text-[13px] font-normal text-muted-foreground">
-            <input
-              type="checkbox"
-              checked={rssOn}
-              onChange={(event) => setRssOn(event.target.checked)}
+        <div className="space-y-3">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className={box}>
+            <Label className="flex items-center gap-2 text-[13px] font-normal text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={rssOn}
+                onChange={(event) => setRssOn(event.target.checked)}
+              />
+              RSS items per day
+            </Label>
+            <Input
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={10}
+              aria-label="Drafts per day from RSS"
+              disabled={!rssOn}
+              className={number}
+              value={rssCount}
+              onChange={(event) => setRssCount(event.target.value)}
             />
-            RSS items per day
-          </Label>
-          <Input
-            type="number"
-            inputMode="numeric"
-            min={1}
-            max={10}
-            aria-label="Drafts per day from RSS"
-            disabled={!rssOn}
-            className={number}
-            value={rssCount}
-            onChange={(event) => setRssCount(event.target.value)}
-          />
+          </div>
+          {rssOn ? (
+            <PictureChoice
+              className={box}
+              label="Picture for RSS drafts"
+              value={rssPicture}
+              onChange={setRssPicture}
+              source
+            />
+          ) : null}
         </div>
         {rssOn && feeds === 0 ? (
           <Gap title="No feeds.">RSS will find nothing to draft from.</Gap>
@@ -586,22 +615,6 @@ function AutoDrafts({
           />
         </div>
         ) : null}
-
-        <div className={cn(box, "sm:w-[calc(50%-0.375rem)]")}>
-          <Label htmlFor="auto-draft-picture" className="text-[13px] font-normal text-muted-foreground">
-            Picture
-          </Label>
-          <NativeSelect
-            id="auto-draft-picture"
-            ariaLabel="Picture for auto-drafts"
-            value={picture}
-            onValueChange={(value) => setPicture(value as typeof picture)}
-          >
-            <NativeSelectOption value="google">Google image</NativeSelectOption>
-            <NativeSelectOption value="source">Source photo</NativeSelectOption>
-            <NativeSelectOption value="generate">Generate with AI</NativeSelectOption>
-            <NativeSelectOption value="none">No picture</NativeSelectOption>
-          </NativeSelect>
         </div>
 
         {dirty ? (
@@ -612,6 +625,40 @@ function AutoDrafts({
         ) : null}
       </div>
     </Block>
+  );
+}
+
+type Picture = Page["auto_draft_rss_picture"];
+
+/** One source's picture choice. `source` only for RSS: a competitor's picture
+ *  is never reused. */
+function PictureChoice({
+  className,
+  label,
+  value,
+  onChange,
+  source = false,
+}: {
+  className: string;
+  label: string;
+  value: Picture;
+  onChange: (value: Picture) => void;
+  source?: boolean;
+}) {
+  return (
+    <div className={className}>
+      <span className="text-[13px] text-muted-foreground">Picture</span>
+      <NativeSelect
+        ariaLabel={label}
+        value={value}
+        onValueChange={(next) => onChange(next as Picture)}
+      >
+        {source ? <NativeSelectOption value="source">Source photo</NativeSelectOption> : null}
+        <NativeSelectOption value="google">Google image</NativeSelectOption>
+        <NativeSelectOption value="generate">Generate with AI</NativeSelectOption>
+        <NativeSelectOption value="none">No picture</NativeSelectOption>
+      </NativeSelect>
+    </div>
   );
 }
 

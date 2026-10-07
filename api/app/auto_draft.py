@@ -117,7 +117,10 @@ def run(
         logger.bind(page=page.name).info("No auto-draft for {}: {}", page.name, note)
     else:
         draft_ids = generate.start_run(
-            session, [page.id], list(items), **_pictures(page, hero_from_source)
+            session,
+            [page.id],
+            list(items),
+            **_pictures(page.auto_draft_competitor_picture, hero_from_source),
         )
         if len(items) < target:
             note = f"Only {len(items)} post(s) left to write about, asked for {target}"
@@ -126,12 +129,11 @@ def run(
     return draft_ids
 
 
-def _pictures(page: Page, hero_from_source: bool) -> dict:
-    """The Page's `auto_draft_picture`, as `start_run` arguments.
+def _pictures(choice: str, hero_from_source: bool) -> dict:
+    """A Page's picture choice for one source, as `start_run` arguments.
 
     `hero_from_source` is the cron's own flag, kept so its `HERO_FROM_SOURCE`
     still works; the Page's choice wins wherever it says something else."""
-    choice = page.auto_draft_picture
     return {
         "no_image": choice == "none",
         "hero_from_source": choice == "source" or (hero_from_source and choice == "generate"),
@@ -253,7 +255,7 @@ def run_rss(
                 session,
                 [page.id],
                 list(items),
-                **_pictures(page, hero_from_source),
+                **_pictures(page.auto_draft_rss_picture, hero_from_source),
             )
             if len(items) < target:
                 notes.insert(0, f"Only {len(items)} item(s) fit, asked for {target}")

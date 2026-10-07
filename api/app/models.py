@@ -309,15 +309,21 @@ class Page(SQLModel, table=True):
     """What the model picks feed items by ("UK politics only, no sport"). Null
     takes the newest."""
 
-    auto_draft_picture: str = Field(default="google")
-    """Where an auto-draft's picture comes from: `none` (text only), `source`
-    (the source's own photo), `google` (an image search) or `generate` (the
-    image model). Chosen per Page before the run, never per draft.
+    auto_draft_competitor_picture: str = Field(default="google")
+    """Where a competitor auto-draft's picture comes from: `none` (text only),
+    `google` (an image search) or `generate` (the image model). Never `source`:
+    a competitor's picture is not reused (`generate.build_image`).
 
     `google` by default because auto-drafts are written before anyone reviews
     them: on 2026-10-06, 19 of 58 paid heroes went on drafts that were
     rejected or never scheduled. A `str` validated in `PageUpdate`, like
     `inset_source`."""
+
+    auto_draft_rss_picture: str = Field(default="source")
+    """The same choice for RSS auto-drafts, plus `source`: the feed's own photo,
+    which is free and is the picture of the story. Separate because the two
+    sources want different answers (client, 2026-10-07: no picture for
+    Facebook posts, the source's picture for RSS)."""
 
     # --- what this Page tells the model ---------------------------------------
     #
@@ -945,7 +951,7 @@ class Draft(SQLModel, table=True):
     hero_search: bool = Field(default=False)
     """Take the hero from a Google image search instead of the image model.
 
-    What an auto-draft sets when its Page's `auto_draft_picture` is `google`.
+    What an auto-draft sets when its Page's picture choice is `google`.
     The query is the writer's `inset_subject`, so the search costs no extra
     model call to word."""
 
