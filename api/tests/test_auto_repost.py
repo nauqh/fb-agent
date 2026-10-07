@@ -392,13 +392,14 @@ def test_deleting_a_repost_draft_clears_the_link(session, auto, account, copies)
 # --- the trigger --------------------------------------------------------------
 
 
-def test_get_pages_queues_one_run_per_six_hours(client, session, auto, monkeypatch):
+def test_the_cron_route_queues_pages_with_auto_save_on(client, session, auto, monkeypatch):
     runs = []
     monkeypatch.setattr(auto_repost, "run_pages", lambda ids: runs.append(ids))
 
-    client.get("/pages")
-    client.get("/pages")
+    response = client.post("/pages/auto-repost")
 
+    assert response.status_code == 202
+    assert response.json() == [auto.id]
     assert runs == [[auto.id]]
 
 
@@ -406,18 +407,13 @@ def test_a_page_with_auto_save_off_is_not_queued(client, page, monkeypatch):
     runs = []
     monkeypatch.setattr(auto_repost, "run_pages", lambda ids: runs.append(ids))
 
-    client.get("/pages")
-
+    assert client.post("/pages/auto-repost").json() == []
     assert runs == []
 
 
-def test_get_pages_answers_the_same_when_the_run_raises(client, session, auto, monkeypatch):
-    def boom(*a, **k):
-        raise RuntimeError("Metricool is on fire")
+def test_opening_the_app_runs_nothing(client, session, auto, monkeypatch):
+    runs = []
+    monkeypatch.setattr(auto_repost, "run_pages", lambda ids: runs.append(ids))
 
-    monkeypatch.setattr(auto_repost, "run", boom)
-
-    response = client.get("/pages")
-
-    assert response.status_code == 200
-    assert [p["name"] for p in response.json()] == ["History Retraced"]
+    assert client.get("/pages").status_code == 200
+    assert runs == []

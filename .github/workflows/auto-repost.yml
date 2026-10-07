@@ -1,0 +1,48 @@
+# Auto save and repost, once a week. Requirements: the auto-repost PRD.
+#
+# Which Pages and which thresholds is each Page's own setting, on Settings >
+# This Page. This file only says when. The route runs every Page with auto-save on.
+
+name: Auto-repost
+
+on:
+  schedule:
+    # Monday 06:00 in Ho Chi Minh City, which has no DST.
+    - cron: "0 23 * * 0"
+
+  workflow_dispatch:
+
+permissions: {}
+
+env:
+  API: https://fb-agent.up.railway.app
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    # The route answers 202 and the run happens in the API process afterwards.
+    timeout-minutes: 5
+
+    steps:
+      - name: Save and repost for each Page with auto-save on
+        env:
+          API_KEY: ${{ secrets.FB_AGENT_API_KEY }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${API_KEY:-}" ]; then
+            echo "::error::FB_AGENT_API_KEY is not set in repository secrets"
+            exit 1
+          fi
+
+          code=$(curl -sS -o response.json -w '%{http_code}' \
+            -X POST "$API/pages/auto-repost" \
+            -H "X-API-Key: $API_KEY")
+
+          if [ "$code" != "202" ]; then
+            echo "::error::/pages/auto-repost answered $code"
+            cat response.json
+            exit 1
+          fi
+
+          echo "Queued Pages: $(cat response.json)"

@@ -42,17 +42,6 @@ def competitor_sync_memo_cleared():
 
 
 @pytest.fixture(autouse=True)
-def auto_repost_memo_cleared():
-    """`auto_repost._checked` is process-global too, and throttles per Page id,
-    which every test's Page shares. Same leak as the competitor memo above."""
-    from app.publish import auto_repost
-
-    auto_repost._checked.clear()
-    yield
-    auto_repost._checked.clear()
-
-
-@pytest.fixture(autouse=True)
 def no_migrations_at_startup(monkeypatch):
     """`init_db` is `alembic upgrade head` against the real DATABASE_URL.
 

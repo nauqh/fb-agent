@@ -362,7 +362,7 @@ function Automation({ page }: { page: Page }) {
     setBusy(true);
     try {
       await updatePage(page.id, next);
-      toast(saveOn ? "Saved. Checked next time the app is opened." : "Saved. Automation is off.");
+      toast(saveOn ? "Saved. Checked every Monday morning." : "Saved. Automation is off.");
       emit();
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : "Could not save");

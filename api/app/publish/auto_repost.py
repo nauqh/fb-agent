@@ -7,15 +7,14 @@ for 30 days times... at first available slot." Per Page, from Settings:
 The requirements are web/content/PRDs/auto-repost.md; the design record is
 the commit that added this file.
 
-**The trigger is the operator opening the app.** Nothing pushes "a post passed N
-reactions" (Metricool's webhooks and Facebook's Page feed webhook were both
-checked), so `GET /pages`, which every screen calls, queues `run_pages` as a
-background task. A repost is scheduled weeks ahead, so a check at whatever time
-KC next opens the app costs nothing.
+**The trigger is a weekly cron** (`.github/workflows/auto-repost.yml`), which
+POSTs `/pages/auto-repost`. Nothing pushes "a post passed N reactions"
+(Metricool's webhooks and Facebook's Page feed webhook were both checked).
+Weekly is enough: a repost is scheduled weeks ahead, and the stats window is 30
+days, so a crossing is seen by at least four runs.
 
-ponytail: in-process throttle and lock, correct only with `--workers 1`, which
-the Dockerfile already pins. A Page nobody opens the app for in 30 days can miss
-a crossing; a cron calling `run_pages` is the upgrade.
+ponytail: in-process lock, correct only with `--workers 1`, which the
+Dockerfile already pins.
 
 **This is the first path to an audience that skips Review**, agreed as such.
 The repost is still visible and cancellable on Schedule weeks before it goes.
@@ -44,9 +43,6 @@ STATS_DAYS = 30
 """The stats window read for threshold crossings. Metricool's own default and
 the Overview's; a post older than this is never auto-saved."""
 
-THROTTLE = timedelta(hours=6)
-"""How long a checked Page is left alone. `GET /pages` fires on every load."""
-
 REPOSTS_PER_RUN = 3
 """Reposts scheduled per Page per run, earliest target first.
 
@@ -54,10 +50,6 @@ With N under 30 days, most posts over the threshold are already past their
 target the first time a run sees them. Uncapped, History Retraced's 26 would
 take the next 26 free slots at once, and manual Publish, which offers the same
 free slots through `next_slot`, would find nothing free for days."""
-
-_checked: dict[int, datetime] = {}
-"""When each Page was last queued for a run. Stamped before the run is queued,
-so two tabs opening at once queue one."""
 
 _run_lock = threading.Lock()
 
@@ -74,24 +66,6 @@ class Report:
 
     not_scheduled: list[tuple[str, str]] = field(default_factory=list)
     """Post id, and why."""
-
-
-def due(pages: list[Page]) -> list[int]:
-    """The Pages with auto-save on that have not been checked lately, stamped."""
-    now = datetime.now(timezone.utc)
-    ids = [
-        page.id
-        for page in pages
-        if page.id is not None
-        and page.auto_save_min_reactions
-        and now - _checked.get(page.id, datetime.min.replace(tzinfo=timezone.utc))
-        > THROTTLE
-    ]
-    # Unlocked: two requests racing here both queue a run, and `_run_lock`
-    # makes the second a no-op.
-    for page_id in ids:
-        _checked[page_id] = now
-    return ids
 
 
 def run_pages(page_ids: list[int]) -> None:

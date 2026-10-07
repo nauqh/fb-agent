@@ -80,20 +80,23 @@ class PageUpdate(BaseModel):
 
 
 @router.get("")
-def list_pages(
-    background: BackgroundTasks, session: Session = Depends(get_session)
-) -> list[Page]:
-    """Every Page. Also the trigger for `auto_repost`.
+def list_pages(session: Session = Depends(get_session)) -> list[Page]:
+    return list(session.exec(select(Page).order_by(Page.name)).all())
 
-    Every screen calls this (`PageScopeProvider`), so it fires whenever the
-    operator opens the app. The check runs after the response, throttled per
-    Page, and answers the same whether it succeeds or raises.
-    """
-    pages = list(session.exec(select(Page).order_by(Page.name)).all())
-    due = auto_repost.due(pages)
-    if due:
-        background.add_task(auto_repost.run_pages, due)
-    return pages
+
+@router.post("/auto-repost", status_code=202)
+def start_auto_repost(
+    background: BackgroundTasks, session: Session = Depends(get_session)
+) -> list[int]:
+    """Run `auto_repost` for every Page with auto-save on. The weekly cron calls this."""
+    ids = [
+        page.id
+        for page in session.exec(select(Page).order_by(Page.id)).all()
+        if page.id is not None and page.auto_save_min_reactions
+    ]
+    if ids:
+        background.add_task(auto_repost.run_pages, ids)
+    return ids
 
 
 @router.get("/{page_id}")
