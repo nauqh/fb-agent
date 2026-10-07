@@ -1555,6 +1555,34 @@ def test_a_hero_with_no_prompt_is_drawn_from_the_post(client, written, monkeypat
     assert asked and GOOD.hook in asked[0]
 
 
+def test_a_typed_prompt_replaces_the_pages_image_prompt(client, written, monkeypatch):
+    """Client report: "Cartoon style." came back a photograph, because the
+    Page's brief - "100% photorealistic" - went in as the system instruction."""
+    from app.image import hero
+
+    asked = []
+
+    def record(prompt, *a, **k):
+        asked.append((prompt, k))
+        raise hero.HeroError("stop")
+
+    monkeypatch.setattr(hero, "generate", record)
+    source = _rss()
+    client.post(
+        "/generate",
+        json={"page_ids": [1], "sources": [source.model_dump(mode="json")], "no_image": True},
+    )
+    client.patch("/drafts/1", json={"image_prompt": "A political cartoon. Cartoon style."})
+    client.post("/drafts/1/image?new_hero=true")
+    client.patch("/drafts/1", json={"image_prompt": ""})
+    client.post("/drafts/1/image?new_hero=true")
+
+    (typed, typed_k), (empty, empty_k) = asked
+    assert typed.startswith("A political cartoon.") and source.text in typed
+    assert typed_k["raw"] is True and typed_k["style"] is None
+    assert empty_k["raw"] is False and source.text in empty
+
+
 def test_an_uploaded_hero_is_no_longer_the_feeds_photograph(
     client, written, illustrated, a_photograph, monkeypatch
 ):

@@ -742,7 +742,9 @@ def rebuild_image(
 
     # Rebound rather than appended: `warnings` is a plain JSON column, so an
     # in-place edit does not mark the row dirty and never persists.
-    fresh = generate.build_image(session, draft, page)
+    # The operator's prompt replaces the Page's image prompt here. An empty box
+    # falls back to the Page's, drawing from the post text.
+    fresh = generate.build_image(session, draft, page, raw_prompt=new_hero)
     kept = [w for w in draft.warnings if not w.startswith(generate.IMAGE_WARNING)]
     draft.warnings = kept + fresh
     return _save(session, draft)

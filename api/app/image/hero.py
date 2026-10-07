@@ -166,6 +166,7 @@ def generate(
     page_name: str | None = None,
     page=None,
     style: str | None = None,
+    raw: bool = False,
 ) -> Hero:
     """Image bytes for `prompt`, shaped for the hero box, and the model that drew it.
 
@@ -200,6 +201,10 @@ def generate(
     nothing was billed. Retrying it is free, and not retrying it killed runs
     (`writer/agent.py` carries the same scar from the text side).
 
+    **`raw` sends `prompt` alone**: no brief, no reminder. The operator's own
+    words on Regenerate, which the brief would otherwise overrule - "cartoon
+    style" lost to the brief's "100% photorealistic" every time.
+
     So the ladder is: retry the same model while it is *unavailable*, step to the
     next model when it stays that way, and give up instantly on anything else. A
     refusal ends the whole thing on the spot - a second model refuses the same
@@ -212,13 +217,13 @@ def generate(
     client = genai.Client(api_key=settings.gemini_api_key)
     ratio = aspect_ratio_for(layout.image.width, hero_height_px)
     config = types.GenerateContentConfig(
-        system_instruction=brief(layout, page_name, page, style),
+        system_instruction=None if raw else brief(layout, page_name, page, style),
         response_modalities=["IMAGE"],
         image_config=types.ImageConfig(aspect_ratio=ratio),
     )
     # A style's own brief decides whether the picture carries text: an
     # infographic is nothing but labels, and this reminder would undo it.
-    contents = prompt if style and style.strip() else prompt + NO_TEXT_REMINDER
+    contents = prompt if raw or (style and style.strip()) else prompt + NO_TEXT_REMINDER
 
     last: Exception | None = None
     for model in settings.image_fallback_chain:

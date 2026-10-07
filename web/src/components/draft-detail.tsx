@@ -873,7 +873,7 @@ export function DraftDetail({
                 }
                 rows={3}
                 className="text-xs leading-relaxed"
-                placeholder="What the picture should show. Regenerate draws from this."
+                placeholder="What the picture should show, sent as written. Empty uses the Page's image prompt."
               />
               <div className="flex gap-2">
                 <Button

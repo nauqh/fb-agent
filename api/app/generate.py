@@ -500,8 +500,13 @@ operator has just fixed.
 """
 
 
-def build_image(session: Session, draft: Draft, page: Page) -> list[str]:
+def build_image(
+    session: Session, draft: Draft, page: Page, *, raw_prompt: bool = False
+) -> list[str]:
     """Hero, then composite, then store. Returns warnings; never raises.
+
+    `raw_prompt` draws from `draft.image_prompt` and the source post alone,
+    without the Page's or the style's image prompt - see `hero.generate`.
 
     **A picture that fails must not throw away text that worked.** The draft
     stays at `review` with its copy intact and the reason in `warnings`, because
@@ -588,19 +593,19 @@ def build_image(session: Session, draft: Draft, page: Page) -> list[str]:
             store_image(draft, "hero_image_path", image_bytes, "hero")
         else:
             style = None
+            raw = raw_prompt and bool((draft.image_prompt or "").strip())
             # Text-only and hand-written drafts can have no prompt. Empty, the
             # model is sent only the brief and draws something unrelated.
             subject = (draft.image_prompt or "").strip() or post_text(draft)[:1000]
-            if draft.prompt_template_id:
+            if draft.prompt_template_id and not raw:
                 post_style = session.get(PromptTemplate, draft.prompt_template_id)
                 if post_style and (post_style.image_prompt or "").strip():
                     style = prompts.substitute(post_style.image_prompt, layout)
-            # Under a style the image model gets the source's text too: an
-            # infographic of a competitor's five exercises has to know which
-            # five. The Page's photo brief keeps the one-line subject.
+            # The source's text always goes along as context: an infographic of
+            # a competitor's five exercises has to know which five.
             source = (
                 session.get(SourceItem, draft.source_item_id)
-                if style and draft.source_item_id
+                if draft.source_item_id
                 else None
             )
             if source is not None and source.text.strip():
@@ -612,6 +617,7 @@ def build_image(session: Session, draft: Draft, page: Page) -> list[str]:
                 page.name,
                 page,
                 style=style,
+                raw=raw,
             )
             image_bytes = drawn.data
             if drawn.model != settings.gemini_image_model:
