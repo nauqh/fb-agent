@@ -73,7 +73,7 @@ class PageUpdate(BaseModel):
     auto_draft_competitor_min_reactions: int | None = Field(default=None, ge=1)
     auto_draft_rss_count: int | None = Field(default=None, ge=1, le=10)
     auto_draft_rss_instructions: str | None = Field(default=None, max_length=2000)
-    auto_draft_images: bool = True
+    auto_draft_picture: Literal["none", "source", "google", "generate"] = "google"
     """Not optional: null has no meaning, like `inset_source`."""
 
 

@@ -460,7 +460,7 @@ function AutoDrafts({
   const [rssOn, setRssOn] = useState(page.auto_draft_rss_count !== null);
   const [rssCount, setRssCount] = useState((page.auto_draft_rss_count ?? 2).toString());
   const [instructions, setInstructions] = useState(page.auto_draft_rss_instructions ?? "");
-  const [images, setImages] = useState(page.auto_draft_images);
+  const [picture, setPicture] = useState(page.auto_draft_picture);
   const [busy, setBusy] = useState(false);
 
   const next = {
@@ -468,7 +468,7 @@ function AutoDrafts({
     auto_draft_competitor_min_reactions: minReactions.trim() ? Number(minReactions) : null,
     auto_draft_rss_count: rssOn ? Number(rssCount) : null,
     auto_draft_rss_instructions: instructions.trim() || null,
-    auto_draft_images: images,
+    auto_draft_picture: picture,
   };
   const dirty = (Object.keys(next) as (keyof typeof next)[]).some(
     (key) => next[key] !== page[key],
@@ -584,17 +584,20 @@ function AutoDrafts({
         ) : null}
 
         <div className={cn(box, "sm:w-[calc(50%-0.375rem)]")}>
-          <Label className="flex items-center gap-2 text-[13px] font-normal text-muted-foreground">
-            <input
-              type="checkbox"
-              checked={images}
-              onChange={(event) => setImages(event.target.checked)}
-            />
-            With a picture
+          <Label htmlFor="auto-draft-picture" className="text-[13px] font-normal text-muted-foreground">
+            Picture
           </Label>
-          <span className="text-[12px] text-muted-foreground">
-            {images ? "Source photo or Google" : "Text only"}
-          </span>
+          <NativeSelect
+            id="auto-draft-picture"
+            ariaLabel="Picture for auto-drafts"
+            value={picture}
+            onValueChange={(value) => setPicture(value as typeof picture)}
+          >
+            <NativeSelectOption value="google">Google image</NativeSelectOption>
+            <NativeSelectOption value="source">Source photo</NativeSelectOption>
+            <NativeSelectOption value="generate">Generate with AI</NativeSelectOption>
+            <NativeSelectOption value="none">No picture</NativeSelectOption>
+          </NativeSelect>
         </div>
 
         <Button size="sm" disabled={!dirty || busy} onClick={() => void save()}>

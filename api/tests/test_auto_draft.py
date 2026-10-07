@@ -530,12 +530,18 @@ def test_the_monitor_carries_both_switches(client, session, page, feed):
     assert body["runs"][0]["source"] == "rss"
 
 
-def test_auto_drafts_never_buy_a_picture(session, page, pool):
-    """Pictures on: the source's photo, else Google. Off: text only."""
-    [searched] = auto_draft.run(session, page, target=1)
-    page.auto_draft_images = False
-    [text_only] = auto_draft.run(session, page, target=1)
+@pytest.mark.parametrize(
+    "choice, flags",
+    [
+        ("none", (True, False, False)),
+        ("source", (False, True, False)),
+        ("google", (False, False, True)),
+        ("generate", (False, False, False)),
+    ],
+)
+def test_the_page_chooses_where_the_picture_comes_from(session, page, pool, choice, flags):
+    page.auto_draft_picture = choice
+    [draft_id] = auto_draft.run(session, page, target=1)
 
-    assert session.get(Draft, searched).hero_search is True
-    assert session.get(Draft, text_only).no_image is True
-    assert session.get(Draft, text_only).hero_search is False
+    draft = session.get(Draft, draft_id)
+    assert (draft.no_image, draft.hero_from_source, draft.hero_search) == flags

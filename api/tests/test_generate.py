@@ -2262,7 +2262,7 @@ def _same_picture(stored: bytes, original: bytes) -> bool:
         return a.format == "JPEG" and a.size == b.size
 
 
-# --- hero_search: the source's photo, else Google; never the image model -----
+# --- hero_search: a Google image, never the image model ----------------------
 
 
 def _searched(session, page, monkeypatch, source: SourceItemBase) -> tuple[Draft, list]:
@@ -2304,13 +2304,3 @@ def test_a_searched_hero_takes_a_google_image_for_a_competitor_post(
 
     assert len(searches) == 1
     assert draft.hero_image_path and draft.composed_image_path
-
-
-def test_a_searched_hero_prefers_the_feeds_own_photo(session, page, written, monkeypatch):
-    source = _rss()
-    source.image_url = "https://example.com/photo.jpg"
-
-    draft, searches = _searched(session, page, monkeypatch, source)
-
-    assert searches == []
-    assert draft.hero_image_path

@@ -309,13 +309,15 @@ class Page(SQLModel, table=True):
     """What the model picks feed items by ("UK politics only, no sport"). Null
     takes the newest."""
 
-    auto_draft_images: bool = Field(default=True)
-    """Whether auto-drafts carry a picture. False makes them text-only.
+    auto_draft_picture: str = Field(default="google")
+    """Where an auto-draft's picture comes from: `none` (text only), `source`
+    (the source's own photo), `google` (an image search) or `generate` (the
+    image model). Chosen per Page before the run, never per draft.
 
-    On, the picture is the source's own photo where that may be reused, else a
-    Google image (`Draft.hero_search`) - never the image model. Auto-drafts are
-    written before anyone reviews them, and on 2026-10-06 19 of 58 paid heroes
-    went on drafts that were rejected or never scheduled."""
+    `google` by default because auto-drafts are written before anyone reviews
+    them: on 2026-10-06, 19 of 58 paid heroes went on drafts that were
+    rejected or never scheduled. A `str` validated in `PageUpdate`, like
+    `inset_source`."""
 
     # --- what this Page tells the model ---------------------------------------
     #
@@ -941,11 +943,11 @@ class Draft(SQLModel, table=True):
     """
 
     hero_search: bool = Field(default=False)
-    """Take the hero from the source's photo, else a Google image; never Gemini.
+    """Take the hero from a Google image search instead of the image model.
 
-    What auto-drafts set (`Page.auto_draft_images`). Unlike `hero_from_source`
-    a source with no reusable photo is not a dead end: the search runs instead.
-    """
+    What an auto-draft sets when its Page's `auto_draft_picture` is `google`.
+    The query is the writer's `inset_subject`, so the search costs no extra
+    model call to word."""
 
     hero_image_path: str | None = None
     """The source hero. The compositor fits it into the card on every redraw."""
