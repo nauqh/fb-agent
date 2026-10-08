@@ -6,7 +6,6 @@ system exposed every intermediate state of a six-node graph, and its brand
 rules ran afterwards as warnings nobody had to act on.
 """
 
-from functools import lru_cache
 from urllib.parse import urlsplit
 
 import httpx
@@ -344,7 +343,6 @@ image one beside it, because model ids rot and a rotted id should be an env
 change rather than a release. The evidence for what is in it is on the setting.
 """
 
-@lru_cache(maxsize=4)
 def _model(model_name: str) -> GoogleModel:
     if not settings.gemini_api_key:
         raise RuntimeError("missing GEMINI_API_KEY")
