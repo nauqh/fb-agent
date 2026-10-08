@@ -158,14 +158,16 @@ export default function SettingsScreen() {
               label: "Automation",
               body: (
                 <Pane title="Automation" hint="What this Page does on its own.">
+                  {/* Keyed by Page: both forms seed their state from `page` once. */}
                   <div className="space-y-8">
                     <AutoDrafts
+                      key={page.id}
                       page={page}
                       assigned={assignments ? assigned : null}
                       feeds={sources ? sources.feeds.length : null}
                     />
                     <div className="border-t pt-6">
-                      <Automation page={page} />
+                      <Automation key={page.id} page={page} />
                     </div>
                   </div>
                 </Pane>
