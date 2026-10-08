@@ -11,7 +11,7 @@ import { StatusBadge, title } from "@/components/review-list";
 import { ScreenHeader } from "@/components/screen";
 import { StatusPill, type StatusTone } from "@/components/status-pill";
 import { getAutoDraftStatus } from "@/lib/api/auto-drafts";
-import { asUtc, dayHeading, timeAgo, timeOfDay } from "@/lib/format";
+import { asUtc, dayHeading, dayKey, timeAgo, timeOfDay } from "@/lib/format";
 import { pageAvatarRaw } from "@/lib/page-avatar";
 import type { AutoDraftPage, AutoDraftRun, AutoDraftStatus, Draft } from "@/lib/types";
 import { useQuery } from "@/lib/use-query";
@@ -62,6 +62,15 @@ const BATCH_MINUTES = 10;
 
 const LOW_WATER = 5;
 /** At or below this many unused posts, a Page is worth looking at. */
+
+const DAYS = 7;
+/** How far back the log and each Page's strip reach. */
+
+const STUCK_MINUTES = 30;
+/**
+ * A draft still writing after this long has hung. A restart is already swept to
+ * `failed` by `sweep_stranded`, so this only catches a writer that never returns.
+ */
 
 function nextRun(now: Date): Date {
   const next = new Date(now);
@@ -119,7 +128,7 @@ function left(count: number, what: string): PoolState {
   return { tone: "positive", label: "Ready", why: `${count} ${what}.` };
 }
 
-const WORST: StatusTone[] = ["negative", "waiting", "neutral", "positive"];
+const WORST: StatusTone[] = ["negative", "waiting", "busy", "neutral", "positive"];
 
 /** The Page's pill: its worst switched-on source. */
 function worst(states: (PoolState | null)[]): PoolState | null {
@@ -130,9 +139,50 @@ function worst(states: (PoolState | null)[]): PoolState | null {
 
 const isOn = (page: AutoDraftPage) => page.competitor_count !== null || page.rss_count !== null;
 
+function isStuck(draft: Draft, now: Date | null): boolean {
+  return (
+    draft.status === "generating" &&
+    now !== null &&
+    now.getTime() - asUtc(draft.created_at).getTime() > STUCK_MINUTES * 60_000
+  );
+}
+
+/**
+ * One run row's outcome, the way a job runner labels a run rather than counting
+ * it. `run_rss` writes a failure onto the note instead of raising, and this
+ * prefix is the only thing that tells it from a short pool.
+ */
+function runState(run: AutoDraftRun, drafts: Draft[], now: Date | null): PoolState {
+  if (
+    run.note?.startsWith("Could not choose") ||
+    drafts.some((draft) => draft.status === "failed" || isStuck(draft, now))
+  ) {
+    return { tone: "negative", label: "Failed", why: run.note ?? "A draft did not finish." };
+  }
+  if (drafts.some((draft) => draft.status === "generating")) {
+    return { tone: "busy", label: "Writing", why: "Drafts are still being written." };
+  }
+  if (run.drafts_created === 0) {
+    return { tone: "neutral", label: "Empty", why: run.note ?? "Nothing to write about." };
+  }
+  if (run.note) return { tone: "waiting", label: "Partial", why: run.note };
+  return { tone: "positive", label: "OK", why: `${run.drafts_created} drafts.` };
+}
+
+/** The last `DAYS` scheduled runs, oldest first. Today's counts once it is due. */
+function nights(now: Date): Date[] {
+  const last = nextRun(now);
+  last.setUTCDate(last.getUTCDate() - 1);
+  return Array.from({ length: DAYS }, (_, i) => {
+    const night = new Date(last);
+    night.setUTCDate(night.getUTCDate() - (DAYS - 1 - i));
+    return night;
+  });
+}
+
 export default function AutoDraftsScreen() {
   const { data, error } = useQuery<AutoDraftStatus>(
-    () => getAutoDraftStatus(30),
+    () => getAutoDraftStatus(DAYS),
     [],
     {
       cacheKey: "auto-draft-status",
@@ -147,21 +197,30 @@ export default function AutoDraftsScreen() {
   if (error) return <QueryError error={error} />;
   if (!data) return <Loading label="Reading the automation" className="h-72" />;
 
+  const made = (runId: number) => data.drafts.filter((draft) => draft.auto_draft_run_id === runId);
+
   const latest = data.runs[0] ?? null;
+  // From the Pages, not the log: the log is a week, and a week of silence is
+  // exactly when this has to show.
+  const lastRunAt = data.pages
+    .map((page) => page.last_run_at)
+    .filter((at): at is string => at !== null)
+    .sort()
+    .at(-1);
   const stale =
     now !== null &&
-    latest !== null &&
-    (now.getTime() - asUtc(latest.created_at).getTime()) / 3_600_000 > STALE_AFTER_HOURS;
+    lastRunAt !== undefined &&
+    (now.getTime() - asUtc(lastRunAt).getTime()) / 3_600_000 > STALE_AFTER_HOURS;
 
-  const lastDrafts = latest
-    ? data.runs
-        .filter(
-          (run) =>
-            asUtc(latest.created_at).getTime() - asUtc(run.created_at).getTime() <
-            BATCH_MINUTES * 60_000,
-        )
-        .reduce((sum, run) => sum + run.drafts_created, 0)
-    : 0;
+  const lastBatch = latest
+    ? data.runs.filter(
+        (run) =>
+          asUtc(latest.created_at).getTime() - asUtc(run.created_at).getTime() <
+          BATCH_MINUTES * 60_000,
+      )
+    : [];
+  const lastDrafts = lastBatch.reduce((sum, run) => sum + run.drafts_created, 0);
+  const failed = lastBatch.filter((run) => runState(run, made(run.id), now).tone === "negative");
 
   const automated = data.pages.filter(isOn);
   const attention = automated.filter((page) => {
@@ -173,6 +232,17 @@ export default function AutoDraftsScreen() {
   // need a ceiling nobody could defend.
   const bestCompetitor = Math.max(1, ...data.pages.map((page) => page.available));
   const bestRss = Math.max(1, ...data.pages.map((page) => page.rss_available ?? 0));
+
+  // What the next run should make: each switch, capped by what is left. RSS
+  // before its first run has no count yet, so it is taken at its word.
+  const expected = automated.reduce(
+    (sum, page) =>
+      sum +
+      Math.min(page.competitor_count ?? 0, page.assigned_competitors ? page.available : 0) +
+      Math.min(page.rss_count ?? 0, page.feeds ? (page.rss_available ?? page.rss_count ?? 0) : 0),
+    0,
+  );
+  const strip = now ? nights(now) : [];
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto pb-10">
@@ -191,6 +261,8 @@ export default function AutoDraftsScreen() {
       <p className="flex flex-wrap items-center gap-x-2 gap-y-1 px-0.5 text-sm text-muted-foreground">
         <Figure value={now ? until(nextRun(now), now) : "-"} label="until the next run" />
         <span aria-hidden>·</span>
+        <Figure value={`~${expected}`} label="drafts expected" />
+        <span aria-hidden>·</span>
         <Figure value={String(automated.length)} label="Pages automated" />
         {latest ? (
           <>
@@ -200,6 +272,17 @@ export default function AutoDraftsScreen() {
               label={`drafts ${timeAgo(latest.created_at)}`}
             />
           </>
+        ) : null}
+
+        {failed.length > 0 ? (
+          <span
+            title={failed.map((run) => named(data.pages, run.page_id)).join(", ")}
+            className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-medium tabular-nums text-destructive"
+          >
+            <AlertTriangle className="size-3" />
+            {failed.length}
+            <span className="font-normal">failed last run</span>
+          </span>
         ) : null}
 
         {attention.length > 0 ? (
@@ -216,27 +299,28 @@ export default function AutoDraftsScreen() {
         ) : null}
       </p>
 
-      {stale && latest ? (
+      {stale ? (
         <p
           role="status"
           className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
         >
           <AlertTriangle className="mt-0.5 size-4 shrink-0" />
           <span>
-            Nothing has run since {timeAgo(latest.created_at)}. The schedule may
+            Nothing has run since {timeAgo(lastRunAt ?? null)}. The schedule may
             have stopped - check the Auto-drafts workflow on GitHub.
           </span>
         </p>
       ) : null}
 
       <section className="shrink-0 overflow-x-auto rounded-xl border">
-        <table className="w-full min-w-[44rem]">
+        <table className="w-full min-w-[52rem]">
           <thead>
             <tr className="border-b bg-muted/30 text-left font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
               <th className="px-5 py-3 font-medium">Page</th>
               <th className="w-44 px-5 py-3 font-medium">Facebook left</th>
               <th className="w-44 px-5 py-3 font-medium">RSS left</th>
               <th className="w-44 px-5 py-3 font-medium">Last run</th>
+              <th className="w-40 px-5 py-3 font-medium">Last {DAYS} nights</th>
               <th className="w-40 px-5 py-3 font-medium">Status</th>
             </tr>
           </thead>
@@ -245,6 +329,7 @@ export default function AutoDraftsScreen() {
               const competitor = competitorPool(page);
               const rss = rssPool(page);
               const state = worst([competitor, rss]);
+              const runs = data.runs.filter((run) => run.page_id === page.page_id);
               return (
                 <tr
                   key={page.page_id}
@@ -277,6 +362,12 @@ export default function AutoDraftsScreen() {
                   </td>
 
                   <td className="px-5 py-3">
+                    {isOn(page) || runs.length > 0 ? (
+                      <Nights nights={strip} runs={runs} made={made} now={now} />
+                    ) : null}
+                  </td>
+
+                  <td className="px-5 py-3">
                     {state === null ? (
                       <span className="text-[13px] text-muted-foreground/60" title="Switch auto-drafts on in Settings.">
                         Off
@@ -294,7 +385,7 @@ export default function AutoDraftsScreen() {
         </table>
       </section>
 
-      <RunLog runs={data.runs} pages={data.pages} drafts={data.drafts} />
+      <RunLog runs={data.runs} pages={data.pages} made={made} now={now} />
     </div>
   );
 }
@@ -307,25 +398,28 @@ export default function AutoDraftsScreen() {
  * turns it into what it actually is: a history, where the useful reading is
  * "every night this week ran" rather than any single row.
  */
+function named(pages: AutoDraftPage[], id: number): string {
+  return pages.find((page) => page.page_id === id)?.page_name ?? `Page ${id}`;
+}
+
 function RunLog({
   runs,
   pages,
-  drafts,
+  made,
+  now,
 }: {
   runs: AutoDraftRun[];
   pages: AutoDraftPage[];
-  drafts: Draft[];
+  made: (runId: number) => Draft[];
+  now: Date | null;
 }) {
   if (runs.length === 0) {
     return (
       <section className="shrink-0 rounded-xl border px-5 py-8 text-center text-sm text-muted-foreground">
-        Nothing has run yet. The first run writes its rows at 06:00.
+        Nothing has run in the last {DAYS} days.
       </section>
     );
   }
-
-  const named = (id: number) => pages.find((page) => page.page_id === id) ?? null;
-  const made = (runId: number) => drafts.filter((draft) => draft.auto_draft_run_id === runId);
 
   const days: { heading: string; rows: AutoDraftRun[] }[] = [];
   for (const run of runs) {
@@ -358,8 +452,9 @@ function RunLog({
             key={day.heading}
             heading={day.heading}
             rows={day.rows}
-            named={named}
+            name={(id) => named(pages, id)}
             made={made}
+            now={now}
           />
         ))}
       </div>
@@ -377,13 +472,15 @@ const RUN_GRID =
 function Day({
   heading,
   rows,
-  named,
+  name,
   made,
+  now,
 }: {
   heading: string;
   rows: AutoDraftRun[];
-  named: (id: number) => AutoDraftPage | null;
+  name: (id: number) => string;
   made: (runId: number) => Draft[];
+  now: Date | null;
 }) {
   const total = rows.reduce((sum, run) => sum + run.drafts_created, 0);
 
@@ -400,19 +497,20 @@ function Day({
 
       <ul className="divide-y">
         {rows.map((run) => {
-          const page = named(run.page_id);
           const drafts = made(run.id);
+          const state = runState(run, drafts, now);
           return (
             <li
               key={run.id}
               className={cn(RUN_GRID, "py-2.5 text-[13px] transition-colors hover:bg-muted/30")}
             >
               <span className="min-w-0">
-                <span className="block truncate font-medium">
-                  {page?.page_name ?? `Page ${run.page_id}`}
-                </span>
-                <span className="block text-xs text-muted-foreground">
+                <span className="block truncate font-medium">{name(run.page_id)}</span>
+                <span className="flex items-center gap-2 pt-0.5 text-xs text-muted-foreground">
                   {run.source === "rss" ? "RSS" : "Facebook posts"}
+                  <span title={state.why}>
+                    <StatusPill tone={state.tone} label={state.label} />
+                  </span>
                 </span>
               </span>
 
@@ -425,25 +523,47 @@ function Day({
                     here, so the count is the fallback. */}
                 {drafts.length > 0 ? (
                   <ul className="space-y-1.5">
-                    {drafts.map((draft) => (
-                      <li key={draft.id} className="flex min-w-0 items-center gap-3">
-                        <Link
-                          href={`/review/${draft.id}`}
-                          title={title(draft)}
-                          className="min-w-0 flex-1 truncate hover:underline"
-                        >
-                          {draft.status === "generating" ? "Writing..." : title(draft)}
-                        </Link>
-                        <StatusBadge draft={draft} />
-                      </li>
-                    ))}
+                    {drafts.map((draft) => {
+                      const error = isStuck(draft, now)
+                        ? `Still writing after ${STUCK_MINUTES} minutes - it has probably hung.`
+                        : draft.status === "failed"
+                          ? draft.error
+                          : null;
+                      return (
+                        <li key={draft.id} className="min-w-0">
+                          <div className="flex min-w-0 items-center gap-3">
+                            <Link
+                              href={`/review/${draft.id}`}
+                              title={title(draft)}
+                              className="min-w-0 flex-1 truncate hover:underline"
+                            >
+                              {draft.status === "generating" ? "Writing..." : title(draft)}
+                            </Link>
+                            <StatusBadge draft={draft} />
+                          </div>
+                          {error ? (
+                            <p className="truncate text-xs text-destructive" title={error}>
+                              {error}
+                            </p>
+                          ) : null}
+                        </li>
+                      );
+                    })}
                   </ul>
                 ) : run.drafts_created > 0 ? (
                   <span className="tabular-nums">
                     {run.drafts_created} {run.drafts_created === 1 ? "draft" : "drafts"}
                   </span>
                 ) : (
-                  <span className="text-muted-foreground">Nothing to write about</span>
+                  <span
+                    className={cn(
+                      "block truncate",
+                      state.tone === "negative" ? "text-destructive" : "text-muted-foreground",
+                    )}
+                    title={run.note ?? undefined}
+                  >
+                    {run.note ?? "Nothing to write about"}
+                  </span>
                 )}
                 {run.note && run.drafts_created > 0 ? (
                   <p className="pt-1 text-xs text-muted-foreground">{run.note}</p>
@@ -456,6 +576,55 @@ function Day({
     </div>
   );
 }
+
+/**
+ * One dot per scheduled night, coloured by that night's worst run. A hollow dot
+ * is a night with no run for this Page: the cron did not fire, or the Page was
+ * off. A manual run lands on its own day, like the log groups it.
+ */
+function Nights({
+  nights,
+  runs,
+  made,
+  now,
+}: {
+  nights: Date[];
+  runs: AutoDraftRun[];
+  made: (runId: number) => Draft[];
+  now: Date | null;
+}) {
+  return (
+    <span className="flex items-center gap-1.5">
+      {nights.map((night) => {
+        const iso = night.toISOString();
+        const day = dayKey(iso);
+        const state = worst(
+          runs
+            .filter((run) => dayKey(run.created_at) === day)
+            .map((run) => runState(run, made(run.id), now)),
+        );
+        return (
+          <span
+            key={day}
+            title={`${dayHeading(iso)}: ${state ? `${state.label}. ${state.why}` : "No run"}`}
+            className={cn(
+              "size-2.5 rounded-full",
+              state === null ? "border border-muted-foreground/40" : DOT[state.tone],
+            )}
+          />
+        );
+      })}
+    </span>
+  );
+}
+
+const DOT: Record<StatusTone, string> = {
+  negative: "bg-red-500",
+  waiting: "bg-blue-500",
+  busy: "bg-gold animate-pulse",
+  neutral: "bg-muted-foreground/40",
+  positive: "bg-green-500",
+};
 
 /** One source's cell: what is left, drawn, or "Off" when the source is off. */
 function Left({

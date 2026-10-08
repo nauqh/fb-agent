@@ -345,6 +345,20 @@ def test_the_monitor_carries_each_page_s_last_run(client, session, page, pool):
     assert rows[page.name]["last_run_at"] is not None
 
 
+def test_the_monitor_s_log_is_a_week_but_the_last_run_is_not(client, session, page, pool):
+    """A Page quiet for longer than the log still shows when it last ran."""
+    auto_draft.run(session, page, target=2)
+    run = session.exec(select(AutoDraftRun)).one()
+    run.created_at = run.created_at - timedelta(days=10)
+    session.commit()
+
+    body = client.get("/auto-drafts/status").json()
+    row = next(row for row in body["pages"] if row["page_name"] == page.name)
+
+    assert body["runs"] == []
+    assert row["last_run_drafts"] == 2
+
+
 def test_a_run_s_drafts_point_at_the_run(session, page, pool):
     ids = auto_draft.run(session, page, target=2)
 

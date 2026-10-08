@@ -7,6 +7,6 @@ import { get } from "@/lib/api/client";
  * Every Page in one read, deliberately unscoped: the question the monitor asks
  * is "is anything wrong anywhere", which the Page switcher cannot ask.
  */
-export async function getAutoDraftStatus(limit = 20): Promise<AutoDraftStatus> {
-  return get<AutoDraftStatus>("/auto-drafts/status", { limit });
+export async function getAutoDraftStatus(days = 7): Promise<AutoDraftStatus> {
+  return get<AutoDraftStatus>("/auto-drafts/status", { days });
 }

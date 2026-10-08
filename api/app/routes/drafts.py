@@ -6,7 +6,7 @@ is the job record, which is why progress lives on it.
 """
 
 import io
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Literal, get_args
 
 import httpx
@@ -204,14 +204,14 @@ class AutoDraftPage(BaseModel):
 class AutoDraftStatus(BaseModel):
     pages: list[AutoDraftPage]
     runs: list[AutoDraftRun]
-    """Most recent first, across every Page."""
+    """The last `days` of runs, most recent first, across every Page."""
     drafts: list[Draft]
     """What those runs made, so the log can say what became of each one."""
 
 
 @router.get("/auto-drafts/status")
 def auto_draft_status(
-    limit: int = Query(20, ge=1, le=100, description="How many recent runs to return"),
+    days: int = Query(7, ge=1, le=30, description="How many days of runs to return"),
     session: Session = Depends(get_session),
 ) -> AutoDraftStatus:
     """What the automation did last, and which Pages are about to run dry.
@@ -227,13 +227,24 @@ def auto_draft_status(
     """
     pages = session.exec(select(Page).order_by(col(Page.name))).all()
 
+    since = datetime.now(timezone.utc) - timedelta(days=days)
     runs = session.exec(
-        select(AutoDraftRun).order_by(col(AutoDraftRun.created_at).desc()).limit(limit)
+        select(AutoDraftRun)
+        .where(col(AutoDraftRun.created_at) >= since)
+        .order_by(col(AutoDraftRun.created_at).desc())
     ).all()
 
-    latest: dict[tuple[int, str], AutoDraftRun] = {}
-    for run in runs:
-        latest.setdefault((run.page_id, run.source), run)
+    # Read outside the window: a Page quiet for a week has still run before.
+    newest = (
+        select(func.max(col(AutoDraftRun.id)))
+        .group_by(col(AutoDraftRun.page_id), col(AutoDraftRun.source))
+    )
+    latest: dict[tuple[int, str], AutoDraftRun] = {
+        (run.page_id, run.source): run
+        for run in session.exec(
+            select(AutoDraftRun).where(col(AutoDraftRun.id).in_(newest))
+        ).all()
+    }
 
     out = []
     for page in pages:
