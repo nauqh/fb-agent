@@ -151,16 +151,25 @@ function isStuck(draft: Draft, now: Date | null): boolean {
  * One run row's outcome, the way a job runner labels a run rather than counting
  * it. `run_rss` writes a failure onto the note instead of raising, and this
  * prefix is the only thing that tells it from a short pool.
+ *
+ * Failed means the run gave the operator nothing. One lost draft out of three
+ * is Partial: the night still filled the queue, and red for it would make most
+ * nights red.
  */
 function runState(run: AutoDraftRun, drafts: Draft[], now: Date | null): PoolState {
-  if (
-    run.note?.startsWith("Could not choose") ||
-    drafts.some((draft) => draft.status === "failed" || isStuck(draft, now))
-  ) {
-    return { tone: "negative", label: "Failed", why: run.note ?? "A draft did not finish." };
+  const lost = drafts.filter((draft) => draft.status === "failed" || isStuck(draft, now)).length;
+  if (run.note?.startsWith("Could not choose") || (drafts.length > 0 && lost === drafts.length)) {
+    return { tone: "negative", label: "Failed", why: run.note ?? "No draft finished." };
   }
-  if (drafts.some((draft) => draft.status === "generating")) {
+  if (drafts.some((draft) => draft.status === "generating" && !isStuck(draft, now))) {
     return { tone: "busy", label: "Writing", why: "Drafts are still being written." };
+  }
+  if (lost > 0) {
+    return {
+      tone: "waiting",
+      label: "Partial",
+      why: `${lost} of ${drafts.length} drafts did not finish.`,
+    };
   }
   if (run.drafts_created === 0) {
     return { tone: "neutral", label: "Empty", why: run.note ?? "Nothing to write about." };
