@@ -118,10 +118,6 @@ export function ScheduleWeek({
         </div>
       </div>
 
-      <p className="shrink-0 text-[11px] text-muted-foreground">
-        An empty cell is a slot nothing is booked into. Rows are the times this
-        page actually posts at, not every hour of the day.
-      </p>
     </div>
   );
 }

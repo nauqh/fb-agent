@@ -950,10 +950,10 @@ function Badge({ page }: { page: Page }) {
 function Group({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="space-y-3">
-      {/* Full-strength, like every other heading on this screen. Small caps
-          already separate it from the controls under it; greying it as well
+      {/* Full-strength, like every other heading on this screen. Weight
+          already separates it from the controls under it; greying it as well
           made the group read as switched off. */}
-      <h3 className="text-xs font-semibold uppercase tracking-wide">{title}</h3>
+      <h3 className="text-sm font-semibold">{title}</h3>
       <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2">{children}</div>
     </section>
   );

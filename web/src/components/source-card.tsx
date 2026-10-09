@@ -250,7 +250,7 @@ export function SourceCard({ selected, pending, onToggle, ...item }: SourceCardP
               {text || <span className="text-muted-foreground">No text.</span>}
             </p>
 
-            <div className="clear-both flex flex-wrap items-center gap-x-4 gap-y-1 border-t pt-3 font-mono text-[11px] text-muted-foreground tabular-nums">
+            <div className="clear-both flex flex-wrap items-center gap-x-4 gap-y-1 border-t pt-3 text-xs text-muted-foreground tabular-nums">
               <span>{chars(text)}</span>
               {reactions !== null && reactions !== undefined ? (
                 <>

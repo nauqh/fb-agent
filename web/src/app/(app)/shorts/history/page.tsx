@@ -184,7 +184,7 @@ function JobRow({
         </div>
 
         <span
-          className="hidden w-20 shrink-0 text-right font-mono text-[11px] text-muted-foreground sm:block"
+          className="hidden w-20 shrink-0 text-right text-xs text-muted-foreground sm:block"
           title={job.finished_at ? fullDate(job.finished_at) : undefined}
         >
           {job.finished_at ? timeAgo(job.finished_at) : "-"}

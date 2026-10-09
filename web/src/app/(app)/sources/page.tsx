@@ -189,8 +189,7 @@ function CompetitorsTab() {
             </>
           ) : (
             <>Never synced from Metricool; {order}.</>
-          )}{" "}
-          Which competitors this Page reads is set on Settings.
+          )}
           {reach && reach.used_posts > 0 ? (
             <>
               {" "}

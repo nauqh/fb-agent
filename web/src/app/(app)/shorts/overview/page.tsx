@@ -255,16 +255,16 @@ function VideoTable({
         >
           <span className="w-6 shrink-0" />
           <span className="w-24 shrink-0" />
-          <span className="min-w-0 flex-1 font-mono text-[10px] tracking-[0.12em] text-muted-foreground uppercase">
+          <span className="min-w-0 flex-1 text-xs text-muted-foreground">
             Video
           </span>
-          <span className="w-16 shrink-0 text-right font-mono text-[10px] tracking-[0.12em] text-muted-foreground uppercase">
+          <span className="w-16 shrink-0 text-right text-xs text-muted-foreground">
             Watch
           </span>
-          <span className="w-32 shrink-0 text-right font-mono text-[10px] tracking-[0.12em] text-muted-foreground uppercase">
+          <span className="w-32 shrink-0 text-right text-xs text-muted-foreground">
             Views
           </span>
-          <span className="w-24 shrink-0 text-right font-mono text-[10px] tracking-[0.12em] text-muted-foreground uppercase">
+          <span className="w-24 shrink-0 text-right text-xs text-muted-foreground">
             Published
           </span>
           <span className="w-4 shrink-0" />
@@ -375,7 +375,7 @@ function VideoRow({
       >
         <span
           className={cn(
-            "w-6 shrink-0 text-right font-mono text-xs tabular-nums",
+            "w-6 shrink-0 text-right text-xs tabular-nums",
             rank <= 3 ? "font-semibold text-gold" : "text-muted-foreground",
           )}
         >
@@ -407,7 +407,7 @@ function VideoRow({
             magnitude (a short's 30s IS a full watch), so no bar, just the
             figure. */}
         <span className={cn(NUMBER_RIGHT, "w-16 hidden sm:block lg:block")}>
-          <span className="font-mono text-[11px] text-muted-foreground tabular-nums">
+          <span className="text-xs text-muted-foreground tabular-nums">
             {video.avg_watch_s != null ? `${Math.round(video.avg_watch_s)}s` : "-"}
           </span>
         </span>
@@ -435,7 +435,7 @@ function VideoRow({
           </span>
         </span>
 
-        <span className="hidden w-24 shrink-0 text-right font-mono text-[11px] text-muted-foreground sm:block">
+        <span className="hidden w-24 shrink-0 text-right text-xs text-muted-foreground sm:block">
           {timeAgo(video.published_at)}
         </span>
 
@@ -523,7 +523,7 @@ function Stat({ value, label }: { value: string; label: string }) {
       <dd className="text-sm font-semibold tracking-tight text-foreground tabular-nums">
         {value}
       </dd>
-      <dt className="font-mono text-[10px] tracking-[0.12em] text-muted-foreground uppercase">
+      <dt className="text-xs text-muted-foreground">
         {label}
       </dt>
     </div>

@@ -507,9 +507,9 @@ const ROW_PADDING = "gap-5 px-5 py-3";
 /** One right-aligned figure column. Fixed so the digits line up down the page. */
 const NUMBER_COLUMN = "w-16 shrink-0 text-right";
 
-/** A column label. Furniture, not data - mono, muted, and the same everywhere. */
+/** A column label. Furniture, not data - muted, and the same everywhere. */
 const LABEL =
-  "font-mono text-[10px] tracking-[0.12em] text-muted-foreground uppercase";
+  "text-xs text-muted-foreground";
 
 function TableHead() {
   return (
@@ -519,8 +519,8 @@ function TableHead() {
     >
       <span className="w-6 shrink-0" />
       <span className={cn("min-w-0 flex-1", LABEL)}>Post</span>
-      <span className={cn(NUMBER_COLUMN, LABEL)}>Reac.</span>
-      <span className={cn(NUMBER_COLUMN, LABEL)}>Com.</span>
+      <span className={cn(NUMBER_COLUMN, LABEL)}>Reactions</span>
+      <span className={cn(NUMBER_COLUMN, LABEL)}>Comments</span>
       <span className={cn(NUMBER_COLUMN, LABEL)}>Shares</span>
       <span className={cn(NUMBER_COLUMN, "w-20", LABEL)}>Reach</span>
       <span className={cn("w-40 shrink-0 text-right", LABEL)}>Engagement</span>
@@ -693,7 +693,7 @@ function PostRow({
 }) {
   const column = cn(
     NUMBER_COLUMN,
-    "hidden font-mono text-[11px] text-muted-foreground tabular-nums lg:block",
+    "hidden text-xs text-muted-foreground tabular-nums lg:block",
   );
 
   return (
@@ -709,7 +709,7 @@ function PostRow({
               colour. */}
           <span
             className={cn(
-              "w-6 shrink-0 text-right font-mono text-xs tabular-nums",
+              "w-6 shrink-0 text-right text-xs tabular-nums",
               rank <= 3 ? "font-semibold text-gold" : "text-muted-foreground",
             )}
           >
@@ -769,7 +769,7 @@ function PostRow({
             </span>
           </span>
 
-          <span className="hidden w-24 shrink-0 text-right font-mono text-[11px] text-muted-foreground sm:block">
+          <span className="hidden w-24 shrink-0 text-right text-xs text-muted-foreground sm:block">
             {timeAgo(post.published_at)}
           </span>
         </>
@@ -1100,8 +1100,8 @@ function Saved() {
           className={cn("hidden items-center border-b bg-muted/30 lg:flex", ROW_PADDING)}
         >
           <span className={cn("min-w-0 flex-1", LABEL)}>Post</span>
-          <span className={cn(NUMBER_COLUMN, LABEL)}>Reac.</span>
-          <span className={cn(NUMBER_COLUMN, LABEL)}>Com.</span>
+          <span className={cn(NUMBER_COLUMN, LABEL)}>Reactions</span>
+          <span className={cn(NUMBER_COLUMN, LABEL)}>Comments</span>
           <span className={cn(NUMBER_COLUMN, LABEL)}>Shares</span>
           <span className={cn(NUMBER_COLUMN, "w-20", LABEL)}>Reach</span>
           <span className={cn("w-24 shrink-0 text-right", LABEL)}>Last posted</span>
@@ -1157,7 +1157,7 @@ function SavedRow({
 }) {
   const column = cn(
     NUMBER_COLUMN,
-    "hidden font-mono text-[11px] text-muted-foreground tabular-nums lg:block",
+    "hidden text-xs text-muted-foreground tabular-nums lg:block",
   );
 
   return (
@@ -1169,7 +1169,7 @@ function SavedRow({
           <span className="min-w-0 flex-1 truncate text-sm font-medium">
             {saved.auto_saved ? (
               <span
-                className="mr-2 rounded-full border px-1.5 py-0.5 align-middle font-mono text-[10px] text-muted-foreground"
+                className="mr-2 rounded-full border px-1.5 py-0.5 align-middle text-[11px] text-muted-foreground"
                 title="Saved automatically at the threshold set on Settings"
               >
                 Auto
@@ -1187,7 +1187,7 @@ function SavedRow({
               exact stamp is in the panel below rather than a second line nobody
               reads. */}
           <span
-            className="w-24 shrink-0 text-right font-mono text-[11px] text-muted-foreground"
+            className="w-24 shrink-0 text-right text-xs text-muted-foreground"
             title={fullDate(saved.published_at)}
           >
             {timeAgo(saved.published_at)}

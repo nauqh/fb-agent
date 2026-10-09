@@ -23,7 +23,7 @@ import { PageAvatar } from "@/components/page-badge";
 function Card({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div className="overflow-hidden rounded-2xl border bg-card">
-      <p className="border-b px-4 py-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+      <p className="border-b px-4 py-2 text-xs font-medium text-muted-foreground">
         {title}
       </p>
       {children}

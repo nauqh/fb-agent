@@ -29,7 +29,7 @@ import { cn } from "@/lib/utils";
  * tiles over a bordered table and read as a control panel: three equal boxes
  * make nothing important, which is the opposite of what a monitor is for. The
  * summary is one line now - figures carrying the weight, words between them
- * muted - and both tables are the app's own, down to the mono uppercase header
+ * muted - and both tables are the app's own, down to the header
  * and the day headings the Review queue groups by.
  */
 
@@ -324,7 +324,7 @@ export default function AutoDraftsScreen() {
       <section className="shrink-0 overflow-x-auto rounded-xl border">
         <table className="w-full min-w-[52rem]">
           <thead>
-            <tr className="border-b bg-muted/30 text-left font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
+            <tr className="border-b bg-muted/30 text-left text-xs text-muted-foreground">
               <th className="px-5 py-3 font-medium">Page</th>
               <th className="w-44 px-5 py-3 font-medium">Facebook left</th>
               <th className="w-44 px-5 py-3 font-medium">RSS left</th>
@@ -449,7 +449,7 @@ function RunLog({
           aria-hidden
           className={cn(
             RUN_GRID,
-            "hidden border-b bg-muted/30 py-3 font-mono text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground sm:grid",
+            "hidden border-b bg-muted/30 py-3 text-xs font-medium text-muted-foreground sm:grid",
           )}
         >
           <span>Page</span>
@@ -497,7 +497,7 @@ function Day({
     <div className="border-b last:border-0">
       {/* The Review queue's day heading, verbatim in style: the count beside it
           is what makes the group worth having. */}
-      <h3 className="border-b bg-muted/20 px-5 py-1.5 font-mono text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+      <h3 className="border-b bg-muted/20 px-5 py-1.5 text-xs font-medium text-muted-foreground">
         {heading}{" "}
         <span className="text-muted-foreground/60">
           {total} {total === 1 ? "draft" : "drafts"}

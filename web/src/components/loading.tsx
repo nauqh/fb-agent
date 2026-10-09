@@ -41,9 +41,7 @@ export function Loading({
     >
       <Loader2 className="size-5 animate-spin text-muted-foreground" />
       {label ? (
-        // Mono uppercase, like every other piece of metadata in the app. It is
-        // a status, not prose.
-        <p className="font-mono text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
+        <p className="text-xs text-muted-foreground">
           {label}
         </p>
       ) : null}

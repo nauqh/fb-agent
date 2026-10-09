@@ -40,10 +40,10 @@ export function ScheduleList({ posts }: { posts: ScheduledPost[] }) {
       {days.map(([day, rows]) => (
         <section key={day} className="space-y-2">
           <h2 className="sticky top-0 z-10 flex items-baseline gap-2 bg-background/90 py-1 backdrop-blur">
-            <span className="font-mono text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+            <span className="text-xs font-medium text-muted-foreground">
               {dayLabel(day)}
             </span>
-            <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
+            <span className="text-xs tabular-nums text-muted-foreground">
               {rows.length} post{rows.length === 1 ? "" : "s"}
             </span>
             {rows.length < typical ? (
@@ -70,7 +70,7 @@ function Row({ post }: { post: ScheduledPost }) {
 
   return (
     <div className="flex gap-4 px-4 py-3">
-      <div className="w-12 shrink-0 pt-0.5 font-mono text-[11px] tabular-nums text-muted-foreground">
+      <div className="w-12 shrink-0 pt-0.5 text-xs tabular-nums text-muted-foreground">
         {post.published_at.slice(11, 16)}
       </div>
 
@@ -94,7 +94,7 @@ function Row({ post }: { post: ScheduledPost }) {
           </ul>
         ) : null}
 
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[11px] text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
           {points.length > 2 ? (
             <button
               type="button"
@@ -136,7 +136,7 @@ function Row({ post }: { post: ScheduledPost }) {
           ) : null}
 
           {tags.length ? (
-            <span className="truncate font-mono opacity-70">{tags.join(" ")}</span>
+            <span className="truncate opacity-70">{tags.join(" ")}</span>
           ) : null}
         </div>
       </div>

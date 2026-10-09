@@ -115,7 +115,6 @@ export function PerformanceChart({
       <div
         role="img"
         aria-label={`Reach and engagement per day over the last ${days} days.`}
-        className="font-mono"
       >
         <ResponsiveContainer width="100%" height={320}>
           <LineChart
@@ -267,7 +266,7 @@ function DayTip({ day }: { day: DayPoint }) {
       <p className="text-[11px] text-muted-foreground">
         {DAY_TIP.format(day.t)}
       </p>
-      <div className="mt-1.5 flex flex-wrap items-baseline gap-x-3 gap-y-0.5 font-mono text-[11px]">
+      <div className="mt-1.5 flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-xs">
         <span className="font-semibold text-[#3b82f6]">
           {metric(day.reach)} reach
         </span>

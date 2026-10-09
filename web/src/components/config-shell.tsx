@@ -127,7 +127,7 @@ export function ConfigShell({
             <div className="flex gap-1 overflow-x-auto lg:block lg:space-y-6 lg:overflow-visible">
               {groups.map((group) => (
                 <div key={group.label} className="flex shrink-0 gap-1 lg:block lg:space-y-0.5">
-                  <p className="hidden px-2 pb-1.5 font-mono text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase lg:block">
+                  <p className="hidden px-2 pb-1.5 text-xs font-medium text-muted-foreground lg:block">
                     {group.label}
                   </p>
                   {group.sections.map((section) => (
@@ -247,7 +247,7 @@ export function Block({
 }) {
   return (
     <div className={className}>
-      <p className="pb-3 font-mono text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
+      <p className="pb-3 text-xs font-medium text-muted-foreground">
         {label}
       </p>
       {children}

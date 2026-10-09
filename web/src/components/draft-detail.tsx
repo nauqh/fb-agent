@@ -798,7 +798,7 @@ export function DraftDetail({
                 {picture}
               </div>
               <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                <span className="font-mono">
+                <span>
                   {(form?.template ?? draft.template ?? layout.template) === "photo"
                     ? "picture's own shape"
                     : `${layout.image.width} × ${layout.image.height}`}

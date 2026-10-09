@@ -174,7 +174,7 @@ export function ReviewList() {
         ) : (
           <table className="w-full min-w-[980px]">
             <thead>
-              <tr className="border-b bg-muted/30 text-left font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
+              <tr className="border-b bg-muted/30 text-left text-xs text-muted-foreground">
                 <th className="px-5 py-3 font-medium">Post</th>
                 <th className="w-56 px-5 py-3 font-medium">Page</th>
                 <th className="w-44 px-5 py-3 font-medium">Created</th>
@@ -200,7 +200,7 @@ export function ReviewList() {
                 <tr className="border-b bg-muted/20">
                   <td
                     colSpan={5}
-                    className="px-5 py-1.5 font-mono text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground"
+                    className="px-5 py-1.5 text-xs font-medium text-muted-foreground"
                   >
                     {dayHeading(rows[0].created_at)}
                     <span className="ml-2 font-normal tabular-nums opacity-70">
@@ -339,7 +339,7 @@ function Row({
                 style={{ width: `${draft.progress_pct}%` }}
               />
             </div>
-            <p className="pt-1 font-mono text-[11px] tabular-nums text-muted-foreground">
+            <p className="pt-1 text-xs tabular-nums text-muted-foreground">
               {draft.progress_step} · {draft.progress_pct}%
             </p>
           </div>

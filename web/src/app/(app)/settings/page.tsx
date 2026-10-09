@@ -996,7 +996,7 @@ function PoolPicker({
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-3">
-        <p className="font-mono text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
+        <p className="text-xs font-medium text-muted-foreground">
           Not yet assigned
         </p>
         <Button variant="ghost" size="sm" onClick={onHide}>
@@ -1263,7 +1263,7 @@ function TimeSlots({
                   key={slot.id}
                   className="group flex items-center justify-between gap-3 rounded-xl border bg-background px-3 py-2.5 transition-colors hover:bg-muted/30"
                 >
-                  <p className="font-mono text-sm font-medium tabular-nums">{slot.label}</p>
+                  <p className="text-sm font-medium tabular-nums">{slot.label}</p>
                   <button
                     type="button"
                     onClick={() => void drop(slot.id, slot.label)}
@@ -1336,7 +1336,7 @@ function Writing({
         {/* Folded: the house numbers suit most Pages, and six number boxes
             above the prompts were the first thing an operator met here. */}
         <details className="group border-t pt-6">
-          <summary className="flex cursor-pointer list-none items-center gap-1.5 font-mono text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase [&::-webkit-details-marker]:hidden">
+          <summary className="flex cursor-pointer list-none items-center gap-1.5 text-xs font-medium text-muted-foreground [&::-webkit-details-marker]:hidden">
             <ChevronRight className="size-3 transition-transform group-open:rotate-90" />
             Lengths and limits
           </summary>

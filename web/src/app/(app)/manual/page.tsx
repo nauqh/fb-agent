@@ -195,11 +195,11 @@ function WriteItYourself() {
             </Button>
           ) : null}
         </div>
-        <p className="text-[11px] leading-relaxed text-muted-foreground">
-          {file
-            ? "Your picture is the hero. The panel, the overlay and the watermark are drawn over it."
-            : "Optional. Without one there is no card to publish yet - the gradient above is a placeholder, not the post."}
-        </p>
+        {file ? null : (
+          <p className="text-xs text-muted-foreground">
+            Optional. The gradient is only a placeholder.
+          </p>
+        )}
         {/* Beside the picture it adds to. Reads the text typed on the right,
             once the draft is created. */}
         <div className="flex flex-wrap items-center gap-2">
@@ -210,7 +210,7 @@ function WriteItYourself() {
               onChange={(event) => setFindInset(event.target.checked)}
               className="size-3.5 cursor-pointer accent-primary"
             />
-            Find inset - the AI picks a picture that fits
+            Let AI pick an inset picture
           </label>
           {findInset && page ? (
             <InsetSourceSelect
@@ -222,10 +222,6 @@ function WriteItYourself() {
       </div>
 
       <div className="min-w-0 space-y-6">
-        <p className="text-xs text-muted-foreground">
-          Nothing on this tab calls a model, unless Find inset is ticked.
-        </p>
-
         <div className="space-y-2">
           <Label htmlFor="manual-hook">Image text overlay</Label>
           <Textarea
@@ -239,9 +235,8 @@ function WriteItYourself() {
           {/* The rule the writer is held to, stated rather than enforced - a
               person typing here has decided, and the server records it as a
               warning instead of refusing the draft. */}
-          <p className="text-[11px] text-muted-foreground">
-            Drawn on the panel. Under 65 words and no questions, by the brand
-            rules - broken here, it is recorded as a warning rather than refused.
+          <p className="text-xs text-muted-foreground">
+            Under 65 words, no questions.
           </p>
         </div>
 
@@ -355,7 +350,7 @@ function FromATopic() {
           onChange={(event) => setNoImage(event.target.checked)}
           className="size-3.5 cursor-pointer accent-primary"
         />
-        No image - text only, and nothing to pay for
+        Text only, no image
       </label>
 
       {!noImage ? (
@@ -367,7 +362,7 @@ function FromATopic() {
               onChange={(event) => setFindInset(event.target.checked)}
               className="size-3.5 cursor-pointer accent-primary"
             />
-            Find inset - the AI picks a picture that fits
+            Let AI pick an inset picture
           </label>
           {findInset && page ? (
             <InsetSourceSelect

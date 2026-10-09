@@ -10,10 +10,9 @@ import { Toaster } from "@/components/ui/sonner";
 // `--font-geist-sans` here leaves that mapping pointing at nothing.
 const geistSans = Geist({ variable: "--font-sans", subsets: ["latin"] });
 
-// JetBrains Mono for the data voice: the 11px uppercase section labels, table
-// columns, ids, metrics and `tabular-nums` values - the same face polylane.com
-// sets data and code in. Every place that says `font-mono` or `tabular-nums`
-// picks this up; the UI roman stays Geist.
+// JetBrains Mono for code and typed values only: prompt and YAML editors, ids,
+// URL and hex inputs. Labels, times and figures stay Geist; `tabular-nums`
+// keeps figures aligned without changing face.
 const jetbrainsMono = JetBrains_Mono({
   variable: "--font-jetbrains-mono",
   subsets: ["latin"],
