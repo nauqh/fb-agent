@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -168,9 +169,22 @@ export function ReviewList() {
           // "no rows to draw" is the condition this branch is actually about.
           <Loading label="Loading the queue" className="h-72" />
         ) : drafts.length === 0 ? (
-          <p className="py-20 text-center text-sm text-muted-foreground">
-            Queue is empty.
-          </p>
+          <div className="flex flex-col items-center gap-4 py-16 text-center">
+            <div className="space-y-1">
+              <p className="text-sm font-medium">Nothing to review</p>
+              <p className="text-sm text-muted-foreground">
+                Drafts land here from Sources, Manual and the nightly auto-drafts.
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button asChild size="sm">
+                <Link href="/sources">Pick sources</Link>
+              </Button>
+              <Button asChild size="sm" variant="outline">
+                <Link href="/manual">Write a post</Link>
+              </Button>
+            </div>
+          </div>
         ) : (
           <table className="w-full min-w-[980px]">
             <thead>

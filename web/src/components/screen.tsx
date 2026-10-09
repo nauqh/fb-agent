@@ -26,7 +26,9 @@ export function ScreenHeader({
   switcher?: boolean;
 }) {
   return (
-    <div className="flex shrink-0 items-end justify-between gap-6 pb-5">
+    // `items-start`: pinned to the title, so the switcher sits at the same
+    // height whether or not the screen has a hint line under it.
+    <div className="flex shrink-0 items-start justify-between gap-6 pb-5">
       <div className="space-y-1">
         <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
         {hint ? <p className="text-sm text-muted-foreground">{hint}</p> : null}

@@ -78,7 +78,7 @@ export default function ProduceScreen() {
           app layout's `<main>` is `overflow-hidden`, so a screen that does not
           scroll itself traps the video below the fold with no way down. */}
       <div className="min-h-0 flex-1 overflow-y-auto pr-1">
-        <div className="mx-auto w-full max-w-2xl">
+        <div className="w-full max-w-2xl">
           <div className="rounded-2xl border bg-card p-6">
           <form
             className="flex flex-col gap-5"
@@ -160,7 +160,12 @@ export default function ProduceScreen() {
               </div>
             </div>
 
-            <div className="flex justify-end">
+            <div className="flex items-center justify-end gap-3">
+              {!making && hasTemplates && (!url.trim() || !ctaId) ? (
+                <p className="text-xs text-muted-foreground">
+                  {!url.trim() ? "Needs a YouTube link." : "Needs a CTA clip."}
+                </p>
+              ) : null}
               <Button
                 type="submit"
                 disabled={making || !url.trim() || !ctaId || !hasTemplates}

@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useSyncExternalStore } from "react";
-import { AlertTriangle } from "lucide-react";
+import { useState, useSyncExternalStore } from "react";
+import { AlertTriangle, ChevronRight } from "lucide-react";
 
 import { Loading } from "@/components/loading";
 import { PageBadge } from "@/components/page-badge";
@@ -117,7 +117,7 @@ function rssPool(page: AutoDraftPage): PoolState | null {
     return { tone: "neutral", label: "Not set up", why: "This Page has no feeds. Add some on Settings." };
   }
   if (page.rss_available === null) {
-    return { tone: "neutral", label: "Not run yet", why: "Counted at the first RSS run." };
+    return { tone: "neutral", label: "Pending", why: "Counted at the first RSS run." };
   }
   return left(page.rss_available, "more feed items fit, as at the last run");
 }
@@ -202,6 +202,7 @@ export default function AutoDraftsScreen() {
   );
 
   const now = useMinuteClock();
+  const [showOff, setShowOff] = useState(false);
 
   if (error) return <QueryError error={error} />;
   if (!data) return <Loading label="Reading the automation" className="h-72" />;
@@ -232,6 +233,7 @@ export default function AutoDraftsScreen() {
   const failed = lastBatch.filter((run) => runState(run, made(run.id), now).tone === "negative");
 
   const automated = data.pages.filter(isOn);
+  const off = data.pages.filter((page) => !isOn(page));
   const attention = automated.filter((page) => {
     const tone = worst([competitorPool(page), rssPool(page)])?.tone;
     return tone === "negative" || tone === "waiting";
@@ -334,7 +336,9 @@ export default function AutoDraftsScreen() {
             </tr>
           </thead>
           <tbody>
-            {data.pages.map((page) => {
+            {/* Automated first; the Off Pages fold away, since a row of "Off"
+                in every column says one thing six times. */}
+            {[...automated, ...(showOff ? off : [])].map((page) => {
               const competitor = competitorPool(page);
               const rss = rssPool(page);
               const state = worst([competitor, rss]);
@@ -390,6 +394,24 @@ export default function AutoDraftsScreen() {
                 </tr>
               );
             })}
+            {off.length > 0 ? (
+              <tr>
+                <td colSpan={6} className="px-5 py-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowOff((open) => !open)}
+                    aria-expanded={showOff}
+                    className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    <ChevronRight
+                      className={cn("size-3 transition-transform", showOff && "rotate-90")}
+                    />
+                    {showOff ? "Hide" : "Show"} {off.length}{" "}
+                    {off.length === 1 ? "Page" : "Pages"} with auto-drafts off
+                  </button>
+                </td>
+              </tr>
+            ) : null}
           </tbody>
         </table>
       </section>
@@ -424,9 +446,9 @@ function RunLog({
 }) {
   if (runs.length === 0) {
     return (
-      <section className="shrink-0 rounded-xl border px-5 py-8 text-center text-sm text-muted-foreground">
-        Nothing has run in the last {DAYS} days.
-      </section>
+      <p className="shrink-0 px-0.5 text-sm text-muted-foreground">
+        No runs in the last {DAYS} days.
+      </p>
     );
   }
 
