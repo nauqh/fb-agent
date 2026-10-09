@@ -204,7 +204,8 @@ export function PerformanceChart({
                 *absence* of a choice and two lines need two choices. */}
             <Line
               yAxisId="reach"
-              dataKey="reach"
+              dataKey={plotted("reach")}
+              connectNulls
               stroke="#3b82f6"
               strokeWidth={1.5}
               fill="url(#reach-fill)"
@@ -217,7 +218,8 @@ export function PerformanceChart({
                 but dark enough to hold its own on the light theme. */}
             <Line
               yAxisId="eng"
-              dataKey="engagement"
+              dataKey={plotted("engagement")}
+              connectNulls
               stroke="#f59e0b"
               strokeWidth={1.5}
               type="monotone"
@@ -277,6 +279,16 @@ function DayTip({ day }: { day: DayPoint }) {
       </div>
     </div>
   );
+}
+
+/**
+ * A day with no posts has no reach to report, not zero reach: buckets are by
+ * publish day. Plotted as zero, every quiet day dived to the axis and read as
+ * a collapse. `null` plus `connectNulls` bridges to the next posting day; the
+ * tooltip still says "0 posts".
+ */
+function plotted(metric: "reach" | "engagement") {
+  return (day: DayPoint) => (day.count > 0 ? day[metric] : null);
 }
 
 interface DayPoint {

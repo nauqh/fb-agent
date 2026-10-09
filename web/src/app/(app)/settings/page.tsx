@@ -6,7 +6,6 @@ import {
   ExternalLink,
   Loader2,
   Plus,
-  Clock,
   Rss,
   Trash2,
   X,
@@ -1228,16 +1227,13 @@ function TimeSlots({
             Every day, GMT+7.
           </p>
           <form onSubmit={add} className="flex items-center gap-2">
-            <div className="relative">
-              <Clock className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                type="time"
-                value={time}
-                onChange={(event) => setTime(event.target.value)}
-                aria-label="Publishing time"
-                className="h-8 w-36 pl-8 text-[13px] tabular-nums"
-              />
-            </div>
+            <Input
+              type="time"
+              value={time}
+              onChange={(event) => setTime(event.target.value)}
+              aria-label="Publishing time"
+              className="h-8 w-32 text-[13px] tabular-nums"
+            />
             <Button
               type="submit"
               size="sm"
@@ -1257,11 +1253,11 @@ function TimeSlots({
               Publish now and Publish at a time both still work.
             </Gap>
           ) : (
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="flex flex-wrap gap-2">
               {slots.map((slot) => (
                 <div
                   key={slot.id}
-                  className="group flex items-center justify-between gap-3 rounded-xl border bg-background px-3 py-2.5 transition-colors hover:bg-muted/30"
+                  className="flex items-center gap-1 rounded-lg border bg-background py-1 pr-1 pl-3"
                 >
                   <p className="text-sm font-medium tabular-nums">{slot.label}</p>
                   <button

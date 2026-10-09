@@ -130,7 +130,6 @@ export function SourceCard({ selected, pending, onToggle, ...item }: SourceCardP
               ) : null}
             </p>
             <p className="flex items-center gap-1.5">
-              <MetaChip>{KIND_LABEL[item.kind]}</MetaChip>
               <span className="truncate text-xs text-muted-foreground">
                 {timeAgo(published_at)}
               </span>
@@ -237,7 +236,6 @@ export function SourceCard({ selected, pending, onToggle, ...item }: SourceCardP
             ) : null}
 
             <div className="flex flex-wrap items-center gap-2">
-              <MetaChip>{KIND_LABEL[item.kind]}</MetaChip>
               <span className="text-xs text-muted-foreground">
                 {fullDate(published_at)}
                 <span aria-hidden> · </span>

@@ -61,11 +61,11 @@ export function ScheduleWeek({
         </p>
       </div>
 
-      {/* Vertical is `hidden`, not `auto`: the rows divide the height that is
-          left, so there is never anything below the fold. Horizontal stays
-          scrollable because seven columns have a floor a narrow window cannot
-          honour, and squeezing them further makes the chips unreadable. */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-x-auto overflow-y-hidden rounded-2xl border">
+      {/* Rows hug their chips rather than dividing the screen: split three
+          ways, the height left each slot ~200px of white for one chip. Both
+          axes scroll; horizontal because seven columns have a floor a narrow
+          window cannot honour, and squeezing them makes the chips unreadable. */}
+      <div className="flex min-h-0 flex-col overflow-auto rounded-2xl border">
         <div className="flex min-h-0 min-w-[860px] flex-1 flex-col">
           {/* Day headers */}
           <div className="grid shrink-0 grid-cols-[4rem_repeat(7,minmax(0,1fr))] border-b bg-muted/30">
@@ -89,10 +89,7 @@ export function ScheduleWeek({
           {slots.map((slot) => (
             <div
               key={slot}
-              // `flex-1` on every row, so ten slots and fourteen both fill the
-              // same grid exactly. `min-h-0` is what lets them shrink below
-              // their content instead of forcing the parent to overflow.
-              className="grid min-h-0 flex-1 grid-cols-[4rem_repeat(7,minmax(0,1fr))] border-b last:border-b-0"
+              className="grid min-h-14 shrink-0 grid-cols-[4rem_repeat(7,minmax(0,1fr))] border-b last:border-b-0"
             >
               <div className="border-r px-2 py-1.5 text-right text-[11px] tabular-nums text-muted-foreground">
                 {slot}
@@ -103,7 +100,7 @@ export function ScheduleWeek({
                   <div
                     key={day}
                     className={cn(
-                      "min-h-0 space-y-1 overflow-hidden border-r p-1 last:border-r-0",
+                      "min-w-0 space-y-1 border-r p-1 last:border-r-0",
                       day === todayKey() && "bg-muted/20",
                     )}
                   >
@@ -130,14 +127,14 @@ const TONE: Record<string, string> = {
 
 function Chip({ post }: { post: ScheduledPost }) {
   const body = (
-    <>
+    <span className="line-clamp-3">
       <span className="tabular-nums opacity-60">{post.published_at.slice(11, 16)}</span>{" "}
-      {post.text.slice(0, 40) || "No caption"}
-    </>
+      {post.text || "No caption"}
+    </span>
   );
 
   const className = cn(
-    "block w-full truncate rounded border px-1.5 py-1 text-left text-[11px] leading-tight",
+    "block w-full rounded border px-1.5 py-1 text-left text-[11px] leading-snug",
     TONE[post.status] ?? "border-border bg-muted",
     // Ours stands out against the old system's, which is what this screen is
     // for during the cutover.

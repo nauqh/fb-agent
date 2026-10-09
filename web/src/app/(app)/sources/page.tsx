@@ -53,17 +53,19 @@ export default function SourcesScreen() {
 
         {/* `pr-3` on each pane: these own the scrollbar, and without it the
             card grid runs right up against the bar. Inside the scroller, so
-            it holds the content off the bar rather than moving the bar. */}
-        <TabsContent value="competitors" className="min-h-0 flex-1 overflow-y-auto pr-3">
+            it holds the content off the bar rather than moving the bar.
+            `pb-20` for the same reason at the foot: the fixed Generate bar
+            would otherwise cover the last row of cards. */}
+        <TabsContent value="competitors" className="min-h-0 flex-1 overflow-y-auto pr-3 pb-20">
           <CompetitorsTab />
         </TabsContent>
-        <TabsContent value="tweets" className="min-h-0 flex-1 overflow-y-auto pr-3">
+        <TabsContent value="tweets" className="min-h-0 flex-1 overflow-y-auto pr-3 pb-20">
           <TweetsTab />
         </TabsContent>
-        <TabsContent value="web" className="min-h-0 flex-1 overflow-y-auto pr-3">
+        <TabsContent value="web" className="min-h-0 flex-1 overflow-y-auto pr-3 pb-20">
           <WebTab />
         </TabsContent>
-        <TabsContent value="rss" className="min-h-0 flex-1 overflow-y-auto pr-3">
+        <TabsContent value="rss" className="min-h-0 flex-1 overflow-y-auto pr-3 pb-20">
           <RssTab />
         </TabsContent>
 
