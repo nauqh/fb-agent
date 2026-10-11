@@ -19,6 +19,7 @@ from pydantic_ai.providers.google import GoogleProvider
 
 from app.models import Page, SourceItem, SourceKind
 from app.settings import Layout, layout, settings
+from app.sources import web
 from app.transient import is_transient
 from app.writer import prompts, validators
 
@@ -275,11 +276,11 @@ def source_instruction(kind: SourceKind, summary: bool = False) -> str:
             "theme is the job; reusing the picture itself would be lifting what "
             "the rival shot."
         )
-    if kind is SourceKind.RSS and not summary:
+    if kind in (SourceKind.RSS, SourceKind.WEB) and not summary:
         # The feed's own text is only the fallback for a page the reader cannot
-        # access; the article itself is the source. WEB is not: its adapter
-        # already carries the article body, so the text below is the source and
-        # the URL is a link, not a reading assignment.
+        # access; the article itself is the source. A WEB item reaches here only
+        # as a link-only stub (`reads_link`): one our adapter read carries the
+        # article, so the text below is the source and the URL just a link.
         return (
             "The source is the news article at the URL below. Read that URL and "
             "write about this same story, the same people and the same events, "
@@ -363,6 +364,12 @@ def _model_settings(model_name: str) -> GoogleModelSettings | None:
     return GoogleModelSettings(google_thinking_config={"thinking_level": "MEDIUM"})
 
 
+def reads_link(source: SourceItem) -> bool:
+    """Whether Gemini reads the source from its URL: an RSS item, or a web
+    page our adapter could not read."""
+    return source.kind is SourceKind.RSS or web.is_link_only(source)
+
+
 def user_prompt(
     source: SourceItem | None, topic: str | None, summary: bool = False
 ) -> str:
@@ -372,12 +379,13 @@ def user_prompt(
             raise ValueError("a run needs either a source item or a topic")
         return f"Write a post about: {topic}"
 
-    parts = [source_instruction(source.kind, summary), ""]
+    carried = summary or not reads_link(source)
+    parts = [source_instruction(source.kind, carried), ""]
     if source.author:
         parts.append(f"Author: {source.author}")
     if source.url:
         parts.append(f"URL: {source.url}")
-    if summary or source.kind is not SourceKind.RSS:
+    if carried:
         parts += ["", source.text]
     return "\n".join(parts)
 
@@ -472,12 +480,11 @@ def _run(
     """
     fetch_url = (
         source.url
-        # WEB not among them: the adapter carries the article body, and the
-        # live fetch is the thing that fails - Gemini's reader is refused by
-        # robots.txt on whole publisher networks (ACM, BBC), and the run then
-        # paid for a fallback it did not need. The extracted text IS the
-        # article; fetching it again would buy one or two sentences or nothing.
-        if source is not None and source.kind is SourceKind.RSS
+        # Not a WEB page our adapter read: the live fetch is the thing that
+        # fails - Gemini's reader is refused by robots.txt on whole publisher
+        # networks (ACM, BBC), and the run then paid for a fallback it did not
+        # need. The extracted text IS the article.
+        if source is not None and reads_link(source)
         else None
     )
     try:
@@ -492,7 +499,9 @@ def _run(
             )
         )
     except SourceUnreadable:
-        if not fetch_url:
+        # A link-only web page has a title and nothing else to fall back on, and
+        # a post written from a headline is invented.
+        if not fetch_url or source.kind is SourceKind.WEB:
             raise
         # The stub text is all this draft is built on - say so on the result,
         # where `generate` turns it into a warning on the row.
@@ -513,7 +522,7 @@ FETCH_TIMEOUT = 90.0
 
 
 class SourceUnreadable(RuntimeError):
-    """The article behind an RSS link could not be fetched by the model."""
+    """The article behind an RSS or web link could not be fetched by the model."""
 
 
 def _fetched(messages, url: str) -> bool:

@@ -362,6 +362,36 @@ def test_only_rss_sources_can_fall_back_from_a_blocked_url(page, monkeypatch):
         writer.write(page, source, model=object())
 
 
+def test_a_link_only_web_page_is_read_by_gemini_with_no_fallback(page, monkeypatch):
+    """Our reader could not get the text, so Gemini fetches the URL. If it is
+    refused too, the title is all there is, and the run fails rather than
+    writing a post around a headline."""
+    source = SourceItem(
+        id=1, kind=SourceKind.WEB, external_id="u", text="A Headline", url="https://example.com/x"
+    )
+    asked = []
+
+    def fake_ask(prompt, _output_type, _instructions, model=None, validator=None, fetch_url=None):
+        asked.append((prompt, fetch_url))
+        raise writer.SourceUnreadable("blocked")
+
+    monkeypatch.setattr(writer, "ask", fake_ask)
+
+    with pytest.raises(writer.SourceUnreadable):
+        writer.write(page, source, model=object())
+
+    [(prompt, fetch_url)] = asked
+    assert fetch_url == source.url
+    assert "Read that URL" in prompt
+
+
+def test_a_web_page_our_reader_read_is_not_fetched_again():
+    source = SourceItem(kind=SourceKind.WEB, external_id="u", text="An article. " * 50)
+
+    assert not writer.reads_link(source)
+    assert "Read that URL" not in writer.user_prompt(source, None)
+
+
 def test_a_fetch_counts_only_when_the_article_itself_was_retrieved():
     """A failed fetch does not raise; the model writes "I could not access it"."""
     url = "https://www.bbc.co.uk/news/articles/abc?at_medium=RSS"

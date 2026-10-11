@@ -901,7 +901,7 @@ def get_tweet(url: str = Query(...)) -> SourceItemBase:
 def get_web(url: str = Query(...)) -> SourceItemBase:
     """One live lookup. Nothing is written."""
     try:
-        return web.fetch_article(url)
+        return web.lookup(url)
     except web.WebError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
 

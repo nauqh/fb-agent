@@ -458,6 +458,36 @@ def test_a_bot_wall_says_so(page_fetch):
         web.fetch_article("https://a/x")
 
 
+@pytest.mark.parametrize(
+    "html, status, text",
+    [
+        ("", 403, "https://a/x"),
+        ("<html><head><title>News</title></head><body></body></html>", 200, "News"),
+    ],
+)
+def test_a_page_this_reader_cannot_read_is_looked_up_as_a_link(page_fetch, html, status, text):
+    """Gemini reads it from the URL instead, as it does an RSS link."""
+    page_fetch(html, "https://a/x", status_code=status)
+
+    item = web.lookup("https://a/x")
+
+    assert (item.url, item.text) == ("https://a/x", text)
+    assert web.is_link_only(item)
+
+
+def test_a_page_this_reader_can_read_is_not_link_only(page_fetch):
+    page_fetch(PAGE_HTML, "https://a/x")
+
+    assert not web.is_link_only(web.lookup("https://a/x"))
+
+
+def test_a_missing_page_is_refused_by_lookup_too(page_fetch):
+    page_fetch("", "https://a/x", status_code=404)
+
+    with pytest.raises(web.WebError):
+        web.lookup("https://a/x")
+
+
 def test_a_missing_page_raises(page_fetch):
     page_fetch("", "https://a/x", status_code=404)
 

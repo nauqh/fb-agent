@@ -5,7 +5,8 @@ at a time. This module reads the page server-side with stdlib HTMLParser only -
 `<meta>` tags for the stub, and the `<p>` text for the body. That body **is**
 the source: the writer does not fetch a WEB item's URL, because Gemini's reader
 is refused by robots.txt on whole publisher networks (Australian Community
-Media, the BBC) that serve plain HTML to this module.
+Media, the BBC) that serve plain HTML to this module. Only when this module
+cannot read a page does `lookup` hand the writer the link instead.
 
 Browsing does not write, like every adapter here: the item becomes a row only
 when a run uses it.
@@ -37,6 +38,16 @@ _MIN_BODY_CHARS = 500
 
 class WebError(RuntimeError):
     """A URL that is not a fetchable web page, or a page with nothing usable."""
+
+
+class Unreadable(WebError):
+    """A page that answers, but not with article text this reader can use: a
+    bot wall, a JS shell, a paywall. Gemini's reader may still get in."""
+
+    def __init__(self, message: str, url: str, title: str = ""):
+        super().__init__(message)
+        self.url = url
+        self.title = title
 
 
 class _Page(HTMLParser):
@@ -109,9 +120,10 @@ def fetch_article(url: str, client: httpx.Client | None = None) -> SourceItemBas
         # does not get past it either, so the message says so rather than retry.
         code = error.response.status_code
         if code in (401, 403):
-            raise WebError(
+            raise Unreadable(
                 f"The site refused the request ({code}) - it blocks automated "
-                "readers. Try another source for the story."
+                "readers. Try another source for the story.",
+                urldefrag(str(error.response.url)).url,
             ) from error
         raise WebError(f"The page did not answer ({code}).") from error
     except httpx.HTTPError as error:
@@ -127,7 +139,9 @@ def fetch_article(url: str, client: httpx.Client | None = None) -> SourceItemBas
 
     title = page.meta.get("og:title") or page.title.strip()
     if not title:
-        raise WebError(f"No title found on {final_url} - it may not be an article")
+        raise Unreadable(
+            f"No title found on {final_url} - it may not be an article", final_url
+        )
 
     published_at = None
     stamp = page.meta.get("article:published_time")
@@ -141,9 +155,11 @@ def fetch_article(url: str, client: httpx.Client | None = None) -> SourceItemBas
     # Refused on screen, not handed to the writer as a headline it would invent
     # a post around.
     if len(body) < _MIN_BODY_CHARS:
-        raise WebError(
+        raise Unreadable(
             f"Could not read the article text on {final_url} - the page may need "
-            "JavaScript or a login. Try another source for the story."
+            "JavaScript or a login. Try another source for the story.",
+            final_url,
+            title,
         )
     if len(body) > _MAX_BODY_CHARS:
         body = body[:_MAX_BODY_CHARS]
@@ -161,3 +177,29 @@ def fetch_article(url: str, client: httpx.Client | None = None) -> SourceItemBas
         image_url=page.meta.get("og:image"),
         published_at=published_at,
     )
+
+
+def lookup(url: str) -> SourceItemBase:
+    """`fetch_article`, or a link-only item when this reader cannot get the text.
+
+    The writer hands a link-only item's URL to Gemini, as it does an RSS link
+    (`is_link_only`). Refusing it here instead turned away pages Google's reader
+    can open. `auto_draft` calls `fetch_article` directly: it wants text or a
+    skip, never a link.
+    """
+    try:
+        return fetch_article(url)
+    except Unreadable as error:
+        return SourceItemBase(
+            kind=SourceKind.WEB,
+            external_id=error.url,
+            author=urlsplit(error.url).netloc,
+            text=error.title or error.url,
+            url=error.url,
+        )
+
+
+def is_link_only(item: SourceItemBase) -> bool:
+    """A `lookup` stub rather than an article. `fetch_article` never returns
+    text under `_MIN_BODY_CHARS`, and a stub is one title line."""
+    return item.kind is SourceKind.WEB and len(item.text) < _MIN_BODY_CHARS
