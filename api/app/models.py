@@ -773,6 +773,15 @@ class SourceItemBase(SQLModel):
     image_url: str | None = None
     published_at: datetime | None = None
 
+    body: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
+    """An RSS item's full article, read by `web.fetch_article`. Null otherwise.
+
+    Kept apart from `text`, which stays the feed's headline and summary. The
+    writer works from this when it is set, rather than handing Gemini the link:
+    Gemini's reader is refused by whole publisher networks (the BBC among them)
+    that serve plain HTML to ours.
+    """
+
     reactions: int | None = None
     comments: int | None = None
     shares: int | None = None
@@ -888,6 +897,14 @@ class Draft(SQLModel, table=True):
     caption: str | None = None
     first_comment: str | None = None
     highlight_phrases: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+
+    article_title: str | None = None
+    article_html: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
+    """The website article, written beside the post. Null on every Page but the
+    one in `settings.wordpress_page_id`."""
+    article_url: str | None = None
+    """Where WordPress published it. Set once, so a retried publish reuses it
+    rather than posting the article twice."""
 
     hashtags: list[str] = Field(default_factory=list, sa_column=Column(JSON))
     """**Dead as of 2026-08-12 (feedback E1, reversed). Nothing writes this.**

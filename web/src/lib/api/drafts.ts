@@ -43,6 +43,8 @@ export type DraftEdit = Partial<
     | "caption"
     | "first_comment"
     | "highlight_phrases"
+    | "article_title"
+    | "article_html"
     | "image_prompt"
     | "hero_x_ratio"
     | "hero_y_ratio"

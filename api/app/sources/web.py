@@ -12,6 +12,7 @@ Browsing does not write, like every adapter here: the item becomes a row only
 when a run uses it.
 """
 
+import re
 from datetime import datetime
 from html.parser import HTMLParser
 from urllib.parse import urldefrag, urlsplit
@@ -28,6 +29,14 @@ _META_KEYS = ("og:title", "og:description", "og:site_name", "og:image")
 _SKIP_TAGS = frozenset({"script", "style", "nav", "header", "footer", "aside", "form"})
 # A paragraph shorter than this is a byline, a caption or a menu item.
 _MIN_PARAGRAPH = 40
+# Story prose ends a sentence. Related-story headlines and captions do not, and
+# the writer stated them as facts: a BBC page's "Polanski banned from Israel"
+# link became a line in an article about something else (2026-10-10).
+_SENTENCE_END = (".", "!", "?", ":", "…")
+_CLOSERS = "\"'”’)]"
+# Sign-up and consent text that does end a sentence. The Express ran "You agree
+# you are 18 or over ... You can unsubscribe at any time." mid-article.
+_FURNITURE = re.compile(r"\b(newsletter|unsubscribe|privacy policy|enable javascript)\b", re.I)
 # The writer's prompt carries this; a full longread is past 40k characters and
 # the model needs the story, not every sentence of it.
 _MAX_BODY_CHARS = 12_000
@@ -90,7 +99,11 @@ class _Page(HTMLParser):
             self._in_p = False
             # Collapse whitespace the HTML carries; the writer reads this text.
             text = " ".join("".join(self._chunks).split())
-            if len(text) >= _MIN_PARAGRAPH:
+            if (
+                len(text) >= _MIN_PARAGRAPH
+                and text.rstrip(_CLOSERS).endswith(_SENTENCE_END)
+                and not _FURNITURE.search(text)
+            ):
                 self.paragraphs.append(text)
 
     def handle_data(self, data):
@@ -202,4 +215,4 @@ def lookup(url: str) -> SourceItemBase:
 def is_link_only(item: SourceItemBase) -> bool:
     """A `lookup` stub rather than an article. `fetch_article` never returns
     text under `_MIN_BODY_CHARS`, and a stub is one title line."""
-    return item.kind is SourceKind.WEB and len(item.text) < _MIN_BODY_CHARS
+    return item.kind is SourceKind.WEB and not item.body and len(item.text) < _MIN_BODY_CHARS

@@ -167,6 +167,7 @@ erDiagram
         text external_id "unique with kind"
         text competitor_page_id "joins page_competitor"
         int reactions
+        text body "RSS full article, read by the app"
     }
     DRAFT {
         int id PK
@@ -178,6 +179,8 @@ erDiagram
         text hook "drawn on the card"
         text caption
         text first_comment
+        text article_html "website article, one Page only"
+        text article_url "set = live on WordPress"
         text composed_image_path "bucket"
         text metricool_post_id "set = published"
     }
@@ -258,6 +261,9 @@ upload the hero.
   highest-reaction posts from assigned competitors, above
   `auto_draft_competitor_min_reactions`, that no draft has come from yet. RSS:
   the Page's feeds, fetched live, filtered by `auto_draft_rss_instructions`.
+  On the Page in `WORDPRESS_PAGE_ID`, only items whose article the app can
+  read; the text is kept on `source_item.body` and the draft also gets an
+  article (website articles PRD).
 - **Writes:** one `auto_draft_run` per Page and source, then drafts as in
   flow 3, landing in Review.
 - A post is never drafted twice, because a draft already points at it. That
@@ -274,6 +280,8 @@ upload the hero.
 
 ```
 draft (review) ──> POST /drafts/{id}/publish
+                     ├─ WordPress, if the draft has an article: publish now,
+                     │  draft.article_url = its link, appended to the comment
                      ├─ Metricool: caption, first comment, picture URL, time
                      └─ draft.metricool_post_id = Metricool's id   (frozen)
 

@@ -471,7 +471,7 @@ def test_a_page_this_reader_cannot_read_is_looked_up_as_a_link(page_fetch, html,
 
     item = web.lookup("https://a/x")
 
-    assert (item.url, item.text) == ("https://a/x", text)
+    assert (item.url, item.text, item.body) == ("https://a/x", text, None)
     assert web.is_link_only(item)
 
 
@@ -527,3 +527,27 @@ def test_the_page_body_is_extracted_for_the_fallback_prompt(page_fetch):
     assert "Menu item" not in text, "chrome is skipped"
     assert "var x" not in text, "script is skipped"
     assert text.count("\n\n") == 3, "one paragraph per block, separated"
+
+
+def test_headlines_and_sign_up_text_are_not_the_story(page_fetch):
+    """Both were in real pages on 2026-10-10, and the writer stated the BBC's
+    related-story headline as a fact in an article about something else."""
+    html = (
+        "<html><head><title>T</title></head><body>"
+        "<p>Polanski banned from Israel after party's motion declaring 'Zionism is racism'</p>"
+        "<p>Jewish Greens leader calls for Polanski to resign over ‘dereliction of duty’</p>"
+        "<p>You agree you are 18 or over. You can unsubscribe at any time. More Info.</p>"
+        "<p>Sign up for our Politics Essential newsletter to keep up with Westminster.</p>"
+        "<p>She told Times Radio: “No, I think he should resign.”</p>"
+        + ARTICLE_BODY
+        + "</body></html>"
+    )
+    page_fetch(html, "https://a/x")
+
+    text = web.fetch_article("https://a/x").text
+
+    assert "banned from Israel" not in text
+    assert "dereliction" not in text
+    assert "unsubscribe" not in text
+    assert "newsletter" not in text
+    assert "I think he should resign" in text, "a quote ending a sentence is prose"

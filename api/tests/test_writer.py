@@ -362,36 +362,6 @@ def test_only_rss_sources_can_fall_back_from_a_blocked_url(page, monkeypatch):
         writer.write(page, source, model=object())
 
 
-def test_a_link_only_web_page_is_read_by_gemini_with_no_fallback(page, monkeypatch):
-    """Our reader could not get the text, so Gemini fetches the URL. If it is
-    refused too, the title is all there is, and the run fails rather than
-    writing a post around a headline."""
-    source = SourceItem(
-        id=1, kind=SourceKind.WEB, external_id="u", text="A Headline", url="https://example.com/x"
-    )
-    asked = []
-
-    def fake_ask(prompt, _output_type, _instructions, model=None, validator=None, fetch_url=None):
-        asked.append((prompt, fetch_url))
-        raise writer.SourceUnreadable("blocked")
-
-    monkeypatch.setattr(writer, "ask", fake_ask)
-
-    with pytest.raises(writer.SourceUnreadable):
-        writer.write(page, source, model=object())
-
-    [(prompt, fetch_url)] = asked
-    assert fetch_url == source.url
-    assert "Read that URL" in prompt
-
-
-def test_a_web_page_our_reader_read_is_not_fetched_again():
-    source = SourceItem(kind=SourceKind.WEB, external_id="u", text="An article. " * 50)
-
-    assert not writer.reads_link(source)
-    assert "Read that URL" not in writer.user_prompt(source, None)
-
-
 def test_a_fetch_counts_only_when_the_article_itself_was_retrieved():
     """A failed fetch does not raise; the model writes "I could not access it"."""
     url = "https://www.bbc.co.uk/news/articles/abc?at_medium=RSS"
@@ -970,3 +940,86 @@ def test_a_first_comment_written_anyway_is_dropped_not_retried():
     assert validate(None, writer.DraftContent(**GOOD)).first_comment is None
     kept = writer._validator_for(validators.Limits())(None, writer.DraftContent(**GOOD))
     assert kept.first_comment == GOOD["first_comment"]
+
+
+def test_a_link_only_web_page_is_read_by_gemini_with_no_fallback(page, monkeypatch):
+    """Our reader could not get the text, so Gemini fetches the URL. If it is
+    refused too, the title is all there is, and the run fails rather than
+    writing a post around a headline."""
+    source = SourceItem(
+        id=1, kind=SourceKind.WEB, external_id="u", text="A Headline", url="https://example.com/x"
+    )
+    asked = []
+
+    def fake_ask(prompt, _output_type, _instructions, model=None, validator=None, fetch_url=None):
+        asked.append((prompt, fetch_url))
+        raise writer.SourceUnreadable("blocked")
+
+    monkeypatch.setattr(writer, "ask", fake_ask)
+
+    with pytest.raises(writer.SourceUnreadable):
+        writer.write(page, source, model=object())
+
+    [(prompt, fetch_url)] = asked
+    assert fetch_url == source.url
+    assert "Read that URL" in prompt
+
+
+def test_a_web_page_our_reader_read_is_not_fetched_again():
+    source = SourceItem(kind=SourceKind.WEB, external_id="u", text="An article. " * 50)
+
+    assert not writer.reads_link(source)
+    assert "Read that URL" not in writer.user_prompt(source, None)
+
+
+def test_an_rss_item_with_its_article_read_is_written_from_that_text(page, monkeypatch):
+    """Gemini's reader is refused where ours is not (the BBC), so once the run
+    has the article the link is a link, not a reading assignment."""
+    source = SourceItem(
+        id=1,
+        kind=SourceKind.RSS,
+        external_id="u",
+        text="The feed summary.",
+        body="The whole article, read by the app.",
+        url="https://example.com/x",
+    )
+    asked = []
+
+    def fake_ask(prompt, _output_type, _instructions, model=None, validator=None, fetch_url=None):
+        asked.append((prompt, fetch_url))
+        return SimpleNamespace(output=writer.DraftContent(**GOOD))
+
+    monkeypatch.setattr(writer, "ask", fake_ask)
+
+    writer.write(page, source, model=object())
+
+    [(prompt, fetch_url)] = asked
+    assert fetch_url is None
+    assert "The whole article, read by the app." in prompt
+    assert "Read that URL" not in prompt
+
+
+def test_an_article_is_written_from_the_full_text_and_the_post(page, monkeypatch):
+    source = SourceItem(kind=SourceKind.RSS, external_id="u", text="Summary.", body="The full story.")
+    asked = []
+
+    def fake_ask(prompt, output_type, instructions, model=None, validator=None, fetch_url=None):
+        asked.append((prompt, instructions))
+        return SimpleNamespace(output=output_type(title="A title", html="<p>Body.</p>"))
+
+    monkeypatch.setattr(writer, "ask", fake_ask)
+
+    article = writer.write_article(page, source, "🌊 The recap.")
+
+    [(prompt, instructions)] = asked
+    assert article.title == "A title"
+    assert "The full story." in prompt and "🌊 The recap." in prompt
+    assert "Summary." not in prompt, "a feed summary is not enough to write from"
+    assert "<h3>" in instructions, "the article prompt file is what is sent"
+
+
+def test_no_article_is_written_from_a_feed_summary(page):
+    source = SourceItem(kind=SourceKind.RSS, external_id="u", text="Summary.")
+
+    with pytest.raises(ValueError):
+        writer.write_article(page, source, "caption")

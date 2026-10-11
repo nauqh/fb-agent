@@ -63,13 +63,16 @@ import { useQuery } from "@/lib/use-query";
 import { pageAvatarRaw } from "@/lib/page-avatar";
 import { cn } from "@/lib/utils";
 
-type View = "text" | "image" | "preview";
+type View = "text" | "image" | "article" | "preview";
 
 interface Form {
   hook: string;
   caption: string;
   first_comment: string;
   highlight_phrases: string[];
+  /** Null when the draft has no article, so saving never invents an empty one. */
+  article_title: string | null;
+  article_html: string | null;
   image_prompt: string;
   hero_x_ratio: number;
   hero_y_ratio: number;
@@ -115,6 +118,7 @@ export function DraftDetail({
     form: null,
   });
   const [saving, setSaving] = useState(false);
+  const [articleSource, setArticleSource] = useState(false);
   const [deciding, setDeciding] = useState(false);
   const [imageWork, setImageWork] = useState<
     "hero" | "hero-upload" | "hero-search" | "hero-place" | "inset" | "inset-find" | "inset-search" | null
@@ -748,6 +752,9 @@ export function DraftDetail({
         <TabsList className="*:min-w-24 *:px-4">
           <TabsTrigger value="text">Text</TabsTrigger>
           <TabsTrigger value="image">Image</TabsTrigger>
+          {draft.article_html !== null ? (
+            <TabsTrigger value="article">Article</TabsTrigger>
+          ) : null}
           <TabsTrigger value="preview">Preview</TabsTrigger>
         </TabsList>
 
@@ -1276,6 +1283,57 @@ export function DraftDetail({
             />
           </section>
             </div>
+            ) : view === "article" ? (
+            <div className="space-y-6">
+              {form ? (
+                <>
+                {/* Read-only once live: an edit here would not reach WordPress. */}
+                <Field label="Title" hint={draft.article_url ? "live on the website" : undefined}>
+                  <Input
+                    value={form.article_title ?? ""}
+                    disabled={Boolean(draft.article_url)}
+                    onChange={(event) => setForm({ ...form, article_title: event.target.value })}
+                  />
+                </Field>
+                <Field
+                  label="Article"
+                  hint={`${words((form.article_html ?? "").replace(/<[^>]+>/g, " "))} words`}
+                  regenerate={
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="-ml-2 text-muted-foreground"
+                      onClick={() => setArticleSource(!articleSource)}
+                    >
+                      {articleSource ? "Show preview" : "Edit HTML"}
+                    </Button>
+                  }
+                >
+                  {articleSource ? (
+                    <Textarea
+                      value={form.article_html ?? ""}
+                      rows={28}
+                      disabled={Boolean(draft.article_url)}
+                      className="font-mono text-xs leading-relaxed"
+                      onChange={(event) => setForm({ ...form, article_html: event.target.value })}
+                    />
+                  ) : (
+                    <ArticlePreview title={form.article_title ?? ""} html={form.article_html ?? ""} />
+                  )}
+                </Field>
+                {draft.article_url ? (
+                  <a
+                    href={draft.article_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-sm underline underline-offset-4"
+                  >
+                    View article
+                  </a>
+                ) : null}
+                </>
+              ) : null}
+            </div>
             ) : (
             <div className="space-y-6">
               {form ? (
@@ -1643,6 +1701,13 @@ function PublishAction({
             <>It will go out as soon as Metricool will take it.</>
           )}
         </p>
+
+        {/* Rehearsal mode is Metricool's alone; the website has no dry run. */}
+        {draft.article_html && !draft.article_url ? (
+          <p className="text-sm font-medium">
+            The article goes live on the website now, and the first comment links to it.
+          </p>
+        ) : null}
 
         {/* Said before the press, because there is no undo after it. Only when
             rehearsal is on: a warning shown in both modes is one nobody reads,
@@ -2093,6 +2158,37 @@ function Field({
   );
 }
 
+// The client site's Smart Mag theme, read off a live post on 2026-10-12. If the
+// theme changes, the preview falls back to unstyled HTML, still readable.
+const SITE = "https://thehouseofcommonsense.co.uk";
+const SITE_STYLES = [
+  `${SITE}/wp-includes/css/dist/block-library/style.min.css`,
+  `${SITE}/wp-content/themes/smart-mag/style.css`,
+  `${SITE}/wp-content/themes/smart-mag/css/skin-trendy.css`,
+  "https://fonts.googleapis.com/css?family=PT+Serif:400,700|Roboto:400,500,700&display=swap",
+];
+
+/**
+ * The article as the website will show it, in the theme's own markup and CSS.
+ * Sandboxed without scripts: the HTML is model output, and nothing in it runs.
+ */
+function ArticlePreview({ title, html }: { title: string; html: string }) {
+  const escaped = title.replace(/[&<>"]/g, (c) => `&${{ "&": "amp", "<": "lt", ">": "gt", '"': "quot" }[c]};`);
+  const doc = `<!doctype html><html><head>${SITE_STYLES.map((href) => `<link rel="stylesheet" href="${href}">`).join("")}
+<style>:root{--text-font:"PT Serif",Georgia,serif;--body-font:"PT Serif",Georgia,serif;--title-font:var(--body-font);--h-font:"Roboto",system-ui,sans-serif;--ui-font:"Roboto",system-ui,sans-serif;--c-main:#096dd2;--post-content-gaps:1.3em}
+body{padding:24px 28px}.post-title{font-weight:bold;letter-spacing:-0.01em;margin-bottom:24px}</style></head>
+<body class="single single-post wp-theme-smart-mag"><div class="the-post s-post-large"><h1 class="is-title post-title">${escaped}</h1>
+<div class="post-content cf entry-content content-spacious">${html}</div></div></body></html>`;
+  return (
+    <iframe
+      title="Article preview"
+      sandbox=""
+      srcDoc={doc}
+      className="h-[70vh] w-full rounded-md border bg-white"
+    />
+  );
+}
+
 /** A picture-column section's heading and its quiet note. No box around it. */
 function SectionHead({
   title,
@@ -2157,6 +2253,8 @@ function toForm(draft: Draft): Form {
     caption: draft.caption ?? "",
     first_comment: draft.first_comment ?? "",
     highlight_phrases: [...draft.highlight_phrases],
+    article_title: draft.article_title,
+    article_html: draft.article_html,
     image_prompt: draft.image_prompt ?? "",
     hero_x_ratio: draft.hero_x_ratio,
     hero_y_ratio: draft.hero_y_ratio,

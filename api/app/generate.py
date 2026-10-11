@@ -423,6 +423,18 @@ def _run_one(session: Session, draft_id: int) -> None:
         if not getattr(result, "read_live", True):
             draft.warnings = draft.warnings + [writer.UNREADABLE_WARNING]
 
+        # A failed article costs the website one story, not the operator a post.
+        if page.id == settings.wordpress_page_id and source is not None and source.body:
+            _progress(session, draft, "writing the article", 40)
+            try:
+                article = writer.write_article(page, source, draft.caption)
+                draft.article_title = article.title
+                draft.article_html = article.html
+            except Exception as error:  # noqa: BLE001 - said on the row instead
+                draft.warnings = draft.warnings + [
+                    f"{ARTICLE_WARNING}could not be written - {type(error).__name__}: {error}"[:300]
+                ]
+
         # Deliberately still `generating`. Setting `review` here - before the
         # hero exists - put a finished-looking row in the queue with a blank
         # thumbnail, and stopped the client polling, because it polls only while
@@ -492,6 +504,7 @@ def _run_one(session: Session, draft_id: int) -> None:
 
 
 IMAGE_WARNING = "Image: "
+ARTICLE_WARNING = "Article: "
 """Prefix on every warning this step produces, so a rebuild can replace them.
 
 Without a marker there is no way to tell a stale image warning from a live

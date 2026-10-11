@@ -41,6 +41,7 @@ from app.models import (
     SourceKind,
 )
 from app.publish import metricool as publisher
+from app.publish import wordpress
 from app.settings import Template, layout, settings
 from app.writer import agent as writer
 from app.writer import validators
@@ -452,6 +453,8 @@ class DraftEdit(BaseModel):
     caption: str | None = None
     first_comment: str | None = None
     highlight_phrases: list[str] | None = None
+    article_title: str | None = None
+    article_html: str | None = None
     image_prompt: str | None = None
     hero_x_ratio: float | None = None
     hero_y_ratio: float | None = None
@@ -517,6 +520,14 @@ def update_draft(
         field in changes and changes[field] != getattr(draft, field)
         for field in DRAWN_FIELDS
     )
+    if draft.article_url and any(
+        field in changes and changes[field] != getattr(draft, field)
+        for field in ("article_title", "article_html")
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail=f"The article is already live at {draft.article_url}. Edit it in WordPress.",
+        )
     if scheduled and redraw:
         raise HTTPException(
             status_code=409,
@@ -1248,6 +1259,22 @@ def publish_draft(
             detail=f"{page.name} has no metricool_blog_id to publish against.",
         )
 
+    # The article first, so the link in the first comment is live before
+    # Metricool has the post. Committed at once: a Metricool refusal below must
+    # not lose the URL, or the retry would publish the article a second time.
+    if draft.article_html and not draft.article_url:
+        try:
+            draft.article_url = wordpress.publish(
+                draft.article_title or "", draft.article_html, _featured_image(draft)
+            )
+        except wordpress.WordPressError as error:
+            raise HTTPException(
+                status_code=502,
+                detail=f"The article was not published, so nothing was scheduled. {error}",
+            ) from error
+        session.add(draft)
+        session.commit()
+
     # The composite is already a JPEG in a public bucket, so there is nothing to
     # upload - this is the link to the file `build_image` wrote. It used to be
     # copied to a stable `{draft_id}.jpg` first, on the reasoning that a rebuild
@@ -1295,9 +1322,32 @@ def schedule_draft(draft: Draft, blog_id: str, when: datetime | None) -> str:
             media.public_url(draft.composed_image_path), blog_id
         )
     post_id = publisher.schedule(
-        blog_id, _post_text(draft), draft.first_comment, normalized, when
+        blog_id, _post_text(draft), _first_comment(draft), normalized, when
     )
     return post_id or QUEUED
+
+
+def _first_comment(draft: Draft) -> str | None:
+    """The first comment as it goes out: the row's, then the article's link.
+
+    Added here rather than written into the row, so editing the comment can
+    never delete the link, and every path to Metricool carries it.
+    """
+    if not draft.article_url:
+        return draft.first_comment
+    link = f"Read the full story: {draft.article_url}"
+    return f"{draft.first_comment.strip()}\n\n{link}" if draft.first_comment else link
+
+
+def _featured_image(draft: Draft) -> bytes | None:
+    """The hero, without the overlay drawn on the card. None if there is none."""
+    if not draft.hero_image_path:
+        return None
+    try:
+        return media.jpeg(media.store.read(draft.hero_image_path))
+    except media.MediaError:
+        # ponytail: the article goes up without a picture rather than not at all.
+        return None
 
 
 def _post_text(draft: Draft) -> str:
@@ -1450,7 +1500,7 @@ def _push_to_metricool(
             blog_id,
             post_id,
             _post_text(draft),
-            draft.first_comment,
+            _first_comment(draft),
             normalized,
             when,
         )

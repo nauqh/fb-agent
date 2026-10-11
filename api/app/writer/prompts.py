@@ -214,6 +214,10 @@ def image_prompt(layout: Layout, page_name: str | None = None, page=None) -> str
     return _read("image.txt", layout, page_name, page)
 
 
+def article_prompt(layout: Layout, page_name: str | None = None, page=None) -> str:
+    return _read("article.txt", layout, page_name, page)
+
+
 ORDER = ("system.txt", "first_comment.txt", "overlay.txt", "image.txt")
 """Reading order, which is also the order the run uses them in."""
 

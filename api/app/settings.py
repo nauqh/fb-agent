@@ -32,7 +32,7 @@ from pathlib import Path
 from typing import Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 API_DIR = Path(__file__).resolve().parent.parent
@@ -387,6 +387,26 @@ class Settings(BaseSettings):
     between a row in a planner and a post on a page with an audience - there is
     no dry run for the second one, and no undo that happens before people see it.
     """
+
+    wordpress_page_id: int | None = None
+    """The one Page whose RSS auto-drafts also write a website article.
+
+    An id rather than a Page column: version 1 is one Page and one site, and a
+    setting nobody edits from a screen does not need one (website articles PRD).
+    """
+
+    @field_validator("wordpress_page_id", mode="before")
+    @classmethod
+    def _blank_is_none(cls, value):
+        # `WORDPRESS_PAGE_ID=` as `.env.example` ships it, not a crash at boot.
+        return None if value == "" else value
+
+    wordpress_url: str = ""
+    """The site root, e.g. https://thehouseofcommonsense.co.uk."""
+    wordpress_user: str = ""
+    wordpress_app_password: str = ""
+    """A WordPress Application Password, not the admin login. WordPress offers
+    one only once the site is on HTTPS."""
 
     supabase_url: str = ""
     supabase_service_key: str = ""

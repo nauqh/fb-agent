@@ -365,9 +365,9 @@ def _model_settings(model_name: str) -> GoogleModelSettings | None:
 
 
 def reads_link(source: SourceItem) -> bool:
-    """Whether Gemini reads the source from its URL: an RSS item, or a web
-    page our adapter could not read."""
-    return source.kind is SourceKind.RSS or web.is_link_only(source)
+    """Whether Gemini reads the source from its URL: an RSS item whose article
+    was not read for it, or a web page our adapter could not read."""
+    return (source.kind is SourceKind.RSS and not source.body) or web.is_link_only(source)
 
 
 def user_prompt(
@@ -379,6 +379,8 @@ def user_prompt(
             raise ValueError("a run needs either a source item or a topic")
         return f"Write a post about: {topic}"
 
+    # An RSS item with its article already read is a WEB source in all but
+    # kind: the text below is the source, and the URL is a link.
     carried = summary or not reads_link(source)
     parts = [source_instruction(source.kind, carried), ""]
     if source.author:
@@ -386,7 +388,7 @@ def user_prompt(
     if source.url:
         parts.append(f"URL: {source.url}")
     if carried:
-        parts += ["", source.text]
+        parts += ["", source.body or source.text]
     return "\n".join(parts)
 
 
@@ -801,3 +803,43 @@ def rewrite(
         template=template,
         source=source,
     )
+
+
+class Article(BaseModel):
+    """The website article that goes with a post (website articles PRD)."""
+
+    title: str = Field(description="Plain text, sentence case, under 100 characters.")
+    html: str = Field(description="The body HTML, in the tags the instructions allow.")
+
+
+def _article_rules(_ctx: RunContext, output: Article) -> Article:
+    if not output.title.strip() or "<p>" not in output.html:
+        raise ModelRetry("Return a title, and a body in HTML paragraphs (<p>).")
+    return output
+
+
+def write_article(page: Page, source: SourceItem, caption: str | None, model=None) -> Article:
+    """One article from the source's full text, after the post is written.
+
+    Given the post's caption so the article tells the same story from the same
+    angle. Only for a source whose article was read (`source.body`): a feed
+    summary is two sentences, and an article written from it is invented.
+    """
+    if not source.body:
+        raise ValueError("an article needs the source's full text")
+    prompt = "\n".join(
+        [
+            "THE FACEBOOK POST this article goes with:",
+            (caption or "").strip(),
+            "",
+            f"SOURCE ARTICLE ({len(source.body)} characters):",
+            source.body,
+        ]
+    )
+    return ask(
+        prompt,
+        Article,
+        prompts.article_prompt(layout, page.name, page),
+        model,
+        _article_rules,
+    ).output

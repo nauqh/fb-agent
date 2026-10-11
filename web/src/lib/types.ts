@@ -177,6 +177,12 @@ export interface Draft {
   first_comment: string | null;
   highlight_phrases: string[];
 
+  /** The website article, on the one Page that has a site. Null everywhere else. */
+  article_title: string | null;
+  article_html: string | null;
+  /** Set once WordPress has published it. The first comment links here. */
+  article_url: string | null;
+
   image_prompt: string | null;
   hero_x_ratio: number;
   hero_y_ratio: number;

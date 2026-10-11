@@ -761,3 +761,124 @@ def test_a_post_metricool_never_named_cannot_be_edited(
     assert response.status_code == 409
     assert "planner" in response.json()["detail"]
     assert resyncs["order"] == []
+
+
+# --- the website article ------------------------------------------------------
+
+from app.publish import wordpress  # noqa: E402
+
+
+@pytest.fixture
+def site(monkeypatch):
+    monkeypatch.setattr(settings, "wordpress_url", "https://site.example/")
+    monkeypatch.setattr(settings, "wordpress_user", "app")
+    monkeypatch.setattr(settings, "wordpress_app_password", "abcd efgh")
+
+
+def test_an_article_goes_up_published_with_its_picture(site):
+    seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        if request.url.path.endswith("/media"):
+            return httpx.Response(201, json={"id": 77})
+        return httpx.Response(201, json={"link": "https://site.example/2026/10/10/a-story/"})
+
+    link = wordpress.publish("A story", "<p>Body.</p>", _jpeg(), client=_client(handler))
+
+    assert link == "https://site.example/2026/10/10/a-story/"
+    media_call, post_call = seen
+    assert str(media_call.url) == "https://site.example/wp-json/wp/v2/media"
+    assert media_call.headers["Content-Type"] == "image/jpeg"
+    assert media_call.headers["Authorization"].startswith("Basic ")
+    # `publish`, never `draft`: a draft has only ?p=<id>, not the permalink
+    # the first comment needs.
+    assert json.loads(post_call.content) == {
+        "title": "A story",
+        "content": "<p>Body.</p>",
+        "status": "publish",
+        "featured_media": 77,
+    }
+
+
+def test_a_refused_article_says_what_wordpress_said(site):
+    client = _client(lambda request: httpx.Response(401, text="rest_cannot_create"))
+
+    with pytest.raises(wordpress.WordPressError, match="401.*rest_cannot_create"):
+        wordpress.publish("A story", "<p>Body.</p>", None, client=client)
+
+
+def test_an_unconfigured_site_is_refused_before_any_request():
+    with pytest.raises(wordpress.WordPressError, match="not configured"):
+        wordpress.publish("A story", "<p>Body.</p>", None)
+
+
+@pytest.fixture
+def with_article(session, ready):
+    ready.article_title = "A story"
+    ready.article_html = "<p>Body.</p>"
+    session.add(ready)
+    session.commit()
+    return ready
+
+
+def test_scheduling_publishes_the_article_first_and_links_it(
+    client, session, with_article, published, monkeypatch
+):
+    def publish(title, html, image):
+        published["order"].append("wordpress")
+        return "https://site.example/a-story/"
+
+    monkeypatch.setattr(wordpress, "publish", publish)
+
+    response = client.post(f"/drafts/{with_article.id}/publish")
+
+    assert response.status_code == 200
+    assert published["order"] == ["wordpress", "normalize", "schedule"]
+    assert published["first_comment"] == (
+        with_article.first_comment.strip()
+        + "\n\nRead the full story: https://site.example/a-story/"
+    )
+    assert response.json()["article_url"] == "https://site.example/a-story/"
+
+
+def test_a_refused_article_schedules_nothing(client, with_article, published, monkeypatch):
+    def refuse(*_args):
+        raise wordpress.WordPressError("WordPress refused the posts (401)")
+
+    monkeypatch.setattr(wordpress, "publish", refuse)
+
+    response = client.post(f"/drafts/{with_article.id}/publish")
+
+    assert response.status_code == 502
+    assert "nothing was scheduled" in response.json()["detail"]
+    assert published["order"] == []
+
+
+def test_a_retry_after_metricool_refused_does_not_post_the_article_twice(
+    client, session, with_article, published, monkeypatch
+):
+    calls = []
+    monkeypatch.setattr(wordpress, "publish", lambda *a: calls.append(a) or "https://site.example/a/")
+
+    def refuse(*_args, **_kwargs):
+        raise publisher.PublishError("Metricool is down")
+
+    real_schedule = publisher.schedule
+    monkeypatch.setattr(publisher, "schedule", refuse)
+    assert client.post(f"/drafts/{with_article.id}/publish").status_code == 502
+
+    monkeypatch.setattr(publisher, "schedule", real_schedule)
+    assert client.post(f"/drafts/{with_article.id}/publish").status_code == 200
+    assert len(calls) == 1
+
+
+def test_a_live_article_cannot_be_edited_here(client, session, with_article):
+    with_article.article_url = "https://site.example/a/"
+    session.add(with_article)
+    session.commit()
+
+    response = client.patch(f"/drafts/{with_article.id}", json={"article_html": "<p>New.</p>"})
+
+    assert response.status_code == 409
+    assert "Edit it in WordPress" in response.json()["detail"]

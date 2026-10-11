@@ -2358,3 +2358,49 @@ def test_a_searched_hero_takes_a_google_image_for_a_competitor_post(
 
     assert len(searches) == 1
     assert draft.hero_image_path and draft.composed_image_path
+
+
+def _read_rss() -> dict:
+    return {**_rss().model_dump(mode="json"), "body": "The whole article."}
+
+
+def test_the_article_page_gets_an_article_beside_the_post(client, written, monkeypatch):
+    monkeypatch.setattr(settings, "wordpress_page_id", 1)
+    monkeypatch.setattr(
+        generate.writer,
+        "write_article",
+        lambda page, source, caption: writer.Article(title="T", html=f"<p>{source.body}</p>"),
+    )
+
+    client.post("/generate", json={"page_ids": [1], "sources": [_read_rss()]})
+    draft = client.get("/drafts/1").json()
+
+    assert draft["status"] == "review"
+    assert draft["article_title"] == "T"
+    assert draft["article_html"] == "<p>The whole article.</p>"
+
+
+def test_a_failed_article_is_a_warning_and_the_post_survives(client, written, monkeypatch):
+    def refuse(*_args):
+        raise RuntimeError("503 from the model")
+
+    monkeypatch.setattr(settings, "wordpress_page_id", 1)
+    monkeypatch.setattr(generate.writer, "write_article", refuse)
+
+    client.post("/generate", json={"page_ids": [1], "sources": [_read_rss()]})
+    draft = client.get("/drafts/1").json()
+
+    assert draft["status"] == "review"
+    assert draft["article_html"] is None
+    assert any("503 from the model" in w for w in draft["warnings"] if w.startswith("Article: "))
+
+
+def test_other_pages_get_no_article(client, written, monkeypatch):
+    def never(*_args):
+        raise AssertionError("an article for a Page with no website")
+
+    monkeypatch.setattr(generate.writer, "write_article", never)
+
+    client.post("/generate", json={"page_ids": [1], "sources": [_read_rss()]})
+
+    assert client.get("/drafts/1").json()["article_html"] is None

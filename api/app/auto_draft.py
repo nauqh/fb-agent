@@ -8,7 +8,9 @@ no queue table - the Draft row is the job record, so a restart mid-run needs no
 recovery code beyond `generate.sweep_stranded`.
 """
 
+import re
 from datetime import timedelta
+from urllib.parse import urlsplit
 
 from pydantic import BaseModel, Field
 from sqlmodel import Session, col, func, select
@@ -17,8 +19,9 @@ from app import generate
 from app.log import logger
 from app.models import AutoDraftRun, Draft, Page, SourceItem, SourceItemBase, SourceKind
 from app.routes.sources import _feeds_for, _visible_to
+from app.settings import settings
 from app.settings import sources as sources_config
-from app.sources import rss
+from app.sources import rss, web
 from app.writer import agent as writer
 
 
@@ -221,6 +224,37 @@ def choose(page: Page, items: list[SourceItemBase]) -> list[SourceItemBase]:
     return [shown[n - 1] for n in picks]
 
 
+# A live blog is half a story when it is read: an article from one covered the
+# first ten minutes of a match (2026-10-12). "-live-" in the URL is how the MEN,
+# BBC and Guardian mark them; the boundary keeps "liverpool" out.
+_LIVE_BLOG = re.compile(r"(^|[-/])live([-/]|$)")
+
+
+def readable(items: list[SourceItemBase], target: int) -> tuple[list[SourceItemBase], int]:
+    """The first `target` items whose full article could be read, with it attached.
+
+    Best first, as `choose` ranked them. The second value is how many were
+    tried and skipped: whether a link reads is a fact about the publisher
+    (Sky refuses, Google News links are redirect pages), not one the operator
+    can see in a feed, so the run filters rather than the screen.
+    """
+    picked: list[SourceItemBase] = []
+    skipped = 0
+    for item in items:
+        if len(picked) == target:
+            break
+        if _LIVE_BLOG.search(urlsplit(item.url or "").path):
+            skipped += 1
+            continue
+        try:
+            article = web.fetch_article(item.url or "")
+        except web.WebError:
+            skipped += 1
+            continue
+        picked.append(item.model_copy(update={"body": article.text}))
+    return picked, skipped
+
+
 def run_rss(
     session: Session,
     page: Page,
@@ -245,8 +279,13 @@ def run_rss(
         if failed:
             notes.append(f"{failed} feed(s) did not answer")
         fitting = choose(page, unused)
-        items = fitting[:target]
-        left = len(fitting) - len(items)
+        if page.id == settings.wordpress_page_id:
+            items, skipped = readable(fitting, target)
+            if skipped:
+                notes.append(f"Skipped {skipped} live blog(s) or unreadable article(s)")
+        else:
+            items, skipped = fitting[:target], 0
+        left = len(fitting) - len(items) - skipped
 
         if not items:
             notes.insert(0, "No unused feed items fit" if unused else "No unused feed items left")
