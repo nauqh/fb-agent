@@ -72,6 +72,19 @@ def youtube_worker_off(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def no_wordpress(monkeypatch):
+    """No test may reach the client's site. Autouse, so opting in is deliberate.
+
+    `.env` holds a real Application Password, and a test that expected the site
+    to be unconfigured published two "A story" posts to it instead (2026-10-12).
+    Tests that need a site set these themselves and pass a fake client.
+    """
+    for name in ("wordpress_url", "wordpress_user", "wordpress_app_password"):
+        monkeypatch.setattr(settings, name, "")
+    monkeypatch.setattr(settings, "wordpress_page_id", None)
+
+
+@pytest.fixture(autouse=True)
 def youtube_media_root(tmp_path, monkeypatch):
     """Youtube store writes go to the test's own directory.
 
