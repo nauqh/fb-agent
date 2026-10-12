@@ -143,6 +143,7 @@ erDiagram
         text watermark_image_path "committed file"
         int hook_max_words "null = house number"
         text system_prompt "null = the file"
+        text article_cta "first comment with an article"
         int auto_save_min_reactions "null = off"
         int auto_repost_after_days "null = off"
         int auto_draft_competitor_count "null = off"
@@ -281,7 +282,8 @@ upload the hero.
 ```
 draft (review) ──> POST /drafts/{id}/publish
                      ├─ WordPress, if the draft has an article: publish now,
-                     │  draft.article_url = its link, appended to the comment
+                     │  draft.article_url = its link, first comment = the
+                     │  Page's article_cta with the link
                      ├─ Metricool: caption, first comment, picture URL, time
                      └─ draft.metricool_post_id = Metricool's id   (frozen)
 

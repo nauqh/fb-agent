@@ -31,6 +31,7 @@ export interface TemplateBody {
   first_comment_prompt?: string | null;
   overlay_prompt?: string | null;
   image_prompt?: string | null;
+  article_prompt?: string | null;
   write_first_comment?: boolean | null;
 }
 

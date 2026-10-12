@@ -376,7 +376,7 @@ def _run_one(session: Session, draft_id: int, write_article: bool = False) -> No
         )
         if wants_article and not source.body:
             _progress(session, draft, "reading the article", 10)
-            article_note = _read_full_text(source)
+            article_note = read_full_text(source)
             session.add(source)
             session.commit()
 
@@ -399,17 +399,12 @@ def _run_one(session: Session, draft_id: int, write_article: bool = False) -> No
             and (source.image_url or "").strip()
             else ""
         )
-        result = writer.write(
-            page,
-            source,
-            draft.topic,
-            image=image,
-            template=(
-                session.get(PromptTemplate, draft.prompt_template_id)
-                if draft.prompt_template_id
-                else None
-            ),
+        template = (
+            session.get(PromptTemplate, draft.prompt_template_id)
+            if draft.prompt_template_id
+            else None
         )
+        result = writer.write(page, source, draft.topic, image=image, template=template)
         content = result.output
 
         draft.hook = content.hook
@@ -419,12 +414,17 @@ def _run_one(session: Session, draft_id: int, write_article: bool = False) -> No
         draft.image_prompt = content.image_prompt
         draft.inset_subject = content.inset_subject
 
+        # A failed article costs the website one story, not the operator a post.
+        if not article_note and wants_article:
+            _progress(session, draft, "writing the article", 40)
+            article_note = add_article(draft, page, source, template)
+
         # Residue: what the writer could not fix within its retries. Every
         # rule is enforced, so a Warning here has already survived correction.
         draft.warnings = validators.check(
             content.hook,
             content.caption,
-            content.first_comment,
+            draft.first_comment,
             validators.Limits.for_page(page),
         )
         if image_warning:
@@ -437,19 +437,8 @@ def _run_one(session: Session, draft_id: int, write_article: bool = False) -> No
         if not getattr(result, "read_live", True):
             draft.warnings = draft.warnings + [writer.UNREADABLE_WARNING]
 
-        # A failed article costs the website one story, not the operator a post.
         if article_note:
             draft.warnings = draft.warnings + [f"{ARTICLE_WARNING}{article_note}"[:300]]
-        elif wants_article:
-            _progress(session, draft, "writing the article", 40)
-            try:
-                article = writer.write_article(page, source, draft.caption)
-                draft.article_title = article.title
-                draft.article_html = article.html
-            except Exception as error:  # noqa: BLE001 - said on the row instead
-                draft.warnings = draft.warnings + [
-                    f"{ARTICLE_WARNING}could not be written - {type(error).__name__}: {error}"[:300]
-                ]
 
         # Deliberately still `generating`. Setting `review` here - before the
         # hero exists - put a finished-looking row in the queue with a blank
@@ -519,7 +508,26 @@ def _run_one(session: Session, draft_id: int, write_article: bool = False) -> No
         session.commit()
 
 
-def _read_full_text(source: SourceItem) -> str | None:
+def add_article(
+    draft: Draft, page: Page, source: SourceItem, template: PromptTemplate | None
+) -> str | None:
+    """Write the website article onto `draft`. None, or why it could not be.
+
+    The first comment goes: a post with an article gets the call to action and
+    the link as its first comment, added when it is scheduled, and no written
+    text (client, 2026-10-12).
+    """
+    try:
+        article = writer.write_article(page, source, draft.caption, template=template)
+    except Exception as error:  # noqa: BLE001 - said on the row instead
+        return f"could not be written - {type(error).__name__}: {error}"
+    draft.article_title = article.title
+    draft.article_html = article.html
+    draft.first_comment = None
+    return None
+
+
+def read_full_text(source: SourceItem) -> str | None:
     """Put the story's full text on `source.body`. None, or why it could not be.
 
     A web link's text already is the story, unless our reader could not read

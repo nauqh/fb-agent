@@ -83,6 +83,8 @@ export interface Page {
   recap_max_points: number | null;
   /** False writes no first comment on this Page. Null is the house rule: one is written. */
   write_first_comment: boolean | null;
+  /** First comment of a post with an article, `{link}` for its address. Null is the default. */
+  article_cta: string | null;
 
   /** Save a published post automatically at this many reactions. Null is off. */
   auto_save_min_reactions: number | null;
@@ -312,6 +314,7 @@ export interface PromptTemplate {
   first_comment_prompt: string | null;
   overlay_prompt: string | null;
   image_prompt: string | null;
+  article_prompt: string | null;
   /** Null follows the Page; a bool overrides it for this style. */
   write_first_comment: boolean | null;
 }

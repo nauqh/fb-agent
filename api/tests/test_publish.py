@@ -19,8 +19,9 @@ import httpx
 import pytest
 from PIL import Image
 
-from app.models import Draft, DraftStatus
+from app.models import Draft, DraftStatus, Page
 from app.publish import metricool as publisher
+from app.routes.drafts import article_cta
 from app.settings import settings
 
 
@@ -835,11 +836,19 @@ def test_scheduling_publishes_the_article_first_and_links_it(
 
     assert response.status_code == 200
     assert published["order"] == ["wordpress", "normalize", "schedule"]
-    assert published["first_comment"] == (
-        with_article.first_comment.strip()
-        + "\n\nRead the full story: https://site.example/a-story/"
-    )
+    # The link and the call to action only, never written text (client, 2026-10-12).
+    assert published["first_comment"] == "Read the full story: https://site.example/a-story/"
     assert response.json()["article_url"] == "https://site.example/a-story/"
+    assert response.json()["first_comment"] == published["first_comment"]
+
+
+def test_the_call_to_action_is_the_pages_own():
+    url = "https://site.example/a/"
+    assert article_cta(Page(name="P", article_cta="Full story 👉 {link} 👈"), url) == (
+        "Full story 👉 https://site.example/a/ 👈"
+    )
+    assert article_cta(Page(name="P", article_cta="Read on:"), url) == "Read on: " + url
+    assert article_cta(Page(name="P", article_cta="  "), url) == "Read the full story: " + url
 
 
 def test_a_refused_article_schedules_nothing(client, with_article, published, monkeypatch):

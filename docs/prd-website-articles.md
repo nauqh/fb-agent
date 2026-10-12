@@ -2,7 +2,7 @@
 
 - **Product**: fb-agent, website articles feature
 - **Status**: Version 1 in build
-- **Last updated**: 2026-10-10
+- **Last updated**: 2026-10-12
 
 ## Summary
 
@@ -68,14 +68,25 @@ it.
 5. **Write the article** from the same text. New.
 6. **Review.** The draft drawer gets an Article tab: title and body, both
    editable. Rejecting the draft discards both.
-7. **Schedule.** One action publishes the article to WordPress, appends
-   "Read the full story: <link>" to the first comment, and schedules the post.
+7. **Schedule.** One action publishes the article to WordPress, sets the first
+   comment to the Page's call to action with the link, and schedules the post.
    If WordPress fails, nothing is scheduled and the error is shown.
+
+A post with an article has no written first comment: the comment is the call
+to action and the link only (client, 2026-10-12). The call to action is set in
+Settings, Writing, Article link; `{link}` marks where the link goes, and the
+default is "Read the full story: {link}".
 
 On Sources, the cart bar offers **Write article** for RSS items and web links on
 the politics Page, ticked by default. A story the app cannot read still makes the
 post, with a warning. Topic drafts, competitor posts, tweets and other Pages work
 exactly as today.
+
+A draft made without an article has a **Write article** button in the draft
+drawer (client, 2026-10-12). The operator generates from headlines and decides
+after reading the post. The button reads the full story if it has not been read,
+writes the article, and drops the written first comment. A story that cannot be
+read is refused with the reason.
 
 ## Users
 
@@ -93,7 +104,10 @@ exactly as today.
 | Article writing | Written in the same run as the post, from the same full text, with a title, in the Page's voice. It uses the source's facts only and never copies its sentences. Its length follows the source, roughly 400 to 900 words, and is never padded. |
 | Article format | The body is HTML in the theme's layout: `h3` subheadings, quotes in `blockquote`, and bullet lists where the facts suit them. |
 | Article review | The draft drawer has an Article tab with the title and the HTML body, both editable. Save, Revert and the unsaved-changes check cover it. |
-| Publish and schedule | Scheduling a draft with an article publishes it to WordPress with its title, body and featured image, then schedules the post with the article's link at the end of the first comment. |
+| Publish and schedule | Scheduling a draft with an article publishes it to WordPress with its title, body and featured image, then schedules the post with the Page's call to action and the article's link as the whole first comment. |
+| Call to action | Settings has an Article link field on the politics Page. `{link}` is replaced by the article's address; without it the link goes last. Blank is the default. |
+| Article prompt | The article prompt is editable per Page, like the other prompts, and a post style may carry its own. A blank style field uses the Page's. |
+| Write article on a draft | The drawer offers Write article on a draft from an RSS item or web link that has no article and is not scheduled. |
 | Link works at publish time | The article is live before the post is handed to Metricool. A post MUST NOT go out linking to a missing page. |
 | Failure is visible | If the article cannot be written, the post is still made and the draft says so. If WordPress refuses, the post is not scheduled and the error is shown. |
 
@@ -101,17 +115,16 @@ exactly as today.
 
 - Articles from topic drafts, competitor posts or tweets.
 - Pages other than politics.
-- A Write article button on an existing draft, per-feed full-text checks and
-  marks on sources.
-- A rendered view of the article, and a Rewrite button for it.
+- Per-feed full-text checks and marks on sources.
+- A Rewrite button for the article.
 - The link in the Facebook preview, and "View article" links elsewhere.
 - WordPress categories and tags.
 - Scheduling the article in WordPress for the post's time (`future`). Version 1
   publishes immediately.
 - Unpublishing. An article stays live if its post is unscheduled or deleted; it
   is removed by hand in WordPress.
-- A Settings screen for the site or the article prompt. Both are configuration:
-  the site in the server's environment, the prompt in a file.
+- A Settings screen for the site. It is configuration, in the server's
+  environment.
 - Articles built from several sources on the same story. This is the way to
   longer articles without invented facts.
 - Ads setup, site design and theme changes. The client handles these.
@@ -126,10 +139,11 @@ exactly as today.
 - **Authentication**: a WordPress Application Password in the server's
   environment, never in the browser. The site must be on HTTPS before
   WordPress offers one. The admin login password is not used by the app.
-- **Metricool is unchanged.** The first comment is still plain text; it now
-  ends in a URL. The planner stays the source of truth for scheduled posts.
+- **Metricool is unchanged.** The first comment is still plain text; for a
+  post with an article it is the call to action and a URL. The planner stays the source of truth for scheduled posts.
 - **Writer**: the article is one extra Gemini call after the post, with its own
-  prompt file, `article.txt`, like the existing `first_comment.txt`.
+  prompt, `article.txt`, overridable per Page and per post style like the
+  others.
 - **Images**: the featured image is the post's hero image, without the overlay
   text.
 

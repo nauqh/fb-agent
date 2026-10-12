@@ -106,7 +106,7 @@ def start_generate(
             session,
             request.page_ids,
             # Never the client's `body`: it is the full article the writer
-            # trusts, so the server reads it (`generate._read_full_text`).
+            # trusts, so the server reads it (`generate.read_full_text`).
             [source.model_copy(update={"body": None}) for source in request.sources],
             request.topic,
             request.hero_from_source,
@@ -729,6 +729,54 @@ def regenerate_field(
     )
 
 
+@router.post("/drafts/{draft_id}/article")
+def write_article(draft_id: int, session: Session = Depends(get_session)) -> Draft:
+    """Write the website article for a draft made without one.
+
+    The client, 2026-10-12: drafts are generated from headlines, and whether a
+    story earns an article is decided after reading the post. Synchronous, like
+    Rewrite: one call the operator is waiting on. Saves the article, and drops
+    the written first comment the way a run with an article does.
+    """
+    draft = _editable(session, draft_id)
+    page = session.get(Page, draft.page_id)
+    source = (
+        session.get(SourceItem, draft.source_item_id) if draft.source_item_id else None
+    )
+    if (
+        page is None
+        or page.id != settings.wordpress_page_id
+        or source is None
+        or source.kind not in (SourceKind.RSS, SourceKind.WEB)
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail="Only a draft from a news item or web link on the website's Page can have an article.",
+        )
+    if draft.article_html is not None:
+        raise HTTPException(status_code=409, detail="This draft already has an article.")
+
+    if not source.body:
+        problem = generate.read_full_text(source)
+        if problem:
+            raise HTTPException(status_code=422, detail=f"No article: {problem}.")
+        session.add(source)
+    problem = generate.add_article(
+        draft,
+        page,
+        source,
+        session.get(PromptTemplate, draft.prompt_template_id)
+        if draft.prompt_template_id
+        else None,
+    )
+    if problem:
+        raise HTTPException(status_code=502, detail=f"No article: {problem}.")
+    draft.warnings = [
+        warning for warning in draft.warnings if not warning.startswith(generate.ARTICLE_WARNING)
+    ]
+    return _save(session, draft)
+
+
 @router.post("/drafts/{draft_id}/image")
 def rebuild_image(
     draft_id: int,
@@ -1284,6 +1332,9 @@ def publish_draft(
                 status_code=502,
                 detail=f"The article was not published, so nothing was scheduled. {error}",
             ) from error
+        # Written into the row, so the drawer, a later edit and a repost all
+        # send what went out.
+        draft.first_comment = article_cta(page, draft.article_url)
         session.add(draft)
         session.commit()
 
@@ -1334,21 +1385,22 @@ def schedule_draft(draft: Draft, blog_id: str, when: datetime | None) -> str:
             media.public_url(draft.composed_image_path), blog_id
         )
     post_id = publisher.schedule(
-        blog_id, _post_text(draft), _first_comment(draft), normalized, when
+        blog_id, _post_text(draft), draft.first_comment, normalized, when
     )
     return post_id or QUEUED
 
 
-def _first_comment(draft: Draft) -> str | None:
-    """The first comment as it goes out: the row's, then the article's link.
+ARTICLE_CTA = "Read the full story: {link}"
 
-    Added here rather than written into the row, so editing the comment can
-    never delete the link, and every path to Metricool carries it.
+
+def article_cta(page: Page, url: str) -> str:
+    """The first comment of a post with an article: the Page's call to action.
+
+    A call to action without `{link}` gets the link after it, so the comment
+    always carries it.
     """
-    if not draft.article_url:
-        return draft.first_comment
-    link = f"Read the full story: {draft.article_url}"
-    return f"{draft.first_comment.strip()}\n\n{link}" if draft.first_comment else link
+    text = (page.article_cta or "").strip() or ARTICLE_CTA
+    return text.replace("{link}", url) if "{link}" in text else f"{text} {url}"
 
 
 def _featured_image(draft: Draft) -> bytes | None:
@@ -1512,7 +1564,7 @@ def _push_to_metricool(
             blog_id,
             post_id,
             _post_text(draft),
-            _first_comment(draft),
+            draft.first_comment,
             normalized,
             when,
         )

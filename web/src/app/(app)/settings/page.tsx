@@ -30,7 +30,7 @@ import {
   setAssignments,
   type Assignment,
 } from "@/lib/api/competitors";
-import { getInsetQuota, type InsetQuota } from "@/lib/api/drafts";
+import { getInsetQuota, publishMode, type InsetQuota } from "@/lib/api/drafts";
 import { addFeed, removeFeed } from "@/lib/api/feeds";
 import {
   addSlot,
@@ -1320,14 +1320,29 @@ function Writing({
   templates: PromptTemplate[] | null;
   refreshTemplates: () => Promise<void>;
 }) {
+  // Only the Page in WORDPRESS_PAGE_ID writes website articles.
+  const { data: mode } = useQuery(() => publishMode(), []);
+  const articles = mode?.article_page_id === page.id;
+
   return (
     <Pane title="Writing" hint="What this Page is told to write.">
       <div className="space-y-6">
         <Prompts pageId={pageId} files={files} />
 
         <div className="border-t pt-6">
-          <PostStyles pageId={pageId!} templates={templates} refresh={refreshTemplates} />
+          <PostStyles
+            pageId={pageId!}
+            templates={templates}
+            refresh={refreshTemplates}
+            articles={articles}
+          />
         </div>
+
+        {articles ? (
+          <div className="border-t pt-6">
+            <ArticleLink key={page.article_cta ?? ""} page={page} />
+          </div>
+        ) : null}
 
         {/* Folded: the house numbers suit most Pages, and six number boxes
             above the prompts were the first thing an operator met here. */}
@@ -1658,12 +1673,59 @@ function PromptEditor({ pageId, file }: { pageId: number; file: PromptFile }) {
   );
 }
 
+/**
+ * The first comment of a post with a website article (client, 2026-10-12):
+ * a call to action and the link, never written text. `{link}` is where the
+ * link goes; without it the link goes last. Blank is the default.
+ */
+function ArticleLink({ page }: { page: Page }) {
+  const [text, setText] = useState(page.article_cta ?? "");
+  const [busy, setBusy] = useState(false);
+
+  async function save() {
+    setBusy(true);
+    try {
+      await updatePage(page.id, { article_cta: text.trim() || null });
+      toast("Saved. Posts scheduled from now on use it.");
+      emit();
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Could not save");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Block label="Article link">
+      <div className="flex max-w-2xl flex-wrap items-center gap-2">
+        <Input
+          aria-label="Article link call to action"
+          className="min-w-0 flex-1 bg-background"
+          placeholder="Read the full story: {link}"
+          value={text}
+          onChange={(event) => setText(event.target.value)}
+        />
+        {text !== (page.article_cta ?? "") ? (
+          <Button size="sm" disabled={busy} onClick={() => void save()}>
+            {busy ? <Loader2 className="size-4 animate-spin" /> : null}
+            Save
+          </Button>
+        ) : null}
+      </div>
+      <p className="pt-2 text-[12px] text-muted-foreground">
+        {"The first comment of a post with an article. {link} becomes the article's address."}
+      </p>
+    </Block>
+  );
+}
+
 /** The prompts a style can replace, in the order the writer reads them. */
 const TEMPLATE_FIELDS = [
   { field: "system_prompt", label: "System", hint: "The post's shape and voice." },
   { field: "first_comment_prompt", label: "First comment", hint: "Rules for the main body." },
   { field: "overlay_prompt", label: "Overlay", hint: "Rules for the text panel." },
   { field: "image_prompt", label: "Image", hint: "Photography rules for the hero." },
+  { field: "article_prompt", label: "Article", hint: "Rules for the website article." },
 ] as const;
 
 type TemplateField = (typeof TEMPLATE_FIELDS)[number]["field"];
@@ -1682,10 +1744,12 @@ function PostStyles({
   pageId,
   templates,
   refresh,
+  articles,
 }: {
   pageId: number;
   templates: PromptTemplate[] | null;
   refresh: () => Promise<void>;
+  articles: boolean;
 }) {
   // Which form is open: a template's id, `"new"`, or none. One at a time -
   // two editors over the same row would race the last save to the server.
@@ -1757,6 +1821,7 @@ function PostStyles({
           {open === "new" ? (
             <TemplateForm
               pageId={pageId}
+              articles={articles}
               onSaved={() => saved("Style created.")}
               onCancel={() => setOpen(null)}
             />
@@ -1764,6 +1829,7 @@ function PostStyles({
           {typeof open === "number" ? (
             <TemplateForm
               pageId={pageId}
+              articles={articles}
               initial={templates.find((one) => one.id === open)}
               onSaved={() => saved("Style updated.")}
               onCancel={() => setOpen(null)}
@@ -1834,11 +1900,13 @@ function RemoveTemplate({
 
 function TemplateForm({
   pageId,
+  articles,
   initial,
   onSaved,
   onCancel,
 }: {
   pageId: number;
+  articles: boolean;
   initial?: PromptTemplate;
   onSaved: () => Promise<void>;
   onCancel: () => void;
@@ -1849,6 +1917,7 @@ function TemplateForm({
     first_comment_prompt: initial?.first_comment_prompt ?? "",
     overlay_prompt: initial?.overlay_prompt ?? "",
     image_prompt: initial?.image_prompt ?? "",
+    article_prompt: initial?.article_prompt ?? "",
   }));
   const [busy, setBusy] = useState(false);
   // The overlay is a choice, not only a box (client, 2026-09-14): many styles
@@ -1879,13 +1948,15 @@ function TemplateForm({
       firstComment !== null ||
       form.system_prompt.trim() !== "" ||
       form.first_comment_prompt.trim() !== "" ||
-      form.image_prompt.trim() !== "");
+      form.image_prompt.trim() !== "" ||
+      form.article_prompt.trim() !== "");
   const dirty =
     initial === undefined ||
     form.name !== initial.name ||
     form.system_prompt !== (initial.system_prompt ?? "") ||
     form.first_comment_prompt !== (initial.first_comment_prompt ?? "") ||
     form.image_prompt !== (initial.image_prompt ?? "") ||
+    form.article_prompt !== (initial.article_prompt ?? "") ||
     overlay !== (initial.overlay_prompt == null ? null : initial.overlay_prompt.trim()) ||
     firstComment !== (initial.write_first_comment ?? null);
 
@@ -1899,6 +1970,7 @@ function TemplateForm({
         first_comment_prompt: form.first_comment_prompt.trim() || null,
         overlay_prompt: overlay,
         image_prompt: form.image_prompt.trim() || null,
+        article_prompt: form.article_prompt.trim() || null,
         write_first_comment: firstComment,
       };
       if (initial) {
@@ -1931,7 +2003,8 @@ function TemplateForm({
         />
       </div>
 
-      {TEMPLATE_FIELDS.map(({ field, label, hint }) => (
+      {TEMPLATE_FIELDS.filter(({ field }) => articles || field !== "article_prompt").map(
+        ({ field, label, hint }) => (
         <div key={field}>
           <div className="flex items-baseline justify-between gap-3">
             <Label htmlFor={`template-${field}`} className="text-[13px] font-medium">

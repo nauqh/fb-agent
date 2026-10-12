@@ -252,6 +252,11 @@ export async function regenerateField(
   });
 }
 
+/** Write the website article for a draft made without one. Saves it, and clears the first comment. */
+export async function writeArticle(id: number): Promise<Draft> {
+  return post<Draft>(`/drafts/${id}/article`, {});
+}
+
 /**
  * Put a photo in the circle and redraw the card. Answers with the draft.
  *

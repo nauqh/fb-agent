@@ -818,12 +818,15 @@ def _article_rules(_ctx: RunContext, output: Article) -> Article:
     return output
 
 
-def write_article(page: Page, source: SourceItem, caption: str | None, model=None) -> Article:
+def write_article(
+    page: Page, source: SourceItem, caption: str | None, model=None, template=None
+) -> Article:
     """One article from the source's full text, after the post is written.
 
     Given the post's caption so the article tells the same story from the same
     angle. Only for a source whose article was read (`source.body`): a feed
     summary is two sentences, and an article written from it is invented.
+    A post style's article prompt replaces the Page's, like its other prompts.
     """
     if not source.body:
         raise ValueError("an article needs the source's full text")
@@ -836,10 +839,13 @@ def write_article(page: Page, source: SourceItem, caption: str | None, model=Non
             source.body,
         ]
     )
+    own = template is not None and (template.article_prompt or "").strip()
     return ask(
         prompt,
         Article,
-        prompts.article_prompt(layout, page.name, page),
+        prompts.substitute(template.article_prompt, layout)
+        if own
+        else prompts.article_prompt(layout, page.name, page),
         model,
         _article_rules,
     ).output

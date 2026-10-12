@@ -159,6 +159,7 @@ class TemplateBody(BaseModel):
     first_comment_prompt: str | None = None
     overlay_prompt: str | None = None
     image_prompt: str | None = None
+    article_prompt: str | None = None
     write_first_comment: bool | None = None
     """Null follows the Page; a bool overrides it for this style."""
 
@@ -177,6 +178,7 @@ def _template_out(row: PromptTemplate) -> TemplateOut:
         first_comment_prompt=row.first_comment_prompt,
         overlay_prompt=row.overlay_prompt,
         image_prompt=row.image_prompt,
+        article_prompt=row.article_prompt,
         write_first_comment=row.write_first_comment,
     )
 
@@ -218,7 +220,10 @@ def create_template(
         _overlay(body.overlay_prompt) is None
         and body.write_first_comment is None
         and not any((text or "").strip() for text in (
-            body.system_prompt, body.first_comment_prompt, body.image_prompt
+            body.system_prompt,
+            body.first_comment_prompt,
+            body.image_prompt,
+            body.article_prompt,
         ))
     ):
         raise HTTPException(
@@ -240,6 +245,7 @@ def create_template(
         first_comment_prompt=body.first_comment_prompt,
         overlay_prompt=body.overlay_prompt,
         image_prompt=body.image_prompt,
+        article_prompt=body.article_prompt,
         write_first_comment=body.write_first_comment,
     )
     session.add(row)
@@ -271,6 +277,7 @@ def update_template(
     row.first_comment_prompt = body.first_comment_prompt
     row.overlay_prompt = _overlay(body.overlay_prompt)
     row.image_prompt = body.image_prompt
+    row.article_prompt = body.article_prompt
     row.write_first_comment = body.write_first_comment
     session.add(row)
     session.commit()

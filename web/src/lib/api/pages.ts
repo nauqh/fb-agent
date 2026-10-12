@@ -49,6 +49,7 @@ export interface PageUpdate {
   /** The caption's point cap, per Page since 2026-09-19. Null is the house 5. */
   recap_max_points?: number | null;
   write_first_comment?: boolean | null;
+  article_cta?: string | null;
 
   /** Automatic save and repost. Null is off for both. Days are 1-90. */
   auto_save_min_reactions?: number | null;

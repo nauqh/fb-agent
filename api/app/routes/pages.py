@@ -63,6 +63,8 @@ class PageUpdate(BaseModel):
     recap_max_points: int | None = Field(default=None, ge=1, le=50)
     write_first_comment: bool | None = None
     """False writes no first comment on this Page. Null is the house rule."""
+    article_cta: str | None = Field(default=None, max_length=500)
+    """The first comment of a post with an article. Null is the default."""
 
     # Automatic save and repost (H2). Null is off, as above.
     auto_save_min_reactions: int | None = Field(default=None, ge=1)

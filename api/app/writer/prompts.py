@@ -149,6 +149,7 @@ COLUMN = {
     "first_comment.txt": "first_comment_prompt",
     "overlay.txt": "overlay_prompt",
     "image.txt": "image_prompt",
+    "article.txt": "article_prompt",
 }
 """Which `Page` column overrides which file, for the known prompts.
 

@@ -352,6 +352,13 @@ class Page(SQLModel, table=True):
     )
     overlay_prompt: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
     image_prompt: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
+    article_prompt: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
+
+    article_cta: str | None = None
+    """The first comment of a post with a website article, `{link}` where the
+    article's address goes. Null is `routes.drafts.ARTICLE_CTA`. The client,
+    2026-10-12: the comment is the link and a call to action, never written
+    text."""
 
     created_at: datetime = Field(default_factory=_now)
     updated_at: datetime = Field(default_factory=_now)
@@ -841,6 +848,9 @@ class PromptTemplate(SQLModel, table=True):
         default=None, sa_column=Column(Text, nullable=True)
     )
     """Sent instead of the Page's first comment rules."""
+
+    article_prompt: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
+    """Sent instead of the Page's article prompt."""
 
     image_prompt: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
     """Sent instead of the Page's image brief - the image model never sees the

@@ -2372,7 +2372,9 @@ def _article_run(monkeypatch, read=lambda url: "The whole article."):
     monkeypatch.setattr(
         generate.writer,
         "write_article",
-        lambda page, source, caption: writer.Article(title="T", html=f"<p>{source.body}</p>"),
+        lambda page, source, caption, template=None: writer.Article(
+            title="T", html=f"<p>{source.body}</p>"
+        ),
     )
 
 
@@ -2393,6 +2395,8 @@ def test_the_article_page_gets_an_article_beside_the_post(client, written, monke
     assert draft["status"] == "review"
     assert draft["article_title"] == "T"
     assert draft["article_html"] == "<p>The whole article.</p>"
+    # The first comment is the article's link, added when it is scheduled.
+    assert draft["first_comment"] is None
 
 
 def test_the_client_cannot_supply_the_full_text(client, written, monkeypatch):
@@ -2441,7 +2445,7 @@ def test_unticked_writes_no_article(client, written, monkeypatch):
 
 
 def test_a_failed_article_is_a_warning_and_the_post_survives(client, written, monkeypatch):
-    def refuse(*_args):
+    def refuse(*_args, **_kwargs):
         raise RuntimeError("503 from the model")
 
     _article_run(monkeypatch)
@@ -2464,3 +2468,55 @@ def test_other_pages_get_no_article(client, written, monkeypatch):
     client.post("/generate", json=_ticked(_rss()))
 
     assert client.get("/drafts/1").json()["article_html"] is None
+
+
+# --- Write article on a draft made without one --------------------------------
+
+
+def _without_article(client, monkeypatch) -> dict:
+    _article_run(monkeypatch)
+    client.post("/generate", json={**_ticked(_rss()), "write_article": False})
+    return client.get("/drafts/1").json()
+
+
+def test_a_draft_gets_its_article_afterwards(client, written, monkeypatch):
+    """The client, 2026-10-12: the article is decided on after reading the post."""
+    before = _without_article(client, monkeypatch)
+    assert before["article_html"] is None and before["first_comment"]
+
+    response = client.post("/drafts/1/article")
+
+    assert response.status_code == 200
+    assert response.json()["article_html"] == "<p>The whole article.</p>"
+    assert response.json()["first_comment"] is None
+
+
+def test_an_unreadable_story_writes_no_article(client, written, monkeypatch):
+    from app.sources import web
+
+    _without_article(client, monkeypatch)
+
+    def refuse(url):
+        raise web.WebError("The site refused the request (403)")
+
+    _article_run(monkeypatch, read=refuse)
+
+    response = client.post("/drafts/1/article")
+
+    assert response.status_code == 422
+    assert "403" in response.json()["detail"]
+    assert client.get("/drafts/1").json()["first_comment"]
+
+
+def test_a_draft_with_an_article_is_not_given_a_second(client, written, monkeypatch):
+    _without_article(client, monkeypatch)
+    client.post("/drafts/1/article")
+
+    assert client.post("/drafts/1/article").status_code == 409
+
+
+def test_other_pages_cannot_write_an_article(client, written, monkeypatch):
+    _without_article(client, monkeypatch)
+    monkeypatch.setattr(settings, "wordpress_page_id", 2)
+
+    assert client.post("/drafts/1/article").status_code == 422

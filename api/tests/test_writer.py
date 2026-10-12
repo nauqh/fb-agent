@@ -13,7 +13,7 @@ from pydantic_ai.messages import (
 )
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 
-from app.models import Page, SourceItem, SourceKind
+from app.models import Page, PromptTemplate, SourceItem, SourceKind
 from app.settings import layout
 from app.writer import agent as writer
 from app.writer import prompts, validators
@@ -1016,6 +1016,15 @@ def test_an_article_is_written_from_the_full_text_and_the_post(page, monkeypatch
     assert "The full story." in prompt and "🌊 The recap." in prompt
     assert "Summary." not in prompt, "a feed summary is not enough to write from"
     assert "<h3>" in instructions, "the article prompt file is what is sent"
+
+    asked.clear()
+    writer.write_article(page, source, "caption", template=PromptTemplate(name="S", page_id=1))
+    assert asked[0][1] == instructions, "a style with no article prompt uses the Page's"
+
+    asked.clear()
+    style = PromptTemplate(name="S", page_id=1, article_prompt="Write it as a Q&A.")
+    writer.write_article(page, source, "caption", template=style)
+    assert asked[0][1] == "Write it as a Q&A."
 
 
 def test_no_article_is_written_from_a_feed_summary(page):

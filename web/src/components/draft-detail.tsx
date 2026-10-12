@@ -51,6 +51,7 @@ import {
   updateDraft,
   uploadHero,
   uploadInset,
+  writeArticle,
 } from "@/lib/api/drafts";
 import { getPageLayout, type ResolvedLayout } from "@/lib/api/layout";
 import { listPages } from "@/lib/api/pages";
@@ -119,6 +120,7 @@ export function DraftDetail({
   });
   const [saving, setSaving] = useState(false);
   const [articleSource, setArticleSource] = useState(false);
+  const [writingArticle, setWritingArticle] = useState(false);
   const [deciding, setDeciding] = useState(false);
   const [imageWork, setImageWork] = useState<
     "hero" | "hero-upload" | "hero-search" | "hero-place" | "inset" | "inset-find" | "inset-search" | null
@@ -152,6 +154,7 @@ export function DraftDetail({
   // Shares the "pages" cache entry with `page-scope.tsx` - same loader, same
   // shape. Its Page dropdown needs the same list the scope already resolves.
   const { data: pages } = useQuery(() => listPages(), [], { cacheKey: "pages" });
+  const { data: mode } = useQuery(() => publishMode(), []);
 
   /**
    * The poll.
@@ -241,6 +244,11 @@ export function DraftDetail({
   const page = pages?.find((candidate) => candidate.id === draft?.page_id);
   const insetSource: InsetSource =
     insetChoice?.draftId === draftId ? insetChoice.source : (page?.inset_source ?? "google");
+  // What the first comment will be once the article is live (`article_cta` in the API).
+  const ctaText = page?.article_cta?.trim() || "Read the full story: {link}";
+  const cta = ctaText.includes("{link}")
+    ? ctaText.replace("{link}", "[article link]")
+    : `${ctaText} [article link]`;
   const heroResults = heroSearch?.draftId === draftId ? heroSearch.results : [];
   const heroSource: InsetSource =
     (heroSearch?.draftId === draftId ? heroSearch.source : null) ?? page?.inset_source ?? "google";
@@ -470,6 +478,28 @@ export function DraftDetail({
       toast.error(cause instanceof Error ? cause.message : "Image work failed");
     } finally {
       setImageWork(null);
+    }
+  }
+
+  /**
+   * The article for a draft made without one (client, 2026-10-12). Saves
+   * first, since the article follows the caption on the row, then re-seeds the
+   * form: the server cleared the first comment, and a stale form would write
+   * it back on the next Save.
+   */
+  async function addArticle() {
+    setWritingArticle(true);
+    try {
+      if (dirty && form) await updateDraft(draftId, form);
+      const row = await writeArticle(draftId);
+      setForm(toForm(row));
+      await refresh();
+      setView("article");
+      toast.success("Article written.");
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Could not write the article");
+    } finally {
+      setWritingArticle(false);
     }
   }
 
@@ -749,6 +779,7 @@ export function DraftDetail({
           post and takes the full width, feed post and first comment side by
           side, as they are read. */}
       <Tabs value={view} onValueChange={(next) => setView(next as View)}>
+        <div className="flex flex-wrap items-center gap-2">
         <TabsList className="*:min-w-24 *:px-4">
           <TabsTrigger value="text">Text</TabsTrigger>
           <TabsTrigger value="image">Image</TabsTrigger>
@@ -757,6 +788,24 @@ export function DraftDetail({
           ) : null}
           <TabsTrigger value="preview">Preview</TabsTrigger>
         </TabsList>
+        {/* The API says which sources cannot have one; a competitor post on
+            this Page is rare enough to be refused there rather than fetched
+            here to hide the button. */}
+        {draft.article_html === null &&
+        !draft.metricool_post_id &&
+        draft.source_item_id !== null &&
+        draft.page_id === mode?.article_page_id ? (
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={writingArticle}
+            onClick={() => void addArticle()}
+          >
+            {writingArticle ? <Loader2 className="size-3.5 animate-spin" /> : null}
+            {writingArticle ? "Writing article..." : "Write article"}
+          </Button>
+        ) : null}
+        </div>
 
         {view !== "preview" ? (
         <div className="mt-6">
@@ -1400,6 +1449,19 @@ export function DraftDetail({
                   />
                 </Field>
 
+                {draft.article_html !== null && !draft.article_url ? (
+                  <Field label="First comment" hint="added when scheduled">
+                    <p className="rounded-md border bg-muted/30 px-3 py-2 text-sm">{cta}</p>
+                  </Field>
+                ) : draft.article_url ? (
+                  <Field label="First comment">
+                    <Textarea
+                      value={form.first_comment}
+                      rows={3}
+                      onChange={(event) => setForm({ ...form, first_comment: event.target.value })}
+                    />
+                  </Field>
+                ) : (
                 <Field
                   label="First comment"
                   regenerate={
@@ -1421,6 +1483,7 @@ export function DraftDetail({
                     onChange={(event) => setForm({ ...form, first_comment: event.target.value })}
                   />
                 </Field>
+                )}
 
                 </>
               ) : null}
@@ -1437,7 +1500,11 @@ export function DraftDetail({
             avatarPath={page ? pageAvatarRaw(page) : null}
             image={picture}
             caption={form?.caption ?? draft.caption ?? ""}
-            firstComment={form?.first_comment ?? draft.first_comment ?? ""}
+            firstComment={
+              draft.article_html !== null && !draft.article_url
+                ? cta
+                : (form?.first_comment ?? draft.first_comment ?? "")
+            }
           />
         </TabsContent>
       </Tabs>

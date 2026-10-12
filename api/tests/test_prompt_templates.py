@@ -151,3 +151,12 @@ def test_turning_the_first_comment_off_is_a_style_of_its_own(client, session):
     assert response.status_code == 201
     assert response.json()["write_first_comment"] is False
     assert session.exec(select(PromptTemplate)).one().write_first_comment is False
+
+
+def test_an_article_prompt_is_a_style_of_its_own(client, session):
+    """The client, 2026-10-12: the article prompt, like the others, per style."""
+    created = _create(client, system_prompt=None, article_prompt="Write it as a Q&A.")
+
+    assert created.status_code == 201
+    assert created.json()["article_prompt"] == "Write it as a Q&A."
+    assert session.exec(select(PromptTemplate)).one().article_prompt == "Write it as a Q&A."
