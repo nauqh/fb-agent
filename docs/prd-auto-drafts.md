@@ -3,7 +3,7 @@
 | | |
 | --- | --- |
 | **Date** | 12 Oct 2026 |
-| **Rate** | US$300, fixed (see Rate) |
+| **Rate** | $300 (see Rate) |
 | **Delivery** | 2 weeks after approval: live after week 1, refined by the end of week 2 |
 
 ## Summary
