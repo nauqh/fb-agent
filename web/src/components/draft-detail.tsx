@@ -29,6 +29,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { NativeSelect } from "@/components/ui/native-select";
 import { Separator } from "@/components/ui/separator";
 import { Loading } from "@/components/loading";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -39,6 +40,7 @@ import {
   placeHero,
   publishDraft,
   publishMode,
+  articleCategories,
   regenerateField,
   regenerateHero,
   rejectDraft,
@@ -74,6 +76,7 @@ interface Form {
   /** Null when the draft has no article, so saving never invents an empty one. */
   article_title: string | null;
   article_html: string | null;
+  article_category_id: number | null;
   image_prompt: string;
   hero_x_ratio: number;
   hero_y_ratio: number;
@@ -155,6 +158,11 @@ export function DraftDetail({
   // shape. Its Page dropdown needs the same list the scope already resolves.
   const { data: pages } = useQuery(() => listPages(), [], { cacheKey: "pages" });
   const { data: mode } = useQuery(() => publishMode(), []);
+  const { data: categories, error: categoriesError } = useQuery(
+    () => articleCategories(),
+    [],
+    { cacheKey: "article-categories", enabled: Boolean(mode?.article_page_id) },
+  );
 
   /**
    * The poll.
@@ -803,28 +811,11 @@ export function DraftDetail({
         <TabsList className="*:min-w-24 *:px-4">
           <TabsTrigger value="text">Text</TabsTrigger>
           <TabsTrigger value="image">Image</TabsTrigger>
-          {draft.article_html !== null ? (
+          {draft.article_html !== null || draft.page_id === mode?.article_page_id ? (
             <TabsTrigger value="article">Article</TabsTrigger>
           ) : null}
           <TabsTrigger value="preview">Preview</TabsTrigger>
         </TabsList>
-        {/* The API says which sources cannot have one; a competitor post on
-            this Page is rare enough to be refused there rather than fetched
-            here to hide the button. */}
-        {draft.article_html === null &&
-        !draft.metricool_post_id &&
-        draft.source_item_id !== null &&
-        draft.page_id === mode?.article_page_id ? (
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={writingArticle}
-            onClick={() => void addArticle()}
-          >
-            {writingArticle ? <Loader2 className="size-3.5 animate-spin" /> : null}
-            {writingArticle ? "Writing article..." : "Write article"}
-          </Button>
-        ) : null}
         </div>
 
         {view !== "preview" ? (
@@ -1354,8 +1345,61 @@ export function DraftDetail({
             </div>
             ) : view === "article" ? (
             <div className="space-y-6">
-              {form ? (
+              {form && form.article_html === null ? (
+                // The API says which sources cannot have one; a competitor post
+                // on this Page is rare enough to be refused there.
+                draft.metricool_post_id || draft.source_item_id === null ? (
+                  <p className="text-sm text-muted-foreground">
+                    Only an unscheduled draft from a news item or web link can have an article.
+                  </p>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={writingArticle}
+                    onClick={() => void addArticle()}
+                  >
+                    {writingArticle ? <Loader2 className="size-3.5 animate-spin" /> : null}
+                    {writingArticle ? "Writing article..." : "Write article"}
+                  </Button>
+                )
+              ) : form ? (
                 <>
+                <Field
+                  label="Category"
+                  hint={
+                    categoriesError
+                      ? "could not load from WordPress"
+                      : draft.article_url
+                        ? "live on the website"
+                        : "the first part of the address"
+                  }
+                  flagged={!draft.article_url && !form.article_category_id}
+                >
+                  {draft.article_url ? (
+                    <p className="text-sm">
+                      {categories?.find((c) => c.id === form.article_category_id)?.name ?? "None"}
+                    </p>
+                  ) : (
+                    <NativeSelect
+                      ariaLabel="Category"
+                      className="w-full"
+                      value={String(form.article_category_id ?? "")}
+                      onValueChange={(value) =>
+                        setForm({ ...form, article_category_id: value ? Number(value) : null })
+                      }
+                    >
+                      <option value="" disabled>
+                        Pick a category
+                      </option>
+                      {(categories ?? []).map((category) => (
+                        <option key={category.id} value={category.id}>
+                          {category.name}
+                        </option>
+                      ))}
+                    </NativeSelect>
+                  )}
+                </Field>
                 {/* Read-only once live: an edit here would not reach WordPress. */}
                 <Field label="Title" hint={draft.article_url ? "live on the website" : undefined}>
                   <Input
@@ -2353,6 +2397,7 @@ function toForm(draft: Draft): Form {
     highlight_phrases: [...draft.highlight_phrases],
     article_title: draft.article_title,
     article_html: draft.article_html,
+    article_category_id: draft.article_category_id,
     image_prompt: draft.image_prompt ?? "",
     hero_x_ratio: draft.hero_x_ratio,
     hero_y_ratio: draft.hero_y_ratio,

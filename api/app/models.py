@@ -912,6 +912,9 @@ class Draft(SQLModel, table=True):
     article_html: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
     """The website article, written beside the post. Null on every Page but the
     one in `settings.wordpress_page_id`."""
+    article_category_id: int | None = None
+    """The WordPress category's id, picked in the drawer. Required to schedule:
+    it is the first part of the article's address."""
     article_url: str | None = None
     """Where WordPress published it. Set once, so a retried publish reuses it
     rather than posting the article twice."""

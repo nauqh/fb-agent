@@ -785,7 +785,7 @@ def test_an_article_goes_up_published_with_its_picture(site):
             return httpx.Response(201, json={"id": 77})
         return httpx.Response(201, json={"link": "https://site.example/2026/10/10/a-story/"})
 
-    link = wordpress.publish("A story", "<p>Body.</p>", _jpeg(), client=_client(handler))
+    link = wordpress.publish("A story", "<p>Body.</p>", _jpeg(), 44, client=_client(handler))
 
     assert link == "https://site.example/2026/10/10/a-story/"
     media_call, post_call = seen
@@ -798,26 +798,38 @@ def test_an_article_goes_up_published_with_its_picture(site):
         "title": "A story",
         "content": "<p>Body.</p>",
         "status": "publish",
+        "categories": [44],
         "featured_media": 77,
     }
+
+
+def test_categories_leave_out_uncategorized(site):
+    rows = [
+        {"id": 44, "name": "Crime", "slug": "crime"},
+        {"id": 1, "name": "Uncategorized", "slug": "uncategorized"},
+    ]
+    client = _client(lambda request: httpx.Response(200, json=rows))
+
+    assert wordpress.categories(client=client) == [{"id": 44, "name": "Crime"}]
 
 
 def test_a_refused_article_says_what_wordpress_said(site):
     client = _client(lambda request: httpx.Response(401, text="rest_cannot_create"))
 
     with pytest.raises(wordpress.WordPressError, match="401.*rest_cannot_create"):
-        wordpress.publish("A story", "<p>Body.</p>", None, client=client)
+        wordpress.publish("A story", "<p>Body.</p>", None, 44, client=client)
 
 
 def test_an_unconfigured_site_is_refused_before_any_request():
     with pytest.raises(wordpress.WordPressError, match="not configured"):
-        wordpress.publish("A story", "<p>Body.</p>", None)
+        wordpress.publish("A story", "<p>Body.</p>", None, 44)
 
 
 @pytest.fixture
 def with_article(session, ready):
     ready.article_title = "A story"
     ready.article_html = "<p>Body.</p>"
+    ready.article_category_id = 44
     session.add(ready)
     session.commit()
     return ready
@@ -826,7 +838,8 @@ def with_article(session, ready):
 def test_scheduling_publishes_the_article_first_and_links_it(
     client, session, with_article, published, monkeypatch
 ):
-    def publish(title, html, image):
+    def publish(title, html, image, category):
+        assert category == 44
         published["order"].append("wordpress")
         return "https://site.example/a-story/"
 
@@ -849,6 +862,21 @@ def test_the_call_to_action_is_the_pages_own():
     )
     assert article_cta(Page(name="P", article_cta="Read on:"), url) == "Read on: " + url
     assert article_cta(Page(name="P", article_cta="  "), url) == "Read the full story: " + url
+
+
+def test_an_article_without_a_category_schedules_nothing(
+    client, session, with_article, published, monkeypatch
+):
+    with_article.article_category_id = None
+    session.add(with_article)
+    session.commit()
+    monkeypatch.setattr(wordpress, "publish", lambda *a: pytest.fail("no category yet"))
+
+    response = client.post(f"/drafts/{with_article.id}/publish")
+
+    assert response.status_code == 409
+    assert "category" in response.json()["detail"]
+    assert published["order"] == []
 
 
 def test_a_refused_article_schedules_nothing(client, with_article, published, monkeypatch):

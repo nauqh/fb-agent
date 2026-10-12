@@ -182,6 +182,8 @@ export interface Draft {
   /** The website article, on the one Page that has a site. Null everywhere else. */
   article_title: string | null;
   article_html: string | null;
+  /** The WordPress category's id. Required before scheduling. */
+  article_category_id: number | null;
   /** Set once WordPress has published it. The first comment links here. */
   article_url: string | null;
 

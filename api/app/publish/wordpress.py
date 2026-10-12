@@ -18,9 +18,17 @@ class WordPressError(RuntimeError):
     """The article did not go up. The post is then not scheduled either."""
 
 
-def _call(client: httpx.Client, path: str, **kwargs) -> dict:
+def _configured() -> None:
+    if not (
+        settings.wordpress_url and settings.wordpress_user and settings.wordpress_app_password
+    ):
+        raise WordPressError("WordPress is not configured (URL, user and application password)")
+
+
+def _call(client: httpx.Client, path: str, method: str = "POST", **kwargs) -> dict | list:
     try:
-        response = client.post(
+        response = client.request(
+            method,
             f"{settings.wordpress_url.rstrip('/')}/wp-json/wp/v2/{path}",
             auth=(settings.wordpress_user, settings.wordpress_app_password),
             **kwargs,
@@ -34,17 +42,35 @@ def _call(client: httpx.Client, path: str, **kwargs) -> dict:
     return response.json()
 
 
+def categories(client: httpx.Client | None = None) -> list[dict]:
+    """The site's categories, read live: they are kept in WordPress, not here.
+    Uncategorized is left out, since an article filed there gets
+    `/uncategorized/` in its address."""
+    _configured()
+    rows = _call(
+        client or http_shared(TIMEOUT),
+        "categories",
+        method="GET",
+        params={"per_page": 100, "orderby": "name", "_fields": "id,name,slug"},
+    )
+    return [{"id": row["id"], "name": row["name"]} for row in rows if row["slug"] != "uncategorized"]
+
+
 def publish(
-    title: str, html: str, image: bytes | None, client: httpx.Client | None = None
+    title: str,
+    html: str,
+    image: bytes | None,
+    category: int | None,
+    client: httpx.Client | None = None,
 ) -> str:
-    """Publish the article now. Returns its permalink."""
-    if not (
-        settings.wordpress_url and settings.wordpress_user and settings.wordpress_app_password
-    ):
-        raise WordPressError("WordPress is not configured (URL, user and application password)")
+    """Publish the article now. Returns its permalink, which carries the
+    category once the site's permalinks are `/%category%/%postname%/`."""
+    _configured()
 
     client = client or http_shared(TIMEOUT)
     post = {"title": title, "content": html, "status": "publish"}
+    if category:
+        post["categories"] = [category]
     if image:
         uploaded = _call(
             client,

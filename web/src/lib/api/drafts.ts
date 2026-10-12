@@ -45,6 +45,7 @@ export type DraftEdit = Partial<
     | "highlight_phrases"
     | "article_title"
     | "article_html"
+    | "article_category_id"
     | "image_prompt"
     | "hero_x_ratio"
     | "hero_y_ratio"
@@ -355,6 +356,16 @@ export interface PublishMode {
  */
 export async function publishMode(): Promise<PublishMode> {
   return get<PublishMode>("/publish/mode");
+}
+
+export interface ArticleCategory {
+  id: number;
+  name: string;
+}
+
+/** The website's categories, read live from WordPress. */
+export async function articleCategories(): Promise<ArticleCategory[]> {
+  return get<ArticleCategory[]>("/articles/categories");
 }
 
 /** SerpAPI searches left this month, account-wide. A Google inset find spends one. */

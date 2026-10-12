@@ -462,6 +462,7 @@ class DraftEdit(BaseModel):
     highlight_phrases: list[str] | None = None
     article_title: str | None = None
     article_html: str | None = None
+    article_category_id: int | None = None
     image_prompt: str | None = None
     hero_x_ratio: float | None = None
     hero_y_ratio: float | None = None
@@ -529,7 +530,7 @@ def update_draft(
     )
     if draft.article_url and any(
         field in changes and changes[field] != getattr(draft, field)
-        for field in ("article_title", "article_html")
+        for field in ("article_title", "article_html", "article_category_id")
     ):
         raise HTTPException(
             status_code=409,
@@ -1236,6 +1237,15 @@ def publish_mode() -> PublishMode:
     )
 
 
+@router.get("/articles/categories")
+def article_categories() -> list[dict]:
+    """The website's categories, for the article tab's picker."""
+    try:
+        return wordpress.categories()
+    except wordpress.WordPressError as error:
+        raise HTTPException(status_code=502, detail=str(error)) from error
+
+
 @router.get("/inset/quota")
 def inset_quota() -> dict:
     """SerpAPI searches left this month, for Settings. Each Google inset find spends one.
@@ -1324,9 +1334,16 @@ def publish_draft(
     # Metricool has the post. Committed at once: a Metricool refusal below must
     # not lose the URL, or the retry would publish the article a second time.
     if draft.article_html and not draft.article_url:
+        if not draft.article_category_id:
+            raise HTTPException(
+                status_code=409, detail="Pick a category for the article first."
+            )
         try:
             draft.article_url = wordpress.publish(
-                draft.article_title or "", draft.article_html, _featured_image(draft)
+                draft.article_title or "",
+                draft.article_html,
+                _featured_image(draft),
+                draft.article_category_id,
             )
         except wordpress.WordPressError as error:
             raise HTTPException(
