@@ -2444,6 +2444,18 @@ def test_unticked_writes_no_article(client, written, monkeypatch):
     assert client.get("/drafts/1").json()["article_html"] is None
 
 
+def test_unticked_writes_no_article_for_a_story_read_before(client, written, monkeypatch):
+    """The client, 2026-10-12: an item an earlier run had read kept its full
+    text, and that alone made every later draft from it write an article."""
+    _article_run(monkeypatch)
+    client.post("/generate", json=_ticked(_rss()))
+
+    client.post("/generate", json={**_ticked(_rss()), "write_article": False})
+
+    assert client.get("/drafts/2").json()["article_html"] is None
+    assert client.get("/drafts/2").json()["first_comment"]
+
+
 def test_a_failed_article_is_a_warning_and_the_post_survives(client, written, monkeypatch):
     def refuse(*_args, **_kwargs):
         raise RuntimeError("503 from the model")

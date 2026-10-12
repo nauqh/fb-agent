@@ -503,6 +503,26 @@ export function DraftDetail({
     }
   }
 
+  /** The way back from an article nobody wanted: the post then schedules
+   *  without one, and its first comment is free text again. */
+  async function dropArticle() {
+    if (!form) return;
+    setWritingArticle(true);
+    try {
+      const row = await updateDraft(draftId, { ...form, article_title: null, article_html: null });
+      setForm(toForm(row));
+      await refresh();
+      setView("text");
+      toast.success("Article removed.", {
+        description: "Write a first comment or Rewrite it, or post without one.",
+      });
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Could not remove the article");
+    } finally {
+      setWritingArticle(false);
+    }
+  }
+
   /**
    * Put a picture in the circle, or take it out. `null` removes.
    *
@@ -1370,6 +1390,17 @@ export function DraftDetail({
                     <ArticlePreview title={form.article_title ?? ""} html={form.article_html ?? ""} />
                   )}
                 </Field>
+                {!draft.article_url ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={writingArticle}
+                    onClick={() => void dropArticle()}
+                  >
+                    {writingArticle ? <Loader2 className="size-3.5 animate-spin" /> : null}
+                    Remove article
+                  </Button>
+                ) : null}
                 {draft.article_url ? (
                   <a
                     href={draft.article_url}

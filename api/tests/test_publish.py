@@ -891,3 +891,17 @@ def test_a_live_article_cannot_be_edited_here(client, session, with_article):
 
     assert response.status_code == 409
     assert "Edit it in WordPress" in response.json()["detail"]
+
+
+def test_an_unwanted_article_can_be_removed(client, session, with_article, published, monkeypatch):
+    """The client, 2026-10-12: a draft with an article could not be posted
+    without it. Removed, it schedules with no WordPress call."""
+    monkeypatch.setattr(wordpress, "publish", lambda *a: pytest.fail("no article to publish"))
+
+    removed = client.patch(
+        f"/drafts/{with_article.id}", json={"article_title": None, "article_html": None}
+    )
+
+    assert removed.status_code == 200
+    assert removed.json()["article_html"] is None
+    assert client.post(f"/drafts/{with_article.id}/publish").status_code == 200

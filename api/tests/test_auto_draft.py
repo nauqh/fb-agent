@@ -200,7 +200,7 @@ def test_the_drafts_point_at_the_posts_they_came_from(session, page, pool):
 def queued(monkeypatch):
     """Record what the route hands the writer, without running it."""
     seen: list[list[int]] = []
-    monkeypatch.setattr(generate, "run_drafts", lambda ids: seen.append(ids))
+    monkeypatch.setattr(generate, "run_drafts", lambda ids, write_article=False: seen.append(ids))
     return seen
 
 

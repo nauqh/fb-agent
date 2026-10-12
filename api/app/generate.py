@@ -368,11 +368,13 @@ def _run_one(session: Session, draft_id: int, write_article: bool = False) -> No
 
         # Read before the post, so the post is written from the story too. An
         # auto-draft arrives with `body` already read; the cart asks for it.
+        # Only ever on request: a row read by an earlier run keeps its `body`,
+        # and an unticked box must still mean no article.
         article_note = None
         wants_article = (
             page.id == settings.wordpress_page_id
             and source is not None
-            and (write_article or bool(source.body))
+            and write_article
         )
         if wants_article and not source.body:
             _progress(session, draft, "reading the article", 10)

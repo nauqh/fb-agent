@@ -172,7 +172,8 @@ def start_auto_generate(
         draft_ids += auto_draft.run_page(session, page, request.hero_from_source)
 
     if draft_ids:
-        background.add_task(generate.run_drafts, draft_ids)
+        # Auto-drafts on the website's Page always write the article.
+        background.add_task(generate.run_drafts, draft_ids, True)
     return draft_ids
 
 
