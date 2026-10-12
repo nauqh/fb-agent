@@ -27,7 +27,7 @@ flowchart LR
     C --> D["The staff review them<br/>in Review"]
     D --> E["What they schedule<br/>goes out on Facebook"]
 
-    classDef core fill:#eef3fb,stroke:#5b7bb5,stroke-width:1.5px
+    classDef core fill:#5b7bb526,stroke:#5b7bb5,stroke-width:2px
     class B,F,R,X core
 ```
 
