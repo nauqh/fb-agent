@@ -6,6 +6,8 @@ link this returns goes into the post's first comment, so it has to be the real
 one and live before Metricool has the post (website articles PRD).
 """
 
+from html import escape
+
 import httpx
 
 from app.http import shared as http_shared
@@ -56,6 +58,24 @@ def categories(client: httpx.Client | None = None) -> list[dict]:
     return [{"id": row["id"], "name": row["name"]} for row in rows if row["slug"] != "uncategorized"]
 
 
+def _figure(uploaded: dict, caption: str | None) -> str:
+    """The uploaded image as a full-size image block, captioned when there is one."""
+    details = uploaded.get("media_details") or {}
+    size = (
+        f' width="{details["width"]}" height="{details["height"]}"'
+        if details.get("width") and details.get("height")
+        else ""
+    )
+    text = escape(caption or "")
+    return (
+        '<figure class="wp-block-image size-full">'
+        f'<img src="{escape(uploaded["source_url"])}" alt="{text}"{size}'
+        f' class="wp-image-{uploaded["id"]}"/>'
+        + (f'<figcaption class="wp-element-caption">{text}</figcaption>' if text else "")
+        + "</figure>\n"
+    )
+
+
 def publish(
     title: str,
     html: str,
@@ -81,4 +101,8 @@ def publish(
             data={"caption": caption or "", "alt_text": caption or ""},
         )
         post["featured_media"] = uploaded["id"]
+        # Also at the top of the body, where SmartMag shows a picture whole: it
+        # crops the featured image to a 788x438 banner, which cut the face off a
+        # tall hero. The featured image stays for thumbnails and link previews.
+        post["content"] = _figure(uploaded, caption) + html
     return _call(client, "posts", json=post)["link"]

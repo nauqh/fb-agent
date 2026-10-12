@@ -782,25 +782,40 @@ def test_an_article_goes_up_published_with_its_picture(site):
     def handler(request: httpx.Request) -> httpx.Response:
         seen.append(request)
         if request.url.path.endswith("/media"):
-            return httpx.Response(201, json={"id": 77})
+            return httpx.Response(
+                201,
+                json={
+                    "id": 77,
+                    "source_url": "https://site.example/uploads/article.jpg",
+                    "media_details": {"width": 720, "height": 981},
+                },
+            )
         return httpx.Response(201, json={"link": "https://site.example/2026/10/10/a-story/"})
 
     link = wordpress.publish(
-        "A story", "<p>Body.</p>", _jpeg(), 44, "Benjamin Sesko", client=_client(handler)
+        "A story", "<p>Body.</p>", _jpeg(), 44, "Sesko & Co", client=_client(handler)
     )
 
     assert link == "https://site.example/2026/10/10/a-story/"
     media_call, post_call = seen
     assert str(media_call.url) == "https://site.example/wp-json/wp/v2/media"
     assert media_call.headers["Content-Type"].startswith("multipart/form-data")
-    assert b'name="caption"\r\n\r\nBenjamin Sesko' in media_call.content
-    assert b'name="alt_text"\r\n\r\nBenjamin Sesko' in media_call.content
+    assert b'name="caption"\r\n\r\nSesko & Co' in media_call.content
+    assert b'name="alt_text"\r\n\r\nSesko & Co' in media_call.content
     assert media_call.headers["Authorization"].startswith("Basic ")
     # `publish`, never `draft`: a draft has only ?p=<id>, not the permalink
     # the first comment needs.
     assert json.loads(post_call.content) == {
         "title": "A story",
-        "content": "<p>Body.</p>",
+        # The picture whole at the top of the body, since the theme crops the
+        # featured image to a banner.
+        "content": (
+            '<figure class="wp-block-image size-full">'
+            '<img src="https://site.example/uploads/article.jpg" alt="Sesko &amp; Co"'
+            ' width="720" height="981" class="wp-image-77"/>'
+            '<figcaption class="wp-element-caption">Sesko &amp; Co</figcaption></figure>\n'
+            "<p>Body.</p>"
+        ),
         "status": "publish",
         "categories": [44],
         "featured_media": 77,

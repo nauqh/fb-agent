@@ -161,10 +161,12 @@ filed as Uncategorized; at launch, scheduling SHOULD require one.
 - **Writer**: the article is one extra Gemini call after the post, with its own
   prompt, `article.txt`, overridable per Page and per post style like the
   others.
-- **Images**: the featured image is the post's whole hero image, uncropped,
-  without the overlay text. The theme (SmartMag) crops featured images to a
-  788x438 banner by default, which cut the subject's face off the first live
-  article (2026-10-13); it has to be set to show them uncropped.
+- **Images**: the post's whole hero image, without the overlay text, goes up
+  twice: as the featured image, for thumbnails and link previews, and at the
+  top of the body with its caption. The theme (SmartMag) crops the featured
+  image to a 788x438 banner, which cut the subject's face off the first live
+  article (2026-10-13); a picture in the body is shown whole. Setting the theme
+  to uncropped (open question 4) would make the body copy unnecessary.
 
 ## Success metrics
 
