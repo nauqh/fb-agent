@@ -283,7 +283,10 @@ def _visible_to(session: Session, scope_ids: list[int]):
     and the Sources empty state, which name that case rather than leaving it to
     look like a quiet week.
     """
-    base = SourceItem.kind == SourceKind.COMPETITOR_POST
+    # Reels are video, nothing a writer can borrow from. Metricool's `type`
+    # is null on every row, so the link is the only signal: 68 of 500 measured.
+    not_reel = col(SourceItem.url).is_(None) | ~col(SourceItem.url).contains("/reel/")
+    base = (SourceItem.kind == SourceKind.COMPETITOR_POST) & not_reel
     return base & SourceItem.competitor_page_id.in_(  # type: ignore[union-attr]
         _assigned_to(session, scope_ids)
     )

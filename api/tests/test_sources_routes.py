@@ -114,6 +114,34 @@ def _two_posts(monkeypatch, session, *, apart_days: int = 4):
     )
 
 
+def test_competitor_reels_are_hidden(client, session, monkeypatch):
+    """Client feedback, 2026-10-12. The link is the only signal Metricool sends."""
+    _assign(session, 1, WATCHED)
+    monkeypatch.setattr(
+        routes.metricool,
+        "fetch_competitor_posts",
+        lambda page, **_: [
+            SourceItemBase(
+                kind=SourceKind.COMPETITOR_POST,
+                external_id=external_id,
+                synced_for_page_id=page.id,
+                competitor_page_id=WATCHED,
+                url=url,
+                text="…",
+            )
+            for external_id, url in [
+                ("reel", "https://www.facebook.com/reel/2155551878388009/"),
+                ("post", "https://www.facebook.com/519574217778160/posts/1"),
+                ("no-link", None),
+            ]
+        ],
+    )
+
+    rows = client.get("/sources/competitors", params={"page_ids": 1}).json()
+
+    assert {row["external_id"] for row in rows} == {"post", "no-link"}
+
+
 def test_competitor_posts_are_written_on_arrival_and_ranked_by_reactions(
     client, engine, session, monkeypatch
 ):
