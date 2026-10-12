@@ -1,6 +1,6 @@
 """Publishing a draft's article to the client's WordPress site.
 
-Two calls: upload the featured image, then create the post as `publish`. Never
+Two calls: upload the picture, then create the post as `publish`. Never
 `draft` or `future`: a draft has no permalink yet (only `?p=<id>`), and the
 link this returns goes into the post's first comment, so it has to be the real
 one and live before Metricool has the post (website articles PRD).
@@ -100,9 +100,9 @@ def publish(
             files={"file": ("article.jpg", image, "image/jpeg")},
             data={"caption": caption or "", "alt_text": caption or ""},
         )
-        post["featured_media"] = uploaded["id"]
-        # Also at the top of the body, where SmartMag shows a picture whole: it
-        # crops the featured image to a 788x438 banner, which cut the face off a
-        # tall hero. The featured image stays for thumbnails and link previews.
+        # In the body only, never as the featured image: SmartMag crops that to
+        # a 788x438 banner, which cut the face off a tall hero (2026-10-13), and
+        # shows a picture in the body whole. The cost is no thumbnail in the
+        # site's listings, like the site's own posts (client, 2026-10-13).
         post["content"] = _figure(uploaded, caption) + html
     return _call(client, "posts", json=post)["link"]

@@ -807,8 +807,8 @@ def test_an_article_goes_up_published_with_its_picture(site):
     # the first comment needs.
     assert json.loads(post_call.content) == {
         "title": "A story",
-        # The picture whole at the top of the body, since the theme crops the
-        # featured image to a banner.
+        # The picture whole at the top of the body and never featured, since
+        # the theme crops a featured image to a banner.
         "content": (
             '<figure class="wp-block-image size-full">'
             '<img src="https://site.example/uploads/article.jpg" alt="Sesko &amp; Co"'
@@ -818,7 +818,6 @@ def test_an_article_goes_up_published_with_its_picture(site):
         ),
         "status": "publish",
         "categories": [44],
-        "featured_media": 77,
     }
 
 

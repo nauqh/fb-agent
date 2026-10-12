@@ -1343,7 +1343,7 @@ def publish_draft(
             draft.article_url = wordpress.publish(
                 draft.article_title or "",
                 draft.article_html,
-                _featured_image(draft),
+                _article_image(draft),
                 draft.article_category_id,
                 draft.article_image_caption,
             )
@@ -1423,10 +1423,9 @@ def article_cta(page: Page, url: str) -> str:
     return text.replace("{link}", url) if "{link}" in text else f"{text} {url}"
 
 
-def _featured_image(draft: Draft) -> bytes | None:
-    """The whole hero, without the overlay drawn on the card. None if there is
-    none. Uncropped: the theme MUST show the featured image uncropped, since its
-    default banner cut the face off the first live article (2026-10-13)."""
+def _article_image(draft: Draft) -> bytes | None:
+    """The whole hero, without the overlay drawn on the card, for the top of the
+    article. None if there is none."""
     if not draft.hero_image_path:
         return None
     try:

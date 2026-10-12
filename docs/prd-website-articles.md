@@ -118,9 +118,9 @@ filed as Uncategorized; at launch, scheduling SHOULD require one.
 | Article writing | Written in the same run as the post, from the same full text, with a title, in the Page's voice. It uses the source's facts only and never copies its sentences. Its length follows the source, roughly 400 to 900 words, and is never padded. |
 | Article format | The body is HTML in the theme's layout: `h3` subheadings, quotes in `blockquote`, and bullet lists where the facts suit them. |
 | Article review | The draft drawer has an Article tab with the category, the image caption, the title and the HTML body, all editable. Save, Revert and the unsaved-changes check cover it. On the politics Page the tab is always shown. |
-| Image caption | The writer suggests one line naming the story's subject; it never sees the photo, so it does not describe it. It goes up as the featured image's caption and alt text. Read-only once live. |
+| Image caption | The writer suggests one line naming the story's subject; it never sees the photo, so it does not describe it. It goes up under the article's picture, and as its alt text. Read-only once live. |
 | Category | The Article tab lists the site's WordPress categories, read live, without Uncategorized. Optional until launch, then required to schedule. Once the article is live the category is read-only. |
-| Publish and schedule | Scheduling a draft with an article publishes it to WordPress with its title, body, category and featured image, then schedules the post with the Page's call to action and the article's link as the whole first comment. |
+| Publish and schedule | Scheduling a draft with an article publishes it to WordPress with its title, body, category and picture, then schedules the post with the Page's call to action and the article's link as the whole first comment. |
 | Call to action | Settings has an Article link field on the politics Page. `{link}` is replaced by the article's address; without it the link goes last. Blank is the default. |
 | Article prompt | The article prompt is editable per Page, like the other prompts, and a post style may carry its own. A blank style field uses the Page's. |
 | Write article on a draft | The drawer offers Write article on a draft from an RSS item or web link that has no article and is not scheduled. |
@@ -149,7 +149,7 @@ filed as Uncategorized; at launch, scheduling SHOULD require one.
 
 - **Reader**: `api/app/sources/web.py`, used today for the Web link source.
 - **WordPress REST API**: `POST /wp-json/wp/v2/posts` with `status: publish`
-  and `categories: [id]`, `POST /wp-json/wp/v2/media` for the featured image,
+  and `categories: [id]`, `POST /wp-json/wp/v2/media` for the picture,
   and `GET /wp-json/wp/v2/categories` for the picker. The link for the
   first comment is read from WordPress's response, since a draft has no final
   URL.
@@ -161,12 +161,12 @@ filed as Uncategorized; at launch, scheduling SHOULD require one.
 - **Writer**: the article is one extra Gemini call after the post, with its own
   prompt, `article.txt`, overridable per Page and per post style like the
   others.
-- **Images**: the post's whole hero image, without the overlay text, goes up
-  twice: as the featured image, for thumbnails and link previews, and at the
-  top of the body with its caption. The theme (SmartMag) crops the featured
-  image to a 788x438 banner, which cut the subject's face off the first live
-  article (2026-10-13); a picture in the body is shown whole. Setting the theme
-  to uncropped (open question 4) would make the body copy unnecessary.
+- **Images**: the post's whole hero image, without the overlay text, at the
+  top of the article body with its caption. Never the featured image: the
+  theme (SmartMag) crops that to a 788x438 banner, which cut the subject's face
+  off the first live article (2026-10-13), while a picture in the body is shown
+  whole. The site's own posts work the same way. The cost is no thumbnail on
+  the homepage, category pages and sidebar (client, 2026-10-13).
 
 ## Success metrics
 
@@ -187,6 +187,3 @@ filed as Uncategorized; at launch, scheduling SHOULD require one.
    `/%category%/%postname%/`. Today the addresses have no category
    (`/seven-firefighters-injured-.../`, checked 2026-10-13). Best done before
    the first real article goes up, so no published link changes.
-4. Please set SmartMag's single-post featured image to uncropped. By default it
-   crops every featured image to a wide banner from the middle, and a tall
-   photo loses its subject's head.
