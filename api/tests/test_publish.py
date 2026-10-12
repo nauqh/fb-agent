@@ -443,10 +443,10 @@ def test_the_screen_can_ask_whether_publish_reaches_an_audience(client, monkeypa
     could tell which it was talking to. Both said "Handed to Metricool".
     """
     monkeypatch.setattr(settings, "metricool_publish_as_draft", True)
-    assert client.get("/publish/mode").json() == {"rehearsal": True}
+    assert client.get("/publish/mode").json() == {"rehearsal": True, "article_page_id": None}
 
     monkeypatch.setattr(settings, "metricool_publish_as_draft", False)
-    assert client.get("/publish/mode").json() == {"rehearsal": False}
+    assert client.get("/publish/mode").json() == {"rehearsal": False, "article_page_id": None}
 
 
 def test_publish_mode_is_read_per_request_not_captured_at_import(client, monkeypatch):

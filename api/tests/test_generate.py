@@ -2360,19 +2360,34 @@ def test_a_searched_hero_takes_a_google_image_for_a_competitor_post(
     assert draft.hero_image_path and draft.composed_image_path
 
 
-def _read_rss() -> dict:
-    return {**_rss().model_dump(mode="json"), "body": "The whole article."}
+def _article_run(monkeypatch, read=lambda url: "The whole article."):
+    """The cart's "Write article" on the website's Page, with the reader stubbed."""
+    from app.sources import web
 
+    def fetch(url):
+        return SourceItemBase(kind=SourceKind.WEB, external_id=url, text=read(url))
 
-def test_the_article_page_gets_an_article_beside_the_post(client, written, monkeypatch):
     monkeypatch.setattr(settings, "wordpress_page_id", 1)
+    monkeypatch.setattr(web, "fetch_article", fetch)
     monkeypatch.setattr(
         generate.writer,
         "write_article",
         lambda page, source, caption: writer.Article(title="T", html=f"<p>{source.body}</p>"),
     )
 
-    client.post("/generate", json={"page_ids": [1], "sources": [_read_rss()]})
+
+def _ticked(*sources) -> dict:
+    return {
+        "page_ids": [1],
+        "sources": [source.model_dump(mode="json") for source in sources],
+        "write_article": True,
+    }
+
+
+def test_the_article_page_gets_an_article_beside_the_post(client, written, monkeypatch):
+    _article_run(monkeypatch)
+
+    client.post("/generate", json=_ticked(_rss()))
     draft = client.get("/drafts/1").json()
 
     assert draft["status"] == "review"
@@ -2380,14 +2395,59 @@ def test_the_article_page_gets_an_article_beside_the_post(client, written, monke
     assert draft["article_html"] == "<p>The whole article.</p>"
 
 
+def test_the_client_cannot_supply_the_full_text(client, written, monkeypatch):
+    """`body` is what the writer trusts as the story, so the server reads it."""
+    _article_run(monkeypatch)
+    forged = {**_rss().model_dump(mode="json"), "body": "Invented facts."}
+
+    client.post("/generate", json={**_ticked(), "sources": [forged]})
+
+    assert client.get("/drafts/1").json()["article_html"] == "<p>The whole article.</p>"
+
+
+def test_an_unreadable_source_still_makes_the_post(client, written, monkeypatch):
+    from app.sources import web
+
+    def refuse(url):
+        raise web.WebError("The site refused the request (403)")
+
+    _article_run(monkeypatch, read=refuse)
+
+    client.post("/generate", json=_ticked(_rss()))
+    draft = client.get("/drafts/1").json()
+
+    assert draft["status"] == "review"
+    assert draft["article_html"] is None
+    assert any("403" in w for w in draft["warnings"] if w.startswith("Article: "))
+
+
+def test_a_web_link_is_its_own_full_text(client, written, monkeypatch):
+    _article_run(monkeypatch, read=lambda url: pytest.fail("a web link is not read twice"))
+    page = SourceItemBase(
+        kind=SourceKind.WEB, external_id="https://example.com/a", text="A long story. " * 50
+    )
+
+    client.post("/generate", json=_ticked(page))
+
+    assert client.get("/drafts/1").json()["article_html"] == f"<p>{page.text}</p>"
+
+
+def test_unticked_writes_no_article(client, written, monkeypatch):
+    _article_run(monkeypatch, read=lambda url: pytest.fail("read without being asked"))
+
+    client.post("/generate", json={**_ticked(_rss()), "write_article": False})
+
+    assert client.get("/drafts/1").json()["article_html"] is None
+
+
 def test_a_failed_article_is_a_warning_and_the_post_survives(client, written, monkeypatch):
     def refuse(*_args):
         raise RuntimeError("503 from the model")
 
-    monkeypatch.setattr(settings, "wordpress_page_id", 1)
+    _article_run(monkeypatch)
     monkeypatch.setattr(generate.writer, "write_article", refuse)
 
-    client.post("/generate", json={"page_ids": [1], "sources": [_read_rss()]})
+    client.post("/generate", json=_ticked(_rss()))
     draft = client.get("/drafts/1").json()
 
     assert draft["status"] == "review"
@@ -2401,6 +2461,6 @@ def test_other_pages_get_no_article(client, written, monkeypatch):
 
     monkeypatch.setattr(generate.writer, "write_article", never)
 
-    client.post("/generate", json={"page_ids": [1], "sources": [_read_rss()]})
+    client.post("/generate", json=_ticked(_rss()))
 
     assert client.get("/drafts/1").json()["article_html"] is None

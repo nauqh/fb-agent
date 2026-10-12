@@ -89,6 +89,10 @@ class GenerateRequest(BaseModel):
     inset_source: Literal["google", "unsplash"] | None = None
     """Where that find searches, for this run. Null uses the Page's setting."""
 
+    write_article: bool = False
+    """Also write a website article from each RSS item or web link. Only on the
+    Page in `WORDPRESS_PAGE_ID`; ignored everywhere else."""
+
 
 @router.post("/generate", status_code=202)
 def start_generate(
@@ -101,7 +105,9 @@ def start_generate(
         draft_ids = generate.start_run(
             session,
             request.page_ids,
-            request.sources,
+            # Never the client's `body`: it is the full article the writer
+            # trusts, so the server reads it (`generate._read_full_text`).
+            [source.model_copy(update={"body": None}) for source in request.sources],
             request.topic,
             request.hero_from_source,
             request.template,
@@ -113,7 +119,7 @@ def start_generate(
     except generate.GenerateError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
 
-    background.add_task(generate.run_drafts, draft_ids)
+    background.add_task(generate.run_drafts, draft_ids, request.write_article)
     return draft_ids
 
 
@@ -1149,6 +1155,9 @@ class PublishMode(BaseModel):
 
     rehearsal: bool
     """`METRICOOL_PUBLISH_AS_DRAFT`. True means the post will not go out."""
+    article_page_id: int | None = None
+    """`WORDPRESS_PAGE_ID`: the one Page whose drafts can also get a website
+    article. The cart offers "Write article" only there."""
 
 
 @router.get("/publish/mode")
@@ -1172,7 +1181,10 @@ def publish_mode() -> PublishMode:
     `true` locally, where nothing on a laptop should be able to reach an
     audience.
     """
-    return PublishMode(rehearsal=settings.metricool_publish_as_draft)
+    return PublishMode(
+        rehearsal=settings.metricool_publish_as_draft,
+        article_page_id=settings.wordpress_page_id,
+    )
 
 
 @router.get("/inset/quota")

@@ -111,6 +111,8 @@ export interface GenerateRequest {
   find_inset?: boolean;
   /** Where that find searches for this run. Omitted uses the Page's setting. */
   inset_source?: "google" | "unsplash";
+  /** Also write a website article from each RSS item or web link. Website Page only. */
+  write_article?: boolean;
 }
 
 /**
@@ -330,6 +332,8 @@ export async function unscheduleDraft(id: number): Promise<Draft> {
 /** True when Publish only reaches Metricool's planner, not an audience. */
 export interface PublishMode {
   rehearsal: boolean;
+  /** The one Page whose drafts can also get a website article. Null when none. */
+  article_page_id: number | null;
 }
 
 /**

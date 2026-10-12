@@ -44,7 +44,7 @@ from app.models import (
     SourceKind,
 )
 from app.settings import settings
-from app.sources import rss
+from app.sources import rss, web
 from app.writer import agent as writer
 from app.writer import prompts, validators
 
@@ -283,7 +283,7 @@ def _count(n: int, noun: str) -> str:
     return f"{n} {noun}" if n == 1 else f"{n} {noun}s"
 
 
-def run_drafts(draft_ids: list[int]) -> None:
+def run_drafts(draft_ids: list[int], write_article: bool = False) -> None:
     """Fill the placeholder rows in. Runs as a BackgroundTask, off the request.
 
     Drafts are independent - the only thing two of them share is the database -
@@ -304,10 +304,10 @@ def run_drafts(draft_ids: list[int]) -> None:
     """
     with ThreadPoolExecutor(max_workers=settings.generate_concurrency) as pool:
         for draft_id in draft_ids:
-            pool.submit(_run_one_isolated, draft_id)
+            pool.submit(_run_one_isolated, draft_id, write_article)
 
 
-def _run_one_isolated(draft_id: int) -> None:
+def _run_one_isolated(draft_id: int, write_article: bool = False) -> None:
     """One draft, one session. The unit `run_drafts` puts on a worker thread.
 
     Anything that escapes `_run_one` - only a database failure before its try,
@@ -318,7 +318,7 @@ def _run_one_isolated(draft_id: int) -> None:
     """
     try:
         with Session(get_engine()) as session:
-            _run_one(session, draft_id)
+            _run_one(session, draft_id, write_article)
     except Exception:  # noqa: BLE001 - never escapes; run_drafts cannot raise
         logger.exception("Draft {} failed before its own error handling", draft_id)
 
@@ -346,7 +346,7 @@ def _outcome(draft: Draft, page: Page | None, source: SourceItem | None, started
     )
 
 
-def _run_one(session: Session, draft_id: int) -> None:
+def _run_one(session: Session, draft_id: int, write_article: bool = False) -> None:
     draft = session.get(Draft, draft_id)
     if draft is None:
         return
@@ -365,6 +365,20 @@ def _run_one(session: Session, draft_id: int) -> None:
             if draft.source_item_id
             else None
         )
+
+        # Read before the post, so the post is written from the story too. An
+        # auto-draft arrives with `body` already read; the cart asks for it.
+        article_note = None
+        wants_article = (
+            page.id == settings.wordpress_page_id
+            and source is not None
+            and (write_article or bool(source.body))
+        )
+        if wants_article and not source.body:
+            _progress(session, draft, "reading the article", 10)
+            article_note = _read_full_text(source)
+            session.add(source)
+            session.commit()
 
         _progress(session, draft, "writing the post", 20)
         # Vision input is competitor-only, and the seam must gate here - not
@@ -424,7 +438,9 @@ def _run_one(session: Session, draft_id: int) -> None:
             draft.warnings = draft.warnings + [writer.UNREADABLE_WARNING]
 
         # A failed article costs the website one story, not the operator a post.
-        if page.id == settings.wordpress_page_id and source is not None and source.body:
+        if article_note:
+            draft.warnings = draft.warnings + [f"{ARTICLE_WARNING}{article_note}"[:300]]
+        elif wants_article:
             _progress(session, draft, "writing the article", 40)
             try:
                 article = writer.write_article(page, source, draft.caption)
@@ -501,6 +517,26 @@ def _run_one(session: Session, draft_id: int) -> None:
         draft.updated_at = datetime.now(timezone.utc)
         session.add(draft)
         session.commit()
+
+
+def _read_full_text(source: SourceItem) -> str | None:
+    """Put the story's full text on `source.body`. None, or why it could not be.
+
+    A web link's text already is the story, unless our reader could not read
+    it. An RSS item's is a two-line summary, so the link is read here.
+    """
+    if source.kind is SourceKind.WEB:
+        if web.is_link_only(source):
+            return "the web page could not be read"
+        source.body = source.text
+        return None
+    if source.kind is not SourceKind.RSS:
+        return "only an RSS item or a web link can have one"
+    try:
+        source.body = web.fetch_article(source.url or "").text
+    except web.WebError as error:
+        return f"the source could not be read - {error}"
+    return None
 
 
 IMAGE_WARNING = "Image: "

@@ -72,7 +72,10 @@ it.
    "Read the full story: <link>" to the first comment, and schedules the post.
    If WordPress fails, nothing is scheduled and the error is shown.
 
-Manual drafts, competitor posts, tweets and other Pages work exactly as today.
+On Sources, the cart bar offers **Write article** for RSS items and web links on
+the politics Page, ticked by default. A story the app cannot read still makes the
+post, with a warning. Topic drafts, competitor posts, tweets and other Pages work
+exactly as today.
 
 ## Users
 
@@ -96,9 +99,10 @@ Manual drafts, competitor posts, tweets and other Pages work exactly as today.
 
 ### Out of scope for version 1
 
-- Articles from manual drafts, web links, competitor posts or tweets.
+- Articles from topic drafts, competitor posts or tweets.
 - Pages other than politics.
-- A "Write article" button, per-feed full-text checks and marks on sources.
+- A Write article button on an existing draft, per-feed full-text checks and
+  marks on sources.
 - A rendered view of the article, and a Rewrite button for it.
 - The link in the Facebook preview, and "View article" links elsewhere.
 - WordPress categories and tags.

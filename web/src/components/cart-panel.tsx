@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Loader2, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
 
-import { generate } from "@/lib/api/drafts";
+import { generate, publishMode } from "@/lib/api/drafts";
 import { listPromptTemplates } from "@/lib/api/prompt-templates";
 import { sourceKey, useCart } from "@/lib/cart";
 import { usePageScope } from "@/lib/page-scope";
@@ -112,6 +112,17 @@ export function CartPanel() {
   ).length;
   const offerSourceHero = withPictures > 0;
 
+  /**
+   * Also write the website article. Only on the Page that has the site, and
+   * only for items with a full story to write it from: RSS and web links.
+   * On by default there, because that Page exists to feed the site.
+   */
+  const { data: mode } = useQuery(() => publishMode(), []);
+  const [writeArticle, setWriteArticle] = useState(true);
+  const offerArticle =
+    page?.id === mode?.article_page_id &&
+    cart.items.some((item) => item.kind === "rss" || item.kind === "web");
+
   async function run() {
     if (!page || draftCount === 0) return;
     setRunning(true);
@@ -126,6 +137,7 @@ export function CartPanel() {
         find_inset: findInset && !noImage,
         inset_source: insetSource ?? page.inset_source,
         prompt_template_id: styleId === "" ? null : Number(styleId),
+        write_article: offerArticle && writeArticle,
       });
       cart.clear();
       setHeroFromSource(false);
@@ -133,6 +145,7 @@ export function CartPanel() {
       setFindInset(false);
       setInsetSource(null);
       setStyleId("");
+      setWriteArticle(true);
       toast.success(`${ids.length} draft${ids.length === 1 ? "" : "s"} generating.`, {
         description: "The sidebar tracks progress; finished drafts land in Review.",
       });
@@ -222,6 +235,21 @@ export function CartPanel() {
                 </option>
               ))}
             </select>
+          ) : null}
+
+          {offerArticle ? (
+            <label
+              className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs text-muted-foreground"
+              title="Also write the website article from each RSS item or web link."
+            >
+              <input
+                type="checkbox"
+                checked={writeArticle}
+                onChange={(event) => setWriteArticle(event.target.checked)}
+                className="size-3.5 cursor-pointer accent-primary"
+              />
+              Write article
+            </label>
           ) : null}
 
           {/* Text only. Beside the other picture option because they answer
