@@ -525,6 +525,7 @@ def add_article(
         return f"could not be written - {type(error).__name__}: {error}"
     draft.article_title = article.title
     draft.article_html = article.html
+    draft.article_image_caption = article.image_caption.strip() or None
     draft.first_comment = None
     return None
 

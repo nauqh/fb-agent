@@ -182,6 +182,7 @@ erDiagram
         text first_comment
         text article_html "website article, one Page only"
         int article_category_id "WordPress category, needed to schedule"
+        text article_image_caption "featured image caption and alt"
         text article_url "set = live on WordPress"
         text composed_image_path "bucket"
         text metricool_post_id "set = published"

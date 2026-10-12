@@ -61,6 +61,7 @@ def publish(
     html: str,
     image: bytes | None,
     category: int | None,
+    caption: str | None = None,
     client: httpx.Client | None = None,
 ) -> str:
     """Publish the article now. Returns its permalink, which carries the
@@ -72,14 +73,12 @@ def publish(
     if category:
         post["categories"] = [category]
     if image:
+        # Multipart, so the caption and alt text go up with the file.
         uploaded = _call(
             client,
             "media",
-            content=image,
-            headers={
-                "Content-Type": "image/jpeg",
-                "Content-Disposition": 'attachment; filename="article.jpg"',
-            },
+            files={"file": ("article.jpg", image, "image/jpeg")},
+            data={"caption": caption or "", "alt_text": caption or ""},
         )
         post["featured_media"] = uploaded["id"]
     return _call(client, "posts", json=post)["link"]

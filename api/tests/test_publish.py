@@ -785,12 +785,16 @@ def test_an_article_goes_up_published_with_its_picture(site):
             return httpx.Response(201, json={"id": 77})
         return httpx.Response(201, json={"link": "https://site.example/2026/10/10/a-story/"})
 
-    link = wordpress.publish("A story", "<p>Body.</p>", _jpeg(), 44, client=_client(handler))
+    link = wordpress.publish(
+        "A story", "<p>Body.</p>", _jpeg(), 44, "Benjamin Sesko", client=_client(handler)
+    )
 
     assert link == "https://site.example/2026/10/10/a-story/"
     media_call, post_call = seen
     assert str(media_call.url) == "https://site.example/wp-json/wp/v2/media"
-    assert media_call.headers["Content-Type"] == "image/jpeg"
+    assert media_call.headers["Content-Type"].startswith("multipart/form-data")
+    assert b'name="caption"\r\n\r\nBenjamin Sesko' in media_call.content
+    assert b'name="alt_text"\r\n\r\nBenjamin Sesko' in media_call.content
     assert media_call.headers["Authorization"].startswith("Basic ")
     # `publish`, never `draft`: a draft has only ?p=<id>, not the permalink
     # the first comment needs.
@@ -838,7 +842,7 @@ def with_article(session, ready):
 def test_scheduling_publishes_the_article_first_and_links_it(
     client, session, with_article, published, monkeypatch
 ):
-    def publish(title, html, image, category):
+    def publish(title, html, image, category, caption):
         assert category == 44
         published["order"].append("wordpress")
         return "https://site.example/a-story/"
@@ -864,19 +868,19 @@ def test_the_call_to_action_is_the_pages_own():
     assert article_cta(Page(name="P", article_cta="  "), url) == "Read the full story: " + url
 
 
-def test_an_article_without_a_category_schedules_nothing(
+def test_an_article_without_a_category_still_schedules(
     client, session, with_article, published, monkeypatch
 ):
+    """Not required until the feature launches: the client's flow must not change."""
     with_article.article_category_id = None
     session.add(with_article)
     session.commit()
-    monkeypatch.setattr(wordpress, "publish", lambda *a: pytest.fail("no category yet"))
+    monkeypatch.setattr(wordpress, "publish", lambda *a: "https://site.example/a/")
 
     response = client.post(f"/drafts/{with_article.id}/publish")
 
-    assert response.status_code == 409
-    assert "category" in response.json()["detail"]
-    assert published["order"] == []
+    assert response.status_code == 200
+    assert published["order"] == ["normalize", "schedule"]
 
 
 def test_a_refused_article_schedules_nothing(client, with_article, published, monkeypatch):

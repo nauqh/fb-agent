@@ -810,6 +810,14 @@ class Article(BaseModel):
 
     title: str = Field(description="Plain text, sentence case, under 100 characters.")
     html: str = Field(description="The body HTML, in the tags the instructions allow.")
+    image_caption: str = Field(
+        default="",
+        description=(
+            "One plain-text line under the article's photo, under 120 characters, naming"
+            " the person, place or thing the story is about. You cannot see the photo:"
+            " never describe what it shows, such as a pose, clothing or expression."
+        ),
+    )
 
 
 def _article_rules(_ctx: RunContext, output: Article) -> Article:

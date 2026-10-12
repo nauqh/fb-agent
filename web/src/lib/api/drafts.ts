@@ -46,6 +46,7 @@ export type DraftEdit = Partial<
     | "article_title"
     | "article_html"
     | "article_category_id"
+    | "article_image_caption"
     | "image_prompt"
     | "hero_x_ratio"
     | "hero_y_ratio"

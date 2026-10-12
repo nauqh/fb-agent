@@ -71,8 +71,8 @@ it.
 4. **Write the post** from the full text. Changed: today Gemini is handed only
    the link and reads it itself, which some publishers refuse.
 5. **Write the article** from the same text. New.
-6. **Review.** The draft drawer gets an Article tab: category, title and body,
-   all editable. Rejecting the draft discards the article.
+6. **Review.** The draft drawer gets an Article tab: category, image caption,
+   title and body, all editable. Rejecting the draft discards the article.
 7. **Schedule.** One action publishes the article to WordPress in its category, sets the first
    comment to the Page's call to action with the link, and schedules the post.
    If WordPress fails, nothing is scheduled and the error is shown.
@@ -99,7 +99,8 @@ the category is the first part of the address:
 `thehouseofcommonsense.co.uk/crime/<article>` (client, 2026-10-13). The operator
 picks one in the Article tab. The list is read live from WordPress, so a
 category is added or renamed there, not in this app. Uncategorized is not
-offered. A post with an article cannot be scheduled until a category is picked.
+offered. Until launch a category is optional and an article without one is
+filed as Uncategorized; at launch, scheduling SHOULD require one.
 
 ## Users
 
@@ -116,8 +117,9 @@ offered. A post with an article cannot be scheduled until a category is picked.
 | Clean source text | The reader drops what is not the story: related-story headlines, newsletter sign-up text and similar page furniture. |
 | Article writing | Written in the same run as the post, from the same full text, with a title, in the Page's voice. It uses the source's facts only and never copies its sentences. Its length follows the source, roughly 400 to 900 words, and is never padded. |
 | Article format | The body is HTML in the theme's layout: `h3` subheadings, quotes in `blockquote`, and bullet lists where the facts suit them. |
-| Article review | The draft drawer has an Article tab with the category, the title and the HTML body, all editable. Save, Revert and the unsaved-changes check cover it. On the politics Page the tab is always shown. |
-| Category | The Article tab lists the site's WordPress categories, read live, without Uncategorized. Scheduling is refused until one is picked. Once the article is live the category is read-only. |
+| Article review | The draft drawer has an Article tab with the category, the image caption, the title and the HTML body, all editable. Save, Revert and the unsaved-changes check cover it. On the politics Page the tab is always shown. |
+| Image caption | The writer suggests one line naming the story's subject; it never sees the photo, so it does not describe it. It goes up as the featured image's caption and alt text. Read-only once live. |
+| Category | The Article tab lists the site's WordPress categories, read live, without Uncategorized. Optional until launch, then required to schedule. Once the article is live the category is read-only. |
 | Publish and schedule | Scheduling a draft with an article publishes it to WordPress with its title, body, category and featured image, then schedules the post with the Page's call to action and the article's link as the whole first comment. |
 | Call to action | Settings has an Article link field on the politics Page. `{link}` is replaced by the article's address; without it the link goes last. Blank is the default. |
 | Article prompt | The article prompt is editable per Page, like the other prompts, and a post style may carry its own. A blank style field uses the Page's. |
@@ -159,8 +161,10 @@ offered. A post with an article cannot be scheduled until a category is picked.
 - **Writer**: the article is one extra Gemini call after the post, with its own
   prompt, `article.txt`, overridable per Page and per post style like the
   others.
-- **Images**: the featured image is the post's hero image, without the overlay
-  text.
+- **Images**: the featured image is the post's whole hero image, uncropped,
+  without the overlay text. The theme (SmartMag) crops featured images to a
+  788x438 banner by default, which cut the subject's face off the first live
+  article (2026-10-13); it has to be set to show them uncropped.
 
 ## Success metrics
 
@@ -181,3 +185,6 @@ offered. A post with an article cannot be scheduled until a category is picked.
    `/%category%/%postname%/`. Today the addresses have no category
    (`/seven-firefighters-injured-.../`, checked 2026-10-13). Best done before
    the first real article goes up, so no published link changes.
+4. Please set SmartMag's single-post featured image to uncropped. By default it
+   crops every featured image to a wide banner from the middle, and a tall
+   photo loses its subject's head.

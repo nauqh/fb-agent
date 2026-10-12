@@ -912,6 +912,9 @@ class Draft(SQLModel, table=True):
     article_html: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
     """The website article, written beside the post. Null on every Page but the
     one in `settings.wordpress_page_id`."""
+    article_image_caption: str | None = None
+    """Under the featured image on the website, and its alt text. The writer
+    suggests one; the operator checks it, since the writer never sees the photo."""
     article_category_id: int | None = None
     """The WordPress category's id, picked in the drawer. Required to schedule:
     it is the first part of the article's address."""

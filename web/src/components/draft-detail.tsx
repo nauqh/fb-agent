@@ -77,6 +77,7 @@ interface Form {
   article_title: string | null;
   article_html: string | null;
   article_category_id: number | null;
+  article_image_caption: string | null;
   image_prompt: string;
   hero_x_ratio: number;
   hero_y_ratio: number;
@@ -1401,6 +1402,16 @@ export function DraftDetail({
                   )}
                 </Field>
                 {/* Read-only once live: an edit here would not reach WordPress. */}
+                {/* The writer never sees the photo, so its suggestion names the story's subject. */}
+                <Field label="Image caption" hint="under the picture, and its alt text">
+                  <Input
+                    value={form.article_image_caption ?? ""}
+                    disabled={Boolean(draft.article_url)}
+                    onChange={(event) =>
+                      setForm({ ...form, article_image_caption: event.target.value || null })
+                    }
+                  />
+                </Field>
                 <Field label="Title" hint={draft.article_url ? "live on the website" : undefined}>
                   <Input
                     value={form.article_title ?? ""}
@@ -2398,6 +2409,7 @@ function toForm(draft: Draft): Form {
     article_title: draft.article_title,
     article_html: draft.article_html,
     article_category_id: draft.article_category_id,
+    article_image_caption: draft.article_image_caption,
     image_prompt: draft.image_prompt ?? "",
     hero_x_ratio: draft.hero_x_ratio,
     hero_y_ratio: draft.hero_y_ratio,

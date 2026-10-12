@@ -463,6 +463,7 @@ class DraftEdit(BaseModel):
     article_title: str | None = None
     article_html: str | None = None
     article_category_id: int | None = None
+    article_image_caption: str | None = None
     image_prompt: str | None = None
     hero_x_ratio: float | None = None
     hero_y_ratio: float | None = None
@@ -530,7 +531,9 @@ def update_draft(
     )
     if draft.article_url and any(
         field in changes and changes[field] != getattr(draft, field)
-        for field in ("article_title", "article_html", "article_category_id")
+        for field in (
+            "article_title", "article_html", "article_category_id", "article_image_caption"
+        )
     ):
         raise HTTPException(
             status_code=409,
@@ -1334,16 +1337,15 @@ def publish_draft(
     # Metricool has the post. Committed at once: a Metricool refusal below must
     # not lose the URL, or the retry would publish the article a second time.
     if draft.article_html and not draft.article_url:
-        if not draft.article_category_id:
-            raise HTTPException(
-                status_code=409, detail="Pick a category for the article first."
-            )
+        # ponytail: no category is allowed until the feature launches (client's
+        # flow must not change before then); WordPress files it as Uncategorized.
         try:
             draft.article_url = wordpress.publish(
                 draft.article_title or "",
                 draft.article_html,
                 _featured_image(draft),
                 draft.article_category_id,
+                draft.article_image_caption,
             )
         except wordpress.WordPressError as error:
             raise HTTPException(
@@ -1422,7 +1424,9 @@ def article_cta(page: Page, url: str) -> str:
 
 
 def _featured_image(draft: Draft) -> bytes | None:
-    """The hero, without the overlay drawn on the card. None if there is none."""
+    """The whole hero, without the overlay drawn on the card. None if there is
+    none. Uncropped: the theme MUST show the featured image uncropped, since its
+    default banner cut the face off the first live article (2026-10-13)."""
     if not draft.hero_image_path:
         return None
     try:
