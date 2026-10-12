@@ -591,60 +591,18 @@ def test_a_competitor_picture_cannot_be_the_source_s(client, page):
     assert response.status_code == 422
 
 
-def test_the_article_page_takes_only_items_it_can_read(session, page, feed, monkeypatch):
-    """Sky refuses and Google News links are redirects: whether a link reads is
-    the publisher's, so the run skips it rather than the operator."""
+def test_no_auto_draft_reads_for_an_article(session, page, feed, monkeypatch):
+    """Not even on the website's Page: auto-draft articles are off until the
+    feature is official (client, 2026-10-12)."""
     from app.settings import settings
     from app.sources import web
 
     def fetch(url):
-        if "story-1" in url:
-            raise web.WebError("The site refused the request (403)")
-        return SourceItemBase(kind=SourceKind.WEB, external_id=url, text=f"Full article at {url}")
+        raise AssertionError("auto-drafts write no articles")
 
     monkeypatch.setattr(settings, "wordpress_page_id", page.id)
-    monkeypatch.setattr(web, "fetch_article", fetch)
-
-    ids = auto_draft.run_rss(session, page, 1)
-
-    [draft] = [session.get(Draft, draft_id) for draft_id in ids]
-    source = session.get(SourceItem, draft.source_item_id)
-    assert source.external_id == feed[1].external_id, "the unreadable newest one is skipped"
-    assert source.body == f"Full article at {feed[1].url}"
-    assert source.text == feed[1].text, "the feed's own text is kept apart"
-    run = session.exec(select(AutoDraftRun)).one()
-    assert "Skipped 1 live blog(s) or unreadable" in run.note
-    assert run.available == 1
-
-
-def test_other_pages_never_fetch_the_article(session, page, feed, monkeypatch):
-    from app.sources import web
-
-    def fetch(url):
-        raise AssertionError("fetched for a Page with no website")
-
     monkeypatch.setattr(web, "fetch_article", fetch)
 
     [draft_id] = auto_draft.run_rss(session, page, 1)
 
     assert session.get(SourceItem, session.get(Draft, draft_id).source_item_id).body is None
-
-
-def test_a_live_blog_is_never_read_for_an_article(monkeypatch):
-    from app.sources import web
-
-    def fetch(url):
-        return SourceItemBase(kind=SourceKind.WEB, external_id=url, text="Full article")
-
-    monkeypatch.setattr(web, "fetch_article", fetch)
-    urls = [
-        "https://www.manchestereveningnews.co.uk/sport/liverpool-vs-man-city-live-34740348",
-        "https://www.bbc.co.uk/news/live/c1234",
-        "https://www.manchestereveningnews.co.uk/sport/liverpool-sign-a-striker-34740349",
-    ]
-    items = [SourceItemBase(kind=SourceKind.RSS, external_id=url, url=url, text="t") for url in urls]
-
-    picked, skipped = auto_draft.readable(items, 2)
-
-    assert [item.url for item in picked] == [urls[2]], "liverpool is not a live blog"
-    assert skipped == 2

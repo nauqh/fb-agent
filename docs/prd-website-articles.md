@@ -6,6 +6,11 @@
 
 ## Summary
 
+> **Auto-drafts write no articles for now** (client, 2026-10-12: not an
+> official feature yet). Articles come only from Write article in the
+> cart or on a draft. The auto-draft parts below describe the plan, and
+> the code for them is in git history (`3bb4ccc` and before).
+
 The politics Page's RSS auto-drafts pick news items whose full article the app
 can read, and write two things from each: the Facebook post, as today, and a
 full article for the client's WordPress site,
