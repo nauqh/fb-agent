@@ -112,8 +112,6 @@ Maintenance covers checking the daily runs, finding these changes, and updating 
 
 ## Running costs
 
-Auto-drafts adds usage to accounts you already pay for. At [N] Drafts a day, expect about **US$[X] per month** in total.
-
 | What | Cost |
 | --- | --- |
 | Writing each Draft | One AI call, the same as a Draft asked for by hand (Gemini) |
@@ -121,5 +119,3 @@ Auto-drafts adds usage to accounts you already pay for. At [N] Drafts a day, exp
 | Source photo, No picture | Free |
 | Google image | One image search per Draft (SerpAPI). The free tier covers 250 a month; 20 Drafts a day is about 600 |
 | Generate with AI | One paid AI image per Draft (Gemini) |
-
-Pictures are added before the staff review a Draft, so a rejected Draft's picture is still paid for. Source photo and No picture are the cheapest choices for that reason.
