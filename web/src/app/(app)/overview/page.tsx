@@ -222,7 +222,7 @@ function ScrollFade({
       <div
         ref={ref}
         onScroll={onScroll}
-        className="min-h-0 flex-1 overflow-y-auto pr-3"
+        className="min-h-0 flex-1 overflow-y-auto pr-3 lift-room"
       >
         <div className={className}>{children}</div>
       </div>

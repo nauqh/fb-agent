@@ -393,7 +393,7 @@ export function Sidebar({
           // a deliberately tight `--radius: 0.25rem`, which puts `rounded-xl` at
           // 5.6px - right for a dense table, far too hard for a card floating
           // over the screen. These two are the exception, not a new default.
-          "hidden size-9 items-center justify-center rounded-[12px] border bg-sidebar text-sidebar-foreground shadow-sm",
+          "hidden size-9 items-center justify-center rounded-[12px] border border-ring bg-sidebar text-sidebar-foreground shadow-[3px_3px_0_0_var(--shadow-ink)]",
           /**
            * `top-[26px]` is not a taste value, it is the only one that holds
            * still. The panel's own toggle ends up centred at y=44 when the
@@ -456,8 +456,9 @@ export function Sidebar({
           "lg:duration-300",
           collapsed
             ? // Floating: inset from all three edges, rounded on every corner,
-              // lifted off the screen it is covering.
-              "lg:inset-y-2 lg:left-2 lg:rounded-[16px] lg:border lg:shadow-2xl"
+              // lifted off the screen it is covering. Ink edge and a hard
+              // shadow, the Gumroad treatment for anything opened over the page.
+              "lg:inset-y-2 lg:left-2 lg:rounded-[16px] lg:border lg:border-ring lg:shadow-[6px_6px_0_0_var(--shadow-ink)]"
             : "lg:inset-y-0 lg:left-0",
           // Parked just past the left edge: its own width plus the 8px inset it
           // sits at, so not even the shadow's leading edge stays in view.
@@ -551,8 +552,11 @@ export function Sidebar({
               <button
                 type="button"
                 className={cn(
-                  "flex w-full items-center gap-2.5 rounded-md border px-3 py-2 text-sm font-medium whitespace-nowrap",
-                  "text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                  // Ink edge at rest, unlike the quiet controls elsewhere: this
+                  // says which workspace the whole app is in. It lifts like a
+                  // button (`ui/button.tsx`).
+                  "flex w-full items-center gap-2.5 rounded-md border border-ring px-3 py-2 text-sm font-medium whitespace-nowrap",
+                  "text-sidebar-foreground transition-all hover:-translate-x-[3px] hover:-translate-y-[3px] hover:shadow-[3px_3px_0_0_var(--shadow-ink)] active:translate-0 active:shadow-none aria-expanded:-translate-x-[3px] aria-expanded:-translate-y-[3px] aria-expanded:shadow-[3px_3px_0_0_var(--shadow-ink)] motion-reduce:transition-none",
                   "focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none",
                 )}
               >

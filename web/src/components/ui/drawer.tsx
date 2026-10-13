@@ -36,7 +36,7 @@ function DrawerContent({
         data-slot="drawer-content"
         className={cn(
           "fixed top-3 right-2 bottom-3 z-50 flex w-[calc(92vw-0.5rem)] max-w-[1120px] flex-col",
-          "rounded-[16px] border bg-background shadow-2xl outline-none",
+          "rounded-[16px] border border-ring bg-background shadow-[6px_6px_0_0_var(--shadow-ink)] outline-none",
           // Out is slightly quicker than in, which is the usual asymmetry: an
           // opening panel is being read, a closing one is already finished with.
           "duration-300 ease-out data-closed:duration-200 data-closed:ease-in",

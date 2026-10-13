@@ -327,7 +327,8 @@ export function CartPanel() {
           screen showed that the operator could not already see, and this is
           now the click that spends money. */}
       <Button
-        className="shrink-0 bg-gold text-gold-foreground hover:bg-gold/90"
+        variant="gold"
+        className="shrink-0"
         disabled={draftCount === 0 || running || !page}
         onClick={run}
       >

@@ -95,7 +95,7 @@ export function ScheduleView() {
         />
       ) : (
         // `pr-3` holds the rows off the scrollbar this element owns.
-        <div className="min-h-0 flex-1 overflow-y-auto pr-3">
+        <div className="min-h-0 flex-1 overflow-y-auto pr-3 lift-room">
           <ScheduleList posts={posts ?? []} />
         </div>
       )}

@@ -13,7 +13,7 @@ export default function ScheduleScreen() {
     // `overflow-hidden`, not `overflow-y-auto`: the header and the view toggle
     // stay put, and whichever view is showing owns the scrolling. The shell
     // already fixes the viewport on `lg`, so nothing here needs `sticky`.
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden lift-room">
       <ScreenHeader
         title="Schedule"
         // "Reschedule and cancel there" until 2026-08-18, and false since D6

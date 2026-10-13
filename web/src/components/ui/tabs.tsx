@@ -57,6 +57,10 @@ function Tabs({
 // The tray has to be a real recess for that to work, hence the two themes
 // being given different values: over white, `bg-muted/40` was within a percent
 // of the page and left the segment with nothing to sit proud of.
+//
+// Selected is an interaction state, so its edge is `--ring` (ink in light, a
+// hairline in dark) on a quiet tray. A 1px outline rather than a shadow: it
+// sits outside the segment, over the tray's own border, so the ends stay 1px.
 const tabsListVariants = cva(
   "group/tabs-list inline-flex w-fit items-center justify-center gap-0 rounded-lg border bg-muted p-0 text-muted-foreground group-data-horizontal/tabs:h-auto group-data-vertical/tabs:h-fit group-data-vertical/tabs:flex-col data-[variant=line]:rounded-none dark:bg-muted/40",
   {
@@ -209,7 +213,7 @@ function TabsList({
         <span
           aria-hidden
           data-slot="tabs-indicator"
-          className="absolute top-0 left-0 z-0 bg-background shadow-sm transition-[translate,width,height,border-radius] duration-200 ease-out motion-reduce:transition-none dark:bg-secondary"
+          className="absolute top-0 left-0 z-0 bg-background shadow-[0_0_0_1px_var(--ring)] transition-[translate,width,height,border-radius] duration-200 ease-out motion-reduce:transition-none dark:bg-secondary"
           style={{
             translate: `${pill.x}px ${pill.y}px`,
             width: pill.width,
@@ -244,7 +248,7 @@ function TabsTrigger({
         // `pillRadius` computes at runtime. Hardcoding it was wrong within the
         // hour: `--radius` is 4px here, not the 8px `rounded-lg` looks like.
         "relative z-10 inline-flex flex-1 items-center justify-center gap-1.5 rounded-none first:rounded-l-[calc(var(--radius-lg)-1px)] last:rounded-r-[calc(var(--radius-lg)-1px)] px-2.5 py-1 text-xs font-medium whitespace-nowrap text-muted-foreground transition-colors group-data-vertical/tabs:w-full group-data-vertical/tabs:justify-start hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50 has-data-[icon=inline-end]:pr-1 has-data-[icon=inline-start]:pl-1 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",
-        "group-data-[variant=default]/tabs-list:data-active:bg-background group-data-[variant=default]/tabs-list:data-active:text-foreground dark:group-data-[variant=default]/tabs-list:data-active:bg-secondary",
+        "group-data-[variant=default]/tabs-list:data-active:bg-background group-data-[variant=default]/tabs-list:data-active:text-foreground group-data-[variant=default]/tabs-list:data-active:shadow-[0_0_0_1px_var(--ring)] dark:group-data-[variant=default]/tabs-list:data-active:bg-secondary",
         // Handed over to the sliding indicator once it has measured itself.
         // Important, and it has to be: this and the fill above are both one
         // variant deep on the same property, so which of them wins is decided
@@ -252,7 +256,7 @@ function TabsTrigger({
         // - and a trigger that keeps its own pill paints the destination solid
         // the instant it is clicked, while the indicator is still travelling
         // towards it. Three pills on screen at once.
-        "group-data-[indicator=on]/tabs-list:data-active:bg-transparent!",
+        "group-data-[indicator=on]/tabs-list:data-active:bg-transparent! group-data-[indicator=on]/tabs-list:data-active:shadow-none!",
         // The `delay-100` that used to sit here is gone with the inversion that
         // required it. The arriving label was `text-background` - white text,
         // legible only once the pill had arrived underneath it, and measured at

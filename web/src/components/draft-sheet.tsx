@@ -82,8 +82,9 @@ export function DraftSheet({ draftId }: { draftId: number }) {
         <DrawerContent>
           <DrawerTitle>Draft {draftId}</DrawerTitle>
           <DrawerDescription>Review and edit draft {draftId}.</DrawerDescription>
-          {/* The drawer scrolls, not the page behind it. */}
-          <div className="min-h-0 flex-1 overflow-y-auto px-7 py-6">
+          {/* The drawer scrolls, not the page behind it - without a visible
+              bar, which only added a stripe beside the content. */}
+          <div className="min-h-0 flex-1 overflow-y-auto px-7 py-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {/* `close`, not `requestClose`: a decision already saved the form
                 on its way out, so asking would be asking about nothing. */}
             <DraftDetail draftId={draftId} onDecided={close} dirtyRef={dirty} />

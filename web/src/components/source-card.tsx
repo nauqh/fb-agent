@@ -99,8 +99,8 @@ export function SourceCard({ selected, pending, onToggle, ...item }: SourceCardP
         onClick={onToggle}
         disabled={pending}
         className={cn(
-          "group flex h-full w-full flex-col gap-3 rounded-2xl border p-4 text-left transition-colors",
-          "hover:border-foreground/25 disabled:opacity-60",
+          "group flex h-full w-full flex-col gap-3 rounded-2xl border p-4 text-left transition-colors outline-none",
+          "hover:border-ring focus-visible:border-ring disabled:opacity-60",
           selected && "border-gold bg-gold/[0.06] hover:border-gold",
           // Dimmed, not hidden or disabled. A post worth writing twice exists -
           // a different angle on the same story - so this is a warning, not a

@@ -51,10 +51,10 @@ export default function ManualScreen() {
           <TabsTrigger value="topic">From a topic</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="write" className="min-h-0 flex-1 overflow-y-auto pr-3">
+        <TabsContent value="write" className="min-h-0 flex-1 overflow-y-auto pr-3 lift-room">
           <WriteItYourself />
         </TabsContent>
-        <TabsContent value="topic" className="min-h-0 flex-1 overflow-y-auto pr-3">
+        <TabsContent value="topic" className="min-h-0 flex-1 overflow-y-auto pr-3 lift-room">
           <FromATopic />
         </TabsContent>
       </Tabs>
@@ -374,7 +374,7 @@ function FromATopic() {
       ) : null}
 
       <Button
-        className="bg-gold text-gold-foreground hover:bg-gold/90"
+        variant="gold"
         disabled={!ready || running}
         onClick={run}
       >

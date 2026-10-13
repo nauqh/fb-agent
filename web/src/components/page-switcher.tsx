@@ -51,7 +51,9 @@ export function PageSwitcher() {
         <Button
           variant="outline"
           size="sm"
-          className="h-8 gap-2 pr-2 pl-2 text-xs font-medium"
+          // Ink edge at rest, like the sidebar's workspace picker: both say
+          // where you are.
+          className="h-8 gap-2 border-ring pr-2 pl-2 text-xs font-medium"
         >
           <Mark page={page} />
           <span className="max-w-40 truncate">{page.name}</span>

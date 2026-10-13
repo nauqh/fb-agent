@@ -51,6 +51,16 @@
   --color-panel: var(--panel);
 }
 
+/* Room for a lifted button (`ui/button.tsx`) at a scroll pane's top and left
+   edge, where `overflow` would clip the 3px rise. The negative margin cancels
+   the padding, so the pane's content does not move. */
+@utility lift-room {
+  margin-top: -3px;
+  margin-left: -3px;
+  padding-top: 3px;
+  padding-left: 3px;
+}
+
 @theme {
   /* The shell's motion curve. The built-in `ease-out` is too weak to read as
      deliberate at 200ms - it spends the first third barely moving, which is
@@ -86,15 +96,16 @@
  * than being used sparingly - deepened for legibility, but achromatic (`0 0`)
  * rather than warm, so it reads as a clear grey and not a tint.
  *
- * ## Contrast, lowered 2026-09-12
+ * ## Gumroad, 2026-10-14
  *
- * The ground stays white and the accent stays gold; what changed is how far
- * apart everything else sits. Black ink on white is 19:1 and reads stamped
- * on - softened to 0.22, which is still ~13:1 and is roughly where the
- * reference docs sidebars land. `--border` went the other way, up to a
- * hairline, so surfaces separate by their fill rather than by a grey line
- * drawn around every card. `--muted-foreground` came back up to 0.53: at 0.46
- * it had stopped reading as secondary and become a second foreground.
+ * Pure black ink on white, and the rule "quiet at rest, ink on interaction":
+ * borders are soft until something is hovered, focused or selected, then they
+ * go to `--ring`, which is the ink. All black frames at rest was tried first
+ * and made the Sources grid, the tabs and the cart all shout at once.
+ * Anything opened over the page - the floating rail, its toggle, a dropdown -
+ * is in an interaction state too, so it gets the ink edge and a hard offset
+ * in `--shadow-ink`, as does a lifted button. Panels that are always there
+ * (the cart) keep Tailwind's soft shadows.
  *
  * `--destructive` lost chroma for the same reason the rest of the ramp is
  * achromatic. Gold is the one colour allowed to mean something; a 0.245-chroma
@@ -104,26 +115,27 @@
  * the one thing in here that has to be obvious.
  */
 :root {
+  --shadow-ink: oklch(0 0 0);
   --background: oklch(1 0 0);
-  --foreground: oklch(0.22 0 0);
+  --foreground: oklch(0 0 0);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.22 0 0);
+  --card-foreground: oklch(0 0 0);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.22 0 0);
-  --primary: oklch(0.26 0 0);
+  --popover-foreground: oklch(0 0 0);
+  --primary: oklch(0 0 0);
   --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.965 0 0);
-  --secondary-foreground: oklch(0.26 0 0);
+  --secondary-foreground: oklch(0 0 0);
   --muted: oklch(0.965 0 0);
   --muted-foreground: oklch(0.53 0 0);
   --accent: oklch(0.955 0 0);
-  --accent-foreground: oklch(0.26 0 0);
+  --accent-foreground: oklch(0 0 0);
   --destructive: oklch(0.585 0.175 25);
-  --border: oklch(0.925 0 0);
-  /* One step darker than `--border`: a field the user is meant to type into
-     needs an edge, a card does not. */
-  --input: oklch(0.912 0 0);
-  --ring: oklch(0.708 0 0);
+  --border: oklch(0 0 0 / 12%);
+  /* A step stronger than `--border`: a field the user types into needs an
+     edge, a card does not. */
+  --input: oklch(0 0 0 / 22%);
+  --ring: oklch(0 0 0);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
@@ -144,79 +156,71 @@
      is the floating card - inset, rounded, shadowed - and elevation there is
      carried by the shadow and the corners. 0.985 against 1.0 is ~1.5% of
      lightness: too little to separate anything, enough to read as a smudge at
-     the card's corners and along `border-r` when it is docked. Dark keeps its
-     step up from the ground, where 3% is visible and surfaces do elevate. */
+     the card's corners and along `border-r` when it is docked. Dark sits one step
+     below the ground, as Linear's sidebar does. */
   --sidebar: oklch(1 0 0);
-  --sidebar-foreground: oklch(0.22 0 0);
-  --sidebar-primary: oklch(0.26 0 0);
+  --sidebar-foreground: oklch(0 0 0);
+  --sidebar-primary: oklch(0 0 0);
   --sidebar-primary-foreground: oklch(0.985 0 0);
   --sidebar-accent: oklch(0.955 0 0);
-  --sidebar-accent-foreground: oklch(0.26 0 0);
-  --sidebar-border: oklch(0.925 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar-accent-foreground: oklch(0 0 0);
+  --sidebar-border: oklch(0 0 0 / 12%);
+  --sidebar-ring: oklch(0 0 0);
 }
 
 .dark {
-  /* A charcoal grey ramp, rebuilt on the layering the reference dark themes
-     share (shadcn's shipped dark, Linear, Radix): the ground darkest, each
-     surface one step up so panels read as elevated rather than invisible, and
-     hairlines as translucent white instead of solid grey. The client's identity
-     is kept - achromatic, gold the only warm accent - but the flat mid-grey
-     of the first pass (card #1a1a1a on background #121212, #444 borders) read
-     as murky: no depth and a grey line on every frame.
+  /* Linear's "magic blue" dark (2026-10-14), sampled from its settings
+     screen: a navy-tinted grey at hue 282 instead of the old 0.145 charcoal,
+     which read too heavy. Three close steps, as Linear has them - sidebar
+     #13131c below the ground #191a23, cards #22222c above it. Gold stays
+     the one accent; Linear's indigo toggle was not taken.
+
+     The Gumroad outline is light mode only. In ink, every frame here was a
+     bright line and every shadow a white block; dark keeps white-alpha
+     hairlines and a shadow darker than the ground, as real shadows are.
 
      The primary is raised toward light with a dark label, the way Linear and
-     shadcn make a default button - it is the field the eye lands on, so it
-     should be the lightest thing, not the same grey as everything else.
-     Muted sits one notch down for hint text and metadata.
-
-     Contrast lowered 2026-09-12, same pass as `:root`. The ramp was correct in
-     its ordering and too wide in its steps: `card` and `popover` sat far
-     enough above the ground to read as stacked plates rather than as one
-     surface with a seam, and `foreground` at 0.95 glows against 0.145. The
-     steps are tighter now and the hairlines thinner, so depth comes from
-     three close greys rather than from a frame drawn around each one. */
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.9 0 0);
-  --card: oklch(0.2 0 0);
-  --card-foreground: oklch(0.9 0 0);
-  --popover: oklch(0.22 0 0);
-  --popover-foreground: oklch(0.9 0 0);
+     shadcn make a default button - it is the field the eye lands on. */
+  --shadow-ink: oklch(0.12 0.02 282);
+  --background: oklch(0.221 0.018 282);
+  --foreground: oklch(0.93 0.006 282);
+  --card: oklch(0.256 0.018 282);
+  --card-foreground: oklch(0.93 0.006 282);
+  --popover: oklch(0.28 0.018 282);
+  --popover-foreground: oklch(0.93 0.006 282);
   /* The field: light fill, dark label - shadcn dark’s default button. */
-  --primary: oklch(0.9 0 0);
-  --primary-foreground: oklch(0.2 0 0);
-  --secondary: oklch(0.25 0 0);
-  --secondary-foreground: oklch(0.9 0 0);
-  --muted: oklch(0.25 0 0);
-  --muted-foreground: oklch(0.68 0 0);
+  --primary: oklch(0.93 0.006 282);
+  --primary-foreground: oklch(0.221 0.018 282);
+  --secondary: oklch(0.301 0.018 282);
+  --secondary-foreground: oklch(0.93 0.006 282);
+  --muted: oklch(0.301 0.018 282);
+  --muted-foreground: oklch(0.72 0.015 282);
   /* A shade *up* from the ground, not an inversion. This was 0.74 with a dark
      label - a light block in a dark app, and its one real call site
      (`config-shell.tsx`) pairs `bg-accent` with `text-foreground` rather than
      `text-accent-foreground`, so the selected rail item was near-white text on
      a near-white fill. A selected row is the same surface, lit. */
-  --accent: oklch(0.27 0 0);
-  --accent-foreground: oklch(0.94 0 0);
+  --accent: oklch(0.301 0.018 282);
+  --accent-foreground: oklch(0.95 0.006 282);
   --destructive: oklch(0.68 0.15 25);
-  /* Hairlines: white at low alpha, not a solid grey - the one change that
-      makes a dark theme read clean instead of dusty. Thinner than the first
-      pass: 14% outlined every card instead of separating it. */
+  /* The Gumroad outline, inverted: borders in the ink colour, as in light. */
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 13%);
   --ring: oklch(1 0 0 / 26%);
   --gold: #f5c542;
-  --gold-foreground: oklch(0.2 0 0);
+  --gold-foreground: oklch(0.221 0.018 282);
   --panel: #000000;
   --chart-1: oklch(0.95 0 0);
   --chart-2: oklch(0.8 0 0);
   --chart-3: oklch(0.65 0 0);
   --chart-4: oklch(0.5 0 0);
   --chart-5: oklch(0.35 0 0);
-  --sidebar: oklch(0.175 0 0);
-  --sidebar-foreground: oklch(0.9 0 0);
-  --sidebar-primary: oklch(0.86 0 0);
-  --sidebar-primary-foreground: oklch(0.18 0 0);
-  --sidebar-accent: oklch(0.25 0 0);
-  --sidebar-accent-foreground: oklch(0.94 0 0);
+  --sidebar: oklch(0.191 0.018 282);
+  --sidebar-foreground: oklch(0.93 0.006 282);
+  --sidebar-primary: oklch(0.9 0.006 282);
+  --sidebar-primary-foreground: oklch(0.191 0.018 282);
+  --sidebar-accent: oklch(0.301 0.018 282);
+  --sidebar-accent-foreground: oklch(0.95 0.006 282);
   --sidebar-border: oklch(1 0 0 / 9%);
   --sidebar-ring: oklch(1 0 0 / 24%);
 }

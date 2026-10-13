@@ -16,7 +16,7 @@ export default function ReviewLayout({ children }: { children: React.ReactNode }
     // against the table's right border and reads as part of the frame. The
     // padding is inside the scroll container, so it holds the content off the
     // bar rather than moving the bar.
-    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pr-3">
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pr-3 lift-room">
       <ScreenHeader title="Review" />
       <ReviewList />
       {children}

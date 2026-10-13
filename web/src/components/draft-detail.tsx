@@ -1820,7 +1820,7 @@ function PublishAction({
           deliberate detours. */}
       <Button
         size="sm"
-        className="bg-gold text-gold-foreground hover:bg-gold/90"
+        variant="gold"
         disabled={blocked}
         onClick={() => {
           setSlot(null);
