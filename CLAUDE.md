@@ -40,13 +40,22 @@ what the warning is telling you.
 
 ## Verify in a browser, not just in tests
 
-A green suite has repeatedly not meant a working screen. Playwright is installed
-in the **old** repo - require it by absolute path from a script in the
-scratchpad:
+A green suite has repeatedly not meant a working screen. Playwright is not a
+dependency of this repo. Install it into the scratchpad and run scripts from
+there:
 
-```js
-const { chromium } = require("D:/Laboratory/social-agent/node_modules/playwright");
 ```
+npm i --no-save playwright@latest
+```
+
+The browsers are already cached in `~/AppData/Local/ms-playwright`. An older
+`playwright` pins a browser build that is not in the cache and fails to launch;
+`@latest` matched it as of 2026-10-14.
+
+Every screen sits behind a login. Mint the `fb_agent_session` cookie the way
+`web/src/lib/auth.ts` does: `<expiresMs>.<hex HMAC-SHA256 of expiresMs>`,
+keyed with `AUTH_SECRET` from `web/.env.local`. Read the secret in the
+script; never print it.
 
 Servers: the API on `:8000` (start with `--reload`), the web dev server on
 `:3000`. Both are usually already running.
