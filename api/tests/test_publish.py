@@ -927,6 +927,20 @@ def test_the_article_picture_is_the_sources_photo(
     assert sent[0][:2] == b"\xff\xd8", "a JPEG"
 
 
+def test_a_hand_made_draft_takes_an_article_written_by_hand(
+    client, session, ready, published, monkeypatch
+):
+    """The client, 2026-10-14: a draft from the Manual page has no source to write from."""
+    monkeypatch.setattr(wordpress, "publish", lambda *a: "https://site.example/mine/")
+    edit = {"article_title": "Mine", "article_html": "<p>Typed.</p>"}
+
+    assert client.patch(f"/drafts/{ready.id}", json=edit).status_code == 200
+    response = client.post(f"/drafts/{ready.id}/article/publish")
+
+    assert response.status_code == 200
+    assert response.json()["article_url"] == "https://site.example/mine/"
+
+
 def test_the_call_to_action_is_the_pages_own():
     url = "https://site.example/a/"
     assert article_cta(Page(name="P", article_cta="Full story 👉 {link} 👈"), url) == (

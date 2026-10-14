@@ -1377,29 +1377,48 @@ export function DraftDetail({
             ) : view === "article" ? (
             <div className="space-y-6">
               {form && form.article_html === null ? (
-                draft.metricool_post_id || draft.source_item_id === null ? (
+                draft.metricool_post_id ? (
                   <p className="text-sm text-muted-foreground">
-                    Only an unscheduled draft from a source can have an article.
+                    Only an unscheduled draft can have an article.
                   </p>
                 ) : (
                   <>
-                    <Field label="Source text" hint="optional, if the link cannot be read">
-                      <Textarea
-                        key={draftId}
-                        ref={pastedSource}
-                        rows={8}
-                        placeholder="Paste the source article here"
-                      />
-                    </Field>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={writingArticle}
-                      onClick={() => void addArticle()}
-                    >
-                      {writingArticle ? <Loader2 className="size-3.5 animate-spin" /> : null}
-                      {writingArticle ? "Writing article..." : "Write article"}
-                    </Button>
+                    {/* The writer needs a source; a hand-made draft has none
+                        (client, 2026-10-14), so it is written by hand. */}
+                    {draft.source_item_id !== null ? (
+                      <Field label="Source text" hint="optional, if the link cannot be read">
+                        <Textarea
+                          key={draftId}
+                          ref={pastedSource}
+                          rows={8}
+                          placeholder="Paste the source article here"
+                        />
+                      </Field>
+                    ) : null}
+                    <div className="flex flex-wrap gap-2">
+                      {draft.source_item_id !== null ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={writingArticle}
+                          onClick={() => void addArticle()}
+                        >
+                          {writingArticle ? <Loader2 className="size-3.5 animate-spin" /> : null}
+                          {writingArticle ? "Writing article..." : "Write article"}
+                        </Button>
+                      ) : null}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={writingArticle}
+                        onClick={() => {
+                          setForm({ ...form, article_title: "", article_html: "", first_comment: "" });
+                          setArticleSource(true);
+                        }}
+                      >
+                        Write it yourself
+                      </Button>
+                    </div>
                   </>
                 )
               ) : form ? (
