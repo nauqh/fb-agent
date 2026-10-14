@@ -734,8 +734,18 @@ def regenerate_field(
     )
 
 
+class ArticleRequest(BaseModel):
+    source_text: str | None = Field(default=None, max_length=100_000)
+    """The story, pasted by the operator when the link cannot be read
+    (client, 2026-10-14). Replaces whatever full text the source had."""
+
+
 @router.post("/drafts/{draft_id}/article")
-def write_article(draft_id: int, session: Session = Depends(get_session)) -> Draft:
+def write_article(
+    draft_id: int,
+    body: ArticleRequest | None = None,
+    session: Session = Depends(get_session),
+) -> Draft:
     """Write the website article for a draft made without one.
 
     The client, 2026-10-12: drafts are generated from headlines, and whether a
@@ -761,7 +771,11 @@ def write_article(draft_id: int, session: Session = Depends(get_session)) -> Dra
     if draft.article_html is not None:
         raise HTTPException(status_code=409, detail="This draft already has an article.")
 
-    if not source.body:
+    pasted = (body.source_text or "").strip() if body else ""
+    if pasted:
+        source.body = pasted
+        session.add(source)
+    elif not source.body:
         problem = generate.read_full_text(source)
         if problem:
             raise HTTPException(status_code=422, detail=f"No article: {problem}.")
@@ -1334,29 +1348,9 @@ def publish_draft(
         )
 
     # The article first, so the link in the first comment is live before
-    # Metricool has the post. Committed at once: a Metricool refusal below must
-    # not lose the URL, or the retry would publish the article a second time.
+    # Metricool has the post.
     if draft.article_html and not draft.article_url:
-        # ponytail: no category is allowed until the feature launches (client's
-        # flow must not change before then); WordPress files it as Uncategorized.
-        try:
-            draft.article_url = wordpress.publish(
-                draft.article_title or "",
-                draft.article_html,
-                _article_image(draft),
-                draft.article_category_id,
-                draft.article_image_caption,
-            )
-        except wordpress.WordPressError as error:
-            raise HTTPException(
-                status_code=502,
-                detail=f"The article was not published, so nothing was scheduled. {error}",
-            ) from error
-        # Written into the row, so the drawer, a later edit and a repost all
-        # send what went out.
-        draft.first_comment = article_cta(page, draft.article_url)
-        session.add(draft)
-        session.commit()
+        _publish_article(session, draft, page, ", so nothing was scheduled")
 
     # The composite is already a JPEG in a public bucket, so there is nothing to
     # upload - this is the link to the file `build_image` wrote. It used to be
@@ -1390,6 +1384,57 @@ def publish_draft(
         settings.metricool_publish_as_draft,
     )
     return _save(session, draft)
+
+
+@router.post("/drafts/{draft_id}/article/publish")
+def publish_article(draft_id: int, session: Session = Depends(get_session)) -> Draft:
+    """Put the article on the website now, without scheduling the post.
+
+    The client, 2026-10-14: check the article is live and right before the
+    Facebook post links to it. Publish then schedules the post alone.
+    """
+    draft = _require(session, draft_id)
+    if not draft.article_html:
+        raise HTTPException(status_code=409, detail="This draft has no article.")
+    if draft.article_url:
+        raise HTTPException(
+            status_code=409, detail=f"The article is already live at {draft.article_url}."
+        )
+    page = session.get(Page, draft.page_id)
+    if page is None:
+        raise HTTPException(status_code=404, detail=f"No page {draft.page_id}")
+    _publish_article(session, draft, page)
+    return _save(session, draft)
+
+
+def _publish_article(session: Session, draft: Draft, page: Page, consequence: str = "") -> None:
+    """Publish the draft's article and link it from the first comment.
+
+    Committed at once: a Metricool refusal after this must not lose the URL, or
+    the retry would publish the article a second time.
+    """
+    # ponytail: no category is allowed until the feature launches (client's
+    # flow must not change before then); WordPress files it as Uncategorized.
+    try:
+        draft.article_url = wordpress.publish(
+            draft.article_title or "",
+            draft.article_html or "",
+            _article_image(draft),
+            draft.article_category_id,
+            draft.article_image_caption,
+        )
+    except wordpress.WordPressError as error:
+        raise HTTPException(
+            status_code=502, detail=f"The article was not published{consequence}. {error}"
+        ) from error
+    # Written into the row, so the drawer, a later edit and a repost all send
+    # what went out.
+    draft.first_comment = article_cta(page, draft.article_url)
+    session.add(draft)
+    session.commit()
+    logger.bind(draft_id=draft.id, article_url=draft.article_url).info(
+        "Draft {} article published at {}", draft.id, draft.article_url
+    )
 
 
 def schedule_draft(draft: Draft, blog_id: str, when: datetime | None) -> str:

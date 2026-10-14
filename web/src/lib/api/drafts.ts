@@ -254,9 +254,17 @@ export async function regenerateField(
   });
 }
 
-/** Write the website article for a draft made without one. Saves it, and clears the first comment. */
-export async function writeArticle(id: number): Promise<Draft> {
-  return post<Draft>(`/drafts/${id}/article`, {});
+/**
+ * Write the website article for a draft made without one. Saves it, and clears the first comment.
+ * `sourceText` is the story pasted by hand, for a link that cannot be read.
+ */
+export async function writeArticle(id: number, sourceText?: string): Promise<Draft> {
+  return post<Draft>(`/drafts/${id}/article`, { source_text: sourceText || null });
+}
+
+/** Put the article on the website now, without scheduling the post. Sets the first comment to its link. */
+export async function publishArticle(id: number): Promise<Draft> {
+  return post<Draft>(`/drafts/${id}/article/publish`, {});
 }
 
 /**

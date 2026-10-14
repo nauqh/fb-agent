@@ -873,6 +873,27 @@ def test_scheduling_publishes_the_article_first_and_links_it(
     assert response.json()["first_comment"] == published["first_comment"]
 
 
+def test_the_article_publishes_on_its_own_and_the_post_follows(
+    client, session, with_article, published, monkeypatch
+):
+    """The client, 2026-10-14: check the article is live before the post goes."""
+    calls = []
+    monkeypatch.setattr(wordpress, "publish", lambda *a: calls.append(a) or "https://site.example/a/")
+
+    response = client.post(f"/drafts/{with_article.id}/article/publish")
+
+    assert response.status_code == 200
+    assert response.json()["article_url"] == "https://site.example/a/"
+    assert response.json()["first_comment"] == "Read the full story: https://site.example/a/"
+    assert response.json()["metricool_post_id"] is None
+    assert client.post(f"/drafts/{with_article.id}/article/publish").status_code == 409
+
+    assert client.post(f"/drafts/{with_article.id}/publish").status_code == 200
+    assert published["order"] == ["normalize", "schedule"]
+    assert published["first_comment"] == "Read the full story: https://site.example/a/"
+    assert len(calls) == 1
+
+
 def test_the_call_to_action_is_the_pages_own():
     url = "https://site.example/a/"
     assert article_cta(Page(name="P", article_cta="Full story 👉 {link} 👈"), url) == (

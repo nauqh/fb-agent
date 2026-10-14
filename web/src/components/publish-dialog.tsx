@@ -33,8 +33,10 @@ export function PublishDialog({
   busy,
   onConfirm,
   scheduling = false,
+  title,
   children,
 }: {
+  title?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   busy: boolean;
@@ -47,7 +49,9 @@ export function PublishDialog({
       {/* No `DialogDescription`: Radix warns when one is missing unless the
           content says outright that there isn't one. */}
       <DialogContent className="sm:max-w-md" aria-describedby={undefined}>
-        <DialogTitle>{scheduling ? "Schedule on Metricool?" : "Publish to Metricool?"}</DialogTitle>
+        <DialogTitle>
+          {title ?? (scheduling ? "Schedule on Metricool?" : "Publish to Metricool?")}
+        </DialogTitle>
         {children}
         <DialogFooter className="gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>

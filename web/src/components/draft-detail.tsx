@@ -38,6 +38,7 @@ import {
   findInset,
   getDraft,
   placeHero,
+  publishArticle,
   publishDraft,
   publishMode,
   articleCategories,
@@ -125,6 +126,9 @@ export function DraftDetail({
   const [saving, setSaving] = useState(false);
   const [articleSource, setArticleSource] = useState(false);
   const [writingArticle, setWritingArticle] = useState(false);
+  const [articleConfirm, setArticleConfirm] = useState(false);
+  /** The story pasted by hand, for a link the server cannot read. */
+  const pastedSource = useRef<HTMLTextAreaElement>(null);
   const [deciding, setDeciding] = useState(false);
   const [imageWork, setImageWork] = useState<
     "hero" | "hero-upload" | "hero-search" | "hero-place" | "inset" | "inset-find" | "inset-search" | null
@@ -500,13 +504,31 @@ export function DraftDetail({
     setWritingArticle(true);
     try {
       if (dirty && form) await updateDraft(draftId, form);
-      const row = await writeArticle(draftId);
+      const row = await writeArticle(draftId, pastedSource.current?.value.trim());
       setForm(toForm(row));
       await refresh();
       setView("article");
       toast.success("Article written.");
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : "Could not write the article");
+    } finally {
+      setWritingArticle(false);
+    }
+  }
+
+  /** Put the article live before the post (client, 2026-10-14), so it can be
+   *  checked on the website first. Saves first: unsaved edits would not go up. */
+  async function goLiveArticle() {
+    setWritingArticle(true);
+    try {
+      if (dirty && form) await updateDraft(draftId, form);
+      const row = await publishArticle(draftId);
+      setForm(toForm(row));
+      await refresh();
+      setArticleConfirm(false);
+      toast.success("Article is live.", { description: "Check it, then publish the post." });
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Could not publish the article");
     } finally {
       setWritingArticle(false);
     }
@@ -1354,15 +1376,25 @@ export function DraftDetail({
                     Only an unscheduled draft from a news item or web link can have an article.
                   </p>
                 ) : (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={writingArticle}
-                    onClick={() => void addArticle()}
-                  >
-                    {writingArticle ? <Loader2 className="size-3.5 animate-spin" /> : null}
-                    {writingArticle ? "Writing article..." : "Write article"}
-                  </Button>
+                  <>
+                    <Field label="Source text" hint="optional, if the link cannot be read">
+                      <Textarea
+                        key={draftId}
+                        ref={pastedSource}
+                        rows={8}
+                        placeholder="Paste the source article here"
+                      />
+                    </Field>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={writingArticle}
+                      onClick={() => void addArticle()}
+                    >
+                      {writingArticle ? <Loader2 className="size-3.5 animate-spin" /> : null}
+                      {writingArticle ? "Writing article..." : "Write article"}
+                    </Button>
+                  </>
                 )
               ) : form ? (
                 <>
@@ -1446,15 +1478,38 @@ export function DraftDetail({
                   )}
                 </Field>
                 {!draft.article_url ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={writingArticle}
-                    onClick={() => void dropArticle()}
-                  >
-                    {writingArticle ? <Loader2 className="size-3.5 animate-spin" /> : null}
-                    Remove article
-                  </Button>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      variant="gold"
+                      disabled={writingArticle || Boolean(draft.metricool_post_id)}
+                      onClick={() => setArticleConfirm(true)}
+                    >
+                      <Rocket className="size-4" />
+                      Publish article
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={writingArticle}
+                      onClick={() => void dropArticle()}
+                    >
+                      {writingArticle ? <Loader2 className="size-3.5 animate-spin" /> : null}
+                      Remove article
+                    </Button>
+                    <PublishDialog
+                      title="Publish the article?"
+                      open={articleConfirm}
+                      onOpenChange={setArticleConfirm}
+                      busy={writingArticle}
+                      onConfirm={() => void goLiveArticle()}
+                    >
+                      <p className="text-sm text-muted-foreground">
+                        It goes live on the website now. The Facebook post is not
+                        scheduled; its first comment will link to the article.
+                      </p>
+                    </PublishDialog>
+                  </div>
                 ) : null}
                 {draft.article_url ? (
                   <a

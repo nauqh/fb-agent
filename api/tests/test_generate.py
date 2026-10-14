@@ -2520,6 +2520,19 @@ def test_an_unreadable_story_writes_no_article(client, written, monkeypatch):
     assert client.get("/drafts/1").json()["first_comment"]
 
 
+def test_a_pasted_story_writes_the_article_when_the_link_cannot_be_read(
+    client, written, monkeypatch
+):
+    """The client, 2026-10-14: paste the source in by hand."""
+    _without_article(client, monkeypatch)
+    _article_run(monkeypatch, read=lambda url: pytest.fail("pasted text is not read again"))
+
+    response = client.post("/drafts/1/article", json={"source_text": "  Pasted story.  "})
+
+    assert response.status_code == 200
+    assert response.json()["article_html"] == "<p>Pasted story.</p>"
+
+
 def test_a_draft_with_an_article_is_not_given_a_second(client, written, monkeypatch):
     _without_article(client, monkeypatch)
     client.post("/drafts/1/article")
