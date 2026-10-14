@@ -16,7 +16,12 @@ import { PAGE_TIMEZONE, asUtc, metric } from "@/lib/format";
 
 /**
  * The window's two headline statistics, day by day, as a plain multiline
- * chart: **reach** and **engagement**.
+ * chart: **reach** and **engagement**, each a 7-day rolling average.
+ *
+ * Posts are bucketed by publish day with their lifetime counts, so a raw daily
+ * line was one viral post or none: House of Common Sense went 2.88M, 41K, 482
+ * over 12-14 Oct 2026. The average shows the trend under that. The last two
+ * days are dashed: their posts are hours old and still counting.
  *
  * Reach always rides above engagement (impressions are counted in the
  * thousands, reactions in the hundreds), so the two lines never cross and a
@@ -30,12 +35,15 @@ import { PAGE_TIMEZONE, asUtc, metric } from "@/lib/format";
  */
 export function PerformanceChart({
   posts,
+  previous,
   days,
   /** The window's start, fixed when the read was made. */
   cutoff,
 }: {
   /** The current window, best first. */
   posts: PostStats[];
+  /** The window before, for the first days' trailing average. */
+  previous: PostStats[];
   days: number;
   cutoff: number;
 }) {
@@ -45,11 +53,13 @@ export function PerformanceChart({
     // lands on one entry per calendar day.
     const xMax = cutoff + days * 86_400_000;
     const buckets = new Map<string, DayPoint>();
-    for (let t = cutoff; t < xMax; t += 86_400_000) {
+    for (let t = cutoff - (AVERAGE_DAYS - 1) * 86_400_000; t < xMax; t += 86_400_000) {
       const key = DAY_KEY.format(t);
-      buckets.set(key, { t, key, engagement: 0, reach: 0, count: 0 });
+      buckets.set(key, {
+        t, key, engagement: 0, reach: 0, count: 0, reachAvg: 0, engagementAvg: 0, fresh: false,
+      });
     }
-    for (const post of posts) {
+    for (const post of [...posts, ...previous]) {
       if (post.published_at === null) continue;
       const bucket = buckets.get(DAY_KEY.format(asUtc(post.published_at).getTime()));
       if (!bucket) continue;
@@ -58,11 +68,25 @@ export function PerformanceChart({
       bucket.count += 1;
     }
 
-    const series = [...buckets.values()].sort((a, b) => a.t - b.t);
+    // A day with no posts counts as zero: nothing went out to be seen. Days
+    // before the Page's first post are not days at all - averaged in as zeros,
+    // a Page started mid-window (House of Common Sense, 15 Sept 2026) drew a
+    // week-long climb from nothing that was only the average filling up.
+    const all = [...buckets.values()].sort((a, b) => a.t - b.t);
+    const first = Math.max(0, all.findIndex((day) => day.count > 0));
+    const freshFrom = xMax - FRESH_DAYS * 86_400_000;
+    all.forEach((day, i) => {
+      const week = all.slice(Math.max(first, i - AVERAGE_DAYS + 1), i + 1);
+      day.reachAvg = week.reduce((sum, d) => sum + d.reach, 0) / week.length;
+      day.engagementAvg = week.reduce((sum, d) => sum + d.engagement, 0) / week.length;
+      day.fresh = day.t >= freshFrom;
+      day.joins = day.t < freshFrom && day.t + 86_400_000 >= freshFrom;
+    });
+    const series = all.filter((day, i) => day.t >= cutoff && i >= first);
 
     // `Math.max(1, ...)` guards an all-zero window - a young Page whose posts
     // have no counts yet would otherwise hand the scale a 0 domain.
-    const maxReach = Math.max(1, ...series.map((day) => day.reach));
+    const maxReach = Math.max(1, ...series.map((day) => day.reachAvg));
     // Even rules, not a ladder. Round ladder values (10K, 25K, 50K, 100K)
     // cannot be evenly spaced on a linear axis - the lines bunched at the
     // bottom and stretched at the top. One step instead, sized to give
@@ -94,7 +118,7 @@ export function PerformanceChart({
     }
 
     return { series, maxReach, reachTicks, top, xTicks };
-  }, [posts, days, cutoff]);
+  }, [posts, previous, days, cutoff]);
 
   return (
     <figure className="m-0 mt-2 pb-4">
@@ -102,7 +126,7 @@ export function PerformanceChart({
           answers. Larger than the axis furniture beneath it, since it is
           what a scanning eye lands on first. */}
       <div className="px-0.5 pb-1.5 text-base font-semibold tracking-tight text-foreground">
-        Reach and engagement, daily
+        Reach and engagement, 7-day average
       </div>
       {/* Axis names, once, at the top of their scales - the ticks are mono
           digits, the words are what they count. Set in the foreground, one
@@ -121,15 +145,6 @@ export function PerformanceChart({
             data={series}
             margin={{ top: 8, right: 4, bottom: 0, left: 0 }}
           >
-            <defs>
-              {/* The fill under the reach line, fading to nothing so the
-                  engagement line beneath it is never sitting on grey. */}
-              <linearGradient id="reach-fill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.16} />
-                <stop offset="100%" stopColor="#3b82f6" stopOpacity={0} />
-              </linearGradient>
-            </defs>
-
             {/* Dim rules in both directions. Hand-drawn ReferenceLines rather
                 than CartesianGrid: the grid's horizontal lines come from the
                 default-id y axis, and both of ours are named, so the library
@@ -174,7 +189,7 @@ export function PerformanceChart({
             />
             <YAxis
               yAxisId="reach"
-              dataKey="reach"
+              dataKey="reachAvg"
               type="number"
               domain={[0, top * 1.05]}
               ticks={reachTicks}
@@ -187,7 +202,7 @@ export function PerformanceChart({
             <YAxis
               yAxisId="eng"
               orientation="right"
-              dataKey="engagement"
+              dataKey="engagementAvg"
               type="number"
               domain={[0, (yMax) => yMax * 1.1]}
               tickFormatter={metric}
@@ -198,34 +213,29 @@ export function PerformanceChart({
               width={36}
             />
 
-            {/* Reach: the wider story, carrying the fill. Blue, so the two
-                lines separate at a glance instead of by darkness - hex
-                rather than a theme token, because the app's greys are the
-                *absence* of a choice and two lines need two choices. */}
-            <Line
-              yAxisId="reach"
-              dataKey={plotted("reach")}
-              connectNulls
-              stroke="#3b82f6"
-              strokeWidth={1.5}
-              fill="url(#reach-fill)"
-              type="monotone"
-              dot={false}
-              activeDot={{ r: 3, strokeWidth: 0 }}
-            />
-            {/* Engagement: the metric the list is sorted by, on its own
-                scale at the right edge. Amber, kin to the app's gold accent
-                but dark enough to hold its own on the light theme. */}
-            <Line
-              yAxisId="eng"
-              dataKey={plotted("engagement")}
-              connectNulls
-              stroke="#f59e0b"
-              strokeWidth={1.5}
-              type="monotone"
-              dot={false}
-              activeDot={{ r: 3, strokeWidth: 0 }}
-            />
+            {/* Reach: the wider story. Blue, so the two lines separate at a
+                glance instead of by darkness - hex rather than a theme token,
+                because the app's greys are the *absence* of a choice and two
+                lines need two choices. Engagement: the metric the list is
+                sorted by, on its own scale at the right edge. Amber, kin to
+                the app's gold accent. Each is drawn twice, solid to the last
+                settled day and dashed from there, sharing the joining point. */}
+            {(["reach", "eng"] as const).flatMap((axis) =>
+              [false, true].map((dashed) => (
+                <Line
+                  key={`${axis}-${dashed}`}
+                  yAxisId={axis}
+                  dataKey={plotted(axis === "reach" ? "reachAvg" : "engagementAvg", dashed)}
+                  stroke={axis === "reach" ? "#3b82f6" : "#f59e0b"}
+                  strokeWidth={1.5}
+                  strokeDasharray={dashed ? "4 3" : undefined}
+                  type="monotone"
+                  dot={false}
+                  activeDot={dashed ? false : { r: 3, strokeWidth: 0 }}
+                  isAnimationActive={false}
+                />
+              )),
+            )}
 
             <Tooltip
               cursor={{ stroke: "var(--border)", strokeDasharray: "3 3" }}
@@ -250,46 +260,55 @@ export function PerformanceChart({
           <span aria-hidden className="h-1.5 w-4 rounded-full bg-[#f59e0b]" />
           engagement / day
         </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span aria-hidden className="w-4 border-t border-dashed border-muted-foreground" />
+          still counting
+        </span>
       </figcaption>
     </figure>
   );
 }
 
 /**
- * Hover card for one day: what went out, what it did.
+ * Hover card for one day: the averages plotted, then what went out that day.
  *
- * The three totals a day's row of the table would add up to. The post count
- * is what turns a dip into an answer - "quiet because nothing was published"
- * reads differently from "published and ignored".
+ * The post count is what turns a dip into an answer - "quiet because nothing
+ * was published" reads differently from "published and ignored".
  */
 function DayTip({ day }: { day: DayPoint }) {
   return (
     <div className="min-w-44 rounded-lg border bg-popover/95 px-3 py-2.5 shadow-md backdrop-blur-sm">
       <p className="text-[11px] text-muted-foreground">
         {DAY_TIP.format(day.t)}
+        {day.fresh ? " · still counting" : ""}
       </p>
       <div className="mt-1.5 flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-xs">
         <span className="font-semibold text-[#3b82f6]">
-          {metric(day.reach)} reach
+          {metric(Math.round(day.reachAvg))} reach
         </span>
-        <span className="text-[#f59e0b]">{metric(day.engagement)} eng</span>
-        <span className="text-muted-foreground">
-          {day.count} post{day.count === 1 ? "" : "s"}
+        <span className="text-[#f59e0b]">
+          {metric(Math.round(day.engagementAvg))} eng
         </span>
+        <span className="text-muted-foreground">7-day avg</span>
       </div>
+      <p className="mt-1 text-[11px] text-muted-foreground">
+        That day: {day.count} post{day.count === 1 ? "" : "s"}, {metric(day.reach)} reach
+      </p>
     </div>
   );
 }
 
 /**
- * A day with no posts has no reach to report, not zero reach: buckets are by
- * publish day. Plotted as zero, every quiet day dived to the axis and read as
- * a collapse. `null` plus `connectNulls` bridges to the next posting day; the
- * tooltip still says "0 posts".
+ * The solid line stops at the last settled day; the dashed one starts there,
+ * so the two meet on one point instead of leaving a gap.
  */
-function plotted(metric: "reach" | "engagement") {
-  return (day: DayPoint) => (day.count > 0 ? day[metric] : null);
+function plotted(key: "reachAvg" | "engagementAvg", dashed: boolean) {
+  return (day: DayPoint) =>
+    (dashed ? day.fresh || day.joins : !day.fresh) ? day[key] : null;
 }
+
+const AVERAGE_DAYS = 7;
+const FRESH_DAYS = 2;
 
 interface DayPoint {
   /** Bucket start, epoch ms - the x coordinate. */
@@ -299,6 +318,12 @@ interface DayPoint {
   engagement: number;
   reach: number;
   count: number;
+  reachAvg: number;
+  engagementAvg: number;
+  /** In the last `FRESH_DAYS`, whose posts are still gathering counts. */
+  fresh: boolean;
+  /** The last settled day, where the dashed line picks up. */
+  joins?: boolean;
 }
 
 /** Bucket keys, `2026-09-12` style - the same shape `dayKey()` gives rows. */

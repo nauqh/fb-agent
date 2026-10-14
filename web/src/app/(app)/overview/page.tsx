@@ -361,7 +361,12 @@ function Performance({
     <ScrollFade className="flex flex-col gap-3">
       <Summary posts={posts} previous={data?.previous ?? []} days={days} />
 
-      <PerformanceChart posts={posts} days={days} cutoff={data?.cutoff ?? 0} />
+      <PerformanceChart
+        posts={posts}
+        previous={data?.previous ?? []}
+        days={days}
+        cutoff={data?.cutoff ?? 0}
+      />
 
       <div className="overflow-hidden rounded-xl border bg-card">
         <TableHead />
@@ -428,6 +433,12 @@ function Summary({
 
   const reach = sum(posts, "impressions");
   const engagement = sum(posts, "engagement");
+  // What an ordinary post does. The total is set by the few viral ones; this
+  // is the content-quality signal under them.
+  const sorted = posts.map((post) => post.impressions).sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  const median =
+    sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
   const was = sum(previous, "engagement");
   const delta = was > 0 ? (engagement - was) / was : null;
   const up = delta !== null && delta >= 0;
@@ -437,6 +448,8 @@ function Summary({
       <Figure value={metric(posts.length)} label="posts" />
       <span aria-hidden>·</span>
       <Figure value={metric(reach)} label="reach" />
+      <span aria-hidden>·</span>
+      <Figure value={metric(Math.round(median))} label="median reach per post" />
       <span aria-hidden>·</span>
       <Figure value={metric(engagement)} label="engagement" />
 
