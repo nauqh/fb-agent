@@ -39,12 +39,19 @@ export default async function AppLayout({
     <PageScopeProvider defaultPageId={pageId}>
       <CartProvider>
         <Sidebar defaultCollapsed={collapsed} />
-        {/* `min-w-0`: without it this flex child takes its width from its
+        {/* On `lg`, with the rail docked, the screen is a card inset from the
+            shell, Linear-style. Collapsed it goes full-bleed: a card beside a
+            56px strip holding one button read as a stray margin.
+            The card always fills the row; only `<main>` inside it is capped,
+            so a wide monitor gets a centred screen, not a floating card.
+            `min-w-0`: without it this flex child takes its width from its
             content, and a wide table inside a screen pushes the rail off the
             left edge instead of scrolling in its own pane. */}
-        <main className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col px-6 py-6 lg:min-h-0 lg:min-w-0 lg:overflow-hidden">
-          {children}
-        </main>
+        <div className="flex flex-1 flex-col bg-background lg:my-2 lg:mr-2 lg:min-h-0 lg:min-w-0 lg:overflow-hidden lg:rounded-[16px] lg:border lg:transition-[margin,border-radius,border-color] lg:duration-200 lg:ease-panel motion-reduce:transition-none lg:peer-data-[collapsed=true]:m-0 lg:peer-data-[collapsed=true]:rounded-none lg:peer-data-[collapsed=true]:border-transparent">
+          <main className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col px-6 py-6 lg:min-h-0 lg:min-w-0 lg:overflow-hidden">
+            {children}
+          </main>
+        </div>
       </CartProvider>
     </PageScopeProvider>
   );

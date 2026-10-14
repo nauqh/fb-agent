@@ -48,7 +48,7 @@ export default function RootLayout({
         inverts, because two independent scroll areas side by side do not fit
         on a phone.
       */}
-      <body className="flex min-h-full flex-col lg:h-screen lg:flex-row lg:overflow-hidden">
+      <body className="flex min-h-full flex-col lg:h-screen lg:flex-row lg:overflow-hidden lg:bg-shell">
         {/*
           The Toaster reads the theme too (`ui/sonner.tsx` has called
           `useTheme` since it was generated, and until now got nothing back and

@@ -18,6 +18,7 @@
   --color-sidebar-primary: var(--sidebar-primary);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar: var(--sidebar);
+  --color-shell: var(--shell);
   --color-chart-5: var(--chart-5);
   --color-chart-4: var(--chart-4);
   --color-chart-3: var(--chart-3);
@@ -158,11 +159,14 @@
      lightness: too little to separate anything, enough to read as a smudge at
      the card's corners and along `border-r` when it is docked. Dark sits one step
      below the ground, as Linear's sidebar does. */
+  /* The ground the screen card sits on, and the docked rail with it. Its own
+     token because `--sidebar` stays white for the floating card. */
+  --shell: oklch(0.97 0 0);
   --sidebar: oklch(1 0 0);
   --sidebar-foreground: oklch(0 0 0);
   --sidebar-primary: oklch(0 0 0);
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.955 0 0);
+  --sidebar-accent: oklch(0.935 0 0);
   --sidebar-accent-foreground: oklch(0 0 0);
   --sidebar-border: oklch(0 0 0 / 12%);
   --sidebar-ring: oklch(0 0 0);
@@ -215,6 +219,7 @@
   --chart-3: oklch(0.65 0 0);
   --chart-4: oklch(0.5 0 0);
   --chart-5: oklch(0.35 0 0);
+  --shell: oklch(0.191 0.018 282);
   --sidebar: oklch(0.191 0.018 282);
   --sidebar-foreground: oklch(0.93 0.006 282);
   --sidebar-primary: oklch(0.9 0.006 282);

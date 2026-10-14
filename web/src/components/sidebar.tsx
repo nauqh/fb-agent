@@ -361,10 +361,15 @@ export function Sidebar({
      * driven by a click. The hover-peek moves `transform` alone.
      */
     <div
+      // `peer` + the attribute let the screen card beside it (`(app)/layout.tsx`)
+      // go full-bleed while collapsed, without lifting this state up.
+      data-collapsed={collapsed}
       className={cn(
-        "lg:relative lg:z-40 lg:h-screen lg:shrink-0",
+        "peer lg:relative lg:z-40 lg:h-screen lg:shrink-0",
         "lg:transition-[width] lg:duration-200 lg:ease-panel motion-reduce:lg:transition-none",
-        collapsed ? "lg:w-14" : "lg:w-64",
+        // The gutter takes the screen's ground, not the shell's, so the
+        // full-bleed screen runs to the left edge unbroken.
+        collapsed ? "lg:w-14 lg:bg-background" : "lg:w-64",
       )}
     >
       {/**
@@ -459,7 +464,9 @@ export function Sidebar({
               // lifted off the screen it is covering. Ink edge and a hard
               // shadow, the Gumroad treatment for anything opened over the page.
               "lg:inset-y-2 lg:left-2 lg:rounded-[16px] lg:border lg:border-ring lg:shadow-[6px_6px_0_0_var(--shadow-ink)]"
-            : "lg:inset-y-0 lg:left-0",
+            : // Docked: no edge and no fill of its own. It sits on the shell,
+              // and the screen card's border is the boundary.
+              "lg:inset-y-0 lg:left-0 lg:border-r-0 lg:bg-transparent",
           // Parked just past the left edge: its own width plus the 8px inset it
           // sits at, so not even the shadow's leading edge stays in view.
           collapsed &&
