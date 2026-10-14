@@ -109,7 +109,7 @@ export function ConfigShell({
     //   below owns the scroll, and the rail is `sticky` within it. The rail
     //   holds still, the pane scrolls under it, and a pane is as tall as it
     //   needs to be.
-    <div className="flex w-full flex-col pb-16 lg:min-h-0 lg:flex-1 lg:overflow-hidden lg:pb-0">
+    <div className="flex w-full flex-col pb-16 lift-room lg:min-h-0 lg:flex-1 lg:overflow-hidden lg:pb-0">
       {header}
 
       {/* Below `lg` the rail is a horizontal strip: a 200px column beside a form
