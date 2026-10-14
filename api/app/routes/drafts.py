@@ -26,7 +26,7 @@ from sqlmodel import Session, col, func, select
 
 from app import auto_draft, generate, media
 from app.db import get_session
-from app.image import inset
+from app.image import hero, inset
 from app.log import logger
 from app.models import (
     AutoDraftRun,
@@ -1414,7 +1414,7 @@ def _publish_article(session: Session, draft: Draft, page: Page, consequence: st
         draft.article_url = wordpress.publish(
             draft.article_title or "",
             draft.article_html or "",
-            _article_image(draft),
+            _article_image(session, draft),
             draft.article_category_id,
             draft.article_image_caption,
         )
@@ -1424,7 +1424,7 @@ def _publish_article(session: Session, draft: Draft, page: Page, consequence: st
         ) from error
     # Written into the row, so the drawer, a later edit and a repost all send
     # what went out.
-    draft.first_comment = article_cta(page, draft.article_url)
+    draft.first_comment = article_cta(page, draft.article_url, draft.first_comment)
     session.add(draft)
     session.commit()
     logger.bind(draft_id=draft.id, article_url=draft.article_url).info(
@@ -1453,19 +1453,33 @@ def schedule_draft(draft: Draft, blog_id: str, when: datetime | None) -> str:
 ARTICLE_CTA = "Read the full story: {link}"
 
 
-def article_cta(page: Page, url: str) -> str:
-    """The first comment of a post with an article: the Page's call to action.
+def article_cta(page: Page, url: str, edited: str | None = None) -> str:
+    """The first comment of a post with an article: the operator's edit of it
+    (client, 2026-10-14), else the Page's call to action.
 
-    A call to action without `{link}` gets the link after it, so the comment
-    always carries it.
+    An edit counts only with `{link}` in it: older drafts still hold a written
+    comment that was never meant to go out. A call to action without `{link}`
+    gets the link after it, so the comment always carries it.
     """
+    if edited and "{link}" in edited:
+        return edited.strip().replace("{link}", url)
     text = (page.article_cta or "").strip() or ARTICLE_CTA
     return text.replace("{link}", url) if "{link}" in text else f"{text} {url}"
 
 
-def _article_image(draft: Draft) -> bytes | None:
-    """The whole hero, without the overlay drawn on the card, for the top of the
-    article. None if there is none."""
+def _article_image(session: Session, draft: Draft) -> bytes | None:
+    """The article's featured image. The source's own photo first: news photos
+    are landscape, like the theme's banner (client, 2026-10-14). A competitor's
+    picture is never reused (`generate.build_image`), so then the hero, without
+    the overlay drawn on the card. None if there is neither."""
+    source = session.get(SourceItem, draft.source_item_id) if draft.source_item_id else None
+    if source and source.image_url and source.kind in (
+        SourceKind.RSS, SourceKind.TWEET, SourceKind.WEB
+    ):
+        try:
+            return media.jpeg(hero.from_url(source.image_url))
+        except hero.HeroError:
+            pass
     if not draft.hero_image_path:
         return None
     try:
@@ -1717,6 +1731,15 @@ def _set_status(session: Session, draft_id: int, status: DraftStatus) -> Draft:
 
 
 def _save(session: Session, draft: Draft) -> Draft:
+    # A failed run the operator finished by hand is a draft like any other
+    # (client, 2026-10-14: everything filled in, and no Publish).
+    if (
+        draft.status == DraftStatus.FAILED
+        and (draft.caption or "").strip()
+        and (draft.composed_image_path or draft.no_image)
+    ):
+        draft.status = DraftStatus.REVIEW
+        draft.error = None
     draft.updated_at = datetime.now(timezone.utc)
     session.add(draft)
     session.commit()

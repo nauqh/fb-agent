@@ -6,8 +6,6 @@ link this returns goes into the post's first comment, so it has to be the real
 one and live before Metricool has the post (website articles PRD).
 """
 
-from html import escape
-
 import httpx
 
 from app.http import shared as http_shared
@@ -58,24 +56,6 @@ def categories(client: httpx.Client | None = None) -> list[dict]:
     return [{"id": row["id"], "name": row["name"]} for row in rows if row["slug"] != "uncategorized"]
 
 
-def _figure(uploaded: dict, caption: str | None) -> str:
-    """The uploaded image as a full-size image block, captioned when there is one."""
-    details = uploaded.get("media_details") or {}
-    size = (
-        f' width="{details["width"]}" height="{details["height"]}"'
-        if details.get("width") and details.get("height")
-        else ""
-    )
-    text = escape(caption or "")
-    return (
-        '<figure class="wp-block-image size-full">'
-        f'<img src="{escape(uploaded["source_url"])}" alt="{text}"{size}'
-        f' class="wp-image-{uploaded["id"]}"/>'
-        + (f'<figcaption class="wp-element-caption">{text}</figcaption>' if text else "")
-        + "</figure>\n"
-    )
-
-
 def publish(
     title: str,
     html: str,
@@ -100,9 +80,8 @@ def publish(
             files={"file": ("article.jpg", image, "image/jpeg")},
             data={"caption": caption or "", "alt_text": caption or ""},
         )
-        # In the body only, never as the featured image: SmartMag crops that to
-        # a 788x438 banner, which cut the face off a tall hero (2026-10-13), and
-        # shows a picture in the body whole. The cost is no thumbnail in the
-        # site's listings, like the site's own posts (client, 2026-10-13).
-        post["content"] = _figure(uploaded, caption) + html
+        # The featured image, so the site's listings show it (client,
+        # 2026-10-14). SmartMag crops it to a 788x438 banner, which cut the
+        # face off a tall hero (2026-10-13); the source's landscape photo fits.
+        post["featured_media"] = uploaded["id"]
     return _call(client, "posts", json=post)["link"]

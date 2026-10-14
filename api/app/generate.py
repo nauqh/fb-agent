@@ -554,9 +554,13 @@ def read_full_text(source: SourceItem) -> str | None:
                 continue
         return "the post has no link to the story that could be read - paste the story's text"
     try:
-        source.body = web.fetch_article(source.url or "").text
+        article = web.fetch_article(source.url or "")
     except web.WebError as error:
         return f"the source could not be read - {error}"
+    source.body = article.text
+    # A feed's picture is often a thumbnail (BBC's is 240px wide); the page's
+    # og:image is the same photo full size, for the article's featured image.
+    source.image_url = article.image_url or source.image_url
     return None
 
 

@@ -78,7 +78,8 @@ it.
    If WordPress fails, nothing is scheduled and the error is shown.
 
 A post with an article has no written first comment: the comment is the call
-to action and the link only (client, 2026-10-12). The call to action is set in
+to action and the link only (client, 2026-10-12). It is editable in the drawer,
+`{link}` marking where the link goes (client, 2026-10-14). The call to action is set in
 Settings, Writing, Article link; `{link}` marks where the link goes, and the
 default is "Read the full story: {link}".
 
@@ -163,12 +164,13 @@ filed as Uncategorized; at launch, scheduling SHOULD require one.
 - **Writer**: the article is one extra Gemini call after the post, with its own
   prompt, `article.txt`, overridable per Page and per post style like the
   others.
-- **Images**: the post's whole hero image, without the overlay text, at the
-  top of the article body with its caption. Never the featured image: the
-  theme (SmartMag) crops that to a 788x438 banner, which cut the subject's face
-  off the first live article (2026-10-13), while a picture in the body is shown
-  whole. The site's own posts work the same way. The cost is no thumbnail on
-  the homepage, category pages and sidebar (client, 2026-10-13).
+- **Images**: the source's own photo, as the featured image, so the homepage,
+  category pages and sidebar show it (client, 2026-10-14). An RSS item's is
+  the article page's `og:image`, since a feed's is often a thumbnail (BBC's is
+  240x135). The theme (SmartMag) crops a featured image to a 788x438 banner,
+  which cut the face off a tall hero on 2026-10-13; news photos are landscape
+  and fit. A competitor post's picture is never reused, so there the hero is
+  used, without the overlay text.
 
 ## Success metrics
 

@@ -259,9 +259,10 @@ export function DraftDetail({
     insetChoice?.draftId === draftId ? insetChoice.source : (page?.inset_source ?? "google");
   // What the first comment will be once the article is live (`article_cta` in the API).
   const ctaText = page?.article_cta?.trim() || "Read the full story: {link}";
-  const cta = ctaText.includes("{link}")
-    ? ctaText.replace("{link}", "[article link]")
-    : `${ctaText} [article link]`;
+  const comment = form?.first_comment.trim() || ctaText;
+  const cta = comment.includes("{link}")
+    ? comment.replace("{link}", "[article link]")
+    : `${comment} [article link]`;
   const heroResults = heroSearch?.draftId === draftId ? heroSearch.results : [];
   const heroSource: InsetSource =
     (heroSearch?.draftId === draftId ? heroSearch.source : null) ?? page?.inset_source ?? "google";
@@ -540,7 +541,12 @@ export function DraftDetail({
     if (!form) return;
     setWritingArticle(true);
     try {
-      const row = await updateDraft(draftId, { ...form, article_title: null, article_html: null });
+      const row = await updateDraft(draftId, {
+        ...form,
+        article_title: null,
+        article_html: null,
+        first_comment: "",
+      });
       setForm(toForm(row));
       await refresh();
       setView("text");
@@ -1591,8 +1597,16 @@ export function DraftDetail({
                 </Field>
 
                 {draft.article_html !== null && !draft.article_url ? (
-                  <Field label="First comment" hint="added when scheduled">
-                    <p className="rounded-md border bg-muted/30 px-3 py-2 text-sm">{cta}</p>
+                  <Field
+                    label="First comment"
+                    hint="{link} becomes the article's address"
+                    flagged={!(form.first_comment || ctaText).includes("{link}")}
+                  >
+                    <Textarea
+                      value={form.first_comment || ctaText}
+                      rows={3}
+                      onChange={(event) => setForm({ ...form, first_comment: event.target.value })}
+                    />
                   </Field>
                 ) : draft.article_url ? (
                   <Field label="First comment">
@@ -2459,7 +2473,15 @@ function toForm(draft: Draft): Form {
   return {
     hook: draft.hook ?? "",
     caption: draft.caption ?? "",
-    first_comment: draft.first_comment ?? "",
+    // Before the article is live the comment is its call to action, and only an
+    // edit keeping `{link}` counts (`article_cta` in the API). Older drafts
+    // still hold a written comment there, which never goes out.
+    first_comment:
+      draft.article_html !== null &&
+      !draft.article_url &&
+      !draft.first_comment?.includes("{link}")
+        ? ""
+        : (draft.first_comment ?? ""),
     highlight_phrases: [...draft.highlight_phrases],
     article_title: draft.article_title,
     article_html: draft.article_html,

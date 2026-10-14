@@ -19,7 +19,7 @@ import httpx
 import pytest
 from PIL import Image
 
-from app.models import Draft, DraftStatus, Page
+from app.models import Draft, DraftStatus, Page, SourceItem, SourceKind
 from app.publish import metricool as publisher
 from app.routes.drafts import article_cta
 from app.settings import settings
@@ -339,6 +339,20 @@ def test_a_failed_draft_cannot_be_published(client, session, page, ready, publis
     session.commit()
 
     assert client.post(f"/drafts/{ready.id}/publish").status_code == 409
+
+
+def test_a_failed_draft_finished_by_hand_can_be_published(client, session, ready, published):
+    """The client, 2026-10-14: everything filled in by hand, and no Publish."""
+    ready.status = DraftStatus.FAILED
+    ready.error = "ModelHTTPError: 503"
+    session.add(ready)
+    session.commit()
+
+    saved = client.patch(f"/drafts/{ready.id}", json={"caption": "Written by hand."}).json()
+
+    assert saved["status"] == "review"
+    assert saved["error"] is None
+    assert client.post(f"/drafts/{ready.id}/publish").status_code == 200
 
 
 def test_an_upstream_failure_leaves_the_draft_publishable(client, ready, monkeypatch):
@@ -807,17 +821,11 @@ def test_an_article_goes_up_published_with_its_picture(site):
     # the first comment needs.
     assert json.loads(post_call.content) == {
         "title": "A story",
-        # The picture whole at the top of the body and never featured, since
-        # the theme crops a featured image to a banner.
-        "content": (
-            '<figure class="wp-block-image size-full">'
-            '<img src="https://site.example/uploads/article.jpg" alt="Sesko &amp; Co"'
-            ' width="720" height="981" class="wp-image-77"/>'
-            '<figcaption class="wp-element-caption">Sesko &amp; Co</figcaption></figure>\n'
-            "<p>Body.</p>"
-        ),
+        "content": "<p>Body.</p>",
         "status": "publish",
         "categories": [44],
+        # Featured, so the site's listings show it (client, 2026-10-14).
+        "featured_media": 77,
     }
 
 
@@ -894,6 +902,31 @@ def test_the_article_publishes_on_its_own_and_the_post_follows(
     assert len(calls) == 1
 
 
+def test_the_article_picture_is_the_sources_photo(
+    client, session, with_article, published, monkeypatch
+):
+    """News photos are landscape, like the theme's banner (client, 2026-10-14)."""
+    from app.image import hero
+
+    source = SourceItem(
+        kind=SourceKind.RSS, external_id="x", text="A story", image_url="https://news/a.jpg"
+    )
+    session.add(source)
+    session.commit()
+    with_article.source_item_id = source.id
+    session.add(with_article)
+    session.commit()
+    fetched, sent = [], []
+    monkeypatch.setattr(hero, "from_url", lambda url: fetched.append(url) or _jpeg())
+    monkeypatch.setattr(
+        wordpress, "publish", lambda title, html, image, *a: sent.append(image) or "https://s/a/"
+    )
+
+    assert client.post(f"/drafts/{with_article.id}/article/publish").status_code == 200
+    assert fetched == ["https://news/a.jpg"]
+    assert sent[0][:2] == b"\xff\xd8", "a JPEG"
+
+
 def test_the_call_to_action_is_the_pages_own():
     url = "https://site.example/a/"
     assert article_cta(Page(name="P", article_cta="Full story 👉 {link} 👈"), url) == (
@@ -901,6 +934,11 @@ def test_the_call_to_action_is_the_pages_own():
     )
     assert article_cta(Page(name="P", article_cta="Read on:"), url) == "Read on: " + url
     assert article_cta(Page(name="P", article_cta="  "), url) == "Read the full story: " + url
+    # Edited in the drawer before it went live (client, 2026-10-14).
+    page = Page(name="P", article_cta="Read on:")
+    assert article_cta(page, url, "More here {link}") == "More here " + url
+    assert article_cta(page, url, "") == "Read on: " + url
+    assert article_cta(page, url, "An older written comment.") == "Read on: " + url
 
 
 def test_an_article_without_a_category_still_schedules(
