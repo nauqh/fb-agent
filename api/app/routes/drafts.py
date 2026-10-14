@@ -90,7 +90,7 @@ class GenerateRequest(BaseModel):
     """Where that find searches, for this run. Null uses the Page's setting."""
 
     write_article: bool = False
-    """Also write a website article from each RSS item or web link. Only on the
+    """Also write a website article from each source. Only on the
     Page in `WORDPRESS_PAGE_ID`; ignored everywhere else."""
 
 
@@ -758,15 +758,10 @@ def write_article(
     source = (
         session.get(SourceItem, draft.source_item_id) if draft.source_item_id else None
     )
-    if (
-        page is None
-        or page.id != settings.wordpress_page_id
-        or source is None
-        or source.kind not in (SourceKind.RSS, SourceKind.WEB)
-    ):
+    if page is None or page.id != settings.wordpress_page_id or source is None:
         raise HTTPException(
             status_code=422,
-            detail="Only a draft from a news item or web link on the website's Page can have an article.",
+            detail="Only a draft from a source on the website's Page can have an article.",
         )
     if draft.article_html is not None:
         raise HTTPException(status_code=409, detail="This draft already has an article.")

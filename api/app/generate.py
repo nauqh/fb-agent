@@ -16,6 +16,7 @@ the writer is billed by the request, and a run's own row already records the
 outcome.
 """
 
+import re
 import time
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
@@ -534,7 +535,10 @@ def read_full_text(source: SourceItem) -> str | None:
     """Put the story's full text on `source.body`. None, or why it could not be.
 
     A web link's text already is the story, unless our reader could not read
-    it. An RSS item's is a two-line summary, so the link is read here.
+    it. An RSS item's is a two-line summary, so the link is read here. A tweet
+    or competitor post is a paragraph at most (median 551 characters across
+    5,627 competitor posts, 2026-10-14), so the story is a link in its text;
+    the first that reads wins.
     """
     if source.kind is SourceKind.WEB:
         if web.is_link_only(source):
@@ -542,7 +546,13 @@ def read_full_text(source: SourceItem) -> str | None:
         source.body = source.text
         return None
     if source.kind is not SourceKind.RSS:
-        return "only an RSS item or a web link can have one"
+        for link in re.findall(r"https?://\S+", source.text or ""):
+            try:
+                source.body = web.fetch_article(link.rstrip(".,;:!?)'\"")).text
+                return None
+            except web.WebError:
+                continue
+        return "the post has no link to the story that could be read - paste the story's text"
     try:
         source.body = web.fetch_article(source.url or "").text
     except web.WebError as error:

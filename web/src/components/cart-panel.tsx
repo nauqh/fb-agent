@@ -113,15 +113,13 @@ export function CartPanel() {
   const offerSourceHero = withPictures > 0;
 
   /**
-   * Also write the website article. Only on the Page that has the site, and
-   * only for items with a full story to write it from: RSS and web links.
+   * Also write the website article. Only on the Page that has the site; a
+   * tweet or competitor post needs a readable link to the story in its text.
    * On by default there, because that Page exists to feed the site.
    */
   const { data: mode } = useQuery(() => publishMode(), []);
   const [writeArticle, setWriteArticle] = useState(true);
-  const offerArticle =
-    page?.id === mode?.article_page_id &&
-    cart.items.some((item) => item.kind === "rss" || item.kind === "web");
+  const offerArticle = page?.id === mode?.article_page_id && cart.items.length > 0;
 
   async function run() {
     if (!page || draftCount === 0) return;
@@ -240,7 +238,7 @@ export function CartPanel() {
           {offerArticle ? (
             <label
               className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs text-muted-foreground"
-              title="Also write the website article from each RSS item or web link."
+              title="Also write the website article from each source."
             >
               <input
                 type="checkbox"

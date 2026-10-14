@@ -2436,6 +2436,48 @@ def test_a_web_link_is_its_own_full_text(client, written, monkeypatch):
     assert client.get("/drafts/1").json()["article_html"] == f"<p>{page.text}</p>"
 
 
+def test_a_competitor_post_is_written_from_the_first_link_that_reads(
+    client, session, written, monkeypatch
+):
+    from app.sources import web
+
+    def read(url):
+        if "dead" in url:
+            raise web.WebError("The site refused the request (403)")
+        return f"The story at {url}."
+
+    _article_run(monkeypatch, read=read)
+    text = "Shocking. https://dead.example/a then https://news.example/b."
+    session.add(SourceItem(kind=SourceKind.COMPETITOR_POST, external_id="1_2", text=text))
+    session.commit()
+    post = SourceItemBase(kind=SourceKind.COMPETITOR_POST, external_id="1_2", text=text)
+
+    client.post("/generate", json=_ticked(post))
+
+    assert client.get("/drafts/1").json()["article_html"] == (
+        "<p>The story at https://news.example/b.</p>"
+    )
+
+
+def test_a_tweet_with_no_link_makes_the_post_and_asks_for_the_story(
+    client, written, monkeypatch
+):
+    _article_run(monkeypatch, read=lambda url: pytest.fail("nothing to read"))
+    tweet = SourceItemBase(kind=SourceKind.TWEET, external_id="1", text="Breaking: no link.")
+
+    client.post("/generate", json=_ticked(tweet))
+    draft = client.get("/drafts/1").json()
+
+    assert draft["status"] == "review"
+    assert draft["article_html"] is None
+    assert any("paste" in w for w in draft["warnings"] if w.startswith("Article: "))
+
+    response = client.post("/drafts/1/article", json={"source_text": "The pasted story."})
+
+    assert response.status_code == 200
+    assert response.json()["article_html"] == "<p>The pasted story.</p>"
+
+
 def test_unticked_writes_no_article(client, written, monkeypatch):
     _article_run(monkeypatch, read=lambda url: pytest.fail("read without being asked"))
 

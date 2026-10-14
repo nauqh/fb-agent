@@ -2,7 +2,7 @@
 
 - **Product**: fb-agent, website articles feature
 - **Status**: Version 1 in build
-- **Last updated**: 2026-10-13
+- **Last updated**: 2026-10-14
 
 ## Summary
 
@@ -82,10 +82,12 @@ to action and the link only (client, 2026-10-12). The call to action is set in
 Settings, Writing, Article link; `{link}` marks where the link goes, and the
 default is "Read the full story: {link}".
 
-On Sources, the cart bar offers **Write article** for RSS items and web links on
-the politics Page, ticked by default. A story the app cannot read still makes the
-post, with a warning. Topic drafts, competitor posts, tweets and other Pages work
-exactly as today.
+On Sources, the cart bar offers **Write article** for every source on the
+politics Page, ticked by default (client, 2026-10-14: competitor posts and tweets
+too). A competitor post or tweet is a paragraph at most, so the story is the
+first link in its text that the app can read; without one, the operator pastes
+the story in the drawer. A story the app cannot read still makes the post, with
+a warning. Topic drafts and other Pages work exactly as today.
 
 On the politics Page the Article tab is always there (client, 2026-10-13). A
 draft made without an article has a **Write article** button in it (client,
@@ -123,13 +125,13 @@ filed as Uncategorized; at launch, scheduling SHOULD require one.
 | Publish and schedule | Scheduling a draft with an article publishes it to WordPress with its title, body, category and picture, then schedules the post with the Page's call to action and the article's link as the whole first comment. |
 | Call to action | Settings has an Article link field on the politics Page. `{link}` is replaced by the article's address; without it the link goes last. Blank is the default. |
 | Article prompt | The article prompt is editable per Page, like the other prompts, and a post style may carry its own. A blank style field uses the Page's. |
-| Write article on a draft | The drawer offers Write article on a draft from an RSS item or web link that has no article and is not scheduled. |
+| Write article on a draft | The drawer offers Write article on a draft from a source that has no article and is not scheduled. |
 | Link works at publish time | The article is live before the post is handed to Metricool. A post MUST NOT go out linking to a missing page. |
 | Failure is visible | If the article cannot be written, the post is still made and the draft says so. If WordPress refuses, the post is not scheduled and the error is shown. |
 
 ### Out of scope for version 1
 
-- Articles from topic drafts, competitor posts or tweets.
+- Articles from topic drafts.
 - Pages other than politics.
 - Per-feed full-text checks and marks on sources.
 - A Rewrite button for the article.

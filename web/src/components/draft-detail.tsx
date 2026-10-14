@@ -1371,11 +1371,9 @@ export function DraftDetail({
             ) : view === "article" ? (
             <div className="space-y-6">
               {form && form.article_html === null ? (
-                // The API says which sources cannot have one; a competitor post
-                // on this Page is rare enough to be refused there.
                 draft.metricool_post_id || draft.source_item_id === null ? (
                   <p className="text-sm text-muted-foreground">
-                    Only an unscheduled draft from a news item or web link can have an article.
+                    Only an unscheduled draft from a source can have an article.
                   </p>
                 ) : (
                   <>
