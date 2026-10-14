@@ -796,7 +796,7 @@ export function DraftDetail({
             <TriangleAlert className="size-4" />
             Generation stopped
           </p>
-          <p className="text-xs leading-relaxed text-muted-foreground">{draft.error}</p>
+          <p className="text-xs leading-relaxed wrap-anywhere text-muted-foreground">{draft.error}</p>
         </div>
       ) : null}
 
@@ -813,7 +813,9 @@ export function DraftDetail({
               ? "About this repost"
               : `${draft.warnings.length} rules still failing`}
           </p>
-          <ul className="space-y-1 text-xs text-muted-foreground">
+          {/* `wrap-anywhere`: a warning can quote a feed URL with no spaces,
+              which otherwise widens the whole drawer. */}
+          <ul className="space-y-1 text-xs wrap-anywhere text-muted-foreground">
             {draft.warnings.map((warning) => (
               <li key={warning}>- {warning}</li>
             ))}
