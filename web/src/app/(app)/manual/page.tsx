@@ -39,7 +39,7 @@ export default function ManualScreen() {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <ScreenHeader
-        title="Manual"
+        title="No source"
         hint="Start a post with no source behind it - write it yourself, or from a topic."
       />
 

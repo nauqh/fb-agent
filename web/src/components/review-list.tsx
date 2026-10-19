@@ -173,7 +173,7 @@ export function ReviewList() {
             <div className="space-y-1">
               <p className="text-sm font-medium">Nothing to review</p>
               <p className="text-sm text-muted-foreground">
-                Drafts land here from Sources, Manual and the nightly auto-drafts.
+                Drafts land here from Sources, No source and the nightly auto-drafts.
               </p>
             </div>
             <div className="flex gap-2">

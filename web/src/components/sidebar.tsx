@@ -77,7 +77,7 @@ const LINKS: { href: string; label: string; icon: LucideIcon }[] = [
   // Beside Sources rather than after Review: both are ways of starting a run,
   // and the loop below them - Review, Schedule - is the same whichever one fed
   // it. The topic field used to live in the Sources dock and moved here.
-  { href: "/manual", label: "Manual", icon: PenLine },
+  { href: "/manual", label: "No source", icon: PenLine },
   { href: "/review", label: "Review", icon: Inbox },
   { href: "/schedule", label: "Schedule", icon: CalendarDays },
   { href: "/auto-drafts", label: "Auto-drafts", icon: Bot },

@@ -170,7 +170,7 @@ export function CartPanel() {
         <p className="min-w-0 flex-1 pl-1 text-xs text-muted-foreground">
           Tick a source to generate from it, or write from a topic on{" "}
           <Link href="/manual" className="underline underline-offset-2">
-            Manual
+            No source
           </Link>
           .
         </p>
