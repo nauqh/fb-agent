@@ -951,7 +951,9 @@ def test_the_call_to_action_is_the_pages_own():
     # Edited in the drawer before it went live (client, 2026-10-14).
     page = Page(name="P", article_cta="Read on:")
     assert article_cta(page, url, "More here {link}") == "More here " + url
-    assert article_cta(page, url, "") == "Read on: " + url
+    assert article_cta(page, url, None) == "Read on: " + url
+    # Emptied on purpose: the post goes out with no first comment.
+    assert article_cta(page, url, "") == ""
     assert article_cta(page, url, "An older written comment.") == "Read on: " + url
 
 

@@ -72,7 +72,8 @@ type View = "text" | "image" | "article" | "preview";
 interface Form {
   hook: string;
   caption: string;
-  first_comment: string;
+  /** Null before the article is live means the Page's call to action; "" means none. */
+  first_comment: string | null;
   highlight_phrases: string[];
   /** Null when the draft has no article, so saving never invents an empty one. */
   article_title: string | null;
@@ -259,8 +260,10 @@ export function DraftDetail({
     insetChoice?.draftId === draftId ? insetChoice.source : (page?.inset_source ?? "google");
   // What the first comment will be once the article is live (`article_cta` in the API).
   const ctaText = page?.article_cta?.trim() || "Read the full story: {link}";
-  const comment = form?.first_comment.trim() || ctaText;
-  const cta = comment.includes("{link}")
+  const comment = (form?.first_comment ?? ctaText).trim();
+  const cta = !comment
+    ? ""
+    : comment.includes("{link}")
     ? comment.replace("{link}", "[article link]")
     : `${comment} [article link]`;
   const heroResults = heroSearch?.draftId === draftId ? heroSearch.results : [];
@@ -1412,7 +1415,7 @@ export function DraftDetail({
                         size="sm"
                         disabled={writingArticle}
                         onClick={() => {
-                          setForm({ ...form, article_title: "", article_html: "", first_comment: "" });
+                          setForm({ ...form, article_title: "", article_html: "", first_comment: null });
                           setArticleSource(true);
                         }}
                       >
@@ -1619,10 +1622,12 @@ export function DraftDetail({
                   <Field
                     label="First comment"
                     hint="{link} becomes the article's address"
-                    flagged={!(form.first_comment || ctaText).includes("{link}")}
+                    flagged={
+                      !!form.first_comment?.trim() && !form.first_comment.includes("{link}")
+                    }
                   >
                     <Textarea
-                      value={form.first_comment || ctaText}
+                      value={form.first_comment ?? ctaText}
                       rows={3}
                       onChange={(event) => setForm({ ...form, first_comment: event.target.value })}
                     />
@@ -1630,7 +1635,7 @@ export function DraftDetail({
                 ) : draft.article_url ? (
                   <Field label="First comment">
                     <Textarea
-                      value={form.first_comment}
+                      value={form.first_comment ?? ""}
                       rows={3}
                       onChange={(event) => setForm({ ...form, first_comment: event.target.value })}
                     />
@@ -1647,11 +1652,11 @@ export function DraftDetail({
                       onProposal={applyProposal}
                     />
                   }
-                  hint={`${chars(form.first_comment)} · 1,500-2,100`}
-                  flagged={form.first_comment.length < 1500 || form.first_comment.length > 2100}
+                  hint={`${chars(form.first_comment ?? "")} · 1,500-2,100`}
+                  flagged={(form.first_comment ?? "").length < 1500 || (form.first_comment ?? "").length > 2100}
                 >
                   <Textarea
-                    value={form.first_comment}
+                    value={form.first_comment ?? ""}
                     rows={16}
                     className="leading-relaxed"
                     onChange={(event) => setForm({ ...form, first_comment: event.target.value })}
@@ -2207,7 +2212,7 @@ function Regenerate({
       // which is why the screen had to save first.
       const proposal = await regenerateField(draftId, field, {
         keeping: form
-          ? { hook: form.hook, caption: form.caption, first_comment: form.first_comment }
+          ? { hook: form.hook, caption: form.caption, first_comment: form.first_comment ?? "" }
           : undefined,
         instruction: instruction.trim() || undefined,
       });
@@ -2493,13 +2498,13 @@ function toForm(draft: Draft): Form {
     hook: draft.hook ?? "",
     caption: draft.caption ?? "",
     // Before the article is live the comment is its call to action, and only an
-    // edit keeping `{link}` counts (`article_cta` in the API). Older drafts
-    // still hold a written comment there, which never goes out.
+    // edit keeping `{link}`, or emptied, counts (`article_cta` in the API).
+    // Older drafts still hold a written comment there, which never goes out.
     first_comment:
-      draft.article_html !== null &&
-      !draft.article_url &&
-      !draft.first_comment?.includes("{link}")
-        ? ""
+      draft.article_html !== null && !draft.article_url
+        ? draft.first_comment === "" || draft.first_comment?.includes("{link}")
+          ? draft.first_comment
+          : null
         : (draft.first_comment ?? ""),
     highlight_phrases: [...draft.highlight_phrases],
     article_title: draft.article_title,

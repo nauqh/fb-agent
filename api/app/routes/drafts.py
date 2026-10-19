@@ -1457,11 +1457,11 @@ def article_cta(page: Page, url: str, edited: str | None = None) -> str:
     """The first comment of a post with an article: the operator's edit of it
     (client, 2026-10-14), else the Page's call to action.
 
-    An edit counts only with `{link}` in it: older drafts still hold a written
-    comment that was never meant to go out. A call to action without `{link}`
-    gets the link after it, so the comment always carries it.
+    An edit counts only with `{link}` in it, or when emptied on purpose: older
+    drafts still hold a written comment that was never meant to go out. A call
+    to action without `{link}` gets the link after it.
     """
-    if edited and "{link}" in edited:
+    if edited is not None and (not edited.strip() or "{link}" in edited):
         return edited.strip().replace("{link}", url)
     text = (page.article_cta or "").strip() or ARTICLE_CTA
     return text.replace("{link}", url) if "{link}" in text else f"{text} {url}"
