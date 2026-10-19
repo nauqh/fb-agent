@@ -2575,6 +2575,19 @@ def test_a_pasted_story_writes_the_article_when_the_link_cannot_be_read(
     assert response.json()["article_html"] == "<p>Pasted story.</p>"
 
 
+def test_a_hand_made_draft_writes_its_article_from_pasted_text(client, written, monkeypatch):
+    """The client, 2026-10-18: a draft with no source gets the paste box too."""
+    _article_run(monkeypatch, read=lambda url: pytest.fail("nothing to read"))
+    client.post("/drafts/manual", data={"page_id": "1", "hook": "Anything."})
+
+    assert client.post("/drafts/1/article").status_code == 422
+    response = client.post("/drafts/1/article", json={"source_text": "Pasted story."})
+
+    assert response.status_code == 200
+    assert response.json()["article_html"] == "<p>Pasted story.</p>"
+    assert response.json()["source_item_id"] is None
+
+
 def test_a_draft_with_an_article_is_not_given_a_second(client, written, monkeypatch):
     _without_article(client, monkeypatch)
     client.post("/drafts/1/article")

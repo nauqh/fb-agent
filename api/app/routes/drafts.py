@@ -755,21 +755,29 @@ def write_article(
     """
     draft = _editable(session, draft_id)
     page = session.get(Page, draft.page_id)
+    pasted = (body.source_text or "").strip() if body else ""
     source = (
         session.get(SourceItem, draft.source_item_id) if draft.source_item_id else None
     )
-    if page is None or page.id != settings.wordpress_page_id or source is None:
+    if source is None and pasted:
+        # A hand-made draft has no source (client, 2026-10-18): the pasted
+        # story stands in for one. Never saved - nothing else reads it.
+        source = SourceItem(kind=SourceKind.WEB, external_id="pasted", text=pasted)
+    if page is None or page.id != settings.wordpress_page_id:
         raise HTTPException(
-            status_code=422,
-            detail="Only a draft from a source on the website's Page can have an article.",
+            status_code=422, detail="Only a draft on the website's Page can have an article."
+        )
+    if source is None:
+        raise HTTPException(
+            status_code=422, detail="Paste the story the article is written from."
         )
     if draft.article_html is not None:
         raise HTTPException(status_code=409, detail="This draft already has an article.")
 
-    pasted = (body.source_text or "").strip() if body else ""
     if pasted:
         source.body = pasted
-        session.add(source)
+        if source.id is not None:
+            session.add(source)
     elif not source.body:
         problem = generate.read_full_text(source)
         if problem:

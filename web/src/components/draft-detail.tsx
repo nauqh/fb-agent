@@ -1386,30 +1386,33 @@ export function DraftDetail({
                   </p>
                 ) : (
                   <>
-                    {/* The writer needs a source; a hand-made draft has none
-                        (client, 2026-10-14), so it is written by hand. */}
-                    {draft.source_item_id !== null ? (
-                      <Field label="Source text" hint="optional, if the link cannot be read">
-                        <Textarea
-                          key={draftId}
-                          ref={pastedSource}
-                          rows={8}
-                          placeholder="Paste the source article here"
-                        />
-                      </Field>
-                    ) : null}
+                    {/* A hand-made draft has no source, so the pasted text is
+                        its source (client, 2026-10-18). */}
+                    <Field
+                      label="Source text"
+                      hint={
+                        draft.source_item_id !== null
+                          ? "optional, if the link cannot be read"
+                          : "the story the article is written from"
+                      }
+                    >
+                      <Textarea
+                        key={draftId}
+                        ref={pastedSource}
+                        rows={8}
+                        placeholder="Paste the source article here"
+                      />
+                    </Field>
                     <div className="flex flex-wrap gap-2">
-                      {draft.source_item_id !== null ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={writingArticle}
-                          onClick={() => void addArticle()}
-                        >
-                          {writingArticle ? <Loader2 className="size-3.5 animate-spin" /> : null}
-                          {writingArticle ? "Writing article..." : "Write article"}
-                        </Button>
-                      ) : null}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={writingArticle}
+                        onClick={() => void addArticle()}
+                      >
+                        {writingArticle ? <Loader2 className="size-3.5 animate-spin" /> : null}
+                        {writingArticle ? "Writing article..." : "Write article"}
+                      </Button>
                       <Button
                         variant="outline"
                         size="sm"
