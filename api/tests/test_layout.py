@@ -189,8 +189,8 @@ def test_a_full_overlay_puts_the_photograph_behind_the_panel():
     card = _drawn(_templated("card", panel_opacity=0.5))
     full = _drawn(_templated("full_overlay", panel_opacity=0.5))
 
-    # Well inside the panel, which starts at 80% of the height by default.
-    probe = (448, 1080)
+    # The panel's bottom-left corner: inside it however tall it is, clear of the text.
+    probe = (20, 1110)
     assert card.getpixel(probe) == (0, 0, 0), "a card's panel has only black under it"
     assert full.getpixel(probe)[0] > 40, "the hero is not showing through the panel"
 
@@ -417,7 +417,7 @@ def test_a_cards_panel_is_solid_whatever_the_opacity():
     values["panel"].update(opacity=0.0, color="#1e3a8a")
     card = _drawn(Layout.model_validate(values))
 
-    assert card.getpixel((448, 1080)) == pytest.approx((30, 58, 138), abs=6)
+    assert card.getpixel((20, 1110)) == pytest.approx((30, 58, 138), abs=6)
 
 
 def test_an_inset_without_a_panel_sits_in_the_bottom_right_corner():

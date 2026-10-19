@@ -26,6 +26,10 @@ import pytest
 from app.image import text as overlay
 from app.settings import layout
 
+# The old app's 20% panel floor, which the fixtures were recorded under.
+# `layout.yml` lowered it to 7%, one line of text (client, 2026-10-20).
+OLD_LAYOUT = layout.model_copy(update={"panel": layout.panel.model_copy(update={"ratio": 0.20})})
+
 FIXTURE = Path(__file__).parent / "fixtures" / "overlay_parity.json"
 CASES = json.loads(FIXTURE.read_text(encoding="utf-8"))
 IDS = [case["name"] for case in CASES]
@@ -42,7 +46,7 @@ def test_the_lines_break_where_the_old_renderer_broke_them(case):
 
 @pytest.mark.parametrize("case", CASES, ids=IDS)
 def test_the_panel_and_hero_match(case):
-    result = overlay.plan(case["text"])
+    result = overlay.plan(case["text"], OLD_LAYOUT)
 
     assert result.line_height_px == case["lineHeight"]
     assert result.panel_height_px == case["panelHeight"]

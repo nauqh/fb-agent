@@ -30,7 +30,7 @@ panel:
     # the panel grows to fit the text, up to `max_ratio`. The hero occupies
     # (1 - actual ratio). Also feeds the image-gen prompt hint, so changing it
     # changes how the hero is composed.
-    ratio: 0.20
+    ratio: 0.07
     max_ratio: 0.85
     color: "#000000"
     # Full overlay only; a card's panel is always solid. 0 is type straight on
