@@ -194,10 +194,10 @@ const PEEK_EDGE_X = 72;
  */
 const PEEK_EDGE_TOP = 72;
 
-/** The floating panel's right edge: 8px inset + 256px of panel (`lg:w-64`).
+/** The floating panel's right edge: 8px inset + 288px of panel (`lg:w-72`).
  *  Past this the pointer is over the screen again, which is the one gesture
  *  that closes the peek - so this has to move whenever the width does. */
-const PEEK_PANEL_RIGHT = 264;
+const PEEK_PANEL_RIGHT = 296;
 
 /** The old app's rail: a plain ghost square, tinted only on hover. */
 const GHOST_ICON =
@@ -428,7 +428,10 @@ export function Sidebar({
            * gutter slides the panel sideways instead of squeezing it. Every
            * row inside keeps its one width and never learns about collapsing.
            */
-          "lg:absolute lg:w-64 lg:overflow-hidden lg:border-r lg:border-b-0",
+          "lg:absolute lg:overflow-hidden lg:border-r lg:border-b-0",
+          // Wider floating than docked: it covers the screen rather than
+          // taking width from it.
+          collapsed ? "lg:w-72" : "lg:w-64",
           /**
            * The peek is a **slide**: the whole card travels in from off-screen
            * as one rigid object, so what arrives is a sidebar that moved rather
