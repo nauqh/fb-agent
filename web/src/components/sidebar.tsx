@@ -106,8 +106,8 @@ const CONFIG: { href: string; label: string; icon: LucideIcon }[] = [
  * not here yet, and adding a route to this list is how they arrive.
  */
 const SHORTS_LINKS: { href: string; label: string; icon: LucideIcon }[] = [
-  { href: "/shorts", label: "Produce", icon: Clapperboard },
   { href: "/shorts/overview", label: "Overview", icon: BarChart3 },
+  { href: "/shorts", label: "Produce", icon: Clapperboard },
   { href: "/shorts/history", label: "History", icon: History },
 ];
 
