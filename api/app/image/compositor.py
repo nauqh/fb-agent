@@ -125,6 +125,19 @@ def render_panel(plan: OverlayPlan, phrases: list[str], layout: Layout) -> Image
     return Image.open(io.BytesIO(png)).convert("RGBA")
 
 
+def _fade(width: int, height: int, layout: Layout) -> Image.Image:
+    """Clear at the top to the panel's colour and opacity at the bottom.
+
+    Ends exactly where the panel starts, at the panel's own strength, so the
+    two meet without a seam.
+    """
+    ramp = Image.linear_gradient("L").resize((width, max(1, height)))
+    alpha = ramp.point(lambda v: round(v * layout.panel.opacity))
+    layer = Image.new("RGBA", ramp.size, layout.panel.color)
+    layer.putalpha(alpha)
+    return layer
+
+
 def _cover(
     image: Image.Image,
     width: int,
@@ -463,6 +476,12 @@ def compose(
     # with what is under it, and `paste` would replace those pixels with a
     # semi-transparent black instead - which then flattens onto black at the
     # JPEG step and looks like an opaque panel that ignored the setting.
+    if full_overlay:
+        fade = _fade(width, round(height * layout.panel.fade_ratio), layout)
+        top = plan.hero_height_px - fade.height
+        if top < 0:
+            fade = fade.crop((0, -top, width, fade.height))
+        canvas.alpha_composite(fade, (0, max(0, top)))
     if plan is not None:
         canvas.alpha_composite(render_panel(plan, phrases, layout), (0, plan.hero_height_px))
 

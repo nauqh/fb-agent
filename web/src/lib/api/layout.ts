@@ -22,7 +22,7 @@ export interface ResolvedLayout {
    */
   template: "card" | "full_overlay" | "photo";
   image: { width: number; height: number; edge_margin_ratio: number };
-  panel: { ratio: number; max_ratio: number; color: string; opacity: number };
+  panel: { ratio: number; max_ratio: number; color: string; opacity: number; fade_ratio: number };
   text: {
     font_size_px: number;
     line_height_ratio: number;

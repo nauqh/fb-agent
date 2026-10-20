@@ -56,6 +56,8 @@ class PanelLayout(Frozen):
     max_ratio: float
     color: str
     opacity: float
+    fade_ratio: float = 0.2
+    """Full overlay only: × image height → the fade from clear to the panel above it."""
 
 
 class PaddingLayout(Frozen):

@@ -195,6 +195,21 @@ def test_a_full_overlay_puts_the_photograph_behind_the_panel():
     assert full.getpixel(probe)[0] > 40, "the hero is not showing through the panel"
 
 
+def test_a_full_overlay_fades_into_its_panel():
+    """Darkening toward the panel, not a hard edge at its top."""
+    from app.image import text as overlay
+
+    layout = _templated("full_overlay", panel_opacity=0.9)
+    full = _drawn(layout)
+    seam = overlay.plan(SAMPLE, layout).hero_height_px
+    fade = round(layout.image.height * layout.panel.fade_ratio)
+
+    reds = [full.getpixel((20, y))[0] for y in (seam - fade - 4, seam - fade // 2, seam - 4)]
+    assert reds[0] > 190, "the photograph above the fade is untouched"
+    assert reds[0] > reds[1] > reds[2], "the fade does not darken toward the panel"
+    assert reds[2] < 40, "the fade does not reach the panel's strength"
+
+
 def test_the_badge_is_a_full_overlay_thing_only():
     """On a card the panel begins exactly where the badge would sit."""
     layout = _templated("full_overlay", panel_opacity=0.5)

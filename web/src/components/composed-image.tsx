@@ -253,6 +253,8 @@ export function ComposedImage({
       >
         {full || noPanel ? null : heroImage}
 
+        {full && !noPanel ? <Fade layout={layout} /> : null}
+
         {/* The headline chip, bottom-left of the hero share - whose bottom edge
             *is* the top of the panel, on either template. `cqw` throughout
             because the container query resolves against the width and the
@@ -356,6 +358,23 @@ export function ComposedImage({
           disc can now be anywhere including entirely on the panel. */}
       {insetYRatio == null ? null : disc}
     </div>
+  );
+}
+
+/** The compositor's `_fade`: clear to the panel colour at its opacity, ending
+ * on the hero's bottom edge, which is the top of the panel. Hangs from the
+ * hero share, so `cqw` - the fade is a share of the card's height, and the
+ * container query resolves against its width. */
+export function Fade({ layout }: { layout: ResolvedLayout }) {
+  return (
+    <div
+      className="absolute inset-x-0 bottom-0"
+      style={{
+        height: `${(layout.panel.fade_ratio * layout.image.height * 100) / layout.image.width}cqw`,
+        backgroundImage: `linear-gradient(transparent, ${layout.panel.color})`,
+        opacity: layout.panel.opacity,
+      }}
+    />
   );
 }
 

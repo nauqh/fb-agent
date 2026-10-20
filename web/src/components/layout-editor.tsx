@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { ChevronRight, Loader2, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 
-import { clampInset, splitOnHighlights } from "@/components/composed-image";
+import { clampInset, Fade, splitOnHighlights } from "@/components/composed-image";
 import { HookField } from "@/components/hook-field";
 import { Loading } from "@/components/loading";
 import { Button } from "@/components/ui/button";
@@ -162,7 +162,7 @@ export function LayoutEditor() {
           {shown.template === "full_overlay" ? (
             <Range
               label="Panel opacity"
-              hint="At 100% the panel covers the picture it is meant to sit on."
+              hint="How dark the photo fades behind the text. 0% is type straight on the photo."
               value={shown.panel.opacity}
               min={0}
               max={1}
@@ -536,6 +536,7 @@ function Preview({ layout, page }: { layout: ResolvedLayout; page: Page }) {
               `top_ratio` is a fraction of the hero rather than of the card. */}
           <div className="relative min-h-0 flex-1">
             {photo || full ? null : hero}
+            {full ? <Fade layout={layout} /> : null}
             {/* The chip, bottom-left of the hero share - whose bottom edge *is*
                 the top of the panel, on either template. `cqw` throughout
                 because the container query resolves against the width, and the
