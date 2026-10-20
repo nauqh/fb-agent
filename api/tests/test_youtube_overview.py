@@ -74,6 +74,7 @@ def test_brands_keeps_only_youtube_profiles(client: TestClient, monkeypatch):
         "id": "5600366",
         "label": "Bible Focus",
         "channel_id": "UC-a",
+        "instagram": False,
     }
 
 

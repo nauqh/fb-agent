@@ -17,6 +17,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Loading } from "@/components/loading";
+import { ShortsSchedule } from "@/components/shorts-schedule";
 import { deleteJob, downloadHref, listJobs, type YoutubeJob } from "@/lib/api/youtube";
 import { emit } from "@/lib/store";
 import { fullDate, timeAgo } from "@/lib/format";
@@ -198,6 +199,7 @@ function JobRow({
               </a>
             </Button>
           ) : null}
+          {done ? <ShortsSchedule job={job} iconOnly /> : null}
           <Button variant="ghost" size="icon" aria-label="Remove" onClick={onRemove}>
             <Trash2 className="size-4" />
           </Button>
@@ -252,13 +254,14 @@ function VideoDialog({ job, onClose }: { job: YoutubeJob | null; onClose: () => 
               preload="metadata"
               src={downloadHref(job.id)}
             />
-            <div className="flex justify-center">
+            <div className="flex justify-center gap-2">
               <Button asChild variant="outline">
                 <a href={downloadHref(job.id)} download>
                   <Download className="size-4" />
                   Download mp4
                 </a>
               </Button>
+              <ShortsSchedule job={job} />
             </div>
           </div>
         ) : null}

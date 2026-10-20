@@ -11,10 +11,9 @@ The one request-facing shape worth calling out:
 - **`POST /youtube/jobs`** returns ids immediately and the worker fills the
   rows - the operator never waits on the download/trim/concat.
 
-Publishing used to live here too and was **cut** for v1 (the Q2 scope call):
-no Metricool scheduling, no brands, no Instagram, no `youtube_schedule` table,
-no reconcile. The schedule module, its routes and its table are gone; the
-produce loop is the whole product for now.
+- **`POST /youtube/jobs/{id}/schedule`** hands the mp4 to Metricool for
+  YouTube and/or Instagram. No `youtube_schedule` table and no reconcile: the
+  planner is the schedule (ADR-0001).
 """
 from __future__ import annotations
 
@@ -35,6 +34,7 @@ from app.models import (
     YoutubeJob,
 )
 from app.publish import metricool as publish_metricool
+from app.settings import settings as app_settings
 from app.youtube import (
     overview,
     sources,
@@ -253,6 +253,49 @@ def delete_job(job_id: int, session: Session = Depends(get_session)):
     return {"success": True}
 
 
+class ScheduleRequest(BaseModel):
+    """`when` is naive Page-local time, as `PublishAt` sends it; `None` is soon."""
+
+    brand_id: str
+    title: str = ""
+    caption: str = ""
+    youtube: bool = True
+    instagram: bool = False
+    when: datetime | None = None
+
+
+@router.post("/youtube/jobs/{job_id}/schedule")
+def schedule_job(job_id: int, body: ScheduleRequest, session: Session = Depends(get_session)):
+    """Hand the produced mp4 to Metricool's planner for YouTube and/or Instagram.
+
+    Nothing is stored here: the planner is the schedule (ADR-0001). Metricool
+    keeps a link, not a copy, so the bucket's public URL must still resolve at
+    publish time - deleting the job from History deletes the video under it.
+    """
+    job = session.get(YoutubeJob, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail=f"No job {job_id}")
+    if job.status is not JobStatus.COMPLETED or not job.processed_video_path:
+        raise HTTPException(status_code=409, detail="No processed video to schedule")
+    if not (body.youtube or body.instagram):
+        raise HTTPException(status_code=422, detail="Pick YouTube, Instagram or both")
+
+    title = body.title.strip() or job.raw_title or ""
+    try:
+        media = publish_metricool.normalize_image(
+            ytstore.store.public_url(job.processed_video_path), body.brand_id
+        )
+        post_id = publish_metricool.schedule_video(
+            body.brand_id,
+            publish_metricool.build_video_body(
+                media, title, body.caption.strip() or title, body.youtube, body.instagram, body.when
+            ),
+        )
+    except publish_metricool.PublishError as error:
+        raise HTTPException(status_code=502, detail=str(error)) from error
+    return {"post_id": post_id, "draft": app_settings.metricool_publish_as_draft}
+
+
 # --- overview ---------------------------------------------------------------
 
 
@@ -420,9 +463,6 @@ def youtube_config():
     still fresh. Those are runtime facts the operator learns from a failed
     download, not something a config screen can predict.
     """
-
-    from app.settings import settings as app_settings
-
     return {
         "youtube_api_key_configured": bool(app_settings.youtube_api_key.strip()),
         "cookies_configured": bool(app_settings.ytdlp_cookies_file.strip()),

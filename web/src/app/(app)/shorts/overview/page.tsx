@@ -49,7 +49,7 @@ import { cn } from "@/lib/utils";
  */
 export default function YoutubeOverviewScreen() {
   const { data: brands, error: brandsError, loading: brandsLoading, refresh: refreshBrands } =
-    useQuery(() => listYoutubeBrands(), []);
+    useQuery(async () => (await listYoutubeBrands()).filter((brand) => brand.channel_id), []);
 
   // The brand the overview is about. Defaults to the first youtube-connected
   // profile; the picker only appears once there is more than one, which is the

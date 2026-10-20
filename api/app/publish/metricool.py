@@ -318,13 +318,72 @@ def schedule(
     if not settings.metricool_api_token or not settings.metricool_user_id:
         raise PublishError("Metricool is not configured (token and user id)")
 
+    return _create(blog_id, build_body(text, first_comment, image_url, when), client)
+
+
+def build_video_body(
+    video_url: str,
+    title: str,
+    text: str,
+    youtube: bool,
+    instagram: bool,
+    when: datetime | None = None,
+) -> dict:
+    """A Short for YouTube and/or a Reel for Instagram, as one planner post.
+
+    Recovered from the old tool's `youtubeMetricoolScheduleService.ts`, which
+    ran in production: `ytTitle`/`youtubeData` sit at the **root**, not under
+    the provider - Metricool reads them there. 100 characters is YouTube's
+    title limit and what Metricool's own UI cuts to.
+    """
+    body = {
+        "text": text,
+        "firstCommentText": "",
+        "autoPublish": True,
+        "draft": settings.metricool_publish_as_draft,
+        "providers": [],
+        "publicationDate": {
+            "dateTime": publication_date(when),
+            "timezone": settings.timezone,
+        },
+        "media": [video_url],
+    }
+    if youtube:
+        data = {
+            "title": (title.strip() or "YouTube Short")[:100],
+            "type": "short",
+            "privacy": "public",
+            "madeForKids": False,
+        }
+        body["ytTitle"] = data["title"]
+        body["youtubeData"] = data
+        body["providers"].append({"network": "youtube"})
+    if instagram:
+        body["providers"].append({"network": "instagram", "instagramData": {"type": "REEL"}})
+    if not body["providers"]:
+        raise PublishError("Pick YouTube, Instagram or both")
+    return body
+
+
+def schedule_video(
+    blog_id: str,
+    body: dict,
+    client: httpx.Client | None = None,
+) -> str | None:
+    """Queue a `build_video_body` post. Same contract as `schedule`."""
+    if not settings.metricool_api_token or not settings.metricool_user_id:
+        raise PublishError("Metricool is not configured (token and user id)")
+    return _create(blog_id, body, client)
+
+
+def _create(blog_id: str, body: dict, client: httpx.Client | None) -> str | None:
     client = client or http_shared(TIMEOUT)
     try:
         response = client.post(
             f"{BASE}/v2/scheduler/posts",
             params=_params(blog_id),
             headers=_headers(json_body=True),
-            json=build_body(text, first_comment, image_url, when),
+            json=body,
         )
     except httpx.HTTPError as error:
         raise PublishError(

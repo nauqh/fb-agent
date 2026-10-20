@@ -73,6 +73,24 @@ export async function getJob(jobId: number): Promise<YoutubeJob> {
   return get<YoutubeJob>(`/youtube/jobs/${jobId}`);
 }
 
+export interface ScheduleRequest {
+  brand_id: string;
+  title: string;
+  caption: string;
+  youtube: boolean;
+  instagram: boolean;
+  /** Naive Page-local time, as `PublishAt` gives it. */
+  when: string;
+}
+
+/** Hand the produced mp4 to Metricool. Nothing is kept here (ADR-0001). */
+export async function scheduleJob(
+  jobId: number,
+  body: ScheduleRequest,
+): Promise<{ post_id: string | null; draft: boolean }> {
+  return post(`/youtube/jobs/${jobId}/schedule`, body);
+}
+
 export async function deleteJob(jobId: number): Promise<void> {
   await del(`/youtube/jobs/${jobId}`);
 }
@@ -140,7 +158,9 @@ export async function getYoutubeConfig(): Promise<YoutubeConfig> {
 export interface YoutubeBrand {
   id: string;
   label: string;
+  /** Empty for an Instagram-only brand. */
   channel_id: string;
+  instagram: boolean;
 }
 
 export interface YoutubeVideo {

@@ -82,3 +82,65 @@ def test_delete_live_job_is_409(client: TestClient, session: Session):
 
     response = client.delete(f"/youtube/jobs/{row.id}")
     assert response.status_code == 409
+
+def test_video_body_puts_youtube_fields_at_the_root():
+    from app.publish import metricool
+
+    body = metricool.build_video_body("https://b/v.mp4", "x" * 150, "cap", True, True)
+    assert body["media"] == ["https://b/v.mp4"]
+    assert body["ytTitle"] == "x" * 100
+    assert body["youtubeData"]["type"] == "short"
+    assert body["providers"] == [
+        {"network": "youtube"},
+        {"network": "instagram", "instagramData": {"type": "REEL"}},
+    ]
+
+    reel = metricool.build_video_body("https://b/v.mp4", "t", "cap", False, True)
+    assert "youtubeData" not in reel
+
+
+def test_schedule_sends_the_public_video_url(client: TestClient, session: Session, monkeypatch):
+    from app.publish import metricool
+
+    cta = _cta(session)
+    job = YoutubeJob(
+        cta_template_id=cta.id,
+        status=JobStatus.COMPLETED,
+        processed_video_path="2026-10/short-1.mp4",
+        raw_title="A title",
+    )
+    session.add(job)
+    session.commit()
+
+    sent: dict = {}
+    monkeypatch.setattr(metricool, "normalize_image", lambda url, blog_id: url)
+    monkeypatch.setattr(
+        metricool, "schedule_video", lambda blog_id, body: sent.update(body=body) or "42"
+    )
+
+    response = client.post(
+        f"/youtube/jobs/{job.id}/schedule", json={"brand_id": "5600366", "instagram": True}
+    )
+    assert response.status_code == 200
+    assert response.json()["post_id"] == "42"
+    assert sent["body"]["media"][0].endswith("2026-10/short-1.mp4")
+    assert sent["body"]["ytTitle"] == "A title"
+    assert sent["body"]["text"] == "A title"
+
+
+def test_schedule_needs_a_network(client: TestClient, session: Session, monkeypatch):
+    from app.publish import metricool
+
+    cta = _cta(session)
+    job = YoutubeJob(
+        cta_template_id=cta.id, status=JobStatus.COMPLETED, processed_video_path="p.mp4"
+    )
+    session.add(job)
+    session.commit()
+    monkeypatch.setattr(metricool, "normalize_image", lambda url, blog_id: url)
+
+    response = client.post(
+        f"/youtube/jobs/{job.id}/schedule",
+        json={"brand_id": "1", "youtube": False, "instagram": False},
+    )
+    assert response.status_code == 422

@@ -26,14 +26,14 @@ import { emit } from "@/lib/store";
 import { useQuery } from "@/lib/use-query";
 import { QueryError } from "@/components/query-error";
 import { Loading } from "@/components/loading";
+import { ShortsSchedule } from "@/components/shorts-schedule";
 
 /**
  * Produce - the Shorts tool's one screen.
  *
  * Paste a link, pick the CTA, make a video. The row *is* the job: enqueue
  * returns an id immediately, the worker fills it, and this screen polls until
- * the produced mp4 is ready to play and download. No publishing, no brands,
- * no scheduling - that is deliberately not here yet (see the Shorts nav).
+ * the produced mp4 is ready to play, download, or schedule through Metricool.
  */
 export default function ProduceScreen() {
   const [url, setUrl] = useState("");
@@ -217,7 +217,7 @@ function CtaEmptyState({ onOpen }: { onOpen: () => void }) {
 
 /**
  * The produced artifact. Polls while the row is in flight, then the mp4 is
- * the star: a real `<video>` plus the download link.
+ * the star: a real `<video>` plus download and schedule.
  */
 function JobCard({ jobId }: { jobId: number }) {
   const { data: job, error, loading } = useQuery(
@@ -272,13 +272,14 @@ function JobCard({ jobId }: { jobId: number }) {
             preload="metadata"
             src={downloadHref(job.id)}
           />
-          <div className="flex justify-center">
+          <div className="flex justify-center gap-2">
             <Button asChild variant="outline">
               <a href={downloadHref(job.id)} download>
                 <Download className="size-4" />
                 Download mp4
               </a>
             </Button>
+            <ShortsSchedule job={job} />
           </div>
         </div>
       ) : null}

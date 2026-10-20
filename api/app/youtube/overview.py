@@ -39,16 +39,18 @@ def _headers() -> dict[str, str]:
 
 @dataclass
 class Brand:
-    """A Metricool profile with a YouTube channel connected - the overview's
-    unit of "brand", the way a Page row is the facebook tool's."""
+    """A Metricool profile with YouTube or Instagram connected - the Shorts
+    tool's unit of "brand", the way a Page row is the facebook tool's. An empty
+    `channel_id` is an Instagram-only brand, which Overview skips."""
 
     id: str
     label: str
     channel_id: str
+    instagram: bool = False
 
 
 def youtube_brands(client: httpx.Client | None = None) -> list[Brand]:
-    """Every profile whose `youtube` field holds a channel id.
+    """Every profile with a YouTube channel or an Instagram account.
 
     The profile read comes from `app.sources.metricool.fetch_profiles`'s data;
     it is re-fetched here so the overview is self-contained and offline-testable,
@@ -85,14 +87,16 @@ def youtube_brands(client: httpx.Client | None = None) -> list[Brand]:
 
     out: list[Brand] = []
     for profile in response.json() or []:
-        channel_id = profile.get("youtube")
-        if not channel_id:
+        channel_id = profile.get("youtube") or ""
+        instagram = bool(profile.get("instagram"))
+        if not channel_id and not instagram:
             continue
         out.append(
             Brand(
                 id=str(profile.get("id") or ""),
                 label=profile.get("label") or profile.get("id") or "?",
                 channel_id=channel_id,
+                instagram=instagram,
             )
         )
     return out
