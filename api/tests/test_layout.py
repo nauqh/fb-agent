@@ -17,6 +17,7 @@ from sqlmodel import select
 
 from app import media
 from app.models import Draft, DraftStatus, PageLayout
+from app.settings import API_DIR, FONTS
 
 SAMPLE = "In 1925, a deadly outbreak threatened to wipe out isolated Nome, Alaska."
 
@@ -448,3 +449,43 @@ def test_an_inset_without_a_panel_sits_in_the_bottom_right_corner():
 
     assert card.getpixel((448, 560))[1] < 100, "the disc is still centred"
     assert card.getpixel((896 - 18 - 115, 1120 - 18 - 115))[1] > 150, "not in the corner"
+
+
+@pytest.mark.parametrize("family", list(FONTS))
+def test_every_font_renders_in_its_own_face_at_its_measured_width(family):
+    """resvg falls back silently on a family the TTF does not name, so each
+    pick is rendered twice - by its family and by a name nothing has - and the
+    two must differ. The ink must also fit the width `text.py` measured, or
+    lines wrapped to fit would overrun the panel."""
+    import resvg_py
+
+    from app.image.text import get_measurer
+
+    font = FONTS[family]
+    path = str(API_DIR / font.path)
+    words = "Wave AV To, the 1925 serum run: -50F in Nome."
+
+    def ink(name: str) -> Image.Image:
+        svg = (
+            '<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="80">'
+            f'<text x="0" y="60" font-family="{name}" font-weight="{font.weight}" '
+            f'font-size="40" fill="#000">{words}</text></svg>'
+        )
+        png = resvg_py.svg_to_bytes(svg_string=svg, font_files=[path])
+        return Image.open(io.BytesIO(bytes(png))).convert("RGBA")
+
+    drawn = ink(font.family)
+    assert drawn.tobytes() != ink("No Such Face").tobytes(), "resvg fell back"
+    left, _, right, _ = drawn.getbbox()
+    measured = get_measurer(path).width(words, 40)
+    assert right - left <= measured * 1.01, f"{right - left}px drawn, {measured:.0f}px measured"
+
+
+def test_a_page_picks_a_font_from_the_list(client, page):
+    patch = lambda font: client.patch("/layout", params={"page_id": page.id}, json={"font": font})
+
+    assert patch("Comic Sans").status_code == 422
+    chosen = patch("Montserrat").json()
+    assert chosen["layout"]["font"]["path"] == "assets/fonts/Montserrat-ExtraBold.ttf"
+    assert "font" in chosen["overridden"]
+    assert patch(None).json()["layout"]["font"]["family"] == "Arial", "null tracks the file"

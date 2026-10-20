@@ -15,7 +15,7 @@ claims to be.
 from sqlmodel import Session, select
 
 from app.models import PageLayout
-from app.settings import Layout
+from app.settings import FONTS, Layout
 from app.settings import layout as defaults
 
 __all__ = ["as_overrides", "defaults", "resolve", "resolve_draft"]
@@ -83,7 +83,14 @@ def as_overrides(row: PageLayout | None) -> dict:
             "border_width_px": row.portrait_border_width_px,
             "border_color": row.portrait_border_color,
         },
+        "font": None if row.font is None else _font(row.font),
     }
+
+
+def _font(family: str) -> dict:
+    if family not in FONTS:
+        raise ValueError(f"no font {family!r}; one of {', '.join(FONTS)}")
+    return FONTS[family].model_dump()
 
 
 def resolve_draft(session: Session, page_id: int | None, template: str | None) -> Layout:

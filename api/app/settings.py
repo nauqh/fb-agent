@@ -204,6 +204,26 @@ class FontLayout(Frozen):
     path: str
 
 
+FONTS: dict[str, FontLayout] = {
+    font.family: font
+    for font in (
+        FontLayout(family="Arial", weight="bold", path="assets/fonts/Arial-Bold.ttf"),
+        FontLayout(family="Montserrat", weight="800", path="assets/fonts/Montserrat-ExtraBold.ttf"),
+        FontLayout(family="Poppins", weight="bold", path="assets/fonts/Poppins-Bold.ttf"),
+        FontLayout(family="Oswald", weight="bold", path="assets/fonts/Oswald-Bold.ttf"),
+        FontLayout(family="Anton", weight="normal", path="assets/fonts/Anton-Regular.ttf"),
+        FontLayout(
+            family="Playfair Display", weight="bold", path="assets/fonts/PlayfairDisplay-Bold.ttf"
+        ),
+    )
+}
+"""The faces a Page may pick, keyed by family - the value `page_layout.font` holds.
+
+Static TTFs only. An instance cut from a variable font keeps the variable
+font's name ("Montserrat Thin" for the ExtraBold), and resvg matches on it.
+"""
+
+
 class Layout(Frozen):
     template: Template
     image: ImageLayout

@@ -60,12 +60,22 @@ export interface ResolvedLayout {
     border_width_px: number;
     border_color: string;
   };
+  font: CardFontFace;
+}
+
+/** A TTF the compositor draws with. `path` is under the API's `/assets`. */
+export interface CardFontFace {
+  family: string;
+  weight: string;
+  path: string;
 }
 
 export interface LayoutResult {
   layout: ResolvedLayout;
   /** Column names this Page overrides. Empty means it is on the defaults. */
   overridden: string[];
+  /** The faces a Page may pick. */
+  fonts: CardFontFace[];
 }
 
 /** The flat column names `PATCH` takes. Null clears one back to the default. */
@@ -98,6 +108,7 @@ export interface LayoutPatch {
   portrait_size_px?: number | null;
   portrait_border_width_px?: number | null;
   portrait_border_color?: string | null;
+  font?: string | null;
 }
 
 export async function getPageLayout(pageId?: number): Promise<LayoutResult> {

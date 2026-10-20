@@ -4,7 +4,13 @@ import { useMemo, useState } from "react";
 import { ChevronRight, Loader2, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 
-import { clampInset, Fade, splitOnHighlights } from "@/components/composed-image";
+import {
+  CardFont,
+  cardFont,
+  clampInset,
+  Fade,
+  splitOnHighlights,
+} from "@/components/composed-image";
 import { HookField } from "@/components/hook-field";
 import { Loading } from "@/components/loading";
 import { Button } from "@/components/ui/button";
@@ -13,6 +19,7 @@ import {
   getPageLayout,
   resetPageLayout,
   savePageLayout,
+  type CardFontFace,
   type LayoutPatch,
   type ResolvedLayout,
 } from "@/lib/api/layout";
@@ -63,10 +70,9 @@ const MAX_RING_PX = 48;
  * approximation of resvg, not resvg - good enough to choose a colour or a size,
  * not proof of the pixels. The published image is still the compositor's.
  *
- * Image dimensions and the font are absent on purpose. 4:5 is the tallest ratio
- * Facebook renders in feed, and a font family that does not match the TTF's
- * name table makes resvg substitute a serif *silently* and still return a valid
- * PNG - neither is a thing to offer in a form.
+ * Image dimensions are absent on purpose: 4:5 is the tallest ratio Facebook
+ * renders in feed. The font is a pick from the API's list, never a typed
+ * family - one the TTF does not name makes resvg substitute a serif *silently*.
  */
 export function LayoutEditor() {
   const { page, pageId } = usePageScope();
@@ -82,7 +88,7 @@ export function LayoutEditor() {
 
   if (!data || !page) return <Loading label="Loading layout" className="h-96" />;
 
-  const shown = preview(data.layout, draft);
+  const shown = preview(data.layout, draft, data.fonts);
   const dirty = Object.keys(draft).length > 0;
   const padding = [
     ["Pad left", "text_padding_left_px", shown.text.padding.left_px],
@@ -268,6 +274,27 @@ export function LayoutEditor() {
         </Group>
 
         <Group title="Text overlay">
+          <Field label="Font" changed={data.overridden.includes("font")} value={shown.font.family}>
+            <div className="grid grid-cols-3 gap-1">
+              {data.fonts.map((font) => (
+                <button
+                  key={font.family}
+                  type="button"
+                  onClick={() => set("font", font.family)}
+                  style={cardFont(font)}
+                  className={cn(
+                    "truncate rounded-md border px-2 py-1.5 text-sm transition-colors",
+                    font.family === shown.font.family
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "text-muted-foreground hover:bg-muted",
+                  )}
+                >
+                  <CardFont font={font} />
+                  {font.family}
+                </button>
+              ))}
+            </div>
+          </Field>
           <Range
             label="Size"
             hint="Fixed - there is no autofit. The panel grows, the type does not shrink."
@@ -377,13 +404,18 @@ export function LayoutEditor() {
 }
 
 /** The resolved layout with the unsaved edits laid over it, for the preview. */
-function preview(base: ResolvedLayout, draft: LayoutPatch): ResolvedLayout {
+function preview(
+  base: ResolvedLayout,
+  draft: LayoutPatch,
+  fonts: CardFontFace[],
+): ResolvedLayout {
   const at = <T,>(value: T | null | undefined, fallback: T): T =>
     value === undefined || value === null ? fallback : value;
 
   return {
     ...base,
     template: at(draft.template, base.template),
+    font: fonts.find((font) => font.family === draft.font) ?? base.font,
     badge: {
       ...base.badge,
       color: at(draft.badge_color, base.badge.color),
@@ -449,8 +481,9 @@ const SAMPLE_HIGHLIGHTS = [
  * - **The mark was the page name in 8px text.** It is an image, at
  *   `watermark.max_px` capped at 22% of width, inset by `edge_margin_ratio`,
  *   `top_ratio` down the *hero* rather than the card.
- * - **The font was the app's sans.** The card is drawn in Arial Bold, which is
- *   wider - a hook that fit here could wrap to another line there.
+ * - **The font was the app's sans.** The card is drawn in the Page's TTF, so
+ *   the preview loads that same file (`CardFont`) - a hook that fit in another
+ *   face could wrap to another line on the card.
  */
 function Preview({ layout, page }: { layout: ResolvedLayout; page: Page }) {
   const [sample, setSample] = useState(SAMPLE);
@@ -551,7 +584,7 @@ function Preview({ layout, page }: { layout: ResolvedLayout; page: Page }) {
                   backgroundColor: layout.badge.color,
                   color: layout.badge.text_color,
                   fontSize: `${(layout.badge.font_size_px / layout.image.width) * 100}cqw`,
-                  fontFamily: "Arial, Helvetica, sans-serif",
+                  ...cardFont(layout.font),
                   paddingInline: scale(layout.badge.padding_x_px),
                   paddingBlock: scale(layout.badge.padding_y_px),
                   // Clamped to half the height, as the compositor does - past
@@ -595,7 +628,7 @@ function Preview({ layout, page }: { layout: ResolvedLayout; page: Page }) {
                   right: scale(layout.image.edge_margin_ratio * layout.image.width),
                   top: markTop,
                   fontSize: `${Math.max(16, layout.image.width * 0.022) / layout.image.width * 100}cqw`,
-                  fontFamily: "Arial, Helvetica, sans-serif",
+                  ...cardFont(layout.font),
                 }}
               >
                 {page.watermark_text || page.name}
@@ -672,8 +705,7 @@ function Preview({ layout, page }: { layout: ResolvedLayout; page: Page }) {
                 fontSize: `${(layout.text.font_size_px / layout.image.width) * 100}cqw`,
                 lineHeight: layout.text.line_height_ratio,
                 textAlign: layout.text.align as "left" | "center" | "right",
-                fontFamily: "Arial, Helvetica, sans-serif",
-                fontWeight: 700,
+                ...cardFont(layout.font),
                 paddingLeft: scale(layout.text.padding.left_px),
                 paddingRight: scale(layout.text.padding.right_px),
                 paddingTop: scale(layout.text.padding.top_px),

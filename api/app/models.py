@@ -717,6 +717,9 @@ class PageLayout(SQLModel, table=True):
     portrait_border_width_px: int | None = None
     portrait_border_color: str | None = None
 
+    font: str | None = None
+    """A key of `settings.FONTS`. Null tracks `layout.yml`."""
+
     updated_at: datetime = Field(default_factory=_now)
 
 

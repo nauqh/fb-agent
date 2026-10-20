@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 
-import type { ResolvedLayout } from "@/lib/api/layout";
+import type { CardFontFace, ResolvedLayout } from "@/lib/api/layout";
 import { watermarkUrl } from "@/lib/api/pages";
 import type { Page } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -38,7 +38,7 @@ import { cn } from "@/lib/utils";
  *
  * **The panel is an approximation and structurally cannot be anything else.**
  * The real image is measured with fontTools advance widths and rasterised by
- * resvg from Arial-Bold.ttf; the browser is measuring a different font with a
+ * resvg from the Page's TTF; the browser loads the same file but measures with a
  * different engine, so line breaks and therefore panel height will not match
  * pixel for pixel. What it reproduces faithfully is the form, and it now
  * reproduces the *Page's* form rather than History Retraced's.
@@ -236,6 +236,7 @@ export function ComposedImage({
       )}
       style={{ aspectRatio }}
     >
+      <CardFont font={layout.font} />
       {/* On a full overlay the photograph *is* the card and the panel lies over
           its bottom, so the hero is painted behind everything and the flex
           column above it only positions the panel. On a card the hero occupies
@@ -270,7 +271,7 @@ export function ComposedImage({
               backgroundColor: layout.badge.color,
               color: layout.badge.text_color,
               fontSize: `${(layout.badge.font_size_px / layout.image.width) * 100}cqw`,
-              fontFamily: "Arial, Helvetica, sans-serif",
+              ...cardFont(layout.font),
               paddingInline: scale(layout.badge.padding_x_px),
               paddingBlock: scale(layout.badge.padding_y_px),
               // Clamped to half the height, as the compositor does - past that
@@ -324,6 +325,7 @@ export function ComposedImage({
           // the compositor wraps and highlights.
           className="relative font-bold"
           style={{
+            ...cardFont(layout.font),
             color: layout.text.color,
             // The panel is drawn at `image.width` in the real card, so the type
             // scales with the container rather than sitting at a fixed px. No
@@ -359,6 +361,18 @@ export function ComposedImage({
       {insetYRatio == null ? null : disc}
     </div>
   );
+}
+
+/** The TTF the compositor draws with, from the API's `/assets`, so the preview
+ * wraps in the same face. Aliased so a system Arial cannot stand in for it. */
+export function CardFont({ font }: { font: CardFontFace }) {
+  return (
+    <style>{`@font-face{font-family:"card ${font.family}";font-weight:${font.weight};src:url(/api/${font.path})}`}</style>
+  );
+}
+
+export function cardFont(font: CardFontFace) {
+  return { fontFamily: `"card ${font.family}", sans-serif`, fontWeight: font.weight };
 }
 
 /** The compositor's `_fade`: clear to the panel colour at its opacity, ending
@@ -440,7 +454,7 @@ function Watermark({
         top,
         right,
         fontSize: `${(Math.max(16, layout.image.width * 0.022) / layout.image.width) * 100}cqw`,
-        fontFamily: "Arial, Helvetica, sans-serif",
+        ...cardFont(layout.font),
       }}
     >
       {page.watermark_text || page.name}

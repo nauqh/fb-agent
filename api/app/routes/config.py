@@ -18,10 +18,10 @@ So the file keeps the defaults - a change to it is still a diff - and a
 which is what makes "reset" mean *back to the file* rather than *back to
 whatever the file said when you first pressed save*.
 
-Image dimensions and the font stay out of it. 4:5 is the tallest ratio Facebook
-renders in feed, and a font family that does not match the TTF's name table
-makes resvg substitute a serif silently and still return a valid PNG - neither
-failure is visible from a form.
+Image dimensions stay out of it: 4:5 is the tallest ratio Facebook renders in
+feed. The font is a pick from `settings.FONTS` rather than a free family name,
+because a family that does not match the TTF's name table makes resvg
+substitute a serif silently and still return a valid PNG.
 """
 
 import base64
@@ -35,7 +35,7 @@ from app.db import get_session
 from app.image import compositor
 from app.image import text as overlay
 from app.models import Draft, Page, PageLayout
-from app.settings import Align, Layout, Template
+from app.settings import FONTS, Align, FontLayout, Layout, Template
 
 router = APIRouter(tags=["config"])
 
@@ -53,6 +53,7 @@ class LayoutOut(BaseModel):
 
     layout: Layout
     overridden: list[str]
+    fonts: list[FontLayout] = list(FONTS.values())
 
 
 NOT_OVERRIDES = frozenset({"id", "page_id", "updated_at"})
@@ -156,6 +157,8 @@ class LayoutPatch(BaseModel):
     portrait_ring_pad_px: int | None = None
     portrait_border_width_px: int | None = None
     portrait_border_color: str | None = None
+
+    font: str | None = None
 
 
 @router.patch("/layout")
