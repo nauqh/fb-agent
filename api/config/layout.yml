@@ -33,9 +33,10 @@ panel:
     ratio: 0.07
     max_ratio: 0.85
     color: "#000000"
-    # Full overlay only; a card's panel is always solid. 0 is type straight on
-    # the photograph (client, 2026-10-03).
-    opacity: 0.0
+    # Full overlay only; a card's panel is always solid. 1 fades the photo to
+    # solid black behind the text (client, 2026-10-20); 0 is type straight on
+    # the photograph, the earlier default.
+    opacity: 1.0
     # Full overlay only: × height → a fade from clear to `color` at `opacity`
     # above the panel, so the photo darkens into it instead of meeting a hard
     # edge (client, 2026-10-20).
