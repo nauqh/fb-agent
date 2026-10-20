@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { createManualDraft, generate } from "@/lib/api/drafts";
+import { createManualDraft, generate, publishMode } from "@/lib/api/drafts";
 import { getPageLayout } from "@/lib/api/layout";
 import { InsetSourceSelect, type InsetSource } from "@/components/inset-source-select";
 import { usePageScope } from "@/lib/page-scope";
@@ -285,26 +285,53 @@ function FromATopic() {
   const router = useRouter();
   const { page } = usePageScope();
   const [topic, setTopic] = useState("");
+  const [article, setArticle] = useState("");
+  const [writeArticle, setWriteArticle] = useState(true);
+  const { data: mode } = useQuery(() => publishMode(), []);
   const [noImage, setNoImage] = useState(false);
   const [findInset, setFindInset] = useState(false);
   const [insetSource, setInsetSource] = useState<InsetSource | null>(null);
   const [running, setRunning] = useState(false);
 
-  const ready = topic.trim().length > 0 && page !== null;
+  const pasted = article.trim();
+  const ready = (topic.trim().length > 0 || pasted.length > 0) && page !== null;
+  const offerArticle = pasted.length > 0 && page?.id === mode?.article_page_id;
 
   async function run() {
     if (!page || !ready) return;
     setRunning(true);
     try {
+      // A pasted article goes in as a web source, the same as a link read on
+      // Sources, so the writer works from it and not from the topic alone.
       const ids = await generate({
-        sources: [],
+        sources: pasted
+          ? [
+              {
+                kind: "web",
+                external_id: `pasted-${Date.now()}`,
+                author: null,
+                synced_for_page_id: null,
+                competitor_page_id: null,
+                text: pasted,
+                body: pasted,
+                url: null,
+                image_url: null,
+                published_at: null,
+                reactions: null,
+                comments: null,
+                shares: null,
+              },
+            ]
+          : [],
         page_ids: [page.id],
-        topic: topic.trim(),
+        topic: pasted ? undefined : topic.trim(),
+        write_article: offerArticle && writeArticle,
         no_image: noImage,
         find_inset: findInset && !noImage,
         inset_source: insetSource ?? page.inset_source,
       });
       setTopic("");
+      setArticle("");
       setNoImage(false);
       setFindInset(false);
       setInsetSource(null);
@@ -340,6 +367,33 @@ function FromATopic() {
           run as any other: the same prompts, the same brand rules, the same card.
         </p>
       </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="article">Article</Label>
+        <Textarea
+          id="article"
+          value={article}
+          rows={8}
+          onChange={(event) => setArticle(event.target.value)}
+          placeholder="Paste an article to write the post from"
+          className="text-sm"
+        />
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          Optional. When set, the post is written from this article instead of the topic.
+        </p>
+      </div>
+
+      {offerArticle ? (
+        <label className="flex w-fit cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+          <input
+            type="checkbox"
+            checked={writeArticle}
+            onChange={(event) => setWriteArticle(event.target.checked)}
+            className="size-3.5 cursor-pointer accent-primary"
+          />
+          Write the website article too
+        </label>
+      ) : null}
 
       {/* The picture is the only part of a topic run that costs money, so the
           option to skip it belongs beside the button that spends it. */}

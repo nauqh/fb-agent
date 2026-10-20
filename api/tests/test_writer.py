@@ -972,6 +972,15 @@ def test_a_web_page_our_reader_read_is_not_fetched_again():
     assert "Read that URL" not in writer.user_prompt(source, None)
 
 
+def test_a_short_pasted_article_is_written_from_its_text():
+    """The No source screen (client, 2026-10-20) sends the paste as `body`, so a
+    short one is not mistaken for a page our reader could not read."""
+    source = SourceItem(kind=SourceKind.WEB, external_id="p", text="Short.", body="Short.")
+
+    assert not writer.reads_link(source)
+    assert "Short." in writer.user_prompt(source, None)
+
+
 def test_an_rss_item_with_its_article_read_is_written_from_that_text(page, monkeypatch):
     """Gemini's reader is refused where ours is not (the BBC), so once the run
     has the article the link is a link, not a reading assignment."""

@@ -131,6 +131,8 @@ export interface SourceItem {
    */
   competitor_page_id: string | null;
   text: string;
+  /** The full article, when it was read or pasted. */
+  body?: string | null;
   url: string | null;
   image_url: string | null;
   published_at: string | null;
