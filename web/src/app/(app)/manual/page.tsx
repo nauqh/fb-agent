@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { createManualDraft, generate, publishMode } from "@/lib/api/drafts";
+import { getWeb } from "@/lib/api/sources";
 import { getPageLayout } from "@/lib/api/layout";
 import { InsetSourceSelect, type InsetSource } from "@/components/inset-source-select";
 import { usePageScope } from "@/lib/page-scope";
@@ -301,10 +302,14 @@ function FromATopic() {
     if (!page || !ready) return;
     setRunning(true);
     try {
-      // A pasted article goes in as a web source, the same as a link read on
-      // Sources, so the writer works from it and not from the topic alone.
+      // A pasted article goes in as a web source, so the writer works from it
+      // and not from the topic alone. A bare link is read the way the Sources
+      // Web tab reads one.
+      const link = /^https?:\/\/\S+$/.test(pasted);
       const ids = await generate({
-        sources: pasted
+        sources: link
+          ? [await getWeb(pasted)]
+          : pasted
           ? [
               {
                 kind: "web",
@@ -375,7 +380,7 @@ function FromATopic() {
           value={article}
           rows={8}
           onChange={(event) => setArticle(event.target.value)}
-          placeholder="Paste an article to write the post from"
+          placeholder="Paste an article, or its link, to write the post from"
           className="text-sm"
         />
         <p className="text-xs leading-relaxed text-muted-foreground">
