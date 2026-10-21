@@ -6,6 +6,7 @@ is the job record, which is why progress lives on it.
 """
 
 import io
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Literal, get_args
 
@@ -43,6 +44,7 @@ from app.models import (
 from app.publish import metricool as publisher
 from app.publish import wordpress
 from app.settings import Template, layout, settings
+from app.sources import web
 from app.writer import agent as writer
 from app.writer import validators
 
@@ -714,9 +716,29 @@ def regenerate_field(
     )
 
 
+class UnsavedRewriteRequest(RewriteRequest):
+    source: str | None = Field(default=None, max_length=100_000)
+    """An article pasted on No source, or its link. Optional: what the
+    writer works from, the way a draft's own source is on the drawer."""
+
+
+def _pasted_source(pasted: str) -> SourceItem:
+    """A link is read the way the Sources Web tab reads one; text is the article.
+
+    Unsaved: it is the brief for one rewrite, not a row. Read again on every
+    press, which is a free fetch of a page the operator is waiting on anyway.
+    """
+    if re.fullmatch(r"https?://\S+", pasted):
+        try:
+            return SourceItem(**web.lookup(pasted).model_dump())
+        except web.WebError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+    return SourceItem(kind=SourceKind.WEB, external_id="pasted", text=pasted, body=pasted)
+
+
 @router.post("/rewrite")
 def rewrite_unsaved(
-    body: RewriteRequest,
+    body: UnsavedRewriteRequest,
     page_id: int = Query(...),
     field: str = Query(description="hook, caption or first_comment"),
     session: Session = Depends(get_session),
@@ -727,7 +749,8 @@ def rewrite_unsaved(
     still being typed. `keeping` carries all three fields as they are on
     screen, the one being rewritten included; an empty field is written fresh
     from the others. The Page's own default voice, since there is no draft to
-    have chosen one.
+    have chosen one. `source` grounds it; without one the fields on screen are
+    the whole brief.
     """
     _regeneratable(field)
     page = session.get(Page, page_id)
@@ -735,12 +758,14 @@ def rewrite_unsaved(
         raise HTTPException(status_code=404, detail=f"No page {page_id}")
     on_screen = {name: (body.keeping or {}).get(name) or "" for name in writer.REGENERATABLE}
     instruction = (body.instruction or "").strip()
-    if not (instruction or any(value.strip() for value in on_screen.values())):
+    pasted = (body.source or "").strip()
+    if not (pasted or instruction or any(value.strip() for value in on_screen.values())):
         raise HTTPException(
             status_code=422,
             detail="Write something first, or say what the post is about.",
         )
-    return _propose(page, None, None, field, on_screen, instruction, None)
+    source = _pasted_source(pasted) if pasted else None
+    return _propose(page, source, None, field, on_screen, instruction, None)
 
 
 def _regeneratable(field: str) -> None:

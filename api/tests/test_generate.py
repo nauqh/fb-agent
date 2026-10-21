@@ -823,6 +823,38 @@ def test_an_empty_post_with_nothing_to_go_on_is_refused(client, rewritten):
     assert client.post("/rewrite?page_id=999&field=hook", json={}).status_code == 404
 
 
+def test_a_pasted_article_is_what_the_writer_works_from(client, rewritten):
+    """Without it a 23-word hook is the whole brief, and a 1,500-character first
+    comment has nothing to be written from."""
+    client.post(
+        "/rewrite?page_id=1&field=first_comment",
+        json={"source": "  The 1925 serum run, in full.  "},
+    )
+
+    assert rewritten["source"].body == "The 1925 serum run, in full."
+    assert rewritten["source"].kind.value == "web"
+
+
+def test_a_pasted_link_is_read_like_the_web_tab_reads_one(client, rewritten, monkeypatch):
+    from app.models import SourceItemBase, SourceKind
+    from app.routes import drafts as drafts_routes
+
+    read = SourceItemBase(
+        kind=SourceKind.WEB, external_id="https://example.com/a", text="Title",
+        body="The article.", url="https://example.com/a",
+    )
+    monkeypatch.setattr(drafts_routes.web, "lookup", lambda url: read)
+    client.post("/rewrite?page_id=1&field=caption", json={"source": "https://example.com/a"})
+    assert rewritten["source"].body == "The article."
+
+    def unreadable(url):
+        raise drafts_routes.web.WebError("That page could not be read.")
+
+    monkeypatch.setattr(drafts_routes.web, "lookup", unreadable)
+    response = client.post("/rewrite?page_id=1&field=caption", json={"source": "https://x.test/b"})
+    assert response.status_code == 422
+
+
 def test_a_hand_written_post_is_its_own_brief():
     """No source and no topic: the kept fields are all there is to write from."""
     prompt = writer.rewrite_prompt(None, None, "caption", {"hook": "Dogs ran serum."})

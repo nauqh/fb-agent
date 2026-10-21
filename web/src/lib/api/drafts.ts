@@ -261,11 +261,17 @@ export async function regenerateField(
 export async function rewriteUnsaved(
   pageId: number,
   field: RegeneratableField,
-  options: { keeping: Record<RegeneratableField, string>; instruction?: string },
+  options: {
+    keeping: Record<RegeneratableField, string>;
+    instruction?: string;
+    /** An article, or its link, for the writer to work from. */
+    source?: string;
+  },
 ): Promise<RewriteProposal> {
   return post<RewriteProposal>(`/rewrite?page_id=${pageId}&field=${field}`, {
     instruction: options.instruction ?? null,
     keeping: options.keeping,
+    source: options.source || null,
   });
 }
 

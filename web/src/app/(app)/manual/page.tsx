@@ -89,6 +89,7 @@ function WriteItYourself() {
   const [phrases, setPhrases] = useState<string[]>([]);
   const [caption, setCaption] = useState("");
   const [firstComment, setFirstComment] = useState("");
+  const [source, setSource] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [findInset, setFindInset] = useState(false);
   const [insetSource, setInsetSource] = useState<InsetSource | null>(null);
@@ -123,7 +124,11 @@ function WriteItYourself() {
 
   async function rewrite(field: RegeneratableField, instruction?: string) {
     if (!page) return;
-    const proposal = await rewriteUnsaved(page.id, field, { keeping: text, instruction });
+    const proposal = await rewriteUnsaved(page.id, field, {
+      keeping: text,
+      instruction,
+      source: source.trim(),
+    });
     if (field === "hook") {
       setHook(proposal.text);
       setPhrases(proposal.highlight_phrases ?? []);
@@ -252,6 +257,19 @@ function WriteItYourself() {
       </div>
 
       <div className="min-w-0 space-y-6">
+        {/* A writing aid only: the drafts made here carry no Source Item, so
+            this is not stored. Without it the writer has nothing but the three
+            boxes, and a 1,500-character first comment cannot come from a hook. */}
+        <Field label="Source" hint="optional · not saved">
+          <Textarea
+            value={source}
+            rows={4}
+            onChange={(event) => setSource(event.target.value)}
+            placeholder="Paste the article, or its link. Write and Rewrite work from it."
+            className="text-sm"
+          />
+        </Field>
+
         <Field
           label="Image text overlay"
           regenerate={
