@@ -6,17 +6,26 @@ import { ImageIcon, Loader2, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { ComposedImage } from "@/components/composed-image";
+import { HookField } from "@/components/hook-field";
+import { Field, Regenerate } from "@/components/rewrite-field";
 import { ScreenHeader } from "@/components/screen";
 import { Loading } from "@/components/loading";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { createManualDraft, generate, publishMode } from "@/lib/api/drafts";
+import {
+  createManualDraft,
+  generate,
+  publishMode,
+  rewriteUnsaved,
+  type RegeneratableField,
+} from "@/lib/api/drafts";
 import { getWeb } from "@/lib/api/sources";
 import { getPageLayout } from "@/lib/api/layout";
 import { InsetSourceSelect, type InsetSource } from "@/components/inset-source-select";
 import { usePageScope } from "@/lib/page-scope";
+import { chars, words } from "@/lib/format";
 import { useQuery } from "@/lib/use-query";
 
 /**
@@ -30,7 +39,9 @@ import { useQuery } from "@/lib/use-query";
  *
  * **Write it yourself** is the old app's manual mode, restored at the client's
  * request - "Create a draft for {page} without calling Gemini". Hook, caption,
- * first comment, and an optional picture that becomes the hero.
+ * first comment, and an optional picture that becomes the hero. Each field has
+ * the review drawer's Write/Rewrite box (client, 2026-10-21): the writer is
+ * there if asked, and nothing it proposes is saved until Create draft.
  *
  * **From a topic** is the strip that used to sit in the Sources dock. It does
  * call the writer; the difference from a source run is only that nothing binds
@@ -75,6 +86,7 @@ function WriteItYourself() {
   const router = useRouter();
   const { page, pageId } = usePageScope();
   const [hook, setHook] = useState("");
+  const [phrases, setPhrases] = useState<string[]>([]);
   const [caption, setCaption] = useState("");
   const [firstComment, setFirstComment] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -103,6 +115,22 @@ function WriteItYourself() {
     };
   }, [preview]);
 
+  const text: Record<RegeneratableField, string> = {
+    hook,
+    caption,
+    first_comment: firstComment,
+  };
+
+  async function rewrite(field: RegeneratableField, instruction?: string) {
+    if (!page) return;
+    const proposal = await rewriteUnsaved(page.id, field, { keeping: text, instruction });
+    if (field === "hook") {
+      setHook(proposal.text);
+      setPhrases(proposal.highlight_phrases ?? []);
+    } else if (field === "caption") setCaption(proposal.text);
+    else setFirstComment(proposal.text);
+  }
+
   function choose(chosen: File | null) {
     setFile(chosen);
     setPreview(chosen ? URL.createObjectURL(chosen) : null);
@@ -118,6 +146,7 @@ function WriteItYourself() {
         hook,
         caption,
         first_comment: firstComment,
+        highlight_phrases: phrases,
         find_inset: findInset,
         inset_source: insetSource ?? page.inset_source,
         file,
@@ -153,7 +182,7 @@ function WriteItYourself() {
             layout={layout}
             page={page}
             overlayText={hook}
-            highlightPhrases={[]}
+            highlightPhrases={phrases}
             heroSrc={preview}
           />
         ) : (
@@ -223,47 +252,68 @@ function WriteItYourself() {
       </div>
 
       <div className="min-w-0 space-y-6">
-        <div className="space-y-2">
-          <Label htmlFor="manual-hook">Image text overlay</Label>
-          <Textarea
-            id="manual-hook"
+        <Field
+          label="Image text overlay"
+          regenerate={
+            <Regenerate
+              label="Overlay"
+              empty={!hook.trim()}
+              ask={(instruction) => rewrite("hook", instruction)}
+            />
+          }
+          hint={`${words(hook)} words · limit 65, no question`}
+          flagged={words(hook) > 65 || hook.includes("?")}
+        >
+          <HookField
             value={hook}
+            phrases={phrases}
             rows={3}
-            onChange={(event) => setHook(event.target.value)}
-            placeholder="Scroll-stopping opening line…"
-            className="text-sm"
+            onChange={setHook}
+            onPhrasesChange={setPhrases}
           />
-          {/* The rule the writer is held to, stated rather than enforced - a
-              person typing here has decided, and the server records it as a
-              warning instead of refusing the draft. */}
-          <p className="text-xs text-muted-foreground">
-            Under 65 words, no questions.
-          </p>
-        </div>
+        </Field>
 
-        <div className="space-y-2">
-          <Label htmlFor="manual-caption">Caption</Label>
+        <Field
+          label="Caption"
+          regenerate={
+            <Regenerate
+              label="Caption"
+              empty={!caption.trim()}
+              ask={(instruction) => rewrite("caption", instruction)}
+            />
+          }
+          hint={`${caption.split("\n").filter(Boolean).length} recap lines · max 5`}
+        >
           <Textarea
-            id="manual-caption"
             value={caption}
             rows={5}
             onChange={(event) => setCaption(event.target.value)}
             placeholder="Recap / post caption…"
             className="text-sm"
           />
-        </div>
+        </Field>
 
-        <div className="space-y-2">
-          <Label htmlFor="manual-first-comment">First comment</Label>
+        <Field
+          label="First comment"
+          regenerate={
+            <Regenerate
+              label="First comment"
+              empty={!firstComment.trim()}
+              ask={(instruction) => rewrite("first_comment", instruction)}
+            />
+          }
+          hint={`${chars(firstComment)} · 1,500-2,100`}
+          // Not on an empty box: nobody has written it yet, which is not a mistake.
+          flagged={firstComment.length > 0 && (firstComment.length < 1500 || firstComment.length > 2100)}
+        >
           <Textarea
-            id="manual-first-comment"
             value={firstComment}
             rows={10}
             onChange={(event) => setFirstComment(event.target.value)}
             placeholder="Main body / CTA as first comment…"
             className="text-sm leading-relaxed"
           />
-        </div>
+        </Field>
 
         <div className="flex items-center gap-3 border-t pt-4">
           <Button type="submit" disabled={!ready || saving || !page}>

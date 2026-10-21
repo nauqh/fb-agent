@@ -144,7 +144,8 @@ export async function createManualDraft(input: {
   hook: string;
   caption: string;
   first_comment: string;
-  /** Have the AI find an inset from this text. The one model call on Manual. */
+  highlight_phrases: string[];
+  /** Have the AI find an inset from this text. */
   find_inset: boolean;
   /** Where that find searches. Omitted uses the Page's setting. */
   inset_source?: "google" | "unsplash";
@@ -155,6 +156,7 @@ export async function createManualDraft(input: {
   body.append("hook", input.hook);
   body.append("caption", input.caption);
   body.append("first_comment", input.first_comment);
+  for (const phrase of input.highlight_phrases) body.append("highlight_phrases", phrase);
   if (input.find_inset) body.append("find_inset", "true");
   if (input.find_inset && input.inset_source) body.append("inset_source", input.inset_source);
   // Only when there is one: an empty part still arrives as an UploadFile with a
@@ -251,6 +253,19 @@ export async function regenerateField(
   return post<RewriteProposal>(`/drafts/${id}/regenerate?field=${field}`, {
     instruction: options.instruction ?? null,
     keeping: options.keeping ?? null,
+  });
+}
+
+/** The same rewrite for a post still being typed - No source. `keeping` is all
+ *  three fields as on screen; an empty `field` is written fresh. Saves nothing. */
+export async function rewriteUnsaved(
+  pageId: number,
+  field: RegeneratableField,
+  options: { keeping: Record<RegeneratableField, string>; instruction?: string },
+): Promise<RewriteProposal> {
+  return post<RewriteProposal>(`/rewrite?page_id=${pageId}&field=${field}`, {
+    instruction: options.instruction ?? null,
+    keeping: options.keeping,
   });
 }
 

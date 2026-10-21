@@ -49,19 +49,19 @@ Risks:
 Measured: every pick draws within 1% of its measured width (test in
 `test_layout.py`), so the missing GPOS kerning has not mattered yet.
 
-## 3. WYSIWYG editor - waiting on a decision
+## 3. AI-assisted Write it yourself
 
-Two different things; which one is meant decides the cost.
+Clarified 2026-10-21: the client meant neither a caption composer nor a canvas
+editor. She wants the review drawer's per-field AI help on No source > Write
+it yourself, before a draft exists.
 
-- **A. Caption composer** (Postiz style): emoji, hashtag/char counters, a
-  Facebook-style preview. Facebook captions are plain text, so "bold" is
-  Unicode look-alikes that screen readers and search mishandle. About 2-4 days.
-- **B. Canvas image editor** (Canva style): weeks. Cards are drawn server-side
-  in Python so drafts generate without a browser; a true WYSIWYG means two
-  renderers kept pixel-identical, or moving drawing to the browser and losing
-  auto-generation.
-- **Middle path for B:** more direct handles on the existing draft preview
-  (it already drags the hero crop and the inset) - drag the panel, pick the
-  font per draft. Days.
+- [x] `POST /rewrite?page_id=&field=`: the drawer's rewrite with no draft
+      behind it. Saves nothing. An empty field is written from the others.
+- [x] The rewrite prompt now shows the field as it stands, so "make it longer"
+      has text to lengthen - on the drawer too.
+- [x] Write/Rewrite box, gold highlighting and counters on each field, shared
+      with the drawer (`components/rewrite-field.tsx`).
+- [x] Gold phrases are saved with the manual draft.
+- [x] Driven in the browser: hook typed, caption written by the model.
 
-Recommendation: the middle path, after 1 and 2.
+Left out: emoji picker and Unicode bold. Neither was asked for.

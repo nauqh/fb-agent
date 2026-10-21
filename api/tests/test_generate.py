@@ -651,10 +651,15 @@ def rewritten(monkeypatch):
             image_prompt="a sled dog team on sea ice",
         )
 
-    def fake(page, source, topic, field, keeping, instruction=None, model=None, template=None):
+    def fake(
+        page, source, topic, field, keeping, instruction=None, model=None, template=None,
+        current=None,
+    ):
         seen["field"] = field
         seen["keeping"] = keeping
         seen["instruction"] = instruction
+        seen["current"] = current
+        seen["source"], seen["topic"] = source, topic
         return Result()
 
     monkeypatch.setattr(generate.writer, "rewrite", fake)
@@ -779,13 +784,61 @@ def test_no_instruction_is_the_same_call_as_before(client, written, illustrated,
     assert rewritten["instruction"] is None
 
 
+def test_the_field_being_rewritten_is_shown_as_it_stands(
+    client, written, illustrated, rewritten
+):
+    """"Make it longer" needs the text it is lengthening. Only the other two
+    fields used to reach the model."""
+    _generate(client)
+
+    client.post(
+        "/drafts/1/regenerate?field=hook",
+        json={"keeping": {"hook": "A hook on screen."}, "instruction": "Longer."},
+    )
+
+    assert rewritten["current"] == "A hook on screen."
+    assert "hook" not in rewritten["keeping"]
+
+
+def test_a_post_being_typed_can_be_rewritten_before_it_is_a_draft(client, rewritten):
+    """No source > Write it yourself (client, 2026-10-21): the review screen's
+    rewrite, a screen earlier. Nothing is saved, so there is no draft after."""
+    proposed = client.post(
+        "/rewrite?page_id=1&field=caption",
+        json={"keeping": {"hook": "Typed, never saved.", "caption": ""}},
+    ).json()
+
+    assert proposed["text"] == "🐕 A relay of dog teams."
+    assert rewritten["keeping"] == {"hook": "Typed, never saved.", "first_comment": ""}
+    assert rewritten["current"] == "", "an empty field is written fresh"
+    assert rewritten["source"] is None and rewritten["topic"] is None
+    assert client.get("/drafts").json() == []
+
+
+def test_an_empty_post_with_nothing_to_go_on_is_refused(client, rewritten):
+    assert client.post("/rewrite?page_id=1&field=hook", json={}).status_code == 422
+    assert client.post(
+        "/rewrite?page_id=1&field=hook", json={"instruction": "The 1925 serum run."}
+    ).status_code == 200
+    assert client.post("/rewrite?page_id=999&field=hook", json={}).status_code == 404
+
+
+def test_a_hand_written_post_is_its_own_brief():
+    """No source and no topic: the kept fields are all there is to write from."""
+    prompt = writer.rewrite_prompt(None, None, "caption", {"hook": "Dogs ran serum."})
+
+    assert "writing this post by hand" in prompt
+    assert "Write ONLY the caption" in prompt
+    assert "genuinely different" not in prompt, "there is nothing to differ from"
+
+
 def test_an_operator_instruction_replaces_the_demand_for_novelty(written):
     """The two contradict each other. "Produce a genuinely different one" answers
     *this is not the post I want*; "make it longer" answers *this is the post I
     want, said better*, and leaving both in the prompt asks for both."""
-    plain = writer.rewrite_prompt(None, "sled dogs", "hook", {"caption": "x"})
+    plain = writer.rewrite_prompt(None, "sled dogs", "hook", {"caption": "x"}, current="y")
     steered = writer.rewrite_prompt(
-        None, "sled dogs", "hook", {"caption": "x"}, "Make it longer."
+        None, "sled dogs", "hook", {"caption": "x"}, "Make it longer.", current="y"
     )
 
     assert "genuinely different" in plain
@@ -852,6 +905,18 @@ def test_a_hand_written_draft_needs_no_model(client):
     assert draft["status"] == "review", "it is ready to look at, not queued"
     assert draft["hook"].startswith("In 1925")
     assert draft["image_prompt"] is None, "nothing wrote one - there was no writer"
+
+
+def test_a_hand_written_draft_keeps_its_gold_phrases(client):
+    """Picked on the No source screen. A phrase not in the hook would render
+    nothing, so it is dropped rather than stored."""
+    draft = _manual(
+        client,
+        hook="Twenty mushers ran serum to Nome.",
+        highlight_phrases=["Twenty mushers", "not in the hook"],
+    ).json()
+
+    assert draft["highlight_phrases"] == ["Twenty mushers"]
 
 
 def test_an_uploaded_picture_becomes_the_hero_and_the_card_is_drawn(

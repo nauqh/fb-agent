@@ -9,7 +9,6 @@ import {
   ImagePlus,
   Loader2,
   Rocket,
-  RefreshCw,
   RotateCcw,
   Search,
   Sparkles,
@@ -24,6 +23,7 @@ import { InsetSourceSelect, type InsetSource } from "@/components/inset-source-s
 import { FacebookPreview } from "@/components/facebook-preview";
 import { PublishAt } from "@/components/publish-at";
 import { PublishDialog } from "@/components/publish-dialog";
+import { Field, Regenerate } from "@/components/rewrite-field";
 import { KIND_GLYPH, KIND_LABEL } from "@/components/source-card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogTitle } from "@/components/ui/dialog";
@@ -252,6 +252,23 @@ export function DraftDetail({
       ...(proposal.highlight_phrases
         ? { highlight_phrases: proposal.highlight_phrases }
         : {}),
+    });
+  }
+
+  // What the new field has to fit is what is on screen, so the kept fields are
+  // sent from the form - unsaved edits included. This is what lets the press
+  // write nothing at all: the server used to read them off the row, which is
+  // why the screen had to save first.
+  async function rewrite(field: RegeneratableField, label: string, instruction?: string) {
+    const proposal = await regenerateField(draftId, field, {
+      keeping: form
+        ? { hook: form.hook, caption: form.caption, first_comment: form.first_comment ?? "" }
+        : undefined,
+      instruction,
+    });
+    applyProposal(proposal);
+    toast.success(`New ${label.toLowerCase()}.`, {
+      description: "Not saved yet - Save changes keeps it, Revert throws it away.",
     });
   }
 
@@ -1577,11 +1594,8 @@ export function DraftDetail({
                   label="Overlay"
                   regenerate={
                     <Regenerate
-                      draftId={draftId}
-                      field="hook"
                       label="Overlay"
-                      form={form}
-                      onProposal={applyProposal}
+                      ask={(instruction) => rewrite("hook", "Overlay", instruction)}
                     />
                   }
                   hint={`${words(form.hook)} words · on the image · limit 65, no question`}
@@ -1605,11 +1619,8 @@ export function DraftDetail({
                   label="Caption"
                   regenerate={
                     <Regenerate
-                      draftId={draftId}
-                      field="caption"
                       label="Caption"
-                      form={form}
-                      onProposal={applyProposal}
+                      ask={(instruction) => rewrite("caption", "Caption", instruction)}
                     />
                   }
                   hint={`${form.caption.split("\n").filter(Boolean).length} recap lines · max 5`}
@@ -1648,11 +1659,8 @@ export function DraftDetail({
                   label="First comment"
                   regenerate={
                     <Regenerate
-                      draftId={draftId}
-                      field="first_comment"
                       label="First comment"
-                      form={form}
-                      onProposal={applyProposal}
+                      ask={(instruction) => rewrite("first_comment", "First comment", instruction)}
                     />
                   }
                   hint={`${chars(form.first_comment ?? "")} · 1,500-2,100`}
@@ -2165,109 +2173,6 @@ function InsetRing({
 }
 
 /**
- * Ask the writer for one field again, optionally saying how.
- *
- * Sits directly above its own field rather than in the footer, because it acts
- * on *this* field and a row of three identical buttons somewhere else would not
- * say which. The old app put it in the same place
- * (`regenerate-field-control.tsx`).
- *
- * **The box is always visible, not behind a toggle.** The client asked for it in
- * as many words - *"should there be a textbox for me to input how I want it to
- * be changed"* - after pressing the unargued button on a hook that was too short
- * and getting another short hook. Nothing in `validators.py` sets a minimum
- * length, so the button alone can only re-roll, never steer; a control hidden
- * behind a chevron would leave them pressing the same button. Empty is the
- * common case and is still one click.
- *
- * **Writes nothing.** It used to save the whole form first, because the server
- * read the kept fields off the row - so pressing Rewrite on the hook silently
- * committed an unsaved caption. The kept fields are sent from the form now, and
- * the result comes back as a proposal for the editor to hold.
- */
-function Regenerate({
-  draftId,
-  field,
-  label,
-  form,
-  onProposal,
-}: {
-  draftId: number;
-  field: RegeneratableField;
-  label: string;
-  form: Form | null;
-  /** Put the writer's text in the boxes. Saving it is the operator's press -
-   *  see `applyProposal`. */
-  onProposal: (proposal: RewriteProposal) => void;
-}) {
-  const [busy, setBusy] = useState(false);
-  // Kept after a press, not cleared: "make it longer" is usually said twice, and
-  // the box is on screen, so nothing is being reused invisibly. It is never sent
-  // to the row - an instruction describes an action, not the post.
-  const [instruction, setInstruction] = useState("");
-
-  async function run() {
-    setBusy(true);
-    try {
-      // What the new field has to fit is what is on screen, so the kept fields
-      // are sent from the form - unsaved edits included. This is what lets the
-      // press write nothing at all: the server used to read them off the row,
-      // which is why the screen had to save first.
-      const proposal = await regenerateField(draftId, field, {
-        keeping: form
-          ? { hook: form.hook, caption: form.caption, first_comment: form.first_comment ?? "" }
-          : undefined,
-        instruction: instruction.trim() || undefined,
-      });
-      onProposal(proposal);
-      toast.success(`New ${label.toLowerCase()}.`, {
-        description: "Not saved yet - Save changes keeps it, Revert throws it away.",
-      });
-    } catch (cause) {
-      toast.error(cause instanceof Error ? cause.message : "Could not rewrite that");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="flex items-center gap-2">
-      <Input
-        value={instruction}
-        disabled={busy}
-        placeholder={`How should the ${label.toLowerCase()} change? Optional.`}
-        onChange={(event) => setInstruction(event.target.value)}
-        // Enter runs it. The box is one line and has no other action, and the
-        // draft form below is saved by its own button, so nothing else can be
-        // submitted by accident.
-        onKeyDown={(event) => {
-          if (event.key === "Enter") {
-            event.preventDefault();
-            void run();
-          }
-        }}
-        maxLength={500}
-        className="h-7 text-xs"
-      />
-      <button
-        type="button"
-        onClick={() => void run()}
-        disabled={busy}
-        title={`Ask the writer for a new ${label.toLowerCase()}, keeping the other fields.`}
-        className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-1 text-[11px] font-normal text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
-      >
-        {busy ? (
-          <Loader2 className="size-3 animate-spin" />
-        ) : (
-          <RefreshCw className="size-3" />
-        )}
-        Rewrite
-      </button>
-    </div>
-  );
-}
-
-/**
  * Which Source Item this draft was written from.
  *
  * Client feedback G2 (2026-08-16): *"I have no idea which source or which
@@ -2364,45 +2269,6 @@ function Generating({ draft }: { draft: Draft }) {
           Leaving this screen does not cancel it.
         </p>
       </div>
-    </div>
-  );
-}
-
-function Field({
-  label,
-  hint,
-  flagged,
-  regenerate,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  flagged?: boolean;
-  /** Ask the writer for this field again. Absent on fields it cannot rewrite. */
-  regenerate?: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="space-y-2">
-      <div className="flex items-baseline justify-between gap-3">
-        <Label className="text-sm">{label}</Label>
-        {hint ? (
-          <span
-            className={cn(
-              "text-[11px] tabular-nums",
-              flagged ? "text-destructive" : "text-muted-foreground",
-            )}
-          >
-            {hint}
-          </span>
-        ) : null}
-      </div>
-      {/* Its own row, between the label and the box it rewrites. It used to be a
-          word inside the `<Label>`, which left nowhere for the prompt input to
-          go - and an `<input>` inside a `<label>` steals the click that should
-          focus the field. */}
-      {regenerate}
-      {children}
     </div>
   );
 }

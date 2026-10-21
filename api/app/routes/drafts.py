@@ -307,6 +307,9 @@ async def create_manual_draft(
     hook: str = Form(""),
     caption: str = Form(""),
     first_comment: str = Form(""),
+    highlight_phrases: list[str] = Form(
+        [], description="Gold phrases, each a verbatim substring of the hook."
+    ),
     find_inset: bool = Form(
         False, description="Have the AI find a picture for the inset from this text."
     ),
@@ -359,6 +362,7 @@ async def create_manual_draft(
         hook=hook.strip() or None,
         caption=caption.strip() or None,
         first_comment=first_comment.strip() or None,
+        highlight_phrases=[p for p in highlight_phrases if p and p in hook],
         progress_step="written by hand",
         progress_pct=100,
     )
@@ -682,12 +686,7 @@ def regenerate_field(
 
     Synchronous, unlike `/generate`: this is one call the operator is waiting on.
     """
-    if field not in writer.REGENERATABLE:
-        raise HTTPException(
-            status_code=422,
-            detail=f"Cannot regenerate {field!r}. One of: {', '.join(writer.REGENERATABLE)}.",
-        )
-
+    _regeneratable(field)
     draft = _editable(session, draft_id)
     page = session.get(Page, draft.page_id)
     if page is None:
@@ -697,27 +696,81 @@ def regenerate_field(
         session.get(SourceItem, draft.source_item_id) if draft.source_item_id else None
     )
     sent = (body.keeping or {}) if body else {}
-    keeping = {
+    on_screen = {
         name: (sent.get(name) if sent.get(name) is not None else getattr(draft, name))
         or ""
         for name in writer.REGENERATABLE
-        if name != field
     }
+    return _propose(
+        page,
+        source,
+        draft.topic,
+        field,
+        on_screen,
+        (body.instruction or "").strip() if body else "",
+        session.get(PromptTemplate, draft.prompt_template_id)
+        if draft.prompt_template_id
+        else None,
+    )
 
+
+@router.post("/rewrite")
+def rewrite_unsaved(
+    body: RewriteRequest,
+    page_id: int = Query(...),
+    field: str = Query(description="hook, caption or first_comment"),
+    session: Session = Depends(get_session),
+) -> RewriteProposal:
+    """The same rewrite with no draft behind it. **Saves nothing.**
+
+    For No source > Write it yourself (client, 2026-10-21), where the post is
+    still being typed. `keeping` carries all three fields as they are on
+    screen, the one being rewritten included; an empty field is written fresh
+    from the others. The Page's own default voice, since there is no draft to
+    have chosen one.
+    """
+    _regeneratable(field)
+    page = session.get(Page, page_id)
+    if page is None:
+        raise HTTPException(status_code=404, detail=f"No page {page_id}")
+    on_screen = {name: (body.keeping or {}).get(name) or "" for name in writer.REGENERATABLE}
+    instruction = (body.instruction or "").strip()
+    if not (instruction or any(value.strip() for value in on_screen.values())):
+        raise HTTPException(
+            status_code=422,
+            detail="Write something first, or say what the post is about.",
+        )
+    return _propose(page, None, None, field, on_screen, instruction, None)
+
+
+def _regeneratable(field: str) -> None:
+    if field not in writer.REGENERATABLE:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Cannot regenerate {field!r}. One of: {', '.join(writer.REGENERATABLE)}.",
+        )
+
+
+def _propose(
+    page: Page,
+    source: SourceItem | None,
+    topic: str | None,
+    field: str,
+    on_screen: dict[str, str],
+    instruction: str,
+    template: PromptTemplate | None,
+) -> RewriteProposal:
+    """Ask the writer for `field`, keeping the other two as they are on screen."""
     try:
-        instruction = (body.instruction or "").strip() if body else ""
         result = writer.rewrite(
             page,
             source,
-            draft.topic,
+            topic,
             field,
-            keeping,
+            {name: value for name, value in on_screen.items() if name != field},
             instruction or None,
-            template=(
-                session.get(PromptTemplate, draft.prompt_template_id)
-                if draft.prompt_template_id
-                else None
-            ),
+            template=template,
+            current=on_screen[field],
         )
     except Exception as error:
         raise HTTPException(

@@ -703,8 +703,15 @@ def rewrite_prompt(
     keeping: dict[str, str],
     instruction: str | None = None,
     summary: bool = False,
+    current: str | None = None,
 ) -> str:
     """The original brief, plus what is being kept and what to replace.
+
+    `current` is the field as it stands, so "make it longer" has something to
+    lengthen. Empty, the field is written fresh to fit the others - the No
+    source screen, where an operator types a hook and asks for the caption.
+    With no source and no topic the kept fields are the whole brief: a post
+    written by hand has nothing behind it but what is on screen.
 
     **The kept fields are in the prompt, and that is the whole point.** A caption
     regenerated in isolation is a caption for a different post - it would not
@@ -720,7 +727,13 @@ def rewrite_prompt(
     every unargued retry was an equally valid short hook and the button could
     only re-roll, never steer.
     """
-    parts = [user_prompt(source, topic, summary), ""]
+    brief = (
+        user_prompt(source, topic, summary)
+        if source is not None or topic
+        else "The operator is writing this post by hand. Its story is the fields "
+        "below and the operator's instruction - add no facts that are not there."
+    )
+    parts = [brief, ""]
     parts.append(
         "This post already exists. Keep the fields below EXACTLY as they are "
         "and return them unchanged."
@@ -730,6 +743,14 @@ def rewrite_prompt(
             parts += ["", f"{name.replace('_', ' ').upper()} (keep verbatim):", value]
 
     named = field.replace("_", " ")
+    now = (current or "").strip()
+    if not now:
+        parts += ["", f"Write ONLY the {named}, to fit the kept fields above."]
+        if instruction:
+            parts += ["The operator's instruction for it:", instruction.strip()]
+        return "\n".join(parts)
+
+    parts += ["", f"CURRENT {named.upper()} (to be replaced):", now]
     if instruction:
         parts += [
             "",
@@ -760,6 +781,7 @@ def rewrite(
     instruction: str | None = None,
     model=None,
     template=None,
+    current: str | None = None,
 ):
     """One field again, written to sit with the ones being kept.
 
@@ -796,8 +818,10 @@ def rewrite(
         raise ValueError(f"{field!r} is not a field that can be regenerated")
     return _run(
         page,
-        rewrite_prompt(source, topic, field, keeping, instruction),
-        rewrite_prompt(source, topic, field, keeping, instruction, summary=True),
+        rewrite_prompt(source, topic, field, keeping, instruction, current=current),
+        rewrite_prompt(
+            source, topic, field, keeping, instruction, summary=True, current=current
+        ),
         _field_rules(field, validators.Limits.for_page(page)),
         model,
         template=template,
