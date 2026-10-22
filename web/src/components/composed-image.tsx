@@ -137,6 +137,17 @@ export function ComposedImage({
   /** A photo card's shape is its hero's, clamped as the compositor clamps it
       (4:5 to 1.91:1). Null until the hero has loaded. */
   const [heroShape, setHeroShape] = useState<number | null>(null);
+  if (layout.template === "quote") {
+    return (
+      <QuoteCard
+        layout={layout}
+        page={page}
+        text={overlayText ?? ""}
+        phrases={highlightPhrases}
+        className={className}
+      />
+    );
+  }
   const aspectRatio =
     photo && heroShape
       ? Math.min(Math.max(heroShape, 4 / 5), 1.91)
@@ -359,6 +370,139 @@ export function ComposedImage({
       {/* Placed by the operator: against the card, not the hero, because the
           disc can now be anywhere including entirely on the panel. */}
       {insetYRatio == null ? null : disc}
+    </div>
+  );
+}
+
+/** Fine noise, laid over the quote card's ground at `quote.grain`. */
+const GRAIN =
+  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")";
+
+/**
+ * The `quote` card, mirroring `image/quote.py`: the Page's mark beside a gold
+ * quotation mark, a heading in capitals, the quote with its highlight phrases
+ * in bold italic. The first line is the heading only when there is a second.
+ *
+ * Centred 45/55 rather than halfway, as the compositor places it. Line breaks
+ * are the browser's, so they can differ from the PNG's by a word.
+ */
+function QuoteCard({
+  layout,
+  page,
+  text,
+  phrases,
+  className,
+}: {
+  layout: ResolvedLayout;
+  page: Page;
+  text: string;
+  phrases: string[];
+  className?: string;
+}) {
+  const quote = layout.quote;
+  const px = (value: number) => `${(value / layout.image.width) * 100}cqw`;
+  const lines = text
+    .split("\n")
+    .map((line) => line.trim().replace(/\s+/g, " "))
+    .filter(Boolean);
+  const heading = lines.length > 1 ? lines[0] : null;
+  const body = (lines.length > 1 ? lines.slice(1) : lines).join(" ");
+  const serif = { fontFamily: `"card ${quote.font_family}", serif` };
+  const mark = page.watermark_enabled ? watermarkUrl(page) : null;
+
+  return (
+    <div
+      className={cn("@container relative overflow-hidden rounded-2xl border", className)}
+      style={{
+        aspectRatio: layout.image.width / layout.image.height,
+        backgroundColor: quote.background,
+      }}
+    >
+      <CardFont font={layout.font} />
+      <style>{`@font-face{font-family:"card ${quote.font_family}";font-weight:400;font-style:normal;src:url(/api/${quote.font_path})}@font-face{font-family:"card ${quote.font_family}";font-weight:700;font-style:italic;src:url(/api/${quote.emphasis_path})}`}</style>
+      <div
+        className="absolute inset-0"
+        style={{ backgroundImage: GRAIN, opacity: quote.grain }}
+      />
+      <div
+        className="relative flex h-full flex-col"
+        style={{ paddingInline: px(layout.image.width * quote.margin_ratio) }}
+      >
+        <div style={{ flexGrow: 45 }} />
+        <div
+          className="flex items-start"
+          style={{ height: px(quote.mark_px * 0.4), gap: px(quote.mark_px * 0.12) }}
+        >
+          <span
+            style={{
+              ...cardFont(layout.font),
+              color: layout.highlight.color,
+              fontSize: px(quote.mark_px),
+              lineHeight: 1,
+              marginTop: px(-quote.mark_px * 0.06),
+            }}
+          >
+            &ldquo;
+          </span>
+          {mark ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={mark}
+              alt=""
+              className="self-center"
+              style={{ height: px(quote.mark_px * 0.5) }}
+            />
+          ) : page.watermark_enabled ? (
+            <span
+              className="self-center"
+              style={{
+                ...cardFont(layout.font),
+                color: layout.text.color,
+                opacity: 0.85,
+                fontSize: px(quote.mark_px * 0.2),
+              }}
+            >
+              {page.watermark_text || page.name}
+            </span>
+          ) : null}
+        </div>
+        {heading ? (
+          <p
+            style={{
+              ...serif,
+              color: layout.text.color,
+              fontSize: px(quote.heading_px),
+              lineHeight: 1.1,
+              marginTop: px(quote.heading_px * 0.5),
+            }}
+          >
+            {heading.toUpperCase()}
+          </p>
+        ) : null}
+        <p
+          style={{
+            ...serif,
+            color: layout.text.color,
+            fontSize: px(quote.body_px),
+            lineHeight: quote.line_height_ratio,
+            marginTop: px(heading ? quote.body_px * 0.5 : quote.heading_px * 0.5),
+          }}
+        >
+          {body ? (
+            splitOnHighlights(body, phrases).map((segment, index) => (
+              <span
+                key={index}
+                style={segment.highlight ? { fontWeight: 700, fontStyle: "italic" } : undefined}
+              >
+                {segment.text}
+              </span>
+            ))
+          ) : (
+            <span className="opacity-25">No quote yet</span>
+          )}
+        </p>
+        <div style={{ flexGrow: 55 }} />
+      </div>
     </div>
   );
 }

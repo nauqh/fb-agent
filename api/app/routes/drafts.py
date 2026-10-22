@@ -64,8 +64,8 @@ class GenerateRequest(BaseModel):
     topic: str | None = None
 
     template: str | None = None
-    """`card`, `full_overlay` or `photo` for the drafts this run produces. Null takes
-    the Page's, which is what a run that does not care should send."""
+    """`card`, `full_overlay`, `photo` or `quote` for the drafts this run produces.
+    Null takes the Page's, which is what a run that does not care should send."""
 
     prompt_template_id: int | None = None
     """The post style this run generates under, from the prompts screen's
@@ -321,6 +321,9 @@ async def create_manual_draft(
     file: UploadFile | None = File(
         None, description="Optional. Becomes the hero the card is drawn around."
     ),
+    template: Template | None = Form(
+        None, description="The card form. `quote` is drawn with no picture at all."
+    ),
     session: Session = Depends(get_session),
 ) -> Draft:
     """A draft the operator wrote. No model call, unless it asks for an inset.
@@ -365,6 +368,7 @@ async def create_manual_draft(
         caption=caption.strip() or None,
         first_comment=first_comment.strip() or None,
         highlight_phrases=[p for p in highlight_phrases if p and p in hook],
+        template=template,
         progress_step="written by hand",
         progress_pct=100,
     )
@@ -379,12 +383,16 @@ async def create_manual_draft(
         validators.Limits.for_page(page),
     )
 
-    if find_inset:
+    quote = generate.is_quote(session, draft)
+    if find_inset and not quote:
         # Before the card is drawn, so it composites the circle in one pass.
         # Read from the operator's own text; there is no writer to name a subject.
         warnings += generate.find_inset(draft, source=inset_source or page.inset_source)
 
-    if file is not None and file.filename:
+    if quote:
+        # The whole card is drawn from the hook: nothing to upload.
+        warnings += generate.build_image(session, draft, page)
+    elif file is not None and file.filename:
         data = await file.read(MAX_HERO_BYTES + 1)
         if len(data) > MAX_HERO_BYTES:
             raise HTTPException(
@@ -588,15 +596,23 @@ def update_draft(
         if changes.get(axis) is not None:
             changes[axis] = min(1.0, max(0.0, changes[axis]))
 
+    was_quote = generate.is_quote(session, draft)
     for field, value in changes.items():
         setattr(draft, field, value)
 
-    if redraw and draft.hero_image_path:
+    kept = [w for w in draft.warnings if not w.startswith(generate.IMAGE_WARNING)]
+    if redraw and (draft.hero_image_path or generate.is_quote(session, draft)):
         page = session.get(Page, draft.page_id)
         if page is not None:
-            fresh = generate.build_image(session, draft, page)
-            kept = [w for w in draft.warnings if not w.startswith(generate.IMAGE_WARNING)]
-            draft.warnings = kept + fresh
+            draft.warnings = kept + generate.build_image(session, draft, page)
+    elif redraw and was_quote and draft.composed_image_path:
+        # Off a quote card onto a form that needs a hero this draft never had.
+        # The quote card is not its picture any more, so it must not publish.
+        session.info.setdefault(generate.SUPERSEDED, []).append(draft.composed_image_path)
+        draft.composed_image_path = None
+        draft.warnings = kept + [
+            f"{generate.IMAGE_WARNING}no hero yet - generate or upload one."
+        ]
 
     saved = _save(session, draft)
     if scheduled:
@@ -713,6 +729,7 @@ def regenerate_field(
         session.get(PromptTemplate, draft.prompt_template_id)
         if draft.prompt_template_id
         else None,
+        generate.is_quote(session, draft),
     )
 
 
@@ -720,6 +737,8 @@ class UnsavedRewriteRequest(RewriteRequest):
     source: str | None = Field(default=None, max_length=100_000)
     """An article pasted on No source, or its link. Optional: what the
     writer works from, the way a draft's own source is on the drawer."""
+    quote: bool = False
+    """The post on screen is a quote card, so a hook is a heading and a quote."""
 
 
 def _pasted_source(pasted: str) -> SourceItem:
@@ -765,7 +784,7 @@ def rewrite_unsaved(
             detail="Write something first, or say what the post is about.",
         )
     source = _pasted_source(pasted) if pasted else None
-    return _propose(page, source, None, field, on_screen, instruction, None)
+    return _propose(page, source, None, field, on_screen, instruction, None, body.quote)
 
 
 def _regeneratable(field: str) -> None:
@@ -784,6 +803,7 @@ def _propose(
     on_screen: dict[str, str],
     instruction: str,
     template: PromptTemplate | None,
+    quote: bool = False,
 ) -> RewriteProposal:
     """Ask the writer for `field`, keeping the other two as they are on screen."""
     try:
@@ -796,6 +816,7 @@ def _propose(
             instruction or None,
             template=template,
             current=on_screen[field],
+            quote=quote,
         )
     except Exception as error:
         raise HTTPException(

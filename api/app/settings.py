@@ -94,7 +94,7 @@ class TextLayout(Frozen):
     padding: PaddingLayout
 
 
-Template = Literal["card", "full_overlay", "photo"]
+Template = Literal["card", "full_overlay", "photo", "quote"]
 """Which card form a Page draws.
 
 `card` is the original: hero on top, panel below it, the two dividing the height
@@ -103,13 +103,35 @@ the card and the panel is laid over its bottom, which only reads as one picture
 if the panel is translucent (`panel.opacity`). `photo` is a plain Facebook post
 (client, 2026-10-03): the picture at its own shape and the logo, no panel even
 when the draft has a hook - the form decides, so a stray hook cannot bring the
-panel back.
+panel back. `quote` is the hook set as type on a dark ground, with no picture at
+all (client, 2026-10-22) - see `image/quote.py`.
 
 Closed. `photo` adds no fields; a form that needed its own copy of the panel
 settings would be a `template` table rather than a value, which is what the old
 system had: `facebook_post_templates`, a row per page, every field doubled with
-a `_full_overlay` twin.
+a `_full_overlay` twin. `quote` has a block of its own because it shares no
+geometry with the panel: nothing in it is a second copy of a panel setting.
 """
+
+
+class QuoteLayout(Frozen):
+    """The `quote` card. Not overridable per Page: one look, until asked."""
+
+    background: str
+    grain: float
+    """0-1: how strongly the noise texture shows over `background`."""
+    margin_ratio: float
+    """× width → the left and right margin, and the floor above and below."""
+    heading_px: int
+    body_px: int
+    line_height_ratio: float
+    mark_px: int
+    """The gold quotation mark's type size. Its ink is about a third of it."""
+    font_family: str
+    font_path: str
+    emphasis_path: str
+    """Bold italic, for the highlight phrases. Same family as `font_path`, so
+    resvg picks it by weight and style rather than by name."""
 
 
 class BadgeLayout(Frozen):
@@ -234,6 +256,7 @@ class Layout(Frozen):
     badge: BadgeLayout
     portrait: PortraitLayout
     font: FontLayout
+    quote: QuoteLayout
 
     @property
     def font_file(self) -> Path:

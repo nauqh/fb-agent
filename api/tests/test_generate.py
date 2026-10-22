@@ -653,7 +653,7 @@ def rewritten(monkeypatch):
 
     def fake(
         page, source, topic, field, keeping, instruction=None, model=None, template=None,
-        current=None,
+        current=None, quote=False,
     ):
         seen["field"] = field
         seen["keeping"] = keeping

@@ -672,7 +672,7 @@ class PageLayout(SQLModel, table=True):
     page_id: int = Field(foreign_key="page.id", unique=True, index=True)
 
     template: str | None = None
-    """`card`, `full_overlay` or `photo`. The one override that changes the geometry.
+    """`card`, `full_overlay`, `photo` or `quote`. The one override that changes the geometry.
 
     A column like the rest rather than a Page field, because it is a layout
     value: null means the Page tracks `layout.yml`, and resetting the Page
@@ -942,7 +942,7 @@ class Draft(SQLModel, table=True):
     image_prompt: str | None = None
 
     template: str | None = None
-    """`card`, `full_overlay` or `photo` for this draft alone. Null takes the Page's.
+    """`card`, `full_overlay`, `photo` or `quote` for this draft alone. Null takes the Page's.
 
     The same contract every other per-draft override has: null means "whatever
     the Page is set to" and follows it when that changes, so a draft that has

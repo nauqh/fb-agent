@@ -1,3 +1,5 @@
+import type { CardForm } from "@/lib/types";
+
 import { del, get, patch } from "./client";
 
 /**
@@ -19,8 +21,9 @@ export interface ResolvedLayout {
    * Which card form. `card` divides the height between hero and panel;
    * `full_overlay` fills the card with the hero and lays the panel over its
    * bottom, which only reads as one picture if `panel.opacity` is below 1.
+   * `quote` is type on a drawn ground, with no picture at all.
    */
-  template: "card" | "full_overlay" | "photo";
+  template: CardForm;
   image: { width: number; height: number; edge_margin_ratio: number };
   panel: { ratio: number; max_ratio: number; color: string; opacity: number; fade_ratio: number };
   text: {
@@ -61,6 +64,19 @@ export interface ResolvedLayout {
     border_color: string;
   };
   font: CardFontFace;
+  /** The `quote` card. One look for every Page, from `layout.yml`. */
+  quote: {
+    background: string;
+    grain: number;
+    margin_ratio: number;
+    heading_px: number;
+    body_px: number;
+    line_height_ratio: number;
+    mark_px: number;
+    font_family: string;
+    font_path: string;
+    emphasis_path: string;
+  };
 }
 
 /** A TTF the compositor draws with. `path` is under the API's `/assets`. */

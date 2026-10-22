@@ -1,4 +1,4 @@
-import type { Draft, DraftStatus, InsetCandidate } from "@/lib/types";
+import type { CardForm, Draft, DraftStatus, InsetCandidate } from "@/lib/types";
 import type { LiveSourceItem } from "@/lib/api/sources";
 import { del, delJson, get, patch, post, postForm, upload } from "@/lib/api/client";
 
@@ -100,8 +100,8 @@ export interface GenerateRequest {
    * Ignored for a topic-only run - there is no Source Item to take one from.
    */
   hero_from_source?: boolean;
-  /** `card` or `full_overlay` for the drafts this run makes. Null takes the Page's. */
-  template?: "card" | "full_overlay" | "photo" | null;
+  /** The card form for the drafts this run makes. Null takes the Page's. */
+  template?: CardForm | null;
   /**
    * The post style this run generates under, from the library on Settings.
    * Null or omitted writes with the Page's own prompts, unlayered.
@@ -150,6 +150,8 @@ export async function createManualDraft(input: {
   /** Where that find searches. Omitted uses the Page's setting. */
   inset_source?: "google" | "unsplash";
   file: File | null;
+  /** Omitted takes the Page's form. */
+  template?: CardForm;
 }): Promise<Draft> {
   const body = new FormData();
   body.append("page_id", String(input.page_id));
@@ -162,6 +164,7 @@ export async function createManualDraft(input: {
   // Only when there is one: an empty part still arrives as an UploadFile with a
   // blank filename, which the server would have to special-case.
   if (input.file) body.append("file", input.file);
+  if (input.template) body.append("template", input.template);
   return postForm<Draft>("/drafts/manual", body);
 }
 
@@ -266,12 +269,15 @@ export async function rewriteUnsaved(
     instruction?: string;
     /** An article, or its link, for the writer to work from. */
     source?: string;
+    /** The post is a quote card: a hook is a heading and a quotation. */
+    quote?: boolean;
   },
 ): Promise<RewriteProposal> {
   return post<RewriteProposal>(`/rewrite?page_id=${pageId}&field=${field}`, {
     instruction: options.instruction ?? null,
     keeping: options.keeping,
     source: options.source || null,
+    quote: options.quote ?? false,
   });
 }
 

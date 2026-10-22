@@ -115,7 +115,7 @@ class DraftContent(BaseModel):
     )
 
 
-def _instructions(page: Page, layout: Layout, template=None) -> str:
+def _instructions(page: Page, layout: Layout, template=None, quote: bool = False) -> str:
     """System prompt, panel rules, how to treat the source, and the post style.
 
     The last part is the one that cannot be got wrong. `source_instruction`
@@ -138,6 +138,10 @@ def _instructions(page: Page, layout: Layout, template=None) -> str:
     **A post style replaces, it does not layer** (client, 2026-10-04). A style
     with system text is sent instead of the Page's system prompt, and likewise
     its first comment and overlay text. A blank field falls back to the Page's.
+
+    `quote` is a draft drawn as a quote card (`image/quote.py`), whose hook is a
+    heading and a quotation rather than a panel. It goes last with the other
+    shape overrides, and like NO FIRST COMMENT it wins over the house structure.
     """
     system = prompts.system_prompt(layout, page.name, page)
     body = prompts.first_comment_prompt(layout, page.name, page)
@@ -154,7 +158,7 @@ def _instructions(page: Page, layout: Layout, template=None) -> str:
         # None uses the Page's overlay prompt; "" is "no overlay text".
         if template.overlay_prompt is not None:
             overlay = prompts.substitute(template.overlay_prompt, layout)
-    first_comment = writes_first_comment(page, template)
+    first_comment = writes_first_comment(page, template) and not quote
     parts = [
         system,
         # A post with no first comment is not sent its rules at all.
@@ -194,6 +198,8 @@ def _instructions(page: Page, layout: Layout, template=None) -> str:
             "instruction above that asks for hook or panel text; the other "
             "parts of the post are unchanged."
         )
+    if quote:
+        parts.append(QUOTE_CARD)
     if not first_comment:
         # Last for the same reason. The caption has to change with it: the
         # house structure writes the recap as a teaser for the first comment,
@@ -205,6 +211,28 @@ def _instructions(page: Page, layout: Layout, template=None) -> str:
             "must stand on its own and never point readers to a comment."
         )
     return "\n\n".join(parts)
+
+
+QUOTE_CARD = (
+    "QUOTE CARD. This post is a quote card: the hook is set in type on a plain "
+    "dark background and there is no photograph. This shape outranks the "
+    "structure above:\n"
+    "- `hook`: a short heading on its own first line - who said it, the verse "
+    "or source reference, or a theme of 1-4 words - then a line break, then the "
+    "quote itself, 12-45 words. Put a quotation in curly quotes.\n"
+    "- Quote real words accurately and credit whoever said or wrote them. Never "
+    "invent a quotation and attach it to a real person; an original line of "
+    "ours gets a theme as its heading, never a name.\n"
+    "- `highlight_phrases`: 1-2 verbatim substrings of the quote, the words "
+    "that land hardest. They are set in bold italic, not gold. Never from the "
+    "heading.\n"
+    "- `caption`: 1-3 short plain lines that frame the quote for the reader. No "
+    "emoji list.\n"
+    "- `image_prompt`: an empty string, and `inset_subject`: null. Nothing is "
+    "drawn but the type."
+)
+"""The `quote` card's brief. Not a prompt file: it describes what the renderer
+draws, the way the NO OVERLAY TEXT block does, and no Page can change that."""
 
 
 def writes_first_comment(page: Page, template=None) -> bool:
@@ -411,6 +439,7 @@ def write(
     model=None,
     image: BinaryImage | None = None,
     template=None,
+    quote: bool = False,
 ):
     """A brand-compliant draft, or an explanation. Never a retry.
 
@@ -433,11 +462,13 @@ def write(
         user_contents(user_prompt(source, topic), image),
         user_contents(user_prompt(source, topic, summary=True), image),
         _validator_for(
-            validators.Limits.for_page(page), writes_first_comment(page, template)
+            validators.Limits.for_page(page),
+            writes_first_comment(page, template) and not quote,
         ),
         model,
         template=template,
         source=source,
+        quote=quote,
     )
 
 
@@ -470,6 +501,7 @@ def _run(
     model=None,
     template=None,
     source=None,
+    quote: bool = False,
 ):
     """Ask the model, stepping down the fallback chain while it is unavailable.
 
@@ -494,7 +526,7 @@ def _run(
             ask(
                 prompt,
                 DraftContent,
-                _instructions(page, layout, template),
+                _instructions(page, layout, template, quote),
                 model,
                 validator,
                 fetch_url=fetch_url,
@@ -511,7 +543,7 @@ def _run(
             ask(
                 fallback_prompt,
                 DraftContent,
-                _instructions(page, layout, template),
+                _instructions(page, layout, template, quote),
                 model,
                 validator,
             )
@@ -782,6 +814,7 @@ def rewrite(
     model=None,
     template=None,
     current: str | None = None,
+    quote: bool = False,
 ):
     """One field again, written to sit with the ones being kept.
 
@@ -826,6 +859,7 @@ def rewrite(
         model,
         template=template,
         source=source,
+        quote=quote,
     )
 
 

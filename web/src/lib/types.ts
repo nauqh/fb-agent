@@ -10,6 +10,9 @@
 
 export type SourceKind = "competitor_post" | "tweet" | "rss" | "web";
 
+/** The card forms the compositor draws. `quote` is type only, with no picture. */
+export type CardForm = "card" | "full_overlay" | "photo" | "quote";
+
 /** `failed` means the run produced nothing; `error` says why. Never in `review`. */
 export type DraftStatus =
   | "generating"
@@ -246,8 +249,8 @@ export interface Draft {
   hero_from_source: boolean;
   /** The hero is a Google image search, not the image model. */
   hero_search: boolean;
-  /** `card` or `full_overlay` for this draft alone. Null follows the Page. */
-  template: "card" | "full_overlay" | "photo" | null;
+  /** The card form for this draft alone. Null follows the Page. */
+  template: CardForm | null;
   /**
    * The post style this run was generated under, or null for the Page's own
    * prompts unlayered. Stored on the row, not re-read at rewrite time - a

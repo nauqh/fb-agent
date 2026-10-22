@@ -80,7 +80,7 @@ class Measurer:
         return total * scale
 
 
-@lru_cache(maxsize=2)
+@lru_cache(maxsize=8)
 def get_measurer(font_path: str) -> Measurer:
     """One `TTFont` per file. Re-parsing it per draft would be the slow part."""
     return Measurer(Path(font_path))

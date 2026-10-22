@@ -33,7 +33,7 @@ from sqlmodel import Session, select
 from app import layout_for, media
 from app.db import get_engine
 from app.http import shared as http_shared
-from app.image import compositor, hero, inset
+from app.image import compositor, hero, inset, quote
 from app.image import text as overlay
 from app.models import (
     Draft,
@@ -208,6 +208,10 @@ def start_run(
 
     rows = resolve_sources(session, sources)
     session.flush()  # so every SourceItem has an id to point a Draft at
+
+    # A quote card draws no picture, so nothing may be searched or fetched for it.
+    if template == "quote":
+        hero_from_source = hero_search = find_inset = False
 
     drafts = [
         Draft(
@@ -407,7 +411,14 @@ def _run_one(session: Session, draft_id: int, write_article: bool = False) -> No
             if draft.prompt_template_id
             else None
         )
-        result = writer.write(page, source, draft.topic, image=image, template=template)
+        result = writer.write(
+            page,
+            source,
+            draft.topic,
+            image=image,
+            template=template,
+            quote=is_quote(session, draft),
+        )
         content = result.output
 
         draft.hook = content.hook
@@ -608,6 +619,19 @@ def build_image(
         # the space it was measured for.
         layout = layout_for.resolve_draft(session, page.id, draft.template)
 
+        if layout.template == "quote":
+            # Type on a drawn ground: no hero to buy, fetch or reuse. One kept
+            # from another form stays on the row, so switching back is free.
+            mark, mark_text = page.watermark()
+            _store_composite(
+                session,
+                draft,
+                quote.compose(
+                    draft.hook or "", draft.highlight_phrases, mark, layout, mark_text
+                ),
+            )
+            return []
+
         # A null hook is the no-overlay opt-out (client, 2026-09-11), not a
         # failure: the card is the hero and the logo, full bleed, no panel.
         # `plan` is None exactly when there is nothing to draw on it. A `photo`
@@ -723,23 +747,31 @@ def build_image(
             hero_y_ratio=draft.hero_y_ratio,
             hero_zoom=draft.hero_zoom,
         )
-        superseded = draft.composed_image_path
-        draft.composed_image_path = media.store.save(
-            composed, media.filename(draft.id or 0, "composed", "jpg")
-        )
-        session.add(draft)
-        session.commit()
-
-        # Only after the row points at the new file. The other order - delete,
-        # then save - turns a failed upload into a draft with no picture at all.
-        # This way the worst case is one file nobody reads.
-        if superseded and superseded != draft.composed_image_path:
-            _discard(superseded)
-
+        _store_composite(session, draft, composed)
         return warnings
 
     except Exception as error:  # noqa: BLE001 - a warning, not a dead draft
         return [f"{IMAGE_WARNING}{type(error).__name__}: {error}"[:300]]
+
+
+def _store_composite(session: Session, draft: Draft, composed: bytes) -> None:
+    superseded = draft.composed_image_path
+    draft.composed_image_path = media.store.save(
+        composed, media.filename(draft.id or 0, "composed", "jpg")
+    )
+    session.add(draft)
+    session.commit()
+
+    # Only after the row points at the new file. The other order - delete,
+    # then save - turns a failed upload into a draft with no picture at all.
+    # This way the worst case is one file nobody reads.
+    if superseded and superseded != draft.composed_image_path:
+        _discard(superseded)
+
+
+def is_quote(session: Session, draft: Draft) -> bool:
+    """Whether this draft is drawn as a quote card: its own form, else its Page's."""
+    return layout_for.resolve_draft(session, draft.page_id, draft.template).template == "quote"
 
 
 def post_text(draft: Draft) -> str:

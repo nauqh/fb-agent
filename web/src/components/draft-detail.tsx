@@ -62,7 +62,7 @@ import { getNextSlot, type NextSlot } from "@/lib/api/schedule";
 import { getSourceItem } from "@/lib/api/sources";
 import { chars, pageLocalSoon, timeAgo, words } from "@/lib/format";
 import type { RegeneratableField, RewriteProposal } from "@/lib/api/drafts";
-import type { Draft, InsetCandidate } from "@/lib/types";
+import type { CardForm, Draft, InsetCandidate } from "@/lib/types";
 import { useQuery } from "@/lib/use-query";
 import { pageAvatarRaw } from "@/lib/page-avatar";
 import { cn } from "@/lib/utils";
@@ -95,8 +95,8 @@ interface Form {
    */
   inset_border_width_px: number | null;
   inset_border_color: string | null;
-  /** `card` or `full_overlay` for this draft. Null follows the Page. */
-  template: "card" | "full_overlay" | "photo" | null;
+  /** The card form for this draft. Null follows the Page. */
+  template: CardForm | null;
 }
 
 export function DraftDetail({
@@ -745,7 +745,12 @@ export function DraftDetail({
    * Keyed off the state rather than the topic string: any draft with a
    * composite and no hero has nothing to preview, whatever made it.
    */
-  const published = draft.composed_image_url !== null && draft.hero_image_path === null;
+  const published =
+    draft.composed_image_url !== null &&
+    draft.hero_image_path === null &&
+    (draft.template ?? layout.template) !== "quote";
+  /** Type on a drawn ground: no hero and no circle, so neither control shows. */
+  const quoteCard = (form?.template ?? draft.template ?? layout.template) === "quote";
 
   /**
    * The hero with the panel drawn over it, never the baked PNG.
@@ -924,9 +929,11 @@ export function DraftDetail({
                 <span>
                   {published
                     ? "the published image"
-                    : draft.hero_image_path
-                      ? "hero"
-                      : "no hero"}
+                    : quoteCard
+                      ? "quote card"
+                      : draft.hero_image_path
+                        ? "hero"
+                        : "no hero"}
                   <span className="mx-1">·</span>
                   {draft.composed_image_path ? "composed" : "not composed"}
                 </span>
@@ -943,7 +950,7 @@ export function DraftDetail({
                   Editing the hook will not change it - write the story again
                   from Overview if you want a new card.
                 </p>
-              ) : !draft.hero_image_path ? (
+              ) : !draft.hero_image_path && !quoteCard ? (
                 <p className="text-[11px] text-muted-foreground">
                   No hero yet - the background is a placeholder.
                 </p>
@@ -972,7 +979,7 @@ export function DraftDetail({
               picture. The Page's `image_prompt` - the systematic fix, and the
               right place for "this Page is about exercise form" - is on the
               Settings screen and applies to every draft after it. */}
-          {form && !published ? (
+          {form && !published && !quoteCard ? (
             // Flat sections, not bordered boxes: a heading and spacing group
             // these, and the drawer is already the container. Absent on a
             // repost, where nothing here can reach the picture - and Regenerate
@@ -1187,13 +1194,14 @@ export function DraftDetail({
               <Tabs
                 value={form.template ?? layout.template}
                 onValueChange={(next) =>
-                  setForm({ ...form, template: next as "card" | "full_overlay" | "photo" })
+                  setForm({ ...form, template: next as CardForm })
                 }
               >
                 <TabsList className="w-full *:flex-1">
                   <TabsTrigger value="card">Card</TabsTrigger>
                   <TabsTrigger value="full_overlay">Full overlay</TabsTrigger>
                   <TabsTrigger value="photo">Photo only</TabsTrigger>
+                  <TabsTrigger value="quote">Quote</TabsTrigger>
                 </TabsList>
               </Tabs>
             </section>
@@ -1202,6 +1210,7 @@ export function DraftDetail({
           {/* The inset sits under the picture rather than in the copy column:
               it is the one control whose whole feedback is the image, and the
               slider is useless without it in view. */}
+          {quoteCard ? null : (
           <section className="space-y-3">
             <SectionHead
               title="Circular inset"
@@ -1393,6 +1402,7 @@ export function DraftDetail({
               }}
             />
           </section>
+          )}
             </div>
             ) : view === "article" ? (
             <div className="space-y-6">

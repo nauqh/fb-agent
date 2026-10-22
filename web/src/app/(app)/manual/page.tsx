@@ -46,6 +46,10 @@ import { useQuery } from "@/lib/use-query";
  * **From a topic** is the strip that used to sit in the Sources dock. It does
  * call the writer; the difference from a source run is only that nothing binds
  * the story except the words typed here.
+ *
+ * Both can make a **quote card** (client, 2026-10-22): the hook set as type on
+ * a dark ground, with no picture to upload or buy. A post's form, not a Page's,
+ * because a Page mixes formats.
  */
 export default function ManualScreen() {
   return (
@@ -94,6 +98,7 @@ function WriteItYourself() {
   const [findInset, setFindInset] = useState(false);
   const [insetSource, setInsetSource] = useState<InsetSource | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
+  const [quote, setQuote] = useState(false);
   const [saving, setSaving] = useState(false);
   const picker = useRef<HTMLInputElement>(null);
 
@@ -128,6 +133,7 @@ function WriteItYourself() {
       keeping: text,
       instruction,
       source: source.trim(),
+      quote,
     });
     if (field === "hook") {
       setHook(proposal.text);
@@ -152,14 +158,17 @@ function WriteItYourself() {
         caption,
         first_comment: firstComment,
         highlight_phrases: phrases,
-        find_inset: findInset,
+        find_inset: findInset && !quote,
         inset_source: insetSource ?? page.inset_source,
-        file,
+        file: quote ? null : file,
+        template: quote ? "quote" : undefined,
       });
       toast.success("Draft created.", {
-        description: file
-          ? "The card was drawn around your picture."
-          : "No picture yet, so there is no card to publish.",
+        description: quote
+          ? "The quote card is drawn."
+          : file
+            ? "The card was drawn around your picture."
+            : "No picture yet, so there is no card to publish.",
       });
       // Straight to the draft rather than the queue: this one was written by
       // hand, so the thing worth seeing is how it came out on the card.
@@ -182,9 +191,15 @@ function WriteItYourself() {
       {/* Sticky, like the drawer's: the card has to stay in view while the copy
           beside it scrolls, or the preview is not a preview. */}
       <div className="space-y-3 lg:sticky lg:top-0 lg:self-start">
+        <Tabs value={quote ? "quote" : "card"} onValueChange={(next) => setQuote(next === "quote")}>
+          <TabsList className="w-full *:flex-1">
+            <TabsTrigger value="card">Card</TabsTrigger>
+            <TabsTrigger value="quote">Quote</TabsTrigger>
+          </TabsList>
+        </Tabs>
         {layout && page ? (
           <ComposedImage
-            layout={layout}
+            layout={quote ? { ...layout, template: "quote" } : layout}
             page={page}
             overlayText={hook}
             highlightPhrases={phrases}
@@ -193,6 +208,12 @@ function WriteItYourself() {
         ) : (
           <Loading className="aspect-896/1120 rounded-2xl border" />
         )}
+        {quote ? (
+          <p className="text-xs text-muted-foreground">
+            No picture needed. Highlights are set in bold italic.
+          </p>
+        ) : (
+          <>
 
         <input
           ref={picker}
@@ -254,6 +275,8 @@ function WriteItYourself() {
             />
           ) : null}
         </div>
+          </>
+        )}
       </div>
 
       <div className="min-w-0 space-y-6">
@@ -271,7 +294,7 @@ function WriteItYourself() {
         </Field>
 
         <Field
-          label="Image text overlay"
+          label={quote ? "Quote" : "Image text overlay"}
           regenerate={
             <Regenerate
               label="Overlay"
@@ -279,7 +302,11 @@ function WriteItYourself() {
               ask={(instruction) => rewrite("hook", instruction)}
             />
           }
-          hint={`${words(hook)} words · limit 65, no question`}
+          hint={
+            quote
+              ? "first line is the heading"
+              : `${words(hook)} words · limit 65, no question`
+          }
           flagged={words(hook) > 65 || hook.includes("?")}
         >
           <HookField
@@ -358,6 +385,7 @@ function FromATopic() {
   const [writeArticle, setWriteArticle] = useState(true);
   const { data: mode } = useQuery(() => publishMode(), []);
   const [noImage, setNoImage] = useState(false);
+  const [quote, setQuote] = useState(false);
   const [findInset, setFindInset] = useState(false);
   const [insetSource, setInsetSource] = useState<InsetSource | null>(null);
   const [running, setRunning] = useState(false);
@@ -399,13 +427,15 @@ function FromATopic() {
         page_ids: [page.id],
         topic: pasted ? undefined : topic.trim(),
         write_article: offerArticle && writeArticle,
-        no_image: noImage,
-        find_inset: findInset && !noImage,
+        no_image: noImage && !quote,
+        template: quote ? "quote" : undefined,
+        find_inset: findInset && !noImage && !quote,
         inset_source: insetSource ?? page.inset_source,
       });
       setTopic("");
       setArticle("");
       setNoImage(false);
+      setQuote(false);
       setFindInset(false);
       setInsetSource(null);
       toast.success(`${ids.length} draft${ids.length === 1 ? "" : "s"} generating.`, {
@@ -468,19 +498,31 @@ function FromATopic() {
         </label>
       ) : null}
 
-      {/* The picture is the only part of a topic run that costs money, so the
-          option to skip it belongs beside the button that spends it. */}
       <label className="flex w-fit cursor-pointer items-center gap-2 text-xs text-muted-foreground">
         <input
           type="checkbox"
-          checked={noImage}
-          onChange={(event) => setNoImage(event.target.checked)}
+          checked={quote}
+          onChange={(event) => setQuote(event.target.checked)}
           className="size-3.5 cursor-pointer accent-primary"
         />
-        Text only, no image
+        Quote card, no picture
       </label>
 
-      {!noImage ? (
+      {/* The picture is the only part of a topic run that costs money, so the
+          option to skip it belongs beside the button that spends it. */}
+      {!quote ? (
+        <label className="flex w-fit cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+          <input
+            type="checkbox"
+            checked={noImage}
+            onChange={(event) => setNoImage(event.target.checked)}
+            className="size-3.5 cursor-pointer accent-primary"
+          />
+          Text only, no image
+        </label>
+      ) : null}
+
+      {!noImage && !quote ? (
         <div className="flex flex-wrap items-center gap-2">
           <label className="flex w-fit cursor-pointer items-center gap-2 text-xs text-muted-foreground">
             <input
