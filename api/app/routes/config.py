@@ -25,6 +25,7 @@ substitute a serif silently and still return a valid PNG.
 """
 
 import base64
+from typing import get_args
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -40,8 +41,8 @@ from app.settings import FONTS, Align, FontLayout, Layout, Template
 router = APIRouter(tags=["config"])
 
 
-class LayoutOut(BaseModel):
-    """The resolved layout, plus which fields this Page actually overrides.
+class FormLayout(BaseModel):
+    """One form's resolved layout, plus which fields this Page overrides in it.
 
     `overridden` is what lets the screen mark a changed field and offer a reset
     that means something. Derived from the row rather than by diffing against
@@ -53,15 +54,32 @@ class LayoutOut(BaseModel):
 
     layout: Layout
     overridden: list[str]
+
+
+class LayoutOut(FormLayout):
+    """The Page's own form at the top level, and every form under `forms`.
+
+    Every form, because a draft may pick a form other than its Page's and must
+    then draw with that form's settings, and the editor tunes each one apart.
+    `template` in `overridden` means the Page has picked its form.
+    """
+
+    forms: dict[str, FormLayout]
     fonts: list[FontLayout] = list(FONTS.values())
 
 
-NOT_OVERRIDES = frozenset({"id", "page_id", "updated_at"})
+NOT_OVERRIDES = frozenset({"id", "page_id", "form", "updated_at"})
 """Columns of `page_layout` that are not one of the layout's values."""
 
 
-def _layout_with(session: Session, page_id: int, changes: dict) -> Layout:
-    """This Page's layout, with `changes`' flat column values laid over it.
+def _row(session: Session, page_id: int, form: str) -> PageLayout | None:
+    return session.exec(
+        select(PageLayout).where(PageLayout.page_id == page_id, PageLayout.form == form)
+    ).first()
+
+
+def _layout_with(session: Session, page_id: int, form: str, changes: dict) -> Layout:
+    """This Page's layout in `form`, with `changes`' flat column values laid over it.
 
     The shape both the write and the preview need: `{**yaml, **row, **changes}`.
     `changes` is a `LayoutPatch` dumped with `exclude_unset=True`, so a field
@@ -72,7 +90,7 @@ def _layout_with(session: Session, page_id: int, changes: dict) -> Layout:
     `as_overrides` is the one place the flat column names and the nested file
     shape are related, and a second mapping here would be the copy that drifts.
     """
-    row = session.exec(select(PageLayout).where(PageLayout.page_id == page_id)).first()
+    row = _row(session, page_id, form)
     flat = {
         name: value
         for name, value in (row.model_dump() if row else {}).items()
@@ -82,8 +100,8 @@ def _layout_with(session: Session, page_id: int, changes: dict) -> Layout:
 
     return Layout.model_validate(
         layout_for._merge(
-            layout_for.defaults.model_dump(),
-            layout_for.as_overrides(PageLayout(page_id=page_id, **flat)),
+            {**layout_for.defaults.model_dump(), "template": form},
+            layout_for.as_overrides(PageLayout(page_id=page_id, form=form, **flat)),
         )
     )
 
@@ -102,24 +120,33 @@ def get_layout(
     page_id: int | None = Query(None, description="Omit for the file's defaults"),
     session: Session = Depends(get_session),
 ) -> LayoutOut:
-    _page(session, page_id)
-    row = (
-        session.exec(select(PageLayout).where(PageLayout.page_id == page_id)).first()
-        if page_id is not None
-        else None
-    )
+    page = _page(session, page_id)
+
+    def one(form: str) -> FormLayout:
+        row = _row(session, page_id, form) if page_id is not None else None
+        return FormLayout(
+            layout=layout_for.resolve(session, page_id, form),
+            overridden=sorted(
+                name
+                for name, value in (row.model_dump() if row else {}).items()
+                if value is not None and name not in NOT_OVERRIDES
+            ),
+        )
+
+    forms = {form: one(form) for form in get_args(Template)}
+    own = forms[layout_for.form_of(session, page_id)]
     return LayoutOut(
-        layout=layout_for.resolve(session, page_id),
-        overridden=sorted(
-            name
-            for name, value in (row.model_dump() if row else {}).items()
-            if value is not None and name not in NOT_OVERRIDES
-        ),
+        layout=own.layout,
+        overridden=sorted(own.overridden + (["template"] if page and page.template else [])),
+        forms=forms,
     )
 
 
 class LayoutPatch(BaseModel):
     """Only the fields being changed. `null` clears one back to the default.
+
+    `template` is the Page's pick of form and is stored on the Page; every other
+    field goes to the row of the form being edited.
 
     Distinguished from absent: `model_dump(exclude_unset=True)` is what makes
     "set this to null" and "do not touch this" different requests, which a
@@ -165,27 +192,30 @@ class LayoutPatch(BaseModel):
 def patch_layout(
     body: LayoutPatch,
     page_id: int = Query(...),
+    form: Template | None = Query(None, description="The form edited. The Page's own, by default"),
     session: Session = Depends(get_session),
 ) -> LayoutOut:
     """Change this Page's overrides. Validated by rendering the result."""
-    _page(session, page_id)
+    page = _page(session, page_id)
+    form = form or layout_for.form_of(session, page_id)
     changes = body.model_dump(exclude_unset=True)
+    if "template" in changes:
+        page.template = changes.pop("template")  # type: ignore[union-attr]
+        session.add(page)
 
     # Validated before it is stored, by building the layout it would produce.
     # resvg does not fail on a bad value - it renders something wrong and
     # returns a valid PNG - so a 422 here is the only place this can be caught.
     try:
-        _layout_with(session, page_id, changes)
+        _layout_with(session, page_id, form, changes)
     except Exception as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
 
-    row = session.exec(
-        select(PageLayout).where(PageLayout.page_id == page_id)
-    ).first() or PageLayout(page_id=page_id)
-    for name, value in changes.items():
-        setattr(row, name, value)
-
-    session.add(row)
+    if changes:
+        row = _row(session, page_id, form) or PageLayout(page_id=page_id, form=form)
+        for name, value in changes.items():
+            setattr(row, name, value)
+        session.add(row)
     session.commit()
 
     return get_layout(page_id=page_id, session=session)
@@ -197,6 +227,7 @@ class LayoutSample(BaseModel):
     text: str = Field(min_length=1, description="The hook to wrap into the panel")
     highlight_phrases: list[str] = []
     patch: LayoutPatch = LayoutPatch()
+    form: Template | None = Field(None, description="The form to draw. The Page's own, by default")
     draft_id: int | None = Field(
         None, description="Whose hero to draw on. The Page's newest, by default"
     )
@@ -255,7 +286,9 @@ def render_sample(
         )
 
     try:
-        layout = _layout_with(session, page_id, body.patch.model_dump(exclude_unset=True))
+        changes = body.patch.model_dump(exclude_unset=True)
+        form = changes.pop("template", None) or body.form or layout_for.form_of(session, page_id)
+        layout = _layout_with(session, page_id, form, changes)
     except Exception as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
 
@@ -292,9 +325,10 @@ def render_sample(
 @router.delete("/layout")
 def reset_layout(
     page_id: int = Query(...),
+    form: Template | None = Query(None, description="The form reset. The Page's own, by default"),
     session: Session = Depends(get_session),
 ) -> LayoutOut:
-    """Back to the file's defaults, by deleting the row rather than rewriting it.
+    """One form back to the file's defaults, by deleting its row, not rewriting it.
 
     Deleting is what keeps the Page tracking `layout.yml` afterwards. Writing
     today's defaults back into the row would look identical and behave
@@ -302,7 +336,7 @@ def reset_layout(
     """
     _page(session, page_id)
 
-    row = session.exec(select(PageLayout).where(PageLayout.page_id == page_id)).first()
+    row = _row(session, page_id, form or layout_for.form_of(session, page_id))
     if row is not None:
         session.delete(row)
         session.commit()

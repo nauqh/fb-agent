@@ -199,7 +199,7 @@ function WriteItYourself() {
         </Tabs>
         {layout && page ? (
           <ComposedImage
-            layout={quote ? { ...layout, template: "quote" } : layout}
+            layout={quote ? layoutResult!.forms.quote.layout : layout}
             page={page}
             overlayText={hook}
             highlightPhrases={phrases}

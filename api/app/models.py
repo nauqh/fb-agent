@@ -205,6 +205,13 @@ class Page(SQLModel, table=True):
     layout value can be.
     """
 
+    template: str | None = None
+    """Which card form this Page publishes in. Null tracks `layout.yml`.
+
+    Here rather than on `PageLayout`, because that table now holds one row per
+    form, and which form a Page uses is not a property of any one of them.
+    """
+
     inset_source: str = Field(default="google")
     """Where this Page's inset search looks: `google` or `unsplash` (`image.inset`).
 
@@ -667,17 +674,19 @@ class PageLayout(SQLModel, table=True):
     """
 
     __tablename__ = "page_layout"
+    __table_args__ = (
+        UniqueConstraint("page_id", "form", name="uq_page_layout_page_form"),
+    )
 
     id: int | None = Field(default=None, primary_key=True)
-    page_id: int = Field(foreign_key="page.id", unique=True, index=True)
+    page_id: int = Field(foreign_key="page.id", index=True)
 
-    template: str | None = None
-    """`card`, `full_overlay`, `photo` or `quote`. The one override that changes the geometry.
+    form: str
+    """The card form these overrides apply to: one row per form a Page has tuned.
 
-    A column like the rest rather than a Page field, because it is a layout
-    value: null means the Page tracks `layout.yml`, and resetting the Page
-    returns it to whatever the file says - the same contract every other
-    override here has.
+    A card and a full overlay are different pictures, and a font or padding
+    chosen for one was being forced on the other (client, 2026-10-22). Which
+    form a Page actually uses is `Page.template`.
     """
 
     panel_ratio: float | None = None

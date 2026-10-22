@@ -14,11 +14,11 @@ claims to be.
 
 from sqlmodel import Session, select
 
-from app.models import PageLayout
+from app.models import Page, PageLayout
 from app.settings import FONTS, Layout
 from app.settings import layout as defaults
 
-__all__ = ["as_overrides", "defaults", "resolve", "resolve_draft"]
+__all__ = ["as_overrides", "defaults", "form_of", "resolve", "resolve_draft"]
 
 
 def _merge(base: dict, override: dict) -> dict:
@@ -46,7 +46,6 @@ def as_overrides(row: PageLayout | None) -> dict:
     if row is None:
         return {}
     return {
-        "template": row.template,
         "panel": {
             "ratio": row.panel_ratio,
             "max_ratio": row.panel_max_ratio,
@@ -94,39 +93,41 @@ def _font(family: str) -> dict:
 
 
 def resolve_draft(session: Session, page_id: int | None, template: str | None) -> Layout:
-    """The Page's layout, with this draft's own template laid over it.
+    """The layout a draft renders with: its own template, else the Page's.
 
-    One more level of the same `{**default, **override}` the file and the Page
-    already form: `layout.yml` < `page_layout` < the draft. Null at any level
-    means "keep tracking the one below", which is why a draft that has chosen
-    nothing still follows the Page when the Page changes.
-
-    Validated through `Layout` like everything else, so a stored template the
-    compositor does not know fails here rather than rendering the wrong card and
-    returning a perfectly valid PNG.
+    The form is picked first and the overrides second, because each form has
+    its own: a draft switched to a full overlay draws with the Page's full
+    overlay settings, not its card's. Null means "keep tracking the one
+    below", which is why a draft that has chosen nothing still follows the
+    Page when the Page changes.
     """
-    layout = resolve(session, page_id)
-    if not template or template == layout.template:
-        return layout
-    return Layout.model_validate({**layout.model_dump(), "template": template})
+    return resolve(session, page_id, template)
 
 
-def resolve(session: Session, page_id: int | None) -> Layout:
-    """The layout to render this Page with. `None` gives the file's defaults.
+def form_of(session: Session, page_id: int | None) -> str:
+    """The form a Page publishes in: its own pick, else `layout.yml`'s."""
+    page = session.get(Page, page_id) if page_id is not None else None
+    return (page and page.template) or defaults.template
 
-    Validated through the same `Layout` model the file is, so a stored value
-    that cannot make a layout fails here rather than inside resvg - which does
-    not fail, it renders something wrong and returns a valid PNG.
+
+def resolve(session: Session, page_id: int | None, form: str | None = None) -> Layout:
+    """The layout to render this Page with, in `form` or the Page's own form.
+
+    `None` for the Page gives the file's defaults. Validated through the same
+    `Layout` model the file is, so a stored value that cannot make a layout
+    fails here rather than inside resvg - which does not fail, it renders
+    something wrong and returns a valid PNG.
     """
-    if page_id is None:
-        return defaults
-
-    row = session.exec(
-        select(PageLayout).where(PageLayout.page_id == page_id)
-    ).first()
-    if row is None:
-        return defaults
-
+    form = form or form_of(session, page_id)
+    row = (
+        session.exec(
+            select(PageLayout).where(
+                PageLayout.page_id == page_id, PageLayout.form == form
+            )
+        ).first()
+        if page_id is not None
+        else None
+    )
     return Layout.model_validate(
-        _merge(defaults.model_dump(), as_overrides(row))
+        _merge({**defaults.model_dump(), "template": form}, as_overrides(row))
     )

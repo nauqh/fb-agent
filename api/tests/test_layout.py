@@ -15,7 +15,7 @@ import pytest
 from PIL import Image
 from sqlmodel import select
 
-from app import media
+from app import layout_for, media
 from app.models import Draft, DraftStatus, PageLayout
 from app.settings import API_DIR, FONTS
 
@@ -489,3 +489,33 @@ def test_a_page_picks_a_font_from_the_list(client, page):
     assert chosen["layout"]["font"]["path"] == "assets/fonts/Montserrat-ExtraBold.ttf"
     assert "font" in chosen["overridden"]
     assert patch(None).json()["layout"]["font"]["family"] == "Arial", "null tracks the file"
+
+
+def test_each_form_keeps_its_own_settings(client, session, page):
+    """A card and a full overlay tune apart (client, 2026-10-22)."""
+    patch = lambda form, body: client.patch(
+        "/layout", params={"page_id": page.id, "form": form}, json=body
+    )
+
+    patch("card", {"font": "Montserrat", "text_padding_left_px": 40})
+    out = patch("full_overlay", {"text_padding_left_px": 10}).json()
+
+    card, full = out["forms"]["card"], out["forms"]["full_overlay"]
+    assert card["layout"]["font"]["family"] == "Montserrat"
+    assert full["layout"]["font"]["family"] == "Arial", "the card's font stayed on the card"
+    assert card["layout"]["text"]["padding"]["left_px"] == 40
+    assert full["layout"]["text"]["padding"]["left_px"] == 10
+    assert full["overridden"] == ["text_padding_left_px"]
+
+    # A draft switched to the other form draws with that form's settings.
+    assert layout_for.resolve_draft(session, page.id, "full_overlay").font.family == "Arial"
+    assert layout_for.resolve_draft(session, page.id, None).font.family == "Montserrat"
+
+    picked = patch("card", {"template": "full_overlay"}).json()
+    assert picked["layout"]["text"]["padding"]["left_px"] == 10, "the Page's form is on top"
+    assert "template" in picked["overridden"]
+
+    client.delete("/layout", params={"page_id": page.id, "form": "full_overlay"})
+    out = client.get("/layout", params={"page_id": page.id}).json()
+    assert out["forms"]["full_overlay"]["overridden"] == []
+    assert out["forms"]["card"]["layout"]["font"]["family"] == "Montserrat", "reset one form only"

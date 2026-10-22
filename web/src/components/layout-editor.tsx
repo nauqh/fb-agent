@@ -31,7 +31,7 @@ import {
 } from "@/lib/api/pages";
 import { listDrafts } from "@/lib/api/drafts";
 import { usePageScope } from "@/lib/page-scope";
-import type { Page } from "@/lib/types";
+import type { CardForm, Page } from "@/lib/types";
 import { emit } from "@/lib/store";
 import { useQuery } from "@/lib/use-query";
 import { cn } from "@/lib/utils";
@@ -80,16 +80,26 @@ export function LayoutEditor() {
     enabled: pageId !== null,
   });
 
-  // Unsaved changes only. Merged over the resolved layout for the preview, so
-  // an untouched field keeps tracking the file rather than being captured as a
-  // copy of whatever it said when this screen opened.
-  const [draft, setDraft] = useState<LayoutPatch>({});
+  // Unsaved changes only, per form, since each form has its own settings.
+  // Merged over the resolved layout for the preview, so an untouched field
+  // keeps tracking the file rather than being captured as a copy of whatever it
+  // said when this screen opened.
+  const [drafts, setDrafts] = useState<Partial<Record<CardForm, LayoutPatch>>>({});
+  // The form being edited, and the Page's unsaved pick of form. Apart, so a
+  // full overlay can be tuned without making it what the Page publishes.
+  const [editing, setEditing] = useState<CardForm | null>(null);
+  const [template, setTemplate] = useState<CardForm | null>(null);
   const [saving, setSaving] = useState(false);
 
   if (!data || !page) return <Loading label="Loading layout" className="h-96" />;
 
-  const shown = preview(data.layout, draft, data.fonts);
-  const dirty = Object.keys(draft).length > 0;
+  const form = editing ?? data.layout.template;
+  const publishes = template ?? data.layout.template;
+  const draft = drafts[form] ?? {};
+  const overridden = data.forms[form].overridden;
+  const shown = preview(data.forms[form].layout, draft, data.fonts);
+  const dirty =
+    template !== null || Object.values(drafts).some((one) => Object.keys(one).length > 0);
   const padding = [
     ["Pad left", "text_padding_left_px", shown.text.padding.left_px],
     ["Pad right", "text_padding_right_px", shown.text.padding.right_px],
@@ -98,15 +108,19 @@ export function LayoutEditor() {
   ] as const;
 
   function set<K extends keyof LayoutPatch>(key: K, value: LayoutPatch[K]) {
-    setDraft((current) => ({ ...current, [key]: value }));
+    setDrafts((current) => ({ ...current, [form]: { ...current[form], [key]: value } }));
   }
 
   async function save() {
     if (pageId === null) return;
     setSaving(true);
     try {
-      await savePageLayout(pageId, draft);
-      setDraft({});
+      for (const [one, changes] of Object.entries(drafts)) {
+        await savePageLayout(pageId, one as CardForm, changes);
+      }
+      if (template !== null) await savePageLayout(pageId, template, { template });
+      setDrafts({});
+      setTemplate(null);
       toast.success(`${page!.name}'s layout saved`);
       await refresh();
       emit();
@@ -121,9 +135,9 @@ export function LayoutEditor() {
     if (pageId === null) return;
     setSaving(true);
     try {
-      await resetPageLayout(pageId);
-      setDraft({});
-      toast.success(`${page!.name} is back on the defaults`);
+      await resetPageLayout(pageId, form);
+      setDrafts((current) => ({ ...current, [form]: {} }));
+      toast.success(`${page!.name}'s ${form.replace(/_/g, " ")} is back on the defaults`);
       await refresh();
       emit();
     } catch (cause) {
@@ -145,19 +159,31 @@ export function LayoutEditor() {
             because padding is a property of the text block). */}
         <Group title="Template">
           <div className="sm:col-span-2">
+            {/* Which form's settings are below. Each form keeps its own, so
+                picking one here edits it without publishing in it. */}
             <Choice
               label="Card form"
-              value={shown.template}
+              value={form}
               options={["card", "full_overlay", "photo"]}
-              changed={data.overridden.includes("template")}
-              onChange={(v) => set("template", v as "card" | "full_overlay" | "photo")}
+              onChange={(v) => setEditing(v as CardForm)}
             />
             <p className="pt-1 text-[0.7rem] text-muted-foreground">
-              {shown.template === "card"
+              {form === "card"
                 ? "Hero on top, panel below it, dividing the height between them."
-                : shown.template === "photo"
+                : form === "photo"
                   ? "The picture at its own shape with the logo. No panel."
-                  : "The photograph fills the card and the panel lies over its bottom."}
+                  : "The photograph fills the card and the panel lies over its bottom."}{" "}
+              {publishes === form ? (
+                `${page.name} publishes in this form.`
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setTemplate(form)}
+                  className="text-primary underline-offset-2 hover:underline"
+                >
+                  Publish in this form
+                </button>
+              )}
             </p>
           </div>
 
@@ -174,7 +200,7 @@ export function LayoutEditor() {
               max={1}
               step={0.05}
               format={(v) => `${Math.round(v * 100)}%`}
-              changed={data.overridden.includes("panel_opacity")}
+              changed={overridden.includes("panel_opacity")}
               onChange={(v) => set("panel_opacity", v)}
             />
           ) : null}
@@ -185,7 +211,7 @@ export function LayoutEditor() {
             <Colour
               label="Colour"
               value={shown.badge.color}
-              changed={data.overridden.includes("badge_color")}
+              changed={overridden.includes("badge_color")}
               onChange={(v) => set("badge_color", v)}
             />
             <Range
@@ -195,7 +221,7 @@ export function LayoutEditor() {
               max={48}
               step={1}
               format={(v) => `${v}px`}
-              changed={data.overridden.includes("badge_font_size_px")}
+              changed={overridden.includes("badge_font_size_px")}
               onChange={(v) => set("badge_font_size_px", v)}
             />
             <div className="sm:col-span-2">
@@ -213,7 +239,7 @@ export function LayoutEditor() {
             max={260}
             step={2}
             format={(v) => `${v}px`}
-            changed={data.overridden.includes("watermark_max_px")}
+            changed={overridden.includes("watermark_max_px")}
             onChange={(v) => set("watermark_max_px", v)}
           />
           {/* Its own two cells, spanning the row: the image and the text that
@@ -236,7 +262,7 @@ export function LayoutEditor() {
             max={Math.round(shown.image.width * shown.portrait.max_width_ratio)}
             step={1}
             format={(v) => `${v}px`}
-            changed={data.overridden.includes("portrait_size_px")}
+            changed={overridden.includes("portrait_size_px")}
             onChange={(v) => set("portrait_size_px", v)}
           />
           <Range
@@ -246,13 +272,13 @@ export function LayoutEditor() {
             max={MAX_RING_PX}
             step={1}
             format={(v) => (v === 0 ? "none" : `${v}px`)}
-            changed={data.overridden.includes("portrait_border_width_px")}
+            changed={overridden.includes("portrait_border_width_px")}
             onChange={(v) => set("portrait_border_width_px", v)}
           />
           <Colour
             label="Ring colour"
             value={shown.portrait.border_color}
-            changed={data.overridden.includes("portrait_border_color")}
+            changed={overridden.includes("portrait_border_color")}
             onChange={(v) => set("portrait_border_color", v)}
           />
         </Group>
@@ -268,13 +294,13 @@ export function LayoutEditor() {
           <Colour
             label="Background"
             value={shown.panel.color}
-            changed={data.overridden.includes("panel_color")}
+            changed={overridden.includes("panel_color")}
             onChange={(v) => set("panel_color", v)}
           />
         </Group>
 
         <Group title="Text overlay">
-          <Field label="Font" changed={data.overridden.includes("font")} value={shown.font.family}>
+          <Field label="Font" changed={overridden.includes("font")} value={shown.font.family}>
             <div className="grid grid-cols-3 gap-1">
               {data.fonts.map((font) => (
                 <button
@@ -303,7 +329,7 @@ export function LayoutEditor() {
             max={72}
             step={1}
             format={(v) => `${v}px`}
-            changed={data.overridden.includes("text_font_size_px")}
+            changed={overridden.includes("text_font_size_px")}
             onChange={(v) => set("text_font_size_px", v)}
           />
           {/* No line-height control. It tracks `layout.yml` for every Page: the
@@ -315,7 +341,7 @@ export function LayoutEditor() {
             label="Align"
             value={shown.text.align}
             options={["left", "center", "right"]}
-            changed={data.overridden.includes("text_align")}
+            changed={overridden.includes("text_align")}
             onChange={(v) => set("text_align", v)}
           />
           {/* Case is a drawing setting, so the hook stays in the case the
@@ -327,20 +353,20 @@ export function LayoutEditor() {
             label="Case"
             value={shown.text.uppercase ? "capitals" : "as_written"}
             options={["as_written", "capitals"]}
-            changed={data.overridden.includes("text_uppercase")}
+            changed={overridden.includes("text_uppercase")}
             onChange={(v) => set("text_uppercase", v === "capitals")}
           />
           <Colour
             label="Colour"
             value={shown.text.color}
-            changed={data.overridden.includes("text_color")}
+            changed={overridden.includes("text_color")}
             onChange={(v) => set("text_color", v)}
           />
           <Colour
             label="Highlight"
             hint="Phrases the writer marks verbatim."
             value={shown.highlight.color}
-            changed={data.overridden.includes("highlight_color")}
+            changed={overridden.includes("highlight_color")}
             onChange={(v) => set("highlight_color", v)}
           />
           {/* Folded: four sliders that are rarely touched were a third of
@@ -349,7 +375,7 @@ export function LayoutEditor() {
               overridden, so a changed value is never hidden. */}
           <details
             className="group sm:col-span-2"
-            open={padding.some(([, key]) => data.overridden.includes(key)) || undefined}
+            open={padding.some(([, key]) => overridden.includes(key)) || undefined}
           >
             <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[13px] text-muted-foreground hover:text-foreground [&::-webkit-details-marker]:hidden">
               <ChevronRight className="size-3 transition-transform group-open:rotate-90" />
@@ -368,7 +394,7 @@ export function LayoutEditor() {
                   max={80}
                   step={1}
                   format={(v) => `${v}px`}
-                  changed={data.overridden.includes(key)}
+                  changed={overridden.includes(key)}
                   onChange={(v) => set(key, v)}
                 />
               ))}
@@ -383,16 +409,16 @@ export function LayoutEditor() {
               Save
             </Button>
           ) : null}
-          {data.overridden.length > 0 || dirty ? (
+          {overridden.length > 0 || Object.keys(draft).length > 0 ? (
             <Button size="sm" variant="ghost" onClick={reset} disabled={saving}>
               <RotateCcw className="size-3.5" />
               Reset to defaults
             </Button>
           ) : null}
           <p className="text-xs text-muted-foreground">
-            {data.overridden.length === 0
+            {overridden.length === 0
               ? "On the defaults from config/layout.yml."
-              : `${data.overridden.length} value${data.overridden.length === 1 ? "" : "s"} overridden for ${page.name}.`}
+              : `${overridden.length} value${overridden.length === 1 ? "" : "s"} overridden for ${page.name}'s ${form.replace(/_/g, " ")}.`}
             {dirty ? " Unsaved changes shown in the preview." : ""}
           </p>
         </div>
@@ -414,7 +440,6 @@ function preview(
 
   return {
     ...base,
-    template: at(draft.template, base.template),
     font: fonts.find((font) => font.family === draft.font) ?? base.font,
     badge: {
       ...base.badge,

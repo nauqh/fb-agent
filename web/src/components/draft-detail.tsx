@@ -780,12 +780,10 @@ export function DraftDetail({
   ) : (
     <ComposedImage
       layout={
-        // The draft's own form laid over the Page's, so the toggle moves the
-        // card as it is clicked rather than after a save. Same merge the server
-        // does in `layout_for.resolve_draft`.
-        form?.template && form.template !== layout.template
-          ? { ...layout, template: form.template }
-          : layout
+        // The draft's own form, drawn with that form's settings, so the toggle
+        // moves the card as it is clicked rather than after a save. Same pick
+        // the server makes in `layout_for.resolve_draft`.
+        layoutResult?.forms[form?.template ?? draft.template ?? layout.template]?.layout ?? layout
       }
       page={page}
       overlayText={form?.hook ?? draft.hook}

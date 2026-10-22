@@ -86,17 +86,28 @@ export interface CardFontFace {
   path: string;
 }
 
-export interface LayoutResult {
+export interface FormLayout {
   layout: ResolvedLayout;
   /** Column names this Page overrides. Empty means it is on the defaults. */
   overridden: string[];
+}
+
+/**
+ * The Page's own form at the top level, and every form under `forms`. Each form
+ * has its own overrides, so a card and a full overlay can differ in font and
+ * padding; a draft that picks another form draws with that form's entry.
+ * `template` in the top-level `overridden` means the Page has picked its form.
+ */
+export interface LayoutResult extends FormLayout {
+  forms: Record<CardForm, FormLayout>;
   /** The faces a Page may pick. */
   fonts: CardFontFace[];
 }
 
 /** The flat column names `PATCH` takes. Null clears one back to the default. */
 export interface LayoutPatch {
-  template?: "card" | "full_overlay" | "photo" | null;
+  /** The Page's pick of form. Stored on the Page, not on the form's row. */
+  template?: CardForm | null;
   panel_ratio?: number | null;
   panel_max_ratio?: number | null;
   panel_color?: string | null;
@@ -131,17 +142,19 @@ export async function getPageLayout(pageId?: number): Promise<LayoutResult> {
   return get<LayoutResult>("/layout", pageId ? { page_id: pageId } : undefined);
 }
 
+/** `form` is the one whose settings `changes` apply to. */
 export async function savePageLayout(
   pageId: number,
+  form: CardForm,
   changes: LayoutPatch,
 ): Promise<LayoutResult> {
-  return patch<LayoutResult>(`/layout?page_id=${pageId}`, changes);
+  return patch<LayoutResult>(`/layout?page_id=${pageId}&form=${form}`, changes);
 }
 
 /**
- * Back to `layout.yml`. Deletes the row rather than writing the defaults into
- * it, so the Page keeps tracking the file afterwards.
+ * One form back to `layout.yml`. Deletes its row rather than writing the
+ * defaults into it, so the Page keeps tracking the file afterwards.
  */
-export async function resetPageLayout(pageId: number): Promise<void> {
-  await del(`/layout?page_id=${pageId}`);
+export async function resetPageLayout(pageId: number, form: CardForm): Promise<void> {
+  await del(`/layout?page_id=${pageId}&form=${form}`);
 }
