@@ -196,6 +196,25 @@ def test_a_full_overlay_puts_the_photograph_behind_the_panel():
     assert full.getpixel(probe)[0] > 40, "the hero is not showing through the panel"
 
 
+def test_the_second_full_overlay_draws_as_the_first():
+    first = _drawn(_templated("full_overlay", panel_opacity=0.5), badge_text="NEWS")
+    second = _drawn(_templated("full_overlay_2", panel_opacity=0.5), badge_text="NEWS")
+
+    assert first.tobytes() == second.tobytes()
+
+
+def test_the_two_full_overlays_keep_their_own_settings(client, page):
+    patch = lambda form, body: client.patch(
+        "/layout", params={"page_id": page.id, "form": form}, json=body
+    )
+
+    patch("full_overlay", {"font": "Montserrat"})
+    out = patch("full_overlay_2", {"font": "Oswald"}).json()
+
+    assert out["forms"]["full_overlay"]["layout"]["font"]["family"] == "Montserrat"
+    assert out["forms"]["full_overlay_2"]["layout"]["font"]["family"] == "Oswald"
+
+
 def test_a_full_overlay_fades_into_its_panel():
     """Darkening toward the panel, not a hard edge at its top."""
     from app.image import text as overlay

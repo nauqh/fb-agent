@@ -11,7 +11,17 @@
 export type SourceKind = "competitor_post" | "tweet" | "rss" | "web";
 
 /** The card forms the compositor draws. `quote` is type only, with no picture. */
-export type CardForm = "card" | "full_overlay" | "photo" | "quote";
+export type CardForm = "card" | "full_overlay" | "full_overlay_2" | "photo" | "quote";
+
+/** What the screens call each form. The two full overlays draw alike and
+ *  differ only in their settings. */
+export const FORM_LABEL: Record<CardForm, string> = {
+  card: "Card",
+  full_overlay: "Full overlay 1",
+  full_overlay_2: "Full overlay 2",
+  photo: "Photo",
+  quote: "Quote",
+};
 
 /** `failed` means the run produced nothing; `error` says why. Never in `review`. */
 export type DraftStatus =

@@ -134,7 +134,7 @@ export function ComposedImage({
   }, [overlayText, highlightPhrases, layout.text.uppercase]);
 
   const hue = (seed * 47) % 360;
-  const full = layout.template === "full_overlay";
+  const full = layout.template.startsWith("full_overlay");
   /** The no-overlay card (client, 2026-09-11): no panel, no badge, no gold -
       the hero is full bleed and the logo is the only overlay. Matches the
       compositor's `plan=None`, so the preview beside the PNG stays honest. */

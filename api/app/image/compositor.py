@@ -72,7 +72,7 @@ def panel_svg(plan: OverlayPlan, phrases: list[str], layout: Layout) -> str:
     Opacity is a full overlay's alone. A card has nothing under its panel, so
     a translucent one would only be the panel colour lost to the RGB save.
     """
-    opacity = layout.panel.opacity if layout.template == "full_overlay" else 1
+    opacity = layout.panel.opacity if layout.template.startswith("full_overlay") else 1
     padding = layout.text.padding
     width = layout.image.width
     height = plan.panel_height_px
@@ -432,7 +432,7 @@ def compose(
     photo = layout.template == "photo"
     if photo:
         plan = None
-    full_overlay = plan is not None and layout.template == "full_overlay"
+    full_overlay = plan is not None and layout.template.startswith("full_overlay")
 
     if plan is not None:
         if not plan.lines:

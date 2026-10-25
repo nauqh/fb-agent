@@ -1201,7 +1201,8 @@ export function DraftDetail({
               >
                 <TabsList className="w-full *:flex-1">
                   <TabsTrigger value="card">Card</TabsTrigger>
-                  <TabsTrigger value="full_overlay">Full overlay</TabsTrigger>
+                  <TabsTrigger value="full_overlay">Full overlay 1</TabsTrigger>
+                  <TabsTrigger value="full_overlay_2">Full overlay 2</TabsTrigger>
                   <TabsTrigger value="photo">Photo only</TabsTrigger>
                   <TabsTrigger value="quote">Quote</TabsTrigger>
                 </TabsList>

@@ -94,7 +94,7 @@ class TextLayout(Frozen):
     padding: PaddingLayout
 
 
-Template = Literal["card", "full_overlay", "photo", "quote"]
+Template = Literal["card", "full_overlay", "full_overlay_2", "photo", "quote"]
 """Which card form a Page draws.
 
 `card` is the original: hero on top, panel below it, the two dividing the height
@@ -104,7 +104,9 @@ if the panel is translucent (`panel.opacity`). `photo` is a plain Facebook post
 (client, 2026-10-03): the picture at its own shape and the logo, no panel even
 when the draft has a hook - the form decides, so a stray hook cannot bring the
 panel back. `quote` is the hook set as type on a dark ground, with no picture at
-all (client, 2026-10-22) - see `image/quote.py`.
+all (client, 2026-10-22) - see `image/quote.py`. `full_overlay_2` draws exactly
+as `full_overlay` does; it exists so a Page can keep two tunings of it, each
+with its own `page_layout` row (client, 2026-10-25).
 
 Closed. `photo` adds no fields; a form that needed its own copy of the panel
 settings would be a `template` table rather than a value, which is what the old

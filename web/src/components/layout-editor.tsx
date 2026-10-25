@@ -33,7 +33,7 @@ import {
 } from "@/lib/api/pages";
 import { listDrafts } from "@/lib/api/drafts";
 import { usePageScope } from "@/lib/page-scope";
-import type { CardForm, Page } from "@/lib/types";
+import { FORM_LABEL, type CardForm, type Page } from "@/lib/types";
 import { emit } from "@/lib/store";
 import { useQuery } from "@/lib/use-query";
 import { cn } from "@/lib/utils";
@@ -139,7 +139,7 @@ export function LayoutEditor() {
     try {
       await resetPageLayout(pageId, form);
       setDrafts((current) => ({ ...current, [form]: {} }));
-      toast.success(`${page!.name}'s ${form.replace(/_/g, " ")} is back on the defaults`);
+      toast.success(`${page!.name}'s ${FORM_LABEL[form].toLowerCase()} is back on the defaults`);
       await refresh();
       emit();
     } catch (cause) {
@@ -166,7 +166,8 @@ export function LayoutEditor() {
             <Choice
               label="Card form"
               value={form}
-              options={["card", "full_overlay", "photo", "quote"]}
+              options={Object.keys(FORM_LABEL)}
+              labels={FORM_LABEL}
               onChange={(v) => setEditing(v as CardForm)}
             />
             <p className="pt-1 text-[0.7rem] text-muted-foreground">
@@ -195,7 +196,7 @@ export function LayoutEditor() {
               nothing behind the panel, so the setting does nothing but let one
               brand's cards drift off the house style; here it is the whole
               difference between type on a photograph and a black band over it. */}
-          {shown.template === "full_overlay" ? (
+          {shown.template.startsWith("full_overlay") ? (
             <Range
               label="Panel opacity"
               hint="How dark the photo fades behind the text. 0% is type straight on the photo."
@@ -239,7 +240,7 @@ export function LayoutEditor() {
           </Group>
         ) : (
         <>
-        {shown.template === "full_overlay" ? (
+        {shown.template.startsWith("full_overlay") ? (
           <Group title="Headline badge">
             <Colour
               label="Colour"
@@ -453,7 +454,7 @@ export function LayoutEditor() {
           <p className="text-xs text-muted-foreground">
             {overridden.length === 0
               ? "On the defaults from config/layout.yml."
-              : `${overridden.length} value${overridden.length === 1 ? "" : "s"} overridden for ${page.name}'s ${form.replace(/_/g, " ")}.`}
+              : `${overridden.length} value${overridden.length === 1 ? "" : "s"} overridden for ${page.name}'s ${FORM_LABEL[form].toLowerCase()}.`}
             {dirty ? " Unsaved changes shown in the preview." : ""}
           </p>
         </div>
@@ -574,7 +575,7 @@ function Preview({ layout, page }: { layout: ResolvedLayout; page: Page }) {
   const [phrases, setPhrases] = useState<string[]>(SAMPLE_HIGHLIGHTS);
   const scale = (px: number) => `${(px / layout.image.width) * 100}%`;
   const mark = watermarkUrl(page);
-  const full = layout.template === "full_overlay";
+  const full = layout.template.startsWith("full_overlay");
   // No panel, and the hero is the whole card - as on a full overlay, which is
   // why the mark below hangs from the same place on both.
   const photo = layout.template === "photo";
@@ -1188,17 +1189,19 @@ function Choice({
   label,
   value,
   options,
+  labels,
   changed,
   onChange,
 }: {
   label: string;
   value: string;
   options: string[];
+  labels?: Record<string, string>;
   changed?: boolean;
   onChange: (value: string) => void;
 }) {
   return (
-    <Field label={label} changed={changed} value={value}>
+    <Field label={label} changed={changed} value={labels?.[value] ?? value}>
       <div className="flex gap-1">
         {options.map((option) => (
           <button
@@ -1214,7 +1217,7 @@ function Choice({
           >
             {/* The value is what the API takes; the underscore in
                 `full_overlay` is not for reading. */}
-            {option.replace(/_/g, " ")}
+            {labels?.[option] ?? option.replace(/_/g, " ")}
           </button>
         ))}
       </div>
