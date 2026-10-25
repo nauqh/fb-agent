@@ -97,6 +97,8 @@ interface Form {
   inset_border_color: string | null;
   /** The card form for this draft. Null follows the Page. */
   template: CardForm | null;
+  quote_marks: boolean;
+  attribution: string | null;
 }
 
 export function DraftDetail({
@@ -788,6 +790,8 @@ export function DraftDetail({
       page={page}
       overlayText={form?.hook ?? draft.hook}
       highlightPhrases={form?.highlight_phrases ?? draft.highlight_phrases}
+      quoteMarks={form?.quote_marks ?? draft.quote_marks}
+      attribution={form ? form.attribution : draft.attribution}
       heroSrc={draft.hero_image_url}
       heroXRatio={form?.hero_x_ratio ?? draft.hero_x_ratio}
       heroYRatio={form?.hero_y_ratio ?? draft.hero_y_ratio}
@@ -1204,7 +1208,6 @@ export function DraftDetail({
               </Tabs>
             </section>
           ) : null}
-
           {/* The inset sits under the picture rather than in the copy column:
               it is the one control whose whole feedback is the image, and the
               slider is useless without it in view. */}
@@ -1622,6 +1625,31 @@ export function DraftDetail({
                   />
                 </Field>
                 )}
+
+                {quoteCard && !published ? (
+                  <>
+                  <Field label="Quotation marks" hint="off for a statement">
+                    <Tabs
+                      value={form.quote_marks ? "on" : "off"}
+                      onValueChange={(next) => setForm({ ...form, quote_marks: next === "on" })}
+                    >
+                      <TabsList className="w-fit">
+                        <TabsTrigger value="on">Quote</TabsTrigger>
+                        <TabsTrigger value="off">Statement</TabsTrigger>
+                      </TabsList>
+                    </Tabs>
+                  </Field>
+                  <Field label="Said by" hint="optional · under the quote">
+                    <Input
+                      value={form.attribution ?? ""}
+                      placeholder="Winston Churchill"
+                      onChange={(event) =>
+                        setForm({ ...form, attribution: event.target.value || null })
+                      }
+                    />
+                  </Field>
+                  </>
+                ) : null}
 
                 <Field
                   label="Caption"
@@ -2398,5 +2426,7 @@ function toForm(draft: Draft): Form {
     inset_border_width_px: draft.inset_border_width_px,
     inset_border_color: draft.inset_border_color,
     template: draft.template,
+    quote_marks: draft.quote_marks,
+    attribution: draft.attribution,
   };
 }

@@ -1,14 +1,15 @@
-"""The `quote` card: the hook set as type on a dark ground. No hero, no panel.
+"""The `quote` card: the hook set as type on a plain ground. No hero, no panel.
 
-Modelled on the posts the client pointed at (2026-10-22, Inspire Through
-Bible): a gold quotation mark beside the Page's name, a heading in capitals,
-then the quote, left-aligned on a near-black grain, the block centred on the
-card. Everything is drawn here, so a quote card buys no picture and redraws for
-free like any other edit.
+Modelled on the post the client pointed at (2026-10-25): white on black, the
+quote centred between two horizontal rules, an opening mark above the top rule
+at the left and a closing mark below the bottom rule at the right. Who said it
+sits under the quote, inside the rules; the Page's name sits under everything.
+Everything is drawn here, so a quote card buys no picture and redraws for free
+like any other edit.
 
-The hook carries both texts. With more than one line the first is the heading
-("PSALM 94:19", "MARCUS AURELIUS"); with one line it is all quote. Highlight
-phrases are set in bold italic rather than gold, which is the sample's emphasis.
+Highlight phrases are set in bold italic, the sample's emphasis. The marks are
+the draft's choice (`Draft.quote_marks`): off, the same text reads as a
+statement.
 
 No autofit, as on the panel (`text.plan`): a quote too long for the card is
 refused rather than shrunk, so the preview and the PNG agree on the type size.
@@ -20,25 +21,33 @@ from dataclasses import dataclass
 import resvg_py
 from PIL import Image
 
-from app.image.compositor import JPEG_QUALITY, CompositeError, _escape, _watermark
+from app.image.compositor import JPEG_QUALITY, CompositeError, _escape
 from app.image.text import WIDTH_SAFETY, Measurer, Segment, _merge, get_measurer, segment
 from app.settings import API_DIR, Layout
 
-HEADING_LINE_RATIO = 1.1
-NAME_RATIO = 0.2
-"""The Page's name beside the quotation mark, as a share of the mark's size."""
+MARK_INK = 0.4
+"""A quotation mark's ink, as a share of its em: about the top third."""
+MARK_ASCENT = 0.72
+"""How far above the baseline a quotation mark's ink starts, in ems."""
+QUOTES = "\"“”"
 
 
-def split(hook: str) -> tuple[str | None, str]:
-    """The heading and the quote. No heading unless the hook has two lines.
+def body_text(hook: str, marks: bool) -> str:
+    """The quote as one paragraph. Its own quotation marks go when the card
+    draws them, so a hook written in curly quotes is not quoted twice.
 
     Whitespace is collapsed and nothing else. `text.normalise` puts a space
     after every colon, which turns "Psalm 94:19" into "94: 19".
     """
-    lines = [" ".join(line.split()) for line in hook.splitlines() if line.strip()]
-    if len(lines) < 2:
-        return None, " ".join(lines)
-    return lines[0], " ".join(lines[1:])
+    text = " ".join(hook.split())
+    return text.strip(QUOTES).strip() if marks else text
+
+
+def attribution_text(name: str | None) -> str | None:
+    """`- Name -`, from a name typed with or without its own dashes."""
+    # The class holds en and em dashes as data: what an operator may type.
+    name = (name or "").strip(" -–—")
+    return f"- {name} -" if name else None
 
 
 def wrap_runs(
@@ -91,70 +100,99 @@ def wrap_runs(
 
 @dataclass(frozen=True)
 class QuotePlan:
-    """Every position the card draws at. Baselines, in card pixels."""
+    """Every position the card draws at. Baselines and rule tops, in card pixels."""
 
-    heading: list[str]
     body: list[list[Segment]]
-    mark_y: int
-    heading_y: int
+    attribution: list[str]
+    marks: bool
+    name: str | None
+    open_mark_y: int
+    top_rule_y: int
     body_y: int
-    heading_line_px: int
+    attribution_y: int
+    bottom_rule_y: int
+    close_mark_y: int
+    name_y: int
     body_line_px: int
+    attribution_line_px: int
 
 
-def plan(hook: str, phrases: list[str], layout: Layout) -> QuotePlan:
+def plan(
+    hook: str,
+    phrases: list[str],
+    layout: Layout,
+    *,
+    marks: bool = True,
+    attribution: str | None = None,
+    name: str | None = None,
+) -> QuotePlan:
     quote = layout.quote
     width, height = layout.image.width, layout.image.height
     margin = round(width * quote.margin_ratio)
     available = (width - margin * 2) * WIDTH_SAFETY
     regular = get_measurer(str(API_DIR / quote.font_path))
+    italic = get_measurer(str(API_DIR / quote.italic_path))
     emphasis = get_measurer(str(API_DIR / quote.emphasis_path))
 
-    heading_text, body_text = split(hook)
-    # Not `text.wrap`, which normalises on its own and would put the space back.
-    heading = [
-        "".join(part.text for part in line)
-        for line in wrap_runs(
-            (heading_text or "").upper(), [], available, quote.heading_px, regular, regular
-        )
-    ]
-    body = wrap_runs(body_text, phrases, available, quote.body_px, regular, emphasis)
-    if not heading and not body:
+    body = wrap_runs(body_text(hook, marks), phrases, available, quote.body_px, regular, emphasis)
+    if not body:
         raise CompositeError("the quote card has no text to draw")
+    credit = attribution_text(attribution)
+    credit_lines = [
+        "".join(part.text for part in line)
+        for line in wrap_runs(credit or "", [], available, quote.attribution_px, italic, italic)
+    ]
 
-    heading_line = round(quote.heading_px * HEADING_LINE_RATIO)
     body_line = round(quote.body_px * quote.line_height_ratio)
+    credit_line = round(quote.attribution_px * quote.line_height_ratio)
+    body_height = (len(body) - 1) * body_line + quote.body_px
+    credit_height = (
+        round(quote.body_px * 0.7) + (len(credit_lines) - 1) * credit_line + quote.attribution_px
+        if credit_lines
+        else 0
+    )
+    # Heights as the eye sees them: a mark is its ink, a line of text is its
+    # size plus the leading of every line after the first.
+    mark = round(quote.mark_px * MARK_INK) + round(quote.body_px * 0.35) if marks else 0
+    inside = quote.body_px
+    name_height = round(quote.body_px * 1.1) + quote.name_px if name else 0
 
-    # Heights of the three blocks as the eye sees them: a quotation mark's ink
-    # is the top third of its em, and a line of text is its size plus the
-    # leading of every line after the first.
-    mark = round(quote.mark_px * 0.4)
-    heading_height = (len(heading) - 1) * heading_line + quote.heading_px if heading else 0
-    body_height = (len(body) - 1) * body_line + quote.body_px if body else 0
-    gap_after_mark = round(quote.heading_px * 0.5)
-    gap_after_heading = round(quote.body_px * 0.5) if heading and body else 0
-
-    total = mark + gap_after_mark + heading_height + gap_after_heading + body_height
+    total = (
+        mark * 2
+        + quote.rule_px * 2
+        + inside * 2
+        + body_height
+        + credit_height
+        + name_height
+    )
     if total > height - margin * 2:
         raise CompositeError(
             f"the quote needs {total}px and the card has {height - margin * 2}px; "
             "shorten it"
         )
-    # A touch above centre, where a centred block looks centred.
-    top = round((height - total) * 0.45)
-    heading_top = top + mark + gap_after_mark
-    body_top = heading_top + heading_height + gap_after_heading
+
+    top = round((height - total) / 2)
+    top_rule = top + mark
+    body_top = top_rule + quote.rule_px + inside
+    credit_top = body_top + body_height + round(quote.body_px * 0.7)
+    bottom_rule = body_top + body_height + credit_height + inside
+    close_top = bottom_rule + quote.rule_px + round(quote.body_px * 0.35)
+    name_top = bottom_rule + quote.rule_px + mark + round(quote.body_px * 1.1)
 
     return QuotePlan(
-        heading=heading,
         body=body,
-        # A quotation mark sits high in its em: its ink starts about 0.72em
-        # above the baseline, so this puts the ink's top at `top`.
-        mark_y=top + round(quote.mark_px * 0.72),
-        heading_y=heading_top + round(quote.heading_px * 0.8),
+        attribution=credit_lines,
+        marks=marks,
+        name=name,
+        open_mark_y=top + round(quote.mark_px * MARK_ASCENT),
+        top_rule_y=top_rule,
         body_y=body_top + round(quote.body_px * 0.8),
-        heading_line_px=heading_line,
+        attribution_y=credit_top + round(quote.attribution_px * 0.8),
+        bottom_rule_y=bottom_rule,
+        close_mark_y=close_top + round(quote.mark_px * MARK_ASCENT),
+        name_y=name_top + round(quote.name_px * 0.8),
         body_line_px=body_line,
+        attribution_line_px=credit_line,
     )
 
 
@@ -163,54 +201,61 @@ def _text(content: str) -> str:
     return _escape(content).replace(" ", "&#160;")
 
 
-def card_svg(
-    quote_plan: QuotePlan, layout: Layout, name: str | None, name_x: int
-) -> str:
+def card_svg(quote_plan: QuotePlan, layout: Layout) -> str:
     quote = layout.quote
     width, height = layout.image.width, layout.image.height
     margin = round(width * quote.margin_ratio)
-    colour = layout.text.color
+    centre = width // 2
+    colour = quote.color
     family = f'font-family="{quote.font_family}"'
 
     parts = [
-        f'<text x="{margin}" y="{quote_plan.mark_y}" font-family="{layout.font.family}" '
-        f'font-weight="{layout.font.weight}" font-size="{quote.mark_px}" '
-        f'fill="{layout.highlight.color}">&#8220;</text>'
+        f'<rect x="{margin}" y="{y}" width="{width - margin * 2}" height="{quote.rule_px}" '
+        f'fill="{colour}"/>'
+        for y in (quote_plan.top_rule_y, quote_plan.bottom_rule_y)
     ]
-    if name:
-        size = round(quote.mark_px * NAME_RATIO)
-        # Centred on the mark's ink, which is the top third of its em.
-        y = quote_plan.mark_y - round(quote.mark_px * 0.55) + round(size * 0.35)
-        parts.append(
-            f'<text x="{name_x}" y="{y}" font-family="{layout.font.family}" '
-            f'font-weight="{layout.font.weight}" font-size="{size}" fill="{colour}" '
-            f'fill-opacity="0.85">{_text(name)}</text>'
+    if quote_plan.marks:
+        mark = (
+            f'font-family="{layout.font.family}" font-weight="{layout.font.weight}" '
+            f'font-size="{quote.mark_px}" fill="{colour}"'
         )
-    if quote_plan.heading:
+        parts.append(f'<text x="{margin}" y="{quote_plan.open_mark_y}" {mark}>&#8220;</text>')
+        parts.append(
+            f'<text x="{width - margin}" y="{quote_plan.close_mark_y}" text-anchor="end" '
+            f"{mark}>&#8221;</text>"
+        )
+
+    lines = "".join(
+        f'<tspan x="{centre}" dy="{0 if i == 0 else quote_plan.body_line_px}">'
+        + "".join(
+            f'<tspan font-weight="bold" font-style="italic">{_text(part.text)}</tspan>'
+            if part.highlight
+            else f"<tspan>{_text(part.text)}</tspan>"
+            for part in runs
+        )
+        + "</tspan>"
+        for i, runs in enumerate(quote_plan.body)
+    )
+    parts.append(
+        f'<text xml:space="preserve" x="{centre}" y="{quote_plan.body_y}" {family} '
+        f'text-anchor="middle" font-size="{quote.body_px}" fill="{colour}">{lines}</text>'
+    )
+    if quote_plan.attribution:
         lines = "".join(
-            f'<tspan x="{margin}" dy="{0 if i == 0 else quote_plan.heading_line_px}">'
+            f'<tspan x="{centre}" dy="{0 if i == 0 else quote_plan.attribution_line_px}">'
             f"{_text(line)}</tspan>"
-            for i, line in enumerate(quote_plan.heading)
+            for i, line in enumerate(quote_plan.attribution)
         )
         parts.append(
-            f'<text xml:space="preserve" x="{margin}" y="{quote_plan.heading_y}" {family} '
-            f'font-size="{quote.heading_px}" fill="{colour}">{lines}</text>'
+            f'<text xml:space="preserve" x="{centre}" y="{quote_plan.attribution_y}" {family} '
+            f'font-style="italic" text-anchor="middle" font-size="{quote.attribution_px}" '
+            f'fill="{colour}">{lines}</text>'
         )
-    if quote_plan.body:
-        lines = "".join(
-            f'<tspan x="{margin}" dy="{0 if i == 0 else quote_plan.body_line_px}">'
-            + "".join(
-                f'<tspan font-weight="bold" font-style="italic">{_text(part.text)}</tspan>'
-                if part.highlight
-                else f"<tspan>{_text(part.text)}</tspan>"
-                for part in runs
-            )
-            + "</tspan>"
-            for i, runs in enumerate(quote_plan.body)
-        )
+    if quote_plan.name:
         parts.append(
-            f'<text xml:space="preserve" x="{margin}" y="{quote_plan.body_y}" {family} '
-            f'font-size="{quote.body_px}" fill="{colour}">{lines}</text>'
+            f'<text xml:space="preserve" x="{centre}" y="{quote_plan.name_y}" {family} '
+            f'text-anchor="middle" font-size="{quote.name_px}" fill="{colour}" '
+            f'fill-opacity="0.85">{_text(quote_plan.name)}</text>'
         )
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}">'
@@ -219,54 +264,33 @@ def card_svg(
     )
 
 
-def _ground(layout: Layout) -> Image.Image:
-    """The background: a flat colour with gaussian grain blended over it."""
-    size = (layout.image.width, layout.image.height)
-    base = Image.new("RGB", size, layout.quote.background)
-    grain = Image.effect_noise(size, 64).convert("RGB")
-    return Image.blend(base, grain, layout.quote.grain).convert("RGBA")
-
-
 def compose(
     hook: str,
     phrases: list[str],
-    watermark: str | bytes | None,
     layout: Layout,
-    fallback_text: str | None = None,
+    name: str | None = None,
+    *,
+    marks: bool = True,
+    attribution: str | None = None,
 ) -> bytes:
-    """The finished JPEG. The Page's mark goes beside the quotation mark.
+    """The finished JPEG.
 
-    The mark and its fallback text are the same decision they are on the other
-    cards (`Page.watermark`): an uploaded or committed logo, else the Page's
-    name, else nothing when the Page has opted out.
+    `name` is the Page's, as text, never its logo (client, 2026-10-25): the
+    watermark's fallback text, null when the Page has opted out of a mark.
     """
     quote = layout.quote
-    quote_plan = plan(hook, phrases, layout)
-    margin = round(layout.image.width * quote.margin_ratio)
-    mark_width = get_measurer(str(layout.font_file)).width("“", quote.mark_px)
-    name_x = round(margin + mark_width + quote.mark_px * 0.12)
-
-    logo = _watermark(watermark, 10_000)
-    if logo is not None:
-        tall = round(quote.mark_px * 0.5)
-        logo = logo.resize(
-            (max(1, round(logo.width * tall / logo.height)), tall), Image.LANCZOS
-        )
-
-    svg = card_svg(quote_plan, layout, None if logo else fallback_text, name_x)
+    quote_plan = plan(hook, phrases, layout, marks=marks, attribution=attribution, name=name)
     png = resvg_py.svg_to_bytes(
-        svg_string=svg,
+        svg_string=card_svg(quote_plan, layout),
         font_files=[
             str(layout.font_file),
             str(API_DIR / quote.font_path),
+            str(API_DIR / quote.italic_path),
             str(API_DIR / quote.emphasis_path),
         ],
     )
-    canvas = _ground(layout)
+    canvas = Image.new("RGBA", (layout.image.width, layout.image.height), quote.background)
     canvas.alpha_composite(Image.open(io.BytesIO(bytes(png))).convert("RGBA"))
-    if logo is not None:
-        ink_middle = quote_plan.mark_y - round(quote.mark_px * 0.55)
-        canvas.alpha_composite(logo, (name_x, max(0, ink_middle - logo.height // 2)))
 
     out = io.BytesIO()
     canvas.convert("RGB").save(out, format="JPEG", quality=JPEG_QUALITY)

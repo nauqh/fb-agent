@@ -8,6 +8,7 @@ import {
   CardFont,
   cardFont,
   clampInset,
+  ComposedImage,
   Fade,
   splitOnHighlights,
 } from "@/components/composed-image";
@@ -20,6 +21,7 @@ import {
   resetPageLayout,
   savePageLayout,
   type CardFontFace,
+  type QuoteFontFace,
   type LayoutPatch,
   type ResolvedLayout,
 } from "@/lib/api/layout";
@@ -97,7 +99,7 @@ export function LayoutEditor() {
   const publishes = template ?? data.layout.template;
   const draft = drafts[form] ?? {};
   const overridden = data.forms[form].overridden;
-  const shown = preview(data.forms[form].layout, draft, data.fonts);
+  const shown = preview(data.forms[form].layout, draft, data.fonts, data.quote_fonts);
   const dirty =
     template !== null || Object.values(drafts).some((one) => Object.keys(one).length > 0);
   const padding = [
@@ -164,7 +166,7 @@ export function LayoutEditor() {
             <Choice
               label="Card form"
               value={form}
-              options={["card", "full_overlay", "photo"]}
+              options={["card", "full_overlay", "photo", "quote"]}
               onChange={(v) => setEditing(v as CardForm)}
             />
             <p className="pt-1 text-[0.7rem] text-muted-foreground">
@@ -172,7 +174,9 @@ export function LayoutEditor() {
                 ? "Hero on top, panel below it, dividing the height between them."
                 : form === "photo"
                   ? "The picture at its own shape with the logo. No panel."
-                  : "The photograph fills the card and the panel lies over its bottom."}{" "}
+                  : form === "quote"
+                    ? "White type on black between two rules, the Page's name under it."
+                    : "The photograph fills the card and the panel lies over its bottom."}{" "}
               {publishes === form ? (
                 `${page.name} publishes in this form.`
               ) : (
@@ -206,6 +210,35 @@ export function LayoutEditor() {
           ) : null}
         </Group>
 
+        {form === "quote" ? (
+          <Group title="Quote">
+            <Field label="Font" changed={overridden.includes("font")} value={shown.quote.font_family}>
+              <div className="grid grid-cols-3 gap-1">
+                {data.quote_fonts.map((font) => (
+                  <button
+                    key={font.font_family}
+                    type="button"
+                    onClick={() => set("font", font.font_family)}
+                    style={{ fontFamily: `"card ${font.font_family}", sans-serif` }}
+                    className={cn(
+                      "truncate rounded-md border px-2 py-1.5 text-sm transition-colors",
+                      font.font_family === shown.quote.font_family
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "text-muted-foreground hover:bg-muted",
+                    )}
+                  >
+                    <style>{`@font-face{font-family:"card ${font.font_family}";src:url(/api/${font.font_path})}`}</style>
+                    {font.font_family}
+                  </button>
+                ))}
+              </div>
+            </Field>
+            <div className="sm:col-span-2">
+              <Watermark page={page} />
+            </div>
+          </Group>
+        ) : (
+        <>
         {shown.template === "full_overlay" ? (
           <Group title="Headline badge">
             <Colour
@@ -401,6 +434,8 @@ export function LayoutEditor() {
             </div>
           </details>
         </Group>
+        </>
+        )}
 
         <div className="flex flex-wrap items-center gap-2 border-t pt-4">
           {dirty ? (
@@ -424,7 +459,19 @@ export function LayoutEditor() {
         </div>
       </div>
 
-      <Preview layout={shown} page={page} />
+      {form === "quote" ? (
+        <div className="lg:sticky lg:top-0 lg:self-start">
+          <ComposedImage
+            layout={shown}
+            page={page}
+            overlayText={QUOTE_SAMPLE}
+            highlightPhrases={["Behavior never lies"]}
+            attribution="Winston Churchill"
+          />
+        </div>
+      ) : (
+        <Preview layout={shown} page={page} />
+      )}
     </div>
   );
 }
@@ -434,13 +481,22 @@ function preview(
   base: ResolvedLayout,
   draft: LayoutPatch,
   fonts: CardFontFace[],
+  quoteFonts: QuoteFontFace[],
 ): ResolvedLayout {
   const at = <T,>(value: T | null | undefined, fallback: T): T =>
     value === undefined || value === null ? fallback : value;
 
   return {
     ...base,
-    font: fonts.find((font) => font.family === draft.font) ?? base.font,
+    // On the quote form `font` names a quote face, not a card face.
+    ...(base.template === "quote"
+      ? {
+          quote: {
+            ...base.quote,
+            ...quoteFonts.find((font) => font.font_family === draft.font),
+          },
+        }
+      : { font: fonts.find((font) => font.family === draft.font) ?? base.font }),
     badge: {
       ...base.badge,
       color: at(draft.badge_color, base.badge.color),
@@ -479,6 +535,9 @@ function preview(
     },
   };
 }
+
+const QUOTE_SAMPLE =
+  "I no longer listen to what people say, I just watch what they do. Behavior never lies.";
 
 /** Short phrases, as `overlay.txt` asks the writer for - not one long clause. */
 const SAMPLE_HIGHLIGHTS = [
@@ -940,7 +999,7 @@ function Watermark({ page }: { page: Page }) {
         />
         <p className="text-[0.7rem] text-muted-foreground">
           {hasImage
-            ? "Only drawn if the image beside it is removed."
+            ? "Drawn if the image beside it is removed, and always on a quote card."
             : `Drawn top-right, right now. Blank means this Page's name - “${page.name}”.`}
         </p>
       </div>

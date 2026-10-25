@@ -120,22 +120,23 @@ portrait:
     border_color: "#000000" # reads as a cut-out where it crosses the panel
 
 quote:
-    # The `quote` card (client, 2026-10-22): a quote set on a dark grained
-    # ground, modelled on Inspire Through Bible's posts. No hero, so it costs
-    # nothing to draw. The first line of the hook is the heading when the hook
-    # has more than one; highlight phrases are set in bold italic.
-    background: "#121212"
-    grain: 0.1
+    # The `quote` card (client, 2026-10-25): white type on black, centred
+    # between two rules, opening mark above them and closing mark below. No
+    # hero, so it costs nothing to draw. Highlight phrases are bold italic.
+    # The face is a Page's pick from `settings.QUOTE_FONTS`.
+    background: "#000000"
+    color: "#FFFFFF"
     margin_ratio: 0.08
-    heading_px: 84
-    body_px: 46
+    body_px: 50
     line_height_ratio: 1.36
-    mark_px: 110
-    # Tinos is metric-compatible with Times New Roman, the sample's face.
-    # Apache 2.0, from fontsource. Static cuts, so the name table says "Tinos".
-    font_family: Tinos
-    font_path: assets/fonts/Tinos-Regular.ttf
-    emphasis_path: assets/fonts/Tinos-BoldItalic.ttf
+    attribution_px: 34
+    name_px: 30
+    rule_px: 3
+    mark_px: 150
+    font_family: Nunito
+    font_path: assets/fonts/Nunito-Regular.ttf
+    italic_path: assets/fonts/Nunito-Italic.ttf
+    emphasis_path: assets/fonts/Nunito-BoldItalic.ttf
 
 font:
     # family must match the TTF name table. resvg substitutes silently otherwise:

@@ -15,7 +15,7 @@ claims to be.
 from sqlmodel import Session, select
 
 from app.models import Page, PageLayout
-from app.settings import FONTS, Layout
+from app.settings import FONTS, QUOTE_FONTS, Layout
 from app.settings import layout as defaults
 
 __all__ = ["as_overrides", "defaults", "form_of", "resolve", "resolve_draft"]
@@ -45,6 +45,10 @@ def as_overrides(row: PageLayout | None) -> dict:
     """
     if row is None:
         return {}
+    if row.form == "quote":
+        # The one quote setting a Page has. Its `font` is a quote face, and the
+        # other columns describe a panel the quote card does not draw.
+        return {"quote": None if row.font is None else _quote_font(row.font)}
     return {
         "panel": {
             "ratio": row.panel_ratio,
@@ -90,6 +94,12 @@ def _font(family: str) -> dict:
     if family not in FONTS:
         raise ValueError(f"no font {family!r}; one of {', '.join(FONTS)}")
     return FONTS[family].model_dump()
+
+
+def _quote_font(family: str) -> dict:
+    if family not in QUOTE_FONTS:
+        raise ValueError(f"no quote font {family!r}; one of {', '.join(QUOTE_FONTS)}")
+    return QUOTE_FONTS[family].model_dump()
 
 
 def resolve_draft(session: Session, page_id: int | None, template: str | None) -> Layout:

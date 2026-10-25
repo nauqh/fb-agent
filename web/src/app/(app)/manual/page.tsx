@@ -11,6 +11,7 @@ import { Field, Regenerate } from "@/components/rewrite-field";
 import { ScreenHeader } from "@/components/screen";
 import { Loading } from "@/components/loading";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
@@ -48,7 +49,7 @@ import { useQuery } from "@/lib/use-query";
  * the story except the words typed here.
  *
  * Both can make a **quote card** (client, 2026-10-22): the hook set as type on
- * a dark ground, with no picture to upload or buy. A post's form, not a Page's,
+ * a black ground, with no picture to upload or buy. A post's form, not a Page's,
  * because a Page mixes formats.
  */
 export default function ManualScreen() {
@@ -99,6 +100,7 @@ function WriteItYourself() {
   const [insetSource, setInsetSource] = useState<InsetSource | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [quote, setQuote] = useState(false);
+  const [attribution, setAttribution] = useState("");
   const [saving, setSaving] = useState(false);
   const picker = useRef<HTMLInputElement>(null);
 
@@ -162,6 +164,7 @@ function WriteItYourself() {
         inset_source: insetSource ?? page.inset_source,
         file: quote ? null : file,
         template: quote ? "quote" : undefined,
+        attribution: quote ? attribution : undefined,
       });
       toast.success("Draft created.", {
         description: quote
@@ -203,6 +206,7 @@ function WriteItYourself() {
             page={page}
             overlayText={hook}
             highlightPhrases={phrases}
+            attribution={attribution}
             heroSrc={preview}
           />
         ) : (
@@ -304,7 +308,7 @@ function WriteItYourself() {
           }
           hint={
             quote
-              ? "first line is the heading"
+              ? `${words(hook)} words`
               : `${words(hook)} words · limit 65, no question`
           }
           flagged={words(hook) > 65 || hook.includes("?")}
@@ -317,6 +321,16 @@ function WriteItYourself() {
             onPhrasesChange={setPhrases}
           />
         </Field>
+
+        {quote ? (
+          <Field label="Said by" hint="optional · under the quote">
+            <Input
+              value={attribution}
+              placeholder="Winston Churchill"
+              onChange={(event) => setAttribution(event.target.value)}
+            />
+          </Field>
+        ) : null}
 
         <Field
           label="Caption"

@@ -967,6 +967,11 @@ class Draft(SQLModel, table=True):
     validates it on the way through (`layout_for.resolve_draft`).
     """
 
+    quote_marks: bool = Field(default=True)
+    """Quote card only: draw the quotation marks. Off for a statement."""
+    attribution: str | None = None
+    """Quote card only: who said it, drawn under the quote. Null draws nothing."""
+
     no_image: bool = Field(default=False)
     """Publish this as text only - no hero, no card, no picture at all.
 

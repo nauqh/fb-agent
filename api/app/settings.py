@@ -114,24 +114,55 @@ geometry with the panel: nothing in it is a second copy of a panel setting.
 """
 
 
-class QuoteLayout(Frozen):
-    """The `quote` card. Not overridable per Page: one look, until asked."""
+class QuoteFont(Frozen):
+    """One face for the quote card, in the three cuts it draws."""
 
-    background: str
-    grain: float
-    """0-1: how strongly the noise texture shows over `background`."""
-    margin_ratio: float
-    """× width → the left and right margin, and the floor above and below."""
-    heading_px: int
-    body_px: int
-    line_height_ratio: float
-    mark_px: int
-    """The gold quotation mark's type size. Its ink is about a third of it."""
     font_family: str
     font_path: str
+    italic_path: str
+    """Italic, for the attribution."""
     emphasis_path: str
     """Bold italic, for the highlight phrases. Same family as `font_path`, so
-    resvg picks it by weight and style rather than by name."""
+    resvg picks each cut by weight and style rather than by name."""
+
+
+class QuoteLayout(QuoteFont):
+    """The `quote` card. A Page overrides only its font (`page_layout.font`)."""
+
+    background: str
+    color: str
+    """The quote, the rules, the marks, the attribution and the Page's name."""
+    margin_ratio: float
+    """× width → the left and right margin, and the floor above and below."""
+    body_px: int
+    line_height_ratio: float
+    attribution_px: int
+    name_px: int
+    rule_px: int
+    """The two horizontal rules' thickness."""
+    mark_px: int
+    """The quotation marks' type size. Their ink is about a third of it."""
+
+
+QUOTE_FONTS: dict[str, QuoteFont] = {
+    family: QuoteFont(
+        font_family=family,
+        font_path=f"assets/fonts/{file}-Regular.ttf",
+        italic_path=f"assets/fonts/{file}-Italic.ttf",
+        emphasis_path=f"assets/fonts/{file}-BoldItalic.ttf",
+    )
+    for family, file in (
+        ("Nunito", "Nunito"),
+        ("Tinos", "Tinos"),
+        ("Lora", "Lora"),
+        ("Playfair Display", "PlayfairDisplay"),
+        ("Montserrat", "Montserrat"),
+    )
+}
+"""The faces a quote card may pick. Text faces, unlike `FONTS`, which are all
+bold display cuts. Nunito and Montserrat come from fontsource as instances cut
+from a variable font, named "Nunito ExtraLight" and "Montserrat Thin"; their
+name tables were rewritten to the plain family so resvg matches them."""
 
 
 class BadgeLayout(Frozen):

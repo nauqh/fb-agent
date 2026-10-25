@@ -61,6 +61,8 @@ export function ComposedImage({
   insetYRatio,
   insetBorderWidthPx,
   insetBorderColor,
+  quoteMarks = true,
+  attribution = null,
   seed = 0,
   className,
 }: {
@@ -106,6 +108,10 @@ export function ComposedImage({
    */
   insetBorderWidthPx?: number | null;
   insetBorderColor?: string | null;
+  /** Quote card only: draw the quotation marks. */
+  quoteMarks?: boolean;
+  /** Quote card only: who said it. */
+  attribution?: string | null;
   /** Varies the hero gradient so two drafts do not look identical. */
   seed?: number;
   className?: string;
@@ -144,6 +150,8 @@ export function ComposedImage({
         page={page}
         text={overlayText ?? ""}
         phrases={highlightPhrases}
+        marks={quoteMarks}
+        attribution={attribution}
         className={className}
       />
     );
@@ -374,41 +382,61 @@ export function ComposedImage({
   );
 }
 
-/** Fine noise, laid over the quote card's ground at `quote.grain`. */
-const GRAIN =
-  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")";
-
 /**
- * The `quote` card, mirroring `image/quote.py`: the Page's mark beside a gold
- * quotation mark, a heading in capitals, the quote with its highlight phrases
- * in bold italic. The first line is the heading only when there is a second.
- *
- * Centred 45/55 rather than halfway, as the compositor places it. Line breaks
- * are the browser's, so they can differ from the PNG's by a word.
+ * The `quote` card, mirroring `image/quote.py`: the quote centred between two
+ * rules, an opening mark above them and a closing mark below, who said it under
+ * the quote and the Page's name under everything. Centred halfway, as the
+ * compositor places it. Line breaks are the browser's, so they can differ from
+ * the PNG's by a word.
  */
 function QuoteCard({
   layout,
   page,
   text,
   phrases,
+  marks,
+  attribution,
   className,
 }: {
   layout: ResolvedLayout;
   page: Page;
   text: string;
   phrases: string[];
+  marks: boolean;
+  attribution: string | null;
   className?: string;
 }) {
   const quote = layout.quote;
   const px = (value: number) => `${(value / layout.image.width) * 100}cqw`;
-  const lines = text
-    .split("\n")
-    .map((line) => line.trim().replace(/\s+/g, " "))
-    .filter(Boolean);
-  const heading = lines.length > 1 ? lines[0] : null;
-  const body = (lines.length > 1 ? lines.slice(1) : lines).join(" ");
-  const serif = { fontFamily: `"card ${quote.font_family}", serif` };
-  const mark = page.watermark_enabled ? watermarkUrl(page) : null;
+  const collapsed = text.trim().replace(/\s+/g, " ");
+  const body = marks ? collapsed.replace(/^["“”]+|["“”]+$/g, "").trim() : collapsed;
+  // The class holds en and em dashes as data: what an operator may type.
+  const credit = (attribution ?? "").replace(/^[\s\-–—]+|[\s\-–—]+$/g, "");
+  const name = page.watermark_enabled ? page.watermark_text || page.name : null;
+  const face = `"card ${quote.font_family}"`;
+  const serif = { fontFamily: `${face}, sans-serif`, color: quote.color };
+  const gap = px(quote.body_px * 0.35);
+  const rule = (
+    <div style={{ height: px(quote.rule_px), backgroundColor: quote.color }} />
+  );
+  const mark = (glyph: string, align: "left" | "right") =>
+    marks ? (
+      <div
+        style={{
+          ...cardFont(layout.font),
+          color: quote.color,
+          fontSize: px(quote.mark_px),
+          height: px(quote.mark_px * 0.4),
+          lineHeight: 1,
+          textAlign: align,
+          overflow: "visible",
+          marginBottom: align === "left" ? gap : 0,
+          marginTop: align === "right" ? gap : 0,
+        }}
+      >
+        <span style={{ position: "relative", top: px(-quote.mark_px * 0.06) }}>{glyph}</span>
+      </div>
+    ) : null;
 
   return (
     <div
@@ -419,73 +447,21 @@ function QuoteCard({
       }}
     >
       <CardFont font={layout.font} />
-      <style>{`@font-face{font-family:"card ${quote.font_family}";font-weight:400;font-style:normal;src:url(/api/${quote.font_path})}@font-face{font-family:"card ${quote.font_family}";font-weight:700;font-style:italic;src:url(/api/${quote.emphasis_path})}`}</style>
+      <style>{`@font-face{font-family:${face};font-weight:400;font-style:normal;src:url(/api/${quote.font_path})}@font-face{font-family:${face};font-weight:400;font-style:italic;src:url(/api/${quote.italic_path})}@font-face{font-family:${face};font-weight:700;font-style:italic;src:url(/api/${quote.emphasis_path})}`}</style>
       <div
-        className="absolute inset-0"
-        style={{ backgroundImage: GRAIN, opacity: quote.grain }}
-      />
-      <div
-        className="relative flex h-full flex-col"
+        className="relative flex h-full flex-col justify-center"
         style={{ paddingInline: px(layout.image.width * quote.margin_ratio) }}
       >
-        <div style={{ flexGrow: 45 }} />
-        <div
-          className="flex items-start"
-          style={{ height: px(quote.mark_px * 0.4), gap: px(quote.mark_px * 0.12) }}
-        >
-          <span
-            style={{
-              ...cardFont(layout.font),
-              color: layout.highlight.color,
-              fontSize: px(quote.mark_px),
-              lineHeight: 1,
-              marginTop: px(-quote.mark_px * 0.06),
-            }}
-          >
-            &ldquo;
-          </span>
-          {mark ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={mark}
-              alt=""
-              className="self-center"
-              style={{ height: px(quote.mark_px * 0.5) }}
-            />
-          ) : page.watermark_enabled ? (
-            <span
-              className="self-center"
-              style={{
-                ...cardFont(layout.font),
-                color: layout.text.color,
-                opacity: 0.85,
-                fontSize: px(quote.mark_px * 0.2),
-              }}
-            >
-              {page.watermark_text || page.name}
-            </span>
-          ) : null}
-        </div>
-        {heading ? (
-          <p
-            style={{
-              ...serif,
-              color: layout.text.color,
-              fontSize: px(quote.heading_px),
-              lineHeight: 1.1,
-              marginTop: px(quote.heading_px * 0.5),
-            }}
-          >
-            {heading.toUpperCase()}
-          </p>
-        ) : null}
+        {mark("“", "left")}
+        {rule}
         <p
+          className="text-center"
           style={{
             ...serif,
-            color: layout.text.color,
             fontSize: px(quote.body_px),
             lineHeight: quote.line_height_ratio,
-            marginTop: px(heading ? quote.body_px * 0.5 : quote.heading_px * 0.5),
+            marginBlock: px(quote.body_px),
+            marginBottom: credit ? 0 : px(quote.body_px),
           }}
         >
           {body ? (
@@ -501,7 +477,35 @@ function QuoteCard({
             <span className="opacity-25">No quote yet</span>
           )}
         </p>
-        <div style={{ flexGrow: 55 }} />
+        {credit ? (
+          <p
+            className="text-center italic"
+            style={{
+              ...serif,
+              fontSize: px(quote.attribution_px),
+              lineHeight: quote.line_height_ratio,
+              marginTop: px(quote.body_px * 0.7),
+              marginBottom: px(quote.body_px),
+            }}
+          >
+            - {credit} -
+          </p>
+        ) : null}
+        {rule}
+        {mark("”", "right")}
+        {name ? (
+          <p
+            className="text-center"
+            style={{
+              ...serif,
+              opacity: 0.85,
+              fontSize: px(quote.name_px),
+              marginTop: px(quote.body_px * 1.1),
+            }}
+          >
+            {name}
+          </p>
+        ) : null}
       </div>
     </div>
   );

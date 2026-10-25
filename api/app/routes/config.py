@@ -36,7 +36,7 @@ from app.db import get_session
 from app.image import compositor
 from app.image import text as overlay
 from app.models import Draft, Page, PageLayout
-from app.settings import FONTS, Align, FontLayout, Layout, Template
+from app.settings import FONTS, QUOTE_FONTS, Align, FontLayout, Layout, QuoteFont, Template
 
 router = APIRouter(tags=["config"])
 
@@ -66,6 +66,8 @@ class LayoutOut(FormLayout):
 
     forms: dict[str, FormLayout]
     fonts: list[FontLayout] = list(FONTS.values())
+    quote_fonts: list[QuoteFont] = list(QUOTE_FONTS.values())
+    """What `font` may be on the quote form, whose faces are text cuts."""
 
 
 NOT_OVERRIDES = frozenset({"id", "page_id", "form", "updated_at"})
@@ -130,6 +132,8 @@ def get_layout(
                 name
                 for name, value in (row.model_dump() if row else {}).items()
                 if value is not None and name not in NOT_OVERRIDES
+                # A quote card reads only `font` (`layout_for.as_overrides`).
+                and (form != "quote" or name == "font")
             ),
         )
 

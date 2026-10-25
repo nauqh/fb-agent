@@ -12,7 +12,7 @@ from app.image import quote
 from app.image.compositor import CompositeError
 from app.image.text import get_measurer
 from app.models import Draft, DraftStatus
-from app.settings import API_DIR, layout
+from app.settings import API_DIR, QUOTE_FONTS, layout
 from app.writer import agent as writer
 from app.writer.agent import DraftContent
 
@@ -28,14 +28,30 @@ def _card(jpeg: bytes) -> Image.Image:
     return Image.open(io.BytesIO(jpeg)).convert("RGB")
 
 
-def test_the_first_line_is_the_heading_only_when_there_is_a_second():
-    assert quote.split(PSALM)[0] == "Psalm 94:19"
-    assert quote.split("Be still.") == (None, "Be still.")
+def test_the_hooks_own_quotation_marks_go_when_the_card_draws_them():
+    assert quote.body_text("“Be still.”", marks=True) == "Be still."
+    assert quote.body_text("“Be still.”", marks=False) == "“Be still.”"
+
+
+def test_an_attribution_is_set_between_dashes_however_it_was_typed():
+    assert quote.attribution_text("Winston Churchill") == "- Winston Churchill -"
+    assert quote.attribution_text("- Winston Churchill") == "- Winston Churchill -"
+    assert quote.attribution_text("  ") is None
 
 
 def test_a_verse_reference_keeps_its_colon_tight():
     """`text.normalise` spaces every colon, which reads "94: 19"."""
-    assert quote.plan(PSALM, EMPHASIS, layout).heading == ["PSALM 94:19"]
+    assert quote.plan(PSALM, [], layout, attribution="Psalm 94:19").attribution == [
+        "- Psalm 94:19 -"
+    ]
+
+
+def test_the_quotation_marks_can_be_left_off():
+    on = quote.card_svg(quote.plan(PSALM, [], layout), layout)
+    off = quote.card_svg(quote.plan(PSALM, [], layout, marks=False), layout)
+
+    assert "&#8220;" in on and "&#8221;" in on
+    assert "&#8220;" not in off and "&#8221;" not in off
 
 
 def test_an_emphasised_line_fits_in_the_face_it_is_drawn_in():
@@ -58,11 +74,16 @@ def test_an_emphasised_line_fits_in_the_face_it_is_drawn_in():
         assert drawn <= available
 
 
-@pytest.mark.parametrize("path, weight, style", [
-    (layout.quote.font_path, "normal", "normal"),
-    (layout.quote.emphasis_path, "bold", "italic"),
+@pytest.mark.parametrize("family, path, weight, style", [
+    (face.font_family, path, weight, style)
+    for face in QUOTE_FONTS.values()
+    for path, weight, style in (
+        (face.font_path, "normal", "normal"),
+        (face.italic_path, "normal", "italic"),
+        (face.emphasis_path, "bold", "italic"),
+    )
 ])
-def test_both_quote_faces_render_as_themselves(path, weight, style):
+def test_every_quote_face_renders_as_itself(family, path, weight, style):
     """resvg substitutes silently, the trap `test_layout` guards for the card fonts."""
 
     def ink(family: str) -> bytes:
@@ -73,14 +94,16 @@ def test_both_quote_faces_render_as_themselves(path, weight, style):
         )
         return bytes(resvg_py.svg_to_bytes(svg_string=svg, font_files=[str(API_DIR / path)]))
 
-    assert ink(layout.quote.font_family) != ink("No Such Face")
+    assert ink(family) != ink("No Such Face")
 
 
-def test_a_quote_card_is_the_card_size_and_dark():
-    card = _card(quote.compose(PSALM, EMPHASIS, None, layout, "Golden Years"))
+def test_a_quote_card_is_the_card_size_and_black():
+    card = _card(
+        quote.compose(PSALM, EMPHASIS, layout, "Golden Years", attribution="Psalm 94:19")
+    )
 
     assert card.size == (layout.image.width, layout.image.height)
-    assert max(card.getpixel((10, 10))) < 60, "the corner is the dark ground"
+    assert max(card.getpixel((10, 10))) < 20, "the corner is the black ground"
 
 
 def test_a_quote_too_long_for_the_card_is_refused_rather_than_cut():
@@ -174,3 +197,34 @@ def test_editing_a_quote_cards_text_redraws_it(client, engine):
     assert after["composed_image_path"] != before
     with Session(engine) as session:
         assert session.get(Draft, 1).status == DraftStatus.REVIEW
+
+
+def test_attribution_and_marks_are_kept_and_redraw_the_card(client):
+    created = client.post(
+        "/drafts/manual",
+        data={
+            "page_id": "1",
+            "hook": PSALM,
+            "template": "quote",
+            "attribution": " Psalm 94:19 ",
+        },
+    ).json()
+    assert created["attribution"] == "Psalm 94:19"
+    assert created["quote_marks"] is True
+
+    after = client.patch("/drafts/1", json={"quote_marks": False}).json()
+    assert after["quote_marks"] is False
+    assert after["composed_image_path"] != created["composed_image_path"]
+
+    cleared = client.patch("/drafts/1", json={"attribution": "  "}).json()
+    assert cleared["attribution"] is None
+
+
+def test_a_page_picks_its_quote_font_from_the_quote_faces(client):
+    picked = client.patch("/layout?page_id=1&form=quote", json={"font": "Lora"})
+    assert picked.status_code == 200, picked.text
+    assert picked.json()["forms"]["quote"]["layout"]["quote"]["font_family"] == "Lora"
+    assert picked.json()["forms"]["card"]["layout"]["font"]["family"] == "Arial"
+
+    refused = client.patch("/layout?page_id=1&form=quote", json={"font": "Anton"})
+    assert refused.status_code == 422

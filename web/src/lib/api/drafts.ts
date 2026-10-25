@@ -57,6 +57,8 @@ export type DraftEdit = Partial<
     | "inset_border_width_px"
     | "inset_border_color"
     | "template"
+    | "quote_marks"
+    | "attribution"
   >
 >;
 
@@ -152,6 +154,8 @@ export async function createManualDraft(input: {
   file: File | null;
   /** Omitted takes the Page's form. */
   template?: CardForm;
+  /** Quote card only: who said it. */
+  attribution?: string;
 }): Promise<Draft> {
   const body = new FormData();
   body.append("page_id", String(input.page_id));
@@ -165,6 +169,7 @@ export async function createManualDraft(input: {
   // blank filename, which the server would have to special-case.
   if (input.file) body.append("file", input.file);
   if (input.template) body.append("template", input.template);
+  if (input.attribution) body.append("attribution", input.attribution);
   return postForm<Draft>("/drafts/manual", body);
 }
 
@@ -269,7 +274,7 @@ export async function rewriteUnsaved(
     instruction?: string;
     /** An article, or its link, for the writer to work from. */
     source?: string;
-    /** The post is a quote card: a hook is a heading and a quotation. */
+    /** The post is a quote card: the hook is the quote alone. */
     quote?: boolean;
   },
 ): Promise<RewriteProposal> {

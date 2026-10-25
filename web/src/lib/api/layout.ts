@@ -64,18 +64,17 @@ export interface ResolvedLayout {
     border_color: string;
   };
   font: CardFontFace;
-  /** The `quote` card. One look for every Page, from `layout.yml`. */
-  quote: {
+  /** The `quote` card, from `layout.yml`. A Page overrides only its face. */
+  quote: QuoteFontFace & {
     background: string;
-    grain: number;
+    color: string;
     margin_ratio: number;
-    heading_px: number;
     body_px: number;
     line_height_ratio: number;
+    attribution_px: number;
+    name_px: number;
+    rule_px: number;
     mark_px: number;
-    font_family: string;
-    font_path: string;
-    emphasis_path: string;
   };
 }
 
@@ -84,6 +83,14 @@ export interface CardFontFace {
   family: string;
   weight: string;
   path: string;
+}
+
+/** A quote card face in its three cuts, each under the API's `/assets`. */
+export interface QuoteFontFace {
+  font_family: string;
+  font_path: string;
+  italic_path: string;
+  emphasis_path: string;
 }
 
 export interface FormLayout {
@@ -102,6 +109,8 @@ export interface LayoutResult extends FormLayout {
   forms: Record<CardForm, FormLayout>;
   /** The faces a Page may pick. */
   fonts: CardFontFace[];
+  /** The faces a quote card may pick. `font` on the quote form names one. */
+  quote_fonts: QuoteFontFace[];
 }
 
 /** The flat column names `PATCH` takes. Null clears one back to the default. */

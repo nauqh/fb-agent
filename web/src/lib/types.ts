@@ -251,6 +251,10 @@ export interface Draft {
   hero_search: boolean;
   /** The card form for this draft alone. Null follows the Page. */
   template: CardForm | null;
+  /** Quote card only: draw the quotation marks. Off for a statement. */
+  quote_marks: boolean;
+  /** Quote card only: who said it, drawn under the quote. */
+  attribution: string | null;
   /**
    * The post style this run was generated under, or null for the Page's own
    * prompts unlayered. Stored on the row, not re-read at rewrite time - a

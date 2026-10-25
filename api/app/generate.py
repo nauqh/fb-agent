@@ -425,6 +425,7 @@ def _run_one(session: Session, draft_id: int, write_article: bool = False) -> No
         draft.caption = content.caption
         draft.first_comment = content.first_comment
         draft.highlight_phrases = content.highlight_phrases
+        draft.attribution = content.attribution
         draft.image_prompt = content.image_prompt
         draft.inset_subject = content.inset_subject
 
@@ -622,12 +623,16 @@ def build_image(
         if layout.template == "quote":
             # Type on a drawn ground: no hero to buy, fetch or reuse. One kept
             # from another form stays on the row, so switching back is free.
-            mark, mark_text = page.watermark()
             _store_composite(
                 session,
                 draft,
                 quote.compose(
-                    draft.hook or "", draft.highlight_phrases, mark, layout, mark_text
+                    draft.hook or "",
+                    draft.highlight_phrases,
+                    layout,
+                    (page.watermark_text or page.name) if page.watermark_enabled else None,
+                    marks=draft.quote_marks,
+                    attribution=draft.attribution,
                 ),
             )
             return []

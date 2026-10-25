@@ -324,6 +324,8 @@ async def create_manual_draft(
     template: Template | None = Form(
         None, description="The card form. `quote` is drawn with no picture at all."
     ),
+    attribution: str = Form("", description="Quote card only: who said it."),
+    quote_marks: bool = Form(True, description="Quote card only: draw the quotation marks."),
     session: Session = Depends(get_session),
 ) -> Draft:
     """A draft the operator wrote. No model call, unless it asks for an inset.
@@ -369,6 +371,8 @@ async def create_manual_draft(
         first_comment=first_comment.strip() or None,
         highlight_phrases=[p for p in highlight_phrases if p and p in hook],
         template=template,
+        attribution=attribution.strip() or None,
+        quote_marks=quote_marks,
         progress_step="written by hand",
         progress_pct=100,
     )
@@ -488,11 +492,15 @@ class DraftEdit(BaseModel):
     inset_border_width_px: int | None = None
     inset_border_color: str | None = None
     template: str | None = None
+    quote_marks: bool | None = None
+    attribution: str | None = None
 
 
 DRAWN_FIELDS = (
     "hook",
     "highlight_phrases",
+    "quote_marks",
+    "attribution",
     "hero_x_ratio",
     "hero_y_ratio",
     "hero_zoom",
@@ -571,6 +579,10 @@ def update_draft(
             status_code=422,
             detail=f"Unknown template {changes['template']!r}. One of: {', '.join(TEMPLATES)}.",
         )
+    if "quote_marks" in changes and changes["quote_marks"] is None:
+        del changes["quote_marks"]
+    if "attribution" in changes:
+        changes["attribution"] = (changes["attribution"] or "").strip() or None
     for axis in ("hero_x_ratio", "hero_y_ratio"):
         if axis in changes:
             value = changes[axis]
@@ -738,7 +750,7 @@ class UnsavedRewriteRequest(RewriteRequest):
     """An article pasted on No source, or its link. Optional: what the
     writer works from, the way a draft's own source is on the drawer."""
     quote: bool = False
-    """The post on screen is a quote card, so a hook is a heading and a quote."""
+    """The post on screen is a quote card, so the hook is the quote alone."""
 
 
 def _pasted_source(pasted: str) -> SourceItem:

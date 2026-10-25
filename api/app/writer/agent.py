@@ -96,6 +96,13 @@ class DraftContent(BaseModel):
     highlight_phrases: list[str] = Field(
         description="Short substrings copied verbatim out of the hook. Empty when the hook is null."
     )
+    attribution: str | None = Field(
+        default=None,
+        description=(
+            "Quote cards only: whoever said or wrote the quote, as printed "
+            "under it. Null for an original line and for any other post."
+        ),
+    )
     image_prompt: str = Field(
         description=(
             "What the picture should show, following any image instructions "
@@ -139,8 +146,8 @@ def _instructions(page: Page, layout: Layout, template=None, quote: bool = False
     with system text is sent instead of the Page's system prompt, and likewise
     its first comment and overlay text. A blank field falls back to the Page's.
 
-    `quote` is a draft drawn as a quote card (`image/quote.py`), whose hook is a
-    heading and a quotation rather than a panel. It goes last with the other
+    `quote` is a draft drawn as a quote card (`image/quote.py`), whose hook is the
+    quotation alone, its speaker in `attribution`, rather than a panel. It goes last with the other
     shape overrides, and like NO FIRST COMMENT it wins over the house structure.
     """
     system = prompts.system_prompt(layout, page.name, page)
@@ -215,17 +222,16 @@ def _instructions(page: Page, layout: Layout, template=None, quote: bool = False
 
 QUOTE_CARD = (
     "QUOTE CARD. This post is a quote card: the hook is set in type on a plain "
-    "dark background and there is no photograph. This shape outranks the "
+    "black background and there is no photograph. This shape outranks the "
     "structure above:\n"
-    "- `hook`: a short heading on its own first line - who said it, the verse "
-    "or source reference, or a theme of 1-4 words - then a line break, then the "
-    "quote itself, 12-45 words. Put a quotation in curly quotes.\n"
-    "- Quote real words accurately and credit whoever said or wrote them. Never "
+    "- `hook`: the quote itself, 12-45 words, one paragraph. No heading and no "
+    "quotation marks: the card draws its own.\n"
+    "- `attribution`: who said or wrote it, as printed under the quote "
+    "(\"Marcus Aurelius\", \"Psalm 94:19\"). Quote real words accurately. Never "
     "invent a quotation and attach it to a real person; an original line of "
-    "ours gets a theme as its heading, never a name.\n"
+    "ours has a null attribution.\n"
     "- `highlight_phrases`: 1-2 verbatim substrings of the quote, the words "
-    "that land hardest. They are set in bold italic, not gold. Never from the "
-    "heading.\n"
+    "that land hardest. They are set in bold italic, not gold.\n"
     "- `caption`: 1-3 short plain lines that frame the quote for the reader. No "
     "emoji list.\n"
     "- `image_prompt`: an empty string, and `inset_subject`: null. Nothing is "
