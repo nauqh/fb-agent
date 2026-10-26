@@ -179,6 +179,15 @@ def test_bbc_feed_and_article_hosts_are_treated_as_one_publisher():
     assert not rss.is_curated_url("https://evil.co.uk/news/article", hosts)
 
 
+def test_daily_mail_co_uk_feeds_accept_their_dot_com_links():
+    hosts = {"www.dailymail.co.uk"}
+
+    assert rss.is_curated_url(
+        "https://www.dailymail.com/health/article-16237147/x.html?ito=1490", hosts
+    )
+    assert not rss.is_curated_url("https://www.dailymail.com/x", {"feeds.bbci.co.uk"})
+
+
 def test_every_curated_feed_host_is_one_an_item_can_come_from(session, page):
     """The guard compares an *item* URL against *feed* hosts.
 

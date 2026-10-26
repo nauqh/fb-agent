@@ -33,11 +33,15 @@ USER_AGENT = "Mozilla/5.0 (compatible; fb-agent/1.0)"
 """Several publisher feeds 403 a request that sends none. Not configurable: it
 is part of how the fetch works, not a thing an operator would tune."""
 
-# BBC serves its feed from bbci.co.uk but links to stories on bbc.co.uk. The
-# host check remains closed to arbitrary domains; this is the one known
-# publisher whose feed and article hosts are deliberately different.
+# Publishers whose feed and article hosts differ. BBC serves its feed from
+# bbci.co.uk and links to bbc.co.uk. Daily Mail's .co.uk feeds redirect to
+# .com and link there, which refused every item for two days in October 2026.
+# The host check stays closed to arbitrary domains.
 _CURATED_HOST_ALIASES = (
     frozenset({"feeds.bbci.co.uk", "bbc.co.uk", "www.bbc.co.uk"}),
+    frozenset(
+        {"dailymail.co.uk", "www.dailymail.co.uk", "dailymail.com", "www.dailymail.com"}
+    ),
 )
 
 
