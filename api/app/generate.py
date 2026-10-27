@@ -687,6 +687,9 @@ def build_image(
                     f"{IMAGE_WARNING}a competitor post's picture is never reused; "
                     "it belongs to whoever published it."
                 ]
+            # A website page's link carries no picture; the article's og:image is it.
+            if not source.image_url and source.kind is SourceKind.RSS:
+                read_full_text(source)
             if not source.image_url:
                 return [
                     f"{IMAGE_WARNING}this draft was set to use the feed's "

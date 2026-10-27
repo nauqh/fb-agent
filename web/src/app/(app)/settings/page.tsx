@@ -673,7 +673,7 @@ function Feeds({
   return (
     <Pane
       title="Feeds"
-      hint="RSS feeds this Page drafts from."
+      hint="RSS feeds and news pages this Page drafts from."
       meta={
         sources
           ? `${sources.feeds.length} feeds · ${sources.since_days}d window`
@@ -1083,9 +1083,11 @@ function AddFeed({ pageId }: { pageId: number | null }) {
       // The numbers that decided whether a feed earned its place, shown at the
       // moment the decision is made rather than stored and shown stale later.
       toast.success(
-        probe
-          ? `${name.trim()} added - ${probe.items} items, ${probe.with_images} imaged, ${probe.median_summary}-char summaries`
-          : `${name.trim()} added`,
+        !probe
+          ? `${name.trim()} added`
+          : probe.readable !== null
+            ? `${name.trim()} added - ${probe.items} article links, ${probe.readable} of the first 3 read in full`
+            : `${name.trim()} added - ${probe.items} items, ${probe.with_images} imaged, ${probe.median_summary}-char summaries`,
       );
       setName("");
       setUrl("");
@@ -1110,8 +1112,8 @@ function AddFeed({ pageId }: { pageId: number | null }) {
       <Input
         value={url}
         onChange={(event) => setUrl(event.target.value)}
-        placeholder="https://example.com/feed"
-        aria-label="Feed URL"
+        placeholder="Feed or news page URL"
+        aria-label="Feed or news page URL"
         className="h-7 min-w-0 flex-1 text-[13px]"
       />
       <Button

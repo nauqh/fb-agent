@@ -4,7 +4,7 @@ Each adapter's job is turning one vendor's shape into a `SourceItemBase`, so
 that is what these test - the traps, not the happy path.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from sqlmodel import select
@@ -241,6 +241,63 @@ def test_merge_drops_stale_items_and_duplicate_stories():
     )
 
     assert [item.external_id for item in merged] == ["a"]
+
+
+NEWS_PAGE = """<html><body>
+<nav><a href="/politics">Politics</a> <a href="/news/uk-politics-live-blog">Live</a></nav>
+<a href="/news/politics/123/farage-vows-to-fight-burnham-seat">Farage vows to fight Burnham in his own seat</a>
+<a href="/news/politics/123/farage-vows-to-fight-burnham-seat#comments">Comments on this story here</a>
+<a href="https://other.example/news/a-story-on-another-site">A story on another site entirely</a>
+<a href="/news/politics/124/budget-energy-bills-poll-finds">Read more</a>
+</body></html>"""
+
+
+def test_a_news_page_is_read_for_its_article_links(monkeypatch):
+    stamp = datetime(2026, 10, 27, 9, 0, tzinfo=timezone.utc)
+    monkeypatch.setattr(
+        rss, "_article_meta", lambda url: ("https://news.example/photo.jpg", stamp)
+    )
+    transport = web.httpx.MockTransport(
+        lambda request: web.httpx.Response(
+            200, text=NEWS_PAGE, headers={"content-type": "text/html; charset=utf-8"}
+        )
+    )
+    feed = Feed(page_id=1, name="Express", url="https://news.example/politics")
+
+    with web.httpx.Client(transport=transport) as client:
+        items = rss._fetch_one(client, feed)
+
+    # Section links, off-site links and "Read more" are not stories; a story's
+    # second link is the same story. Picture and date are the article's own.
+    assert [
+        (item.url, item.text, item.author, item.image_url, item.published_at)
+        for item in items
+    ] == [
+        (
+            "https://news.example/news/politics/123/farage-vows-to-fight-burnham-seat",
+            "Farage vows to fight Burnham in his own seat",
+            "Express",
+            "https://news.example/photo.jpg",
+            stamp,
+        )
+    ]
+
+
+def test_an_undated_page_link_sorts_as_now_and_a_feed_copy_keeps_its_date():
+    from app.models import SourceItemBase
+
+    hour_ago = datetime.now(timezone.utc) - timedelta(hours=1)
+
+    merged = rss._merge(
+        [
+            SourceItemBase(kind=SourceKind.RSS, external_id="page", text="Fresh story"),
+            SourceItemBase(kind=SourceKind.RSS, external_id="older", text="Older", published_at=hour_ago),
+            SourceItemBase(kind=SourceKind.RSS, external_id="feed", text="Fresh story", published_at=hour_ago),
+            SourceItemBase(kind=SourceKind.RSS, external_id="new", text="Only on a page"),
+        ]
+    )
+
+    assert [item.external_id for item in merged] == ["new", "older", "feed"]
 
 
 # --- X ---------------------------------------------------------------------

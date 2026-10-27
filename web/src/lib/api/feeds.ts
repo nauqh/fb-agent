@@ -24,6 +24,8 @@ export interface FeedProbe {
   median_summary: number;
   /** Age of the newest item. Null when no item carries a date. */
   newest_hours: number | null;
+  /** A news page only: how many of its first 3 articles read in full. */
+  readable: number | null;
 }
 
 /**

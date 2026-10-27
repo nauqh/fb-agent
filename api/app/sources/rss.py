@@ -12,14 +12,21 @@ where the operator can see the answer.
 Browsing does not write. This module only ever *returns* items; they become rows
 when the operator ticks them, which is what keeps `source_item` from filling
 with hundreds of unread items.
+
+**A feed URL may also be a news website's page**, such as a section front. RSS
+feeds carry only some of a paper's stories (client, 2026-10-27), so a URL that
+answers with HTML rather than a feed is read for its article links instead.
+There is no column saying which a row is: what the URL serves decides.
 """
 
 import re
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
+from functools import lru_cache
 from html import unescape
-from urllib.parse import urlsplit
+from html.parser import HTMLParser
+from urllib.parse import urldefrag, urljoin, urlsplit
 
 import feedparser
 import httpx
@@ -147,13 +154,118 @@ def _to_source_item(entry, publisher: str | None) -> SourceItemBase | None:
     )
 
 
+_PAGE_LINKS = 15
+"""Article links taken from a website page, in page order. The top of a section
+front is its newest and biggest stories; the rest is older and pushes feed
+items out of the ranking pool, since a link carries no date to sort it by."""
+# A headline is a sentence. Menu items, "Read more" and bylines are not.
+_MIN_HEADLINE_WORDS = 4
+# Article addresses end in a slug; section and tag pages mostly do not.
+# Measured on GB News, Mail, Sun, Express, Independent, Standard, Spiked,
+# Spectator (2026-10-27).
+_MIN_SLUG_HYPHENS = 3
+
+
+class _Links(HTMLParser):
+    """Every `<a href>` on a page with the text inside it."""
+
+    def __init__(self):
+        super().__init__()
+        self.links: list[tuple[str, str]] = []
+        self._href: str | None = None
+        self._chunks: list[str] = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "a":
+            self._href = dict(attrs).get("href")
+            self._chunks = []
+
+    def handle_endtag(self, tag):
+        if tag == "a" and self._href:
+            self.links.append((self._href, " ".join("".join(self._chunks).split())))
+            self._href = None
+
+    def handle_data(self, data):
+        if self._href:
+            self._chunks.append(data)
+
+
+def _is_html(response: httpx.Response) -> bool:
+    return "html" in response.headers.get("content-type", "")
+
+
+def _page_items(
+    response: httpx.Response, publisher: str | None
+) -> list[SourceItemBase]:
+    """A website page's article links, as headline-only items.
+
+    The same kind as a feed item, so every rule already written for one holds:
+    the curated-host check, "unused" in auto-drafts, the writer reading the
+    link. The picture and date are the article's own, from `_article_meta`.
+    """
+    page = _Links()
+    page.feed(response.text)
+    base = str(response.url)
+    host = urlsplit(base).hostname
+
+    found: dict[str, str] = {}
+    for href, text in page.links:
+        url = urldefrag(urljoin(base, href)).url
+        parts = urlsplit(url)
+        slug = parts.path.rstrip("/").rsplit("/", 1)[-1]
+        if (
+            parts.hostname == host
+            and slug.count("-") >= _MIN_SLUG_HYPHENS
+            and len(text.split()) >= _MIN_HEADLINE_WORDS
+        ):
+            # First text wins: a story's headline link comes before its
+            # "comments" and "related" links.
+            found.setdefault(url, text)
+        if len(found) == _PAGE_LINKS:
+            break
+
+    return [
+        SourceItemBase(
+            kind=SourceKind.RSS, external_id=url, author=publisher, text=text, url=url
+        )
+        for url, text in found.items()
+    ]
+
+
 def _fetch_one(client: httpx.Client, feed: Feed) -> list[SourceItemBase]:
     response = client.get(feed.url)
     response.raise_for_status()
 
     parsed = feedparser.parse(response.content)
+    if not parsed.entries and _is_html(response):
+        items = _page_items(response, feed.name)
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            metas = list(pool.map(_article_meta, [item.url for item in items]))
+        return [
+            item.model_copy(update={"image_url": image, "published_at": at})
+            for item, (image, at) in zip(items, metas)
+        ]
     items = (_to_source_item(entry, feed.name) for entry in parsed.entries)
     return [item for item in items if item is not None]
+
+
+@lru_cache(maxsize=4096)
+def _article_meta(url: str) -> tuple[str | None, datetime | None]:
+    """A website link's picture and date, read from the article itself.
+
+    Not the section page's thumbnail beside the headline: on GB News that sits
+    beside the *next* story's link, and matched the wrong story 3 times in 3
+    (2026-10-28). A wrong photo is worse than none. Cached, failures too, so
+    only a new link costs a fetch: an article's og:image does not change.
+    """
+    # Imported here: `web` takes its user agent from this module.
+    from app.sources import web
+
+    try:
+        article = web.fetch_article(url)
+    except web.WebError:
+        return None, None
+    return article.image_url, article.published_at
 
 
 def fetch_rss(feeds: list[Feed], timeout: float = 10.0) -> RssFeed:
@@ -215,11 +327,14 @@ def _merge(items: list[SourceItemBase]) -> list[SourceItemBase]:
     Deduplicated on url *and* again on normalised title, because the same story
     routinely runs in several of these feeds under different URLs.
     """
-    cutoff = datetime.now(timezone.utc) - timedelta(days=sources.rss.since_days)
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(days=sources.rss.since_days)
     seen: set[str] = set()
     merged: list[SourceItemBase] = []
 
-    for item in items:
+    # Dated first, so a story both in a feed and on a website page keeps the
+    # feed's copy and its date.
+    for item in sorted(items, key=lambda item: item.published_at is None):
         if item.published_at and item.published_at < cutoff:
             continue
         keys = (f"u:{item.external_id}", f"t:{_comparable(item.text.split(chr(10))[0])}")
@@ -228,10 +343,10 @@ def _merge(items: list[SourceItemBase]) -> list[SourceItemBase]:
         seen.update(keys)
         merged.append(item)
 
-    merged.sort(
-        key=lambda item: item.published_at or datetime.min.replace(tzinfo=timezone.utc),
-        reverse=True,
-    )
+    # An undated item is mostly a website link whose article would not read:
+    # on the page now, so it sorts as now. Last, it would never reach the
+    # ranking pool behind a day of feeds.
+    merged.sort(key=lambda item: item.published_at or now, reverse=True)
     return merged
 
 
@@ -304,6 +419,10 @@ class Probe:
     good feed from every other number here.
     """
 
+    readable: int | None = None
+    """A website page only: how many of its first few articles the reader
+    could open in full. Paywalls (The Times) list fine and read as nothing."""
+
 
 def probe(url: str, timeout: float = 10.0) -> Probe:
     """Fetch a candidate feed and measure it. Raises if it is not usable.
@@ -323,6 +442,8 @@ def probe(url: str, timeout: float = 10.0) -> Probe:
         raise ValueError(f"{url} did not answer: {_describe(error)}") from error
 
     parsed = feedparser.parse(response.content)
+    if not parsed.entries and _is_html(response):
+        return _probe_page(url, response)
     items = [
         item
         for item in (_to_source_item(entry, None) for entry in parsed.entries)
@@ -351,4 +472,48 @@ def probe(url: str, timeout: float = 10.0) -> Probe:
                 (datetime.now(timezone.utc) - newest).total_seconds() / 3600, 1
             )
         ),
+    )
+
+
+_PROBE_READS = 3
+
+
+def _probe_page(url: str, response: httpx.Response) -> Probe:
+    """A website page: does it list articles, and can they be read?"""
+    # Imported here: `web` takes its user agent from this module.
+    from app.sources import web
+
+    # Links are kept to the host the page is served from, and the curated check
+    # knows only the host saved here. Saved as given, every link would be
+    # refused at generate time.
+    if not is_curated_url(str(response.url), {urlsplit(url).hostname or ""}):
+        final = urlsplit(str(response.url)).hostname
+        raise ValueError(f"{url} redirects to {final}. Add that address instead.")
+
+    items = _page_items(response, None)
+    if not items:
+        raise ValueError(
+            f"{url} is a web page, but no article links were found on it. "
+            "Try a section page, such as the site's politics or news front."
+        )
+
+    readable = 0
+    for item in items[:_PROBE_READS]:
+        try:
+            web.fetch_article(item.url or "")
+            readable += 1
+        except web.WebError:
+            pass
+    if not readable:
+        raise ValueError(
+            f"{url} lists {len(items)} articles, but none of the first "
+            f"{_PROBE_READS} could be read. It is likely paywalled or blocks readers."
+        )
+
+    return Probe(
+        items=len(items),
+        with_images=0,
+        median_summary=sorted(len(item.text) for item in items)[len(items) // 2],
+        newest_hours=None,
+        readable=readable,
     )

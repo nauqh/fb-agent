@@ -39,6 +39,8 @@ class ProbeOut(BaseModel):
     with_images: int
     median_summary: int
     newest_hours: float | None
+    readable: int | None = None
+    """Set for a website page: how many of its first articles read in full."""
 
 
 class FeedOut(BaseModel):
@@ -110,6 +112,7 @@ def add_feed(
             with_images=measured.with_images,
             median_summary=measured.median_summary,
             newest_hours=measured.newest_hours,
+            readable=measured.readable,
         ),
     )
 

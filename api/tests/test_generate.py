@@ -1064,10 +1064,17 @@ def test_the_fetched_picture_is_stored_rather_than_hot_linked(
     assert "example.com" not in (draft["hero_image_path"] or "")
 
 
-def test_a_source_with_no_picture_warns_rather_than_buying_one(client, written):
+def test_a_source_with_no_picture_warns_rather_than_buying_one(
+    client, written, monkeypatch
+):
     """The operator asked for the feed's picture. Silently billing them for a
     different one is the wrong kind of helpful - and `hero.generate` raising
     here is what proves it did not happen."""
+
+    def unreadable(url):
+        raise generate.web.WebError("no page")
+
+    monkeypatch.setattr(generate.web, "fetch_article", unreadable)
     client.post(
         "/generate",
         json={
@@ -1081,6 +1088,35 @@ def test_a_source_with_no_picture_warns_rather_than_buying_one(client, written):
     assert draft["status"] == "review", "the text survived a missing picture"
     assert any("has none" in w for w in draft["warnings"]), draft["warnings"]
     assert draft["hero_image_path"] is None
+
+
+def test_a_news_page_link_takes_its_picture_from_the_article(
+    client, written, monkeypatch
+):
+    """A website page's link carries no picture; the article's og:image is it."""
+    _feed_png(monkeypatch)
+    monkeypatch.setattr(
+        generate.web,
+        "fetch_article",
+        lambda url: SourceItemBase(
+            kind=SourceKind.WEB,
+            external_id=url,
+            text="A story\n\nIts full text.",
+            image_url="https://example.com/og.jpg",
+        ),
+    )
+    client.post(
+        "/generate",
+        json={
+            "page_ids": [1],
+            "sources": [_rss().model_dump(mode="json")],
+            "hero_from_source": True,
+        },
+    )
+    draft = client.get("/drafts/1").json()
+
+    assert draft["warnings"] == []
+    assert draft["hero_image_path"] is not None
 
 
 def test_a_competitors_picture_is_never_reused_as_our_hero(
