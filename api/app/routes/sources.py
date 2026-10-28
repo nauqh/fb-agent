@@ -29,6 +29,7 @@ from app.models import (
     Feed,
     Page,
     PageCompetitor,
+    Shortlist,
     SourceItem,
     SourceItemBase,
     SourceKind,
@@ -727,6 +728,67 @@ def get_rss(
             for failure in feed.failures
         ],
     )
+
+
+@router.get("/shortlist")
+def get_shortlist(
+    page_id: int = Query(...),
+    refresh: bool = Query(False, description="Ask the model again"),
+    session: Session = Depends(get_session),
+) -> Shortlist:
+    """This Page's stored shortlist: made at its daily time, or on Run again.
+
+    Made here as well when none is stored or the day's is due and the hourly
+    run has not got to it yet, so the tab never shows yesterday's list. Items
+    a draft has used since are dropped on read.
+    """
+    # Imported here: `auto_draft` imports this module.
+    from app import auto_draft
+
+    page = session.get(Page, page_id)
+    if page is None:
+        raise HTTPException(status_code=404, detail=f"No page {page_id}")
+
+    stored = session.get(Shortlist, page_id)
+    now = datetime.now(timezone.utc)
+    if refresh or stored is None or auto_draft.shortlist_due(page, stored.made_at, now):
+        try:
+            stored = auto_draft.save_shortlist(session, page)
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+
+    spent = set(
+        session.exec(
+            select(SourceItem.kind, SourceItem.external_id).where(
+                col(SourceItem.id).in_(auto_draft._spent())
+            )
+        ).all()
+    )
+    return Shortlist(
+        page_id=stored.page_id,
+        made_at=stored.made_at,
+        considered=stored.considered,
+        failed_feeds=stored.failed_feeds,
+        items=[
+            item
+            for item in stored.items
+            if (SourceKind(item["kind"]), item["external_id"]) not in spent
+        ],
+    )
+
+
+@router.post("/shortlist/auto", status_code=202)
+def run_due_shortlists(
+    background: BackgroundTasks, session: Session = Depends(get_session)
+) -> list[int]:
+    """Make every due Page's shortlist. The hourly cron calls this. 202 with the
+    Page ids: each is a model call of about 30s, made after the answer."""
+    from app import auto_draft
+
+    due = auto_draft.due_shortlists(session)
+    if due:
+        background.add_task(auto_draft.make_shortlists, due)
+    return due
 
 
 class SourcesConfigOut(BaseModel):

@@ -19,6 +19,7 @@ from app.models import (
     Page,
     PageCompetitor,
     SourceItem,
+    Shortlist,
     SourceItemBase,
     SourceKind,
 )
@@ -606,3 +607,94 @@ def test_no_auto_draft_reads_for_an_article(session, page, feed, monkeypatch):
     [draft_id] = auto_draft.run_rss(session, page, 1)
 
     assert session.get(SourceItem, session.get(Draft, draft_id).source_item_id).body is None
+
+
+# --- Shortlist ---------------------------------------------------------------
+
+
+def test_the_shortlist_mixes_posts_and_news_and_knows_what_is_covered(
+    session, page, pool, feed, monkeypatch
+):
+    seen = _answer(monkeypatch, [5, 1, 99])
+    page.auto_draft_rss_instructions = "UK politics"
+    covered = SourceItem(
+        kind=SourceKind.RSS, external_id="https://x/old", text="Budget leaked\n\nsummary"
+    )
+    session.add(covered)
+    session.commit()
+    _draft(session, page.id, DraftStatus.REVIEW, covered.id)
+
+    result = auto_draft.shortlist(session, page)
+
+    # Three feed items first, then the posts loudest first: 5 is post-b.
+    assert [item["external_id"] for item in result.items] == ["post-b", feed[0].external_id]
+    assert result.considered == 6
+    assert "[post, 200 reactions]" in seen[0]
+    assert "- Budget leaked" in seen[0]
+
+
+def test_the_shortlist_route_stores_it_and_drops_what_was_used_since(
+    client, session, page, pool, feed, monkeypatch
+):
+    assert client.get("/sources/shortlist", params={"page_id": page.id}).status_code == 422
+
+    _answer(monkeypatch, [4, 5])
+    page.auto_draft_rss_instructions = "Anything"
+    session.add(page)
+    session.commit()
+    first = client.get("/sources/shortlist", params={"page_id": page.id}).json()
+    assert [item["external_id"] for item in first["items"]] == ["post-a", "post-b"]
+
+    # Stored: the model is not asked again, and a used post leaves the list.
+    monkeypatch.setattr(writer, "ask", lambda *a, **k: pytest.fail("asked twice"))
+    _draft(session, page.id, DraftStatus.REVIEW, pool["loudest"].id)
+    second = client.get("/sources/shortlist", params={"page_id": page.id}).json()
+    assert [item["external_id"] for item in second["items"]] == ["post-b"]
+
+
+@pytest.mark.parametrize(
+    "made_utc, now_utc, due",
+    [
+        # 06:00 in Ho Chi Minh City is 23:00 UTC the day before.
+        (None, "2026-10-28T10:00", True),
+        ("2026-10-27T23:30", "2026-10-28T10:00", False),  # made after today's 06:00
+        ("2026-10-27T22:30", "2026-10-28T10:00", True),  # made before it
+        ("2026-10-27T22:30", "2026-10-27T22:45", False),  # today's 06:00 not yet
+    ],
+)
+def test_the_shortlist_is_due_once_its_daily_time_passes(page, made_utc, now_utc, due):
+    def utc(value):
+        return datetime.fromisoformat(value).replace(tzinfo=timezone.utc)
+
+    page.shortlist_minute = 6 * 60
+    made = utc(made_utc).replace(tzinfo=None) if made_utc else None
+
+    assert auto_draft.shortlist_due(page, made, utc(now_utc)) is due
+
+
+def test_no_daily_time_means_never_due(page):
+    page.shortlist_minute = None
+
+    assert not auto_draft.shortlist_due(page, None, datetime.now(timezone.utc))
+
+
+def test_the_hourly_run_makes_only_due_pages_with_instructions(
+    client, session, page, pool, feed, monkeypatch
+):
+    _answer(monkeypatch, [1])
+    page.shortlist_minute = 0
+    session.add(page)
+    session.commit()
+    # No instructions: skipped rather than failed.
+    assert client.post("/sources/shortlist/auto").json() == []
+
+    page.auto_draft_rss_instructions = "Anything"
+    page.shortlist_size = 1
+    session.add(page)
+    session.commit()
+    assert client.post("/sources/shortlist/auto").json() == [page.id]
+    # Made, so not due again until tomorrow's time.
+    assert client.post("/sources/shortlist/auto").json() == []
+    stored = session.get(Shortlist, page.id)
+    session.refresh(stored)
+    assert [item["external_id"] for item in stored.items] == [feed[0].external_id]

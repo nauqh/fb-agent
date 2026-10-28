@@ -115,6 +115,10 @@ export interface Page {
   auto_draft_competitor_picture: "none" | "google" | "generate";
   /** The same for RSS auto-drafts, which can also take the feed's own photo. */
   auto_draft_rss_picture: "none" | "source" | "google" | "generate";
+  /** How many sources the Shortlisted tab keeps. */
+  shortlist_size: number;
+  /** When the day's shortlist is made, minutes past midnight GMT+7. Null: no daily run. */
+  shortlist_minute: number | null;
 
   /** This Page's own prompt text, or null to inherit the file. Edited through
    *  `setPromptFile`, and read back through `listPromptFiles`. */

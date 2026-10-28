@@ -332,6 +332,19 @@ class Page(SQLModel, table=True):
     sources want different answers (client, 2026-10-07: no picture for
     Facebook posts, the source's picture for RSS)."""
 
+    # --- shortlist ---------------------------------------------------------------
+    #
+    # The Shortlisted tab on Sources (`auto_draft.shortlist`). It judges by
+    # `auto_draft_rss_instructions` and never generates anything.
+
+    shortlist_size: int = Field(default=10, sa_column_kwargs={"server_default": "10"})
+    """How many sources the shortlist keeps."""
+
+    shortlist_minute: int | None = Field(default=360)
+    """When the day's shortlist is made, in minutes past midnight in the Page's
+    zone, like `TimeSlot.minute_of_day`. Null is no daily run: the list changes
+    only on Run again."""
+
     # --- what this Page tells the model ---------------------------------------
     #
     # Null means the file: `prompts/pages/<slug>/x.txt` if it exists, else
@@ -1243,6 +1256,24 @@ class YoutubeJob(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=_now)
     started_at: datetime | None = None
     finished_at: datetime | None = None
+
+
+class Shortlist(SQLModel, table=True):
+    """A Page's current shortlist. One row per Page, replaced on each run.
+
+    Stored rather than held in the process: the hourly run makes it before
+    anyone opens the tab, and a deploy in between would otherwise drop it.
+    """
+
+    __tablename__ = "shortlist"
+
+    page_id: int = Field(foreign_key="page.id", primary_key=True)
+    made_at: datetime = Field(default_factory=_now)
+    considered: int = 0
+    failed_feeds: int = 0
+    items: list[dict] = Field(default_factory=list, sa_column=Column(JSON, nullable=False))
+    """`SourceItemBase` dumps, best fit first. RSS items are live, so these are
+    the only copy until a draft uses one."""
 
 
 class AutoDraftRun(SQLModel, table=True):

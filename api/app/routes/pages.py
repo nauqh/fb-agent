@@ -80,6 +80,10 @@ class PageUpdate(BaseModel):
     auto_draft_competitor_picture: Literal["none", "google", "generate"] = "google"
     auto_draft_rss_picture: Literal["none", "source", "google", "generate"] = "source"
 
+    shortlist_size: int = Field(default=10, ge=1, le=30)
+    # Null is no daily run.
+    shortlist_minute: int | None = Field(default=None, ge=0, le=1439)
+
 
 @router.get("")
 def list_pages(session: Session = Depends(get_session)) -> list[Page]:

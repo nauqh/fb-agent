@@ -1,0 +1,46 @@
+# Shortlists, hourly. Each Page's list is made once its daily time has passed
+# (Settings > This Page > Automation); the route skips Pages that are not due,
+# so most runs make nothing. Hourly because the time is the operator's choice.
+
+name: Shortlist
+
+on:
+  schedule:
+    - cron: "5 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+env:
+  API: https://fb-agent.up.railway.app
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    # The route answers 202 with the due Page ids; the lists are made in the
+    # API process afterwards.
+    timeout-minutes: 5
+
+    steps:
+      - name: Make each due Page's shortlist
+        env:
+          API_KEY: ${{ secrets.FB_AGENT_API_KEY }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${API_KEY:-}" ]; then
+            echo "::error::FB_AGENT_API_KEY is not set in repository secrets"
+            exit 1
+          fi
+
+          code=$(curl -sS -o response.json -w '%{http_code}' \
+            -X POST "$API/sources/shortlist/auto" \
+            -H "X-API-Key: $API_KEY")
+
+          if [ "$code" != "202" ]; then
+            echo "::error::/sources/shortlist/auto answered $code"
+            cat response.json
+            exit 1
+          fi
+
+          echo "Making the shortlist for Page(s): $(cat response.json)"

@@ -467,6 +467,13 @@ function AutoDrafts({
   const [instructions, setInstructions] = useState(page.auto_draft_rss_instructions ?? "");
   const [competitorPicture, setCompetitorPicture] = useState(page.auto_draft_competitor_picture);
   const [rssPicture, setRssPicture] = useState(page.auto_draft_rss_picture);
+  const [shortlistSize, setShortlistSize] = useState(page.shortlist_size.toString());
+  // `HH:MM` for the native time input; blank is no daily run.
+  const [shortlistTime, setShortlistTime] = useState(
+    page.shortlist_minute === null
+      ? ""
+      : `${String(Math.floor(page.shortlist_minute / 60)).padStart(2, "0")}:${String(page.shortlist_minute % 60).padStart(2, "0")}`,
+  );
   const [busy, setBusy] = useState(false);
 
   const next = {
@@ -476,6 +483,10 @@ function AutoDrafts({
     auto_draft_rss_instructions: instructions.trim() || null,
     auto_draft_competitor_picture: competitorPicture,
     auto_draft_rss_picture: rssPicture,
+    shortlist_size: Number(shortlistSize),
+    shortlist_minute: shortlistTime
+      ? Number(shortlistTime.slice(0, 2)) * 60 + Number(shortlistTime.slice(3, 5))
+      : null,
   };
   const dirty = (Object.keys(next) as (keyof typeof next)[]).some(
     (key) => next[key] !== page[key],
@@ -600,28 +611,56 @@ function AutoDrafts({
         {rssOn && feeds === 0 ? (
           <Gap title="No feeds.">RSS will find nothing to draft from.</Gap>
         ) : null}
-        {rssOn ? (
+        {/* Always shown: the Shortlisted tab judges by it too, with auto-drafts off. */}
         <div className="space-y-1.5">
           <Label htmlFor="auto-draft-instructions" className="text-[13px] font-normal text-muted-foreground">
-            Which RSS items to draft
+            Which stories fit this Page - used by Shortlisted and RSS auto-drafts
           </Label>
           <Textarea
             id="auto-draft-instructions"
             rows={3}
             maxLength={2000}
-            placeholder="Blank takes the newest. For example: UK politics only, no sport or celebrity news."
+            placeholder="For example: UK politics only, no sport or celebrity news. Blank: auto-drafts take the newest, and Shortlisted is off."
             className="resize-y rounded-xl border bg-background text-[13px] shadow-none"
             value={instructions}
             onChange={(event) => setInstructions(event.target.value)}
           />
         </div>
-        ) : null}
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className={box}>
+            <Label htmlFor="shortlist-size" className="text-[13px] font-normal text-muted-foreground">
+              Shortlist size
+            </Label>
+            <Input
+              id="shortlist-size"
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={30}
+              className={number}
+              value={shortlistSize}
+              onChange={(event) => setShortlistSize(event.target.value)}
+            />
+          </div>
+          <div className={box}>
+            <Label htmlFor="shortlist-time" className="text-[13px] font-normal text-muted-foreground">
+              Shortlist daily at (GMT+7, blank for never)
+            </Label>
+            <Input
+              id="shortlist-time"
+              type="time"
+              className="h-7 w-28 border-0 bg-transparent px-1 text-right font-medium tabular-nums shadow-none focus-visible:ring-0"
+              value={shortlistTime}
+              onChange={(event) => setShortlistTime(event.target.value)}
+            />
+          </div>
+        </div>
         </div>
 
         {dirty ? (
           <Button size="sm" disabled={busy} onClick={() => void save()}>
             {busy ? <Loader2 className="size-4 animate-spin" /> : null}
-            Save auto-drafts
+            Save
           </Button>
         ) : null}
       </div>

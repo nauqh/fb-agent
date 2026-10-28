@@ -116,6 +116,28 @@ export async function getRss(pageId: number): Promise<RssFeedResult> {
   return get<RssFeedResult>("/sources/rss", { page_id: pageId });
 }
 
+/** Mirrors the `Shortlist` table in api/app/models.py. */
+export interface Shortlist {
+  page_id: number;
+  /** Best fit first: competitor posts and feed items together. */
+  items: LiveSourceItem[];
+  /** How many unused sources the model judged. */
+  considered: number;
+  failed_feeds: number;
+  made_at: string | null;
+}
+
+/**
+ * The Page's best-fit unused sources, as stored: made at the Page's daily
+ * time or on `refresh`. A 422 means the Page has no instructions.
+ */
+export async function getShortlist(pageId: number, refresh = false): Promise<Shortlist> {
+  return get<Shortlist>(
+    "/sources/shortlist",
+    refresh ? { page_id: pageId, refresh: "true" } : { page_id: pageId },
+  );
+}
+
 /** One tweet resolved from a pasted URL. Never a browsable list. */
 export async function getTweet(url: string): Promise<LiveSourceItem> {
   return get<LiveSourceItem>("/sources/tweet", { url });

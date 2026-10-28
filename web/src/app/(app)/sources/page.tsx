@@ -18,6 +18,7 @@ import {
   getCompetitorReach,
   getRss,
   getCompetitorPosts,
+  getShortlist,
   getTweet,
   getWeb,
 } from "@/lib/api/sources";
@@ -45,6 +46,7 @@ export default function SourcesScreen() {
         {/* `*:` reaches the triggers, so the width and padding live in one
             place instead of being repeated on each of the three. */}
         <TabsList className="shrink-0 *:min-w-28 *:px-4">
+          <TabsTrigger value="shortlist">Shortlisted</TabsTrigger>
           <TabsTrigger value="competitors">Competitors</TabsTrigger>
           <TabsTrigger value="tweets">Tweets</TabsTrigger>
           <TabsTrigger value="web">Web</TabsTrigger>
@@ -56,6 +58,9 @@ export default function SourcesScreen() {
             it holds the content off the bar rather than moving the bar.
             `pb-20` for the same reason at the foot: the fixed Generate bar
             would otherwise cover the last row of cards. */}
+        <TabsContent value="shortlist" className="min-h-0 flex-1 overflow-y-auto pr-3 lift-room pb-20">
+          <ShortlistTab />
+        </TabsContent>
         <TabsContent value="competitors" className="min-h-0 flex-1 overflow-y-auto pr-3 lift-room pb-20">
           <CompetitorsTab />
         </TabsContent>
@@ -469,6 +474,102 @@ function RssTab() {
           {data.items.map((item) => (
             <SourceCard
               key={item.external_id}
+              {...item}
+              selected={cart.has(item)}
+              onToggle={() => cart.toggle(item)}
+            />
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
+/**
+ * The ten unused sources that best fit this Page, competitor posts and feed
+ * items together, so the operator picks from ten rather than scrolling hundreds
+ * (client, 2026-10-28). Made at the Page's daily time (Settings); Run again
+ * asks the model afresh, on what is available now.
+ */
+function ShortlistTab() {
+  const cart = useCart();
+  const { pageId } = usePageScope();
+  const { data, loading, error, refresh } = useQuery(() => getShortlist(pageId!), [pageId], {
+    enabled: pageId !== null,
+    cacheKey: "sources-shortlist",
+  });
+  const [running, setRunning] = useState(false);
+
+  async function runAgain() {
+    if (pageId === null) return;
+    setRunning(true);
+    try {
+      await getShortlist(pageId, true);
+      await refresh();
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Could not shortlist");
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  // A 422: the Page has no instructions to judge by. Said with the way out.
+  const needsInstructions = error?.includes("Settings first");
+
+  return (
+    <>
+      <div className="flex items-center justify-between gap-3 pb-3">
+        <p className="text-xs text-muted-foreground">
+          {data?.made_at ? (
+            <>
+              Picked <span className="text-foreground">{timeAgo(data.made_at)}</span>
+              {` from ${data.considered} unused sources, by this Page’s instructions.`}
+            </>
+          ) : (
+            <>The best fits from competitor posts and feeds, by this Page&rsquo;s instructions.</>
+          )}
+        </p>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={running || loading || needsInstructions}
+          onClick={() => void runAgain()}
+        >
+          {running ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
+          Run again
+        </Button>
+      </div>
+
+      {running || (loading && !data) ? <SyncProgress label="Shortlisting" /> : null}
+
+      {data?.failed_feeds ? (
+        <p className="mb-3 flex items-center gap-1.5 text-xs text-muted-foreground">
+          <AlertTriangle className="size-3.5" />
+          {data.failed_feeds} feed{data.failed_feeds === 1 ? " did" : "s did"} not answer; see the RSS tab.
+        </p>
+      ) : null}
+
+      {needsInstructions ? (
+        <p className="rounded-2xl border border-dashed p-10 text-center text-sm text-muted-foreground">
+          Write which stories fit this Page on{" "}
+          <Link href="/settings" className="underline underline-offset-2">
+            Settings
+          </Link>
+          , under Automation, and the shortlist picks by it.
+        </p>
+      ) : error ? (
+        <QueryError error={error} onRetry={refresh} />
+      ) : loading || !data ? (
+        <CardGridLoading />
+      ) : data.items.length === 0 ? (
+        <p className="rounded-2xl border border-dashed p-10 text-center text-sm text-muted-foreground">
+          Nothing unused fits right now. Run again later, or widen the instructions.
+        </p>
+      ) : (
+        <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(360px,1fr))]">
+          {data.items.map((item) => (
+            <SourceCard
+              key={`${item.kind}:${item.external_id}`}
               {...item}
               selected={cart.has(item)}
               onToggle={() => cart.toggle(item)}
