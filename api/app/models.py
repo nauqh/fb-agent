@@ -1085,6 +1085,12 @@ class Draft(SQLModel, table=True):
     """Which of `inset_candidates` is in the circle, by its `url`. Null for an
     upload, or while a search has offered photos and none is placed."""
 
+    text_size_px: int | None = None
+    """The overlay's font size for this draft. Null takes the Page's
+    (`page_layout.text_font_size_px`). Set on the review page, where the
+    operator sees the hook against its picture (client, 2026-10-29). Not used
+    by the quote card, which sizes its own type."""
+
     inset_size_px: int | None = None
     """Diameter of the disc. Null takes `layout.portrait.size_px`.
 

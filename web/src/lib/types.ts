@@ -239,6 +239,8 @@ export interface Draft {
   hero_image_url: string | null;
   composed_image_url: string | null;
   inset_image_url: string | null;
+  /** The overlay's font size for this draft. Null takes the Page's. */
+  text_size_px: number | null;
   /** Its diameter. Null takes the default from `layout.yml`. */
   inset_size_px: number | null;
   /**

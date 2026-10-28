@@ -619,6 +619,10 @@ def build_image(
         # draws it, and the two disagreeing is a card whose text does not fit
         # the space it was measured for.
         layout = layout_for.resolve_draft(session, page.id, draft.template)
+        if draft.text_size_px:
+            layout = layout.model_copy(
+                update={"text": layout.text.model_copy(update={"font_size_px": draft.text_size_px})}
+            )
 
         if layout.template == "quote":
             # Type on a drawn ground: no hero to buy, fetch or reuse. One kept

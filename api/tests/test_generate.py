@@ -2733,3 +2733,25 @@ def test_other_pages_cannot_write_an_article(client, written, monkeypatch):
     monkeypatch.setattr(settings, "wordpress_page_id", 2)
 
     assert client.post("/drafts/1/article").status_code == 422
+
+
+def test_a_draft_s_text_size_is_drawn_and_clamped(client, written, illustrated, monkeypatch):
+    """Set on the review page; null keeps the Page's size."""
+    from app.image import text as overlay
+
+    _generate(client)
+    sizes = []
+    real_plan = overlay.plan
+
+    def spy(hook, layout=None):
+        sizes.append(layout.text.font_size_px)
+        return real_plan(hook, layout)
+
+    monkeypatch.setattr(generate.overlay, "plan", spy)
+
+    assert client.patch("/drafts/1", json={"text_size_px": 30}).json()["text_size_px"] == 30
+    assert sizes[-1] == 30
+    assert client.patch("/drafts/1", json={"text_size_px": 500}).json()["text_size_px"] == 72
+
+    client.patch("/drafts/1", json={"text_size_px": None})
+    assert sizes[-1] != 72

@@ -84,6 +84,8 @@ interface Form {
   hero_x_ratio: number;
   hero_y_ratio: number;
   hero_zoom: number;
+  /** Null is the Page's size for this card form. */
+  text_size_px: number | null;
   /** Null means "the default", which is what the server stores for an untouched draft. */
   inset_size_px: number | null;
   inset_x_ratio: number | null;
@@ -784,8 +786,12 @@ export function DraftDetail({
       layout={
         // The draft's own form, drawn with that form's settings, so the toggle
         // moves the card as it is clicked rather than after a save. Same pick
-        // the server makes in `layout_for.resolve_draft`.
-        layoutResult?.forms[form?.template ?? draft.template ?? layout.template]?.layout ?? layout
+        // the server makes in `layout_for.resolve_draft`, text size included.
+        withTextSize(
+          layoutResult?.forms[form?.template ?? draft.template ?? layout.template]?.layout ??
+            layout,
+          form ? form.text_size_px : draft.text_size_px,
+        )
       }
       page={page}
       overlayText={form?.hook ?? draft.hook}
@@ -1207,6 +1213,49 @@ export function DraftDetail({
                   <TabsTrigger value="quote">Quote</TabsTrigger>
                 </TabsList>
               </Tabs>
+            </section>
+          ) : null}
+          {form && !quoteCard && (form.template ?? layout.template) !== "photo" ? (
+            <section className="space-y-2">
+              <SectionHead
+                title="Text size"
+                meta={
+                  form.text_size_px === null ? (
+                    "from Page"
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setForm({ ...form, text_size_px: null })}
+                      className="hover:text-foreground"
+                    >
+                      Use the Page&rsquo;s
+                    </button>
+                  )
+                }
+              />
+              {(() => {
+                // The Page's size for the form this draft is drawn in.
+                const base = (
+                  layoutResult?.forms[form.template ?? layout.template]?.layout ?? layout
+                ).text.font_size_px;
+                const size = form.text_size_px ?? base;
+                return (
+                  <SliderRow label="Size" value={`${size}px`}>
+                    {/* The Settings slider's range; the server clamps to it. */}
+                    <input
+                      type="range"
+                      className="w-full accent-foreground"
+                      min={20}
+                      max={72}
+                      step={1}
+                      value={size}
+                      onChange={(event) =>
+                        setForm({ ...form, text_size_px: Number(event.target.value) })
+                      }
+                    />
+                  </SliderRow>
+                );
+              })()}
             </section>
           ) : null}
           {/* The inset sits under the picture rather than in the copy column:
@@ -2421,6 +2470,7 @@ function toForm(draft: Draft): Form {
     hero_x_ratio: draft.hero_x_ratio,
     hero_y_ratio: draft.hero_y_ratio,
     hero_zoom: draft.hero_zoom,
+    text_size_px: draft.text_size_px,
     inset_size_px: draft.inset_size_px,
     inset_x_ratio: draft.inset_x_ratio,
     inset_y_ratio: draft.inset_y_ratio,
@@ -2430,4 +2480,12 @@ function toForm(draft: Draft): Form {
     quote_marks: draft.quote_marks,
     attribution: draft.attribution,
   };
+}
+
+/** The layout with this draft's text size in place of the Page's. */
+function withTextSize<T extends { text: { font_size_px: number } }>(
+  layout: T,
+  size: number | null,
+): T {
+  return size === null ? layout : { ...layout, text: { ...layout.text, font_size_px: size } };
 }

@@ -51,6 +51,7 @@ export type DraftEdit = Partial<
     | "hero_x_ratio"
     | "hero_y_ratio"
     | "hero_zoom"
+    | "text_size_px"
     | "inset_size_px"
     | "inset_x_ratio"
     | "inset_y_ratio"

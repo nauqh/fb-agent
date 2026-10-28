@@ -486,6 +486,7 @@ class DraftEdit(BaseModel):
     hero_x_ratio: float | None = None
     hero_y_ratio: float | None = None
     hero_zoom: float | None = None
+    text_size_px: int | None = None
     inset_size_px: int | None = None
     inset_x_ratio: float | None = None
     inset_y_ratio: float | None = None
@@ -496,6 +497,10 @@ class DraftEdit(BaseModel):
     attribution: str | None = None
 
 
+# The Settings slider's range (`layout-editor.tsx`).
+MIN_TEXT_PX = 20
+MAX_TEXT_PX = 72
+
 DRAWN_FIELDS = (
     "hook",
     "highlight_phrases",
@@ -504,6 +509,7 @@ DRAWN_FIELDS = (
     "hero_x_ratio",
     "hero_y_ratio",
     "hero_zoom",
+    "text_size_px",
     "inset_size_px",
     "inset_x_ratio",
     "inset_y_ratio",
@@ -590,6 +596,8 @@ def update_draft(
     if "hero_zoom" in changes:
         value = changes["hero_zoom"]
         changes["hero_zoom"] = min(3.0, max(1.0, 1.0 if value is None else value))
+    if changes.get("text_size_px") is not None:
+        changes["text_size_px"] = min(MAX_TEXT_PX, max(MIN_TEXT_PX, changes["text_size_px"]))
     if changes.get("inset_size_px") is not None:
         changes["inset_size_px"] = layout.portrait.clamp(
             changes["inset_size_px"], layout.image.width
