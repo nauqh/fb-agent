@@ -7,6 +7,7 @@ and how many. The writing itself is `test_generate.py`, so the route test stubs
 
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
+from zoneinfo import ZoneInfo
 
 import pytest
 from sqlmodel import col, select
@@ -17,12 +18,14 @@ from app.models import (
     Draft,
     DraftStatus,
     Page,
+    PageAutoDraftTime,
     PageCompetitor,
-    SourceItem,
     Shortlist,
+    SourceItem,
     SourceItemBase,
     SourceKind,
 )
+from app.settings import settings
 from app.sources import rss
 from app.writer import agent as writer
 
@@ -698,3 +701,86 @@ def test_the_hourly_run_makes_only_due_pages_with_instructions(
     stored = session.get(Shortlist, page.id)
     session.refresh(stored)
     assert [item["external_id"] for item in stored.items] == [feed[0].external_id]
+
+
+# --- per-Page run times -------------------------------------------------------
+
+
+def _add_time(session, page, hour: int, minute: int = 0) -> PageAutoDraftTime:
+    row = PageAutoDraftTime(page_id=page.id, minute_of_day=hour * 60 + minute)
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    return row
+
+
+def _local(hour: int, minute: int = 0, day: int = 29) -> datetime:
+    return datetime(
+        2026, 10, day, hour, minute, tzinfo=ZoneInfo(settings.timezone)
+    )
+
+
+def test_a_page_s_run_times_are_added_listed_and_removed(client, session, page):
+    response = client.post(
+        f"/pages/{page.id}/auto-draft-times", json={"hour": 8, "minute": 30}
+    )
+    assert response.status_code == 201
+    assert response.json()["label"] == "08:30"
+
+    assert client.post(
+        f"/pages/{page.id}/auto-draft-times", json={"hour": 8, "minute": 30}
+    ).status_code == 409
+    assert [row["label"] for row in client.get(
+        f"/pages/{page.id}/auto-draft-times"
+    ).json()] == ["08:30"]
+
+    slot_id = response.json()["id"]
+    assert client.delete(
+        f"/pages/{page.id}/auto-draft-times/{slot_id}"
+    ).status_code == 204
+    assert client.get(f"/pages/{page.id}/auto-draft-times").json() == []
+
+
+def test_a_page_with_no_times_is_not_due(session, page, pool):
+    _switch(session, page, competitors=1)
+    assert auto_draft.is_due(session, page, _local(9)) is False
+
+
+def test_a_configured_time_is_due_until_that_page_has_run(session, page, pool):
+    _switch(session, page, competitors=1)
+    _add_time(session, page, 6)
+    now = _local(6, 5)
+
+    assert auto_draft.is_due(session, page, now) is True
+    # The cron is hourly, so a run any time after 06:00 closes that window.
+    session.add(
+        AutoDraftRun(
+            page_id=page.id,
+            source=SourceKind.COMPETITOR_POST,
+            created_at=datetime(2026, 10, 28, 23, 10, tzinfo=timezone.utc),
+        )
+    )
+    session.commit()
+
+    assert auto_draft.is_due(session, page, now) is False
+    # And the next run is tomorrow's 06:00, not today's.
+    assert auto_draft.next_run_at(session, page, now) == datetime(
+        2026, 10, 29, 23, 0, tzinfo=timezone.utc
+    )
+
+
+def test_the_due_route_runs_only_what_the_schedule_says(
+    client, session, page, pool, queued, monkeypatch
+):
+    _switch(session, page, competitors=1)
+    other = Page(name="Not due", facebook_page_id="777")
+    session.add(other)
+    session.commit()
+
+    monkeypatch.setattr(auto_draft, "due_pages", lambda session: [page])
+
+    response = client.post("/generate/auto/due", json={})
+
+    assert response.status_code == 202
+    assert response.json() == [page.id]
+    assert len(queued) == 1

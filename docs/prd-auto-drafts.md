@@ -18,7 +18,7 @@ The staff set the agent up once per Page. After that, the agent runs on its own 
 
 ```mermaid
 flowchart LR
-    A["The staff set the agent up<br/>once per Page"] --> B["Every morning at 06:00,<br/>the agent looks for<br/>new material"]
+    A["The staff set the agent up<br/>once per Page"] --> B["At each Page's set times,<br/>the agent looks for<br/>new material"]
     B --> F["Facebook posts:<br/>the most-reacted posts<br/>from the Page's competitors"]
     B --> R["RSS items:<br/>news from the Page's feeds<br/>that fits the staff's description"]
     F --> X["Skips anything<br/>already drafted"]
@@ -35,10 +35,10 @@ The highlighted steps are the core development in this feature.
 
 ### Step by step
 
-1. **Set up.** On Settings, under **Auto-drafts**, tick **Facebook posts per day**, **RSS items per day**, or both, and set how many Drafts each should write.
+1. **Set up.** On Settings, under **Auto-drafts**, tick **Facebook posts per run**, **RSS items per run**, or both, and set how many Drafts each should write. Add the times the Page should run at, or leave the list empty for manual only.
 2. **Choose the pictures.** Each source has its own **Picture** setting: Google image, Generate with AI or No picture. RSS also offers Source photo, the feed's own picture.
 3. **Narrow it down (optional).** Set **Minimum reactions** to skip quieter competitor posts. Describe **Which RSS items to draft** in plain words, for example "UK politics only, no sport or celebrity news". Left blank, the newest items are taken.
-4. **The morning run.** At 06:00 Ho Chi Minh City time, the agent writes the Drafts for every Page that has a source switched on. A post or news item is never used twice, even across different Pages.
+4. **The scheduled runs.** At each time in the Page's list (Ho Chi Minh City time), the agent runs every source switched on for that Page. A post or news item is never used twice, even across different Pages. **Run now** on Settings runs the Page immediately, whatever its times say, and is the only trigger when the list is empty.
 5. **Review.** The new Drafts appear in Review alongside the ones made by hand, to edit, schedule or reject as usual.
 6. **Keep an eye on the agent.** The **Auto-drafts** screen shows every Page on one screen: when the next run is, what each run wrote, and which Pages are running out of material.
 
@@ -47,7 +47,7 @@ The highlighted steps are the core development in this feature.
 | Status | Meaning | What to do |
 | --- | --- | --- |
 | Ready | More than 5 posts or items left to draft from | Nothing |
-| Running low | 5 or fewer left | Tick more competitors, add feeds, or lower the number per day |
+| Running low | 5 or fewer left | Tick more competitors, add feeds, or lower the number per run |
 | Nothing left | No unused posts or items | As above; the run writes nothing until there is new material |
 | OK | The last run wrote every Draft the agent was asked for | Nothing |
 | Partial | The agent wrote some, with the reason shown | Usually nothing; check the reason |
@@ -57,7 +57,9 @@ The highlighted steps are the core development in this feature.
 ## Included
 
 - The Auto-drafts settings on Settings, per Page and per source
-- The daily 06:00 run for every Page with a source switched on
+- Per-Page run times, as many times a day as the operator sets
+- A **Run now** button for a Page with a source switched on
+- A run at each configured time for every source switched on
 - A post or RSS item is never drafted twice, across all Pages
 - A Picture choice per source
 - The Auto-drafts screen, with the run history and the statuses above
@@ -68,7 +70,6 @@ The highlighted steps are the core development in this feature.
 | Item | Reason |
 | --- | --- |
 | Publishing without review | Every Draft still goes through Review, by design |
-| A different run time per Page | One daily time for all Pages. Possible later feature |
 | Reusing a competitor's photo | Their picture is not ours to post |
 | Other sources, such as web pages or saved posts | Possible later feature |
 | Website articles from RSS Drafts | Separate feature |
@@ -115,7 +116,7 @@ Maintenance covers checking the daily runs, finding these changes, and updating 
 | What | Cost |
 | --- | --- |
 | Writing each Draft | One AI call, the same as a Draft asked for by hand (Gemini) |
-| Choosing RSS items | One extra AI call per Page per day, only when a description is set (Gemini) |
+| Choosing RSS items | One extra AI call per Page per run, only when a description is set (Gemini) |
 | Source photo, No picture | Free |
 | Google image | One image search per Draft (SerpAPI). The free tier covers 250 a month; 20 Drafts a day is about 600 |
 | Generate with AI | One paid AI image per Draft (Gemini) |

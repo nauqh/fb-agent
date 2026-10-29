@@ -33,14 +33,6 @@ import { cn } from "@/lib/utils";
  * and the day headings the Review queue groups by.
  */
 
-const RUN_HOUR_UTC = 23;
-/**
- * When the cron fires. 23:00 UTC is 06:00 in Ho Chi Minh City, which has no
- * DST. **The schedule itself lives in `.github/workflows/auto-drafts.yml`** and
- * this is a copy of it, which is the honest cost of the schedule living outside
- * the app: change one and the other is wrong. Nothing enforces the pair.
- */
-
 const STALE_AFTER_HOURS = 26;
 /**
  * How long without a run before the automation is treated as stopped.
@@ -71,13 +63,6 @@ const STUCK_MINUTES = 30;
  * A draft still writing after this long has hung. A restart is already swept to
  * `failed` by `sweep_stranded`, so this only catches a writer that never returns.
  */
-
-function nextRun(now: Date): Date {
-  const next = new Date(now);
-  next.setUTCHours(RUN_HOUR_UTC, 0, 0, 0);
-  if (next <= now) next.setUTCDate(next.getUTCDate() + 1);
-  return next;
-}
 
 /** `4h 12m`. Deliberately not seconds - nothing here is worth a ticking digit. */
 function until(target: Date, now: Date): string {
@@ -180,7 +165,7 @@ function runState(run: AutoDraftRun, drafts: Draft[], now: Date | null): PoolSta
 
 /** The last `DAYS` scheduled runs, oldest first. Today's counts once it is due. */
 function nights(now: Date): Date[] {
-  const last = nextRun(now);
+  const last = new Date(now);
   last.setUTCDate(last.getUTCDate() - 1);
   return Array.from({ length: DAYS }, (_, i) => {
     const night = new Date(last);
@@ -195,8 +180,8 @@ export default function AutoDraftsScreen() {
     [],
     {
       cacheKey: "auto-draft-status",
-      // A run happens once a day and takes minutes. Polling faster than this
-      // would be watching a kettle.
+      // Each Page has its own times, and a run takes minutes. Polling faster
+      // than this would be watching a kettle.
       intervalMs: 60_000,
     },
   );
@@ -232,6 +217,12 @@ export default function AutoDraftsScreen() {
   const lastDrafts = lastBatch.reduce((sum, run) => sum + run.drafts_created, 0);
   const failed = lastBatch.filter((run) => runState(run, made(run.id), now).tone === "negative");
 
+  // The soonest configured time across every automated Page. Each Page has its
+  // own list now, so this is a minimum rather than a copied cron hour.
+  const nextAt = data.pages
+    .map((page) => page.next_run_at)
+    .filter((at): at is string => at !== null)
+    .sort()[0];
   const automated = data.pages.filter(isOn);
   const off = data.pages.filter((page) => !isOn(page));
   const attention = automated.filter((page) => {
@@ -259,7 +250,7 @@ export default function AutoDraftsScreen() {
     <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto pb-10">
       <ScreenHeader
         title="Auto-drafts"
-        hint="Writes drafts into Review once a day. Every Page, not just the selected one."
+        hint="Writes drafts into Review at each Page's set times. Every Page, not just the selected one."
         // Off: this screen is about all Pages at once, so a Page name in the
         // title row would claim a scope it does not have. Same reasoning as
         // Global.
@@ -270,7 +261,10 @@ export default function AutoDraftsScreen() {
           the weight, the words between them stay muted, and it costs one line
           where three boxes cost a band across the screen. */}
       <p className="flex flex-wrap items-center gap-x-2 gap-y-1 px-0.5 text-sm text-muted-foreground">
-        <Figure value={now ? until(nextRun(now), now) : "-"} label="until the next run" />
+        <Figure
+          value={now && nextAt ? until(new Date(nextAt), now) : "-"}
+          label="until the next run"
+        />
         <span aria-hidden>·</span>
         <Figure value={`~${expected}`} label="drafts expected" />
         <span aria-hidden>·</span>

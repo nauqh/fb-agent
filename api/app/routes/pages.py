@@ -20,7 +20,7 @@ from sqlmodel import Session, select
 
 from app import media
 from app.db import get_session
-from app.models import Page, PageTimeSlot
+from app.models import Page, PageAutoDraftTime, PageTimeSlot
 from app.publish import auto_repost
 from app.writer import validators
 
@@ -312,5 +312,69 @@ def remove_slot(
     row = session.get(PageTimeSlot, slot_id)
     if row is None or row.page_id != page_id:
         raise HTTPException(status_code=404, detail=f"No slot {slot_id} on page {page_id}")
+    session.delete(row)
+    session.commit()
+
+
+# --- auto-draft run times -----------------------------------------------------
+#
+# The same shape as publishing times, and for the same reason: a standing
+# decision that exists whether or not a run has happened. The cron asks which
+# Pages are due; nothing here records a run (`AutoDraftRun` does).
+
+
+@router.get("/{page_id}/auto-draft-times")
+def list_auto_draft_times(
+    page_id: int, session: Session = Depends(get_session)
+) -> list[PageAutoDraftTime]:
+    """This Page's automatic run times, earliest first."""
+    _page(session, page_id)
+    return list(
+        session.exec(
+            select(PageAutoDraftTime)
+            .where(PageAutoDraftTime.page_id == page_id)
+            .order_by(PageAutoDraftTime.minute_of_day)  # type: ignore[arg-type]
+        ).all()
+    )
+
+
+@router.post("/{page_id}/auto-draft-times", status_code=201)
+def add_auto_draft_time(
+    page_id: int,
+    slot: TimeSlotIn,
+    session: Session = Depends(get_session),
+) -> PageAutoDraftTime:
+    """Add a run time. The same time twice is refused rather than stored."""
+    _page(session, page_id)
+    minute = slot.hour * 60 + slot.minute
+
+    existing = session.exec(
+        select(PageAutoDraftTime)
+        .where(PageAutoDraftTime.page_id == page_id)
+        .where(PageAutoDraftTime.minute_of_day == minute)
+    ).first()
+    if existing is not None:
+        raise HTTPException(
+            status_code=409,
+            detail=f"{existing.label} is already an auto-draft time for this Page.",
+        )
+
+    row = PageAutoDraftTime(page_id=page_id, minute_of_day=minute)
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    return row
+
+
+@router.delete("/{page_id}/auto-draft-times/{slot_id}", status_code=204)
+def remove_auto_draft_time(
+    page_id: int, slot_id: int, session: Session = Depends(get_session)
+) -> None:
+    """Removing a time changes the next run and nothing that already ran."""
+    row = session.get(PageAutoDraftTime, slot_id)
+    if row is None or row.page_id != page_id:
+        raise HTTPException(
+            status_code=404, detail=f"No auto-draft time {slot_id} on page {page_id}"
+        )
     session.delete(row)
     session.commit()

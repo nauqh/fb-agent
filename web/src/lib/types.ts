@@ -396,6 +396,17 @@ export interface AutoDraftPage {
   last_run_at: string | null;
   last_run_drafts: number | null;
   last_run_note: string | null;
+  /** The next configured time, in UTC. Null means no automatic run is set. */
+  next_run_at: string | null;
+}
+
+/** One time of day this Page's auto-drafts run at. Empty means manual only. */
+export interface AutoDraftTime {
+  id: number;
+  page_id: number;
+  minute_of_day: number;
+  /** `HH:MM`, so a screen never does arithmetic to show a time. */
+  label: string;
 }
 
 /** One Page's share of one run, recorded whether or not it made anything. */

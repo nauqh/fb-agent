@@ -3,9 +3,10 @@
 Requirements: the auto-drafts PRD. Two sources, each switched on per Page from
 Settings: competitor posts (`run`) and the Page's RSS feeds (`run_rss`).
 
-A cron outside the app POSTs `/generate/auto`. There is no scheduler here and
-no queue table - the Draft row is the job record, so a restart mid-run needs no
-recovery code beyond `generate.sweep_stranded`.
+A cron outside the app POSTs `/generate/auto/due`, which runs only the Pages
+whose configured time has passed. There is no scheduler here and no queue table
+- the Draft row is the job record, so a restart mid-run needs no recovery code
+beyond `generate.sweep_stranded`.
 """
 
 from datetime import datetime, timedelta, timezone
@@ -20,6 +21,7 @@ from app.models import (
     AutoDraftRun,
     Draft,
     Page,
+    PageAutoDraftTime,
     Shortlist,
     SourceItem,
     SourceItemBase,
@@ -418,6 +420,130 @@ def make_shortlists(page_ids: list[int]) -> None:
 
 def is_on(page: Page) -> bool:
     return bool(page.auto_draft_competitor_count or page.auto_draft_rss_count)
+
+
+def _zone() -> ZoneInfo:
+    return ZoneInfo(settings.timezone)
+
+
+def _local(now: datetime) -> datetime:
+    """Naive local time, the shape `PageAutoDraftTime` is expressed in."""
+    return now.astimezone(_zone()).replace(tzinfo=None)
+
+
+def _utc(local: datetime) -> datetime:
+    return local.replace(tzinfo=_zone()).astimezone(timezone.utc)
+
+
+def _aware(stamp: datetime) -> datetime:
+    """SQLite hands back naive UTC; Postgres keeps the offset."""
+    return stamp if stamp.tzinfo else stamp.replace(tzinfo=timezone.utc)
+
+
+def times_for(session: Session, page_id: int) -> list[int]:
+    """This Page's run times, earliest first."""
+    return list(
+        session.exec(
+            select(PageAutoDraftTime.minute_of_day)
+            .where(PageAutoDraftTime.page_id == page_id)
+            .order_by(PageAutoDraftTime.minute_of_day)
+        ).all()
+    )
+
+
+def last_run_at(session: Session, page_id: int) -> datetime | None:
+    """When this Page last ran, from either source's row."""
+    return session.exec(
+        select(func.max(col(AutoDraftRun.created_at))).where(
+            AutoDraftRun.page_id == page_id
+        )
+    ).one()
+
+
+def _latest_occurrence(minutes: list[int], now: datetime) -> datetime | None:
+    """The most recent configured time at or before `now`, naive local.
+
+    The day is included, so a time that passed this morning is found without
+    walking backwards a day at a time.
+    """
+    if not minutes:
+        return None
+    midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    latest = None
+    for minute in minutes:
+        today = midnight + timedelta(minutes=minute)
+        candidate = today if today <= now else today - timedelta(days=1)
+        if latest is None or candidate > latest:
+            latest = candidate
+    return latest
+
+
+def _next_occurrence(minutes: list[int], now: datetime) -> datetime | None:
+    """The first configured time strictly after `now`, naive local."""
+    if not minutes:
+        return None
+    midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    candidates = []
+    for minute in minutes:
+        today = midnight + timedelta(minutes=minute)
+        candidates.append(today if today > now else today + timedelta(days=1))
+    return min(candidates)
+
+
+def is_due(
+    session: Session,
+    page: Page,
+    now: datetime | None = None,
+) -> bool:
+    """Whether a configured time has passed since this Page last ran.
+
+    The cron runs hourly, so "passed" is measured against the most recent
+    configured time, not the exact minute: a delayed run still counts, and a
+    second run in the same window does not.
+    """
+    if not is_on(page) or page.id is None:
+        return False
+    minutes = times_for(session, page.id)
+    if not minutes:
+        return False
+    latest = _latest_occurrence(minutes, _local(now or datetime.now(timezone.utc)))
+    if latest is None:
+        return False
+    last = last_run_at(session, page.id)
+    return last is None or _aware(last) < _utc(latest)
+
+
+def due_pages(session: Session, now: datetime | None = None) -> list[Page]:
+    """Every Page with a source on and a configured time that is now due."""
+    return [
+        page
+        for page in session.exec(select(Page).order_by(col(Page.id))).all()
+        if is_due(session, page, now)
+    ]
+
+
+def next_run_at(
+    session: Session,
+    page: Page,
+    now: datetime | None = None,
+) -> datetime | None:
+    """The next time this Page is expected to run, in UTC.
+
+    A time that has passed without a matching run returns that past time, so
+    the monitor says "due now" rather than "tomorrow".
+    """
+    if not is_on(page) or page.id is None:
+        return None
+    minutes = times_for(session, page.id)
+    if not minutes:
+        return None
+    local_now = _local(now or datetime.now(timezone.utc))
+    latest = _latest_occurrence(minutes, local_now)
+    last = last_run_at(session, page.id)
+    if latest is not None and (last is None or _aware(last) < _utc(latest)):
+        return _utc(latest)
+    upcoming = _next_occurrence(minutes, local_now)
+    return _utc(upcoming) if upcoming is not None else None
 
 
 def run_page(session: Session, page: Page, hero_from_source: bool = False) -> list[int]:

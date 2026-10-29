@@ -1,4 +1,4 @@
-import type { Page, PromptFile } from "@/lib/types";
+import type { AutoDraftTime, Page, PromptFile } from "@/lib/types";
 import { del, delJson, get, patch, post, put, upload } from "@/lib/api/client";
 /**
  * `GET /pages`, `GET /pages/{id}`, `PATCH /pages/{id}`, `GET /prompts`.
@@ -171,4 +171,29 @@ export async function addSlot(
 
 export async function removeSlot(pageId: number, slotId: number): Promise<void> {
   await del(`/pages/${pageId}/slots/${slotId}`);
+}
+
+/**
+ * When this Page's auto-drafts run. Empty means manual only.
+ *
+ * Policy, not run history: `AutoDraftRun` records what actually ran. The hourly
+ * cron asks the API which Pages are due, so these times survive a deploy.
+ */
+export async function listAutoDraftTimes(pageId: number): Promise<AutoDraftTime[]> {
+  return get<AutoDraftTime[]>(`/pages/${pageId}/auto-draft-times`);
+}
+
+export async function addAutoDraftTime(
+  pageId: number,
+  hour: number,
+  minute: number,
+): Promise<AutoDraftTime> {
+  return post<AutoDraftTime>(`/pages/${pageId}/auto-draft-times`, { hour, minute });
+}
+
+export async function removeAutoDraftTime(
+  pageId: number,
+  slotId: number,
+): Promise<void> {
+  await del(`/pages/${pageId}/auto-draft-times/${slotId}`);
 }

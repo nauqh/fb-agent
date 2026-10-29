@@ -1,18 +1,19 @@
-# Auto-drafts, once a day. Requirements: the auto-drafts PRD.
+# Auto-drafts, hourly. Requirements: the auto-drafts PRD.
 #
-# Which Pages, which sources and how many drafts is each Page's own setting, on
-# Settings > This Page > Auto-drafts. This file only says when. The route runs
-# every Page with a source switched on.
+# Which Pages, which sources, how many drafts and what times are each Page's own
+# setting, on Settings > This Page > Auto-drafts. This file only asks the API
+# which Pages are due; a Page with no times is skipped and runs only on Run now.
+#
+# Hourly rather than once at 06:00 because the times are the operator's. The
+# route compares now with each Page's most recent configured time and the last
+# run, so most hours queue nothing. GitHub runs scheduled jobs late often
+# enough that the commitment is "within the hour", not an exact minute.
 
 name: Auto-drafts
 
 on:
   schedule:
-    # 06:00 in Ho Chi Minh City, which has no DST, so the queue is fresh when
-    # the working day starts. GitHub runs scheduled jobs 10-30 minutes late
-    # often enough that it is worth saying: the commitment is a full queue by
-    # the start of the morning, not an exact minute.
-    - cron: "0 23 * * *"
+    - cron: "5 * * * *"
 
   workflow_dispatch:
     inputs:
@@ -37,7 +38,7 @@ jobs:
     timeout-minutes: 5
 
     steps:
-      - name: Draft for each Page switched on
+      - name: Run due Pages, or the dispatch's Pages now
         env:
           API_KEY: ${{ secrets.FB_AGENT_API_KEY }}
           # Through the environment rather than inline `${{ }}`, so a dispatch
@@ -51,27 +52,39 @@ jobs:
             exit 1
           fi
 
-          ids="${INPUT_PAGE_IDS:-}"
-          if [ -n "$ids" ]; then
-            body=$(jq -nc --argjson ids "[$ids]" --argjson hero "$HERO_FROM_SOURCE" \
-              '{page_ids: $ids, hero_from_source: $hero}')
+          # A scheduled tick runs only what is due. A manual dispatch is the
+          # operator asking for it now, so it forces the Pages it names.
+          if [ "${GITHUB_EVENT_NAME}" = "schedule" ]; then
+            url="$API/generate/auto/due"
+            body=$(jq -nc --argjson hero "$HERO_FROM_SOURCE" \
+              '{hero_from_source: $hero}')
+            label="due Pages"
           else
-            body=$(jq -nc --argjson hero "$HERO_FROM_SOURCE" '{hero_from_source: $hero}')
+            url="$API/generate/auto"
+            ids="${INPUT_PAGE_IDS:-}"
+            if [ -n "$ids" ]; then
+              body=$(jq -nc --argjson ids "[$ids]" --argjson hero "$HERO_FROM_SOURCE" \
+                '{page_ids: $ids, hero_from_source: $hero}')
+            else
+              body=$(jq -nc --argjson hero "$HERO_FROM_SOURCE" '{hero_from_source: $hero}')
+            fi
+            label="dispatch"
           fi
-          echo "Requesting: $body"
+          echo "Requesting $label: $body"
 
           code=$(curl -sS -o response.json -w '%{http_code}' \
-            -X POST "$API/generate/auto" \
+            -X POST "$url" \
             -H "X-API-Key: $API_KEY" \
             -H "Content-Type: application/json" \
             -d "$body")
 
           if [ "$code" != "202" ]; then
-            echo "::error::/generate/auto answered $code"
+            echo "::error::$url answered $code"
             cat response.json
             exit 1
           fi
 
-          # An empty list means no Page had anything left to write about, or
-          # none is switched on. The Auto-drafts screen says which.
-          echo "Queued $(jq 'length' response.json) draft(s): $(cat response.json)"
+          # A scheduled empty list means nothing was due, which is the normal
+          # case on most hours. On a dispatch it means no Page had anything
+          # left to write about, or none is switched on.
+          echo "Queued $(jq 'length' response.json) $label: $(cat response.json)"

@@ -27,7 +27,7 @@ Three rules follow from this:
 
 ## What we store
 
-Twelve tables, in three groups. The group decides what happens to a row when
+Thirteen tables, in three groups. The group decides what happens to a row when
 the database moves, and whether anything ever deletes it.
 
 ### Settings: the operator's decisions
@@ -40,6 +40,7 @@ database MUST copy all of these.
 | `page` | One Facebook page we publish to | Identity (`facebook_page_id`, `metricool_blog_id`), the watermark, how long it writes, its prompt overrides, and its automation switches |
 | `page_layout` | One Page's changes to the card | Only the values the Page changed. Null means `layout.yml`. Deleting the row resets the Page |
 | `page_time_slot` | One time of day a Page publishes at | Publishing policy ("08:00 and 19:00"). Metricool has nowhere to keep it |
+| `page_auto_draft_time` | One time of day a Page's auto-drafts run at | The operator's run times. Empty means manual only. `auto_draft_run` records what actually ran |
 | `feed` | One RSS feed a Page reads | The feed list has to change without a deploy, and the container's files are read-only |
 | `page_competitor` | One competitor assigned to one Page | Metricool allows 100 competitors per account, so one competitor is added once and assigned to every Page that should read it |
 | `prompt_template` | One named post style for one Page | A style picked at generate time. Each field replaces the Page's prompt; blank keeps the Page's |
@@ -258,9 +259,10 @@ upload the hero.
 
 ### 4. Auto-drafts (daily)
 
-- **Trigger:** GitHub Actions, `auto-drafts.yml`, 06:00 Ho Chi Minh City.
-  It POSTs `/generate/auto`.
-- **Reads:** each Page with a source switched on. Competitor posts: the
+- **Trigger:** GitHub Actions, `auto-drafts.yml`, hourly. It POSTs
+  `/generate/auto/due`, which runs only Pages whose configured time has passed.
+  The Settings **Run now** button POSTs `/generate/auto` and ignores the times.
+- **Reads:** each due Page with a source switched on. Competitor posts: the
   highest-reaction posts from assigned competitors, above
   `auto_draft_competitor_min_reactions`, that no draft has come from yet. RSS:
   the Page's feeds, fetched live, filtered by `auto_draft_rss_instructions`.

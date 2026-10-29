@@ -602,6 +602,44 @@ class PageTimeSlot(SQLModel, table=True):
         return f"{self.minute_of_day // 60:02d}:{self.minute_of_day % 60:02d}"
 
 
+class PageAutoDraftTime(SQLModel, table=True):
+    """One time of day this Page's auto-drafts run at.
+
+    A list rather than one minute like `Page.shortlist_minute`: the client asked
+    for set times per day (2026-10-29), and two runs a day is the obvious use -
+    one before the morning shift and one before the evening. Empty is no
+    automatic run, which leaves the manual Run now button as the only trigger.
+
+    Times are policy, not a run record. `AutoDraftRun` still records what ran;
+    deleting a time changes the next run and nothing that already happened.
+    """
+
+    __tablename__ = "page_auto_draft_time"
+    __table_args__ = (
+        # The same time twice is one slot counted twice, and the due check would
+        # run it twice in the same minute.
+        UniqueConstraint(
+            "page_id",
+            "minute_of_day",
+            name="uq_auto_draft_time_page_minute",
+        ),
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    page_id: int = Field(foreign_key="page.id", index=True)
+
+    minute_of_day: int = Field(index=True)
+    """Minutes past midnight, 0-1439, in the Page's zone (`settings.timezone`)."""
+
+    created_at: datetime = Field(default_factory=_now)
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def label(self) -> str:
+        """`HH:MM`, for a screen that should not do arithmetic to show a time."""
+        return f"{self.minute_of_day // 60:02d}:{self.minute_of_day % 60:02d}"
+
+
 class PageCompetitor(SQLModel, table=True):
     """Which Competitors feed which Pages. Ours, not Metricool's.
 

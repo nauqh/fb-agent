@@ -31,11 +31,15 @@ import {
   type Assignment,
 } from "@/lib/api/competitors";
 import { getInsetQuota, publishMode, type InsetQuota } from "@/lib/api/drafts";
+import { runAutoDraft } from "@/lib/api/auto-drafts";
 import { addFeed, removeFeed } from "@/lib/api/feeds";
 import {
+  addAutoDraftTime,
   addSlot,
+  listAutoDraftTimes,
   listPromptFiles,
   listSlots,
+  removeAutoDraftTime,
   removeSlot,
   setPromptFile,
   updatePage,
@@ -46,7 +50,12 @@ import {
   listPromptTemplates,
   updatePromptTemplate,
 } from "@/lib/api/prompt-templates";
-import type { Page, PromptFile, PromptTemplate } from "@/lib/types";
+import type {
+  AutoDraftTime,
+  Page,
+  PromptFile,
+  PromptTemplate,
+} from "@/lib/types";
 import { usePageScope } from "@/lib/page-scope";
 import { emit } from "@/lib/store";
 import { useQuery } from "@/lib/use-query";
@@ -89,6 +98,12 @@ export default function SettingsScreen() {
     [pageId],
     { enabled: pageId !== null },
   );
+  const {
+    data: autoDraftTimes,
+    refresh: refreshAutoDraftTimes,
+  } = useQuery(() => listAutoDraftTimes(pageId!), [pageId], {
+    enabled: pageId !== null,
+  });
   const { data: prompts } = useQuery(() => listPromptFiles(pageId!), [pageId], {
     enabled: pageId !== null,
   });
@@ -164,6 +179,8 @@ export default function SettingsScreen() {
                       page={page}
                       assigned={assignments ? assigned : null}
                       feeds={sources ? sources.feeds.length : null}
+                      times={autoDraftTimes ?? null}
+                      refreshTimes={refreshAutoDraftTimes}
                     />
                     <div className="border-t pt-6">
                       <Automation key={page.id} page={page} />
@@ -442,18 +459,22 @@ function Automation({ page }: { page: Page }) {
 }
 
 /**
- * Which sources the daily run drafts from, and how many. One switch per
- * source because the beats differ: a political Page drafts from its news feeds
- * and not from competitors, a history Page the other way round.
+ * Which sources the automated runs draft from, how many, and when. One switch
+ * per source because the beats differ: a political Page drafts from its news
+ * feeds and not from competitors, a history Page the other way round.
  */
 function AutoDrafts({
   page,
   assigned,
   feeds,
+  times,
+  refreshTimes,
 }: {
   page: Page;
   assigned: number | null;
   feeds: number | null;
+  times: AutoDraftTime[] | null;
+  refreshTimes: () => Promise<void> | void;
 }) {
   const [competitorOn, setCompetitorOn] = useState(page.auto_draft_competitor_count !== null);
   const [competitorCount, setCompetitorCount] = useState(
@@ -475,6 +496,10 @@ function AutoDrafts({
       : `${String(Math.floor(page.shortlist_minute / 60)).padStart(2, "0")}:${String(page.shortlist_minute % 60).padStart(2, "0")}`,
   );
   const [busy, setBusy] = useState(false);
+  const [running, setRunning] = useState(false);
+  const [time, setTime] = useState("");
+  const [timeBusy, setTimeBusy] = useState(false);
+  const [removingTime, setRemovingTime] = useState<number | null>(null);
 
   const next = {
     auto_draft_competitor_count: competitorOn ? Number(competitorCount) : null,
@@ -492,16 +517,67 @@ function AutoDrafts({
     (key) => next[key] !== page[key],
   );
 
-  async function save() {
+  async function save(): Promise<boolean> {
     setBusy(true);
     try {
       await updatePage(page.id, next);
-      toast(competitorOn || rssOn ? "Saved. Runs daily at 06:00." : "Saved. Auto-drafts are off.");
+      toast(competitorOn || rssOn ? "Saved." : "Saved. Auto-drafts are off.");
       emit();
+      return true;
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : "Could not save");
+      return false;
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function runNow() {
+    // The server reads the saved row, so unsaved counts would run the old
+    // settings. Save first, and stop if that failed.
+    if (dirty && !(await save())) return;
+    setRunning(true);
+    try {
+      const ids = await runAutoDraft(page.id);
+      toast(
+        ids.length > 0
+          ? `Queued ${ids.length} draft${ids.length === 1 ? "" : "s"}.`
+          : "Ran, but there is nothing left to draft from.",
+      );
+      emit();
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Could not run");
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  async function addTime(event: React.FormEvent) {
+    event.preventDefault();
+    const [hour, minute] = time.split(":").map(Number);
+    if (Number.isNaN(hour) || Number.isNaN(minute)) return;
+    setTimeBusy(true);
+    try {
+      await addAutoDraftTime(page.id, hour, minute);
+      setTime("");
+      await refreshTimes();
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Could not add that time");
+    } finally {
+      setTimeBusy(false);
+    }
+  }
+
+  async function dropTime(id: number, label: string) {
+    setRemovingTime(id);
+    try {
+      await removeAutoDraftTime(page.id, id);
+      toast.success(`${label} removed`);
+      await refreshTimes();
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Could not remove");
+    } finally {
+      setRemovingTime(null);
     }
   }
 
@@ -514,9 +590,68 @@ function AutoDrafts({
       {/* One group per source, spaced wider than the rows inside it, and the
           Picture choice in the same cell for both - beside the count. */}
       <div className="space-y-5">
-        <p className="text-[13px] text-muted-foreground">
-          New drafts in Review every day at 06:00.
-        </p>
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label className="text-[13px] font-normal text-muted-foreground">
+              Automatic run times (GMT+7)
+            </Label>
+            <form onSubmit={addTime} className="flex items-center gap-2">
+              <Input
+                type="time"
+                value={time}
+                onChange={(event) => setTime(event.target.value)}
+                aria-label="Auto-draft run time"
+                className="h-8 w-32 text-[13px] tabular-nums"
+              />
+              <Button
+                type="submit"
+                size="sm"
+                variant="outline"
+                className="h-8"
+                disabled={timeBusy || !time}
+              >
+                {timeBusy ? (
+                  <Loader2 className="size-3 animate-spin" />
+                ) : (
+                  <Plus className="size-3.5" />
+                )}
+                Add time
+              </Button>
+            </form>
+            {times === null ? (
+              <Loading label="Loading times" className="h-12" />
+            ) : times.length === 0 ? (
+              <Gap title="No automatic runs.">
+                Press Run now below when you want drafts.
+              </Gap>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {times.map((slot) => (
+                  <div
+                    key={slot.id}
+                    className="flex items-center gap-1 rounded-lg border bg-background py-1 pr-1 pl-3"
+                  >
+                    <p className="text-sm font-medium tabular-nums">{slot.label}</p>
+                    <button
+                      type="button"
+                      onClick={() => void dropTime(slot.id, slot.label)}
+                      disabled={removingTime !== null}
+                      aria-label={`Remove ${slot.label}`}
+                      title={`Remove ${slot.label}`}
+                      className="shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+                    >
+                      {removingTime === slot.id ? (
+                        <Loader2 className="size-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="size-3.5" />
+                      )}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
 
         <div className="space-y-3">
         <div className="grid gap-3 sm:grid-cols-2">
@@ -527,14 +662,14 @@ function AutoDrafts({
                 checked={competitorOn}
                 onChange={(event) => setCompetitorOn(event.target.checked)}
               />
-              Facebook posts per day
+              Facebook posts per run
             </Label>
             <Input
               type="number"
               inputMode="numeric"
               min={1}
               max={10}
-              aria-label="Drafts per day from competitor posts"
+              aria-label="Drafts per run from competitor posts"
               disabled={!competitorOn}
               className={number}
               value={competitorCount}
@@ -584,14 +719,14 @@ function AutoDrafts({
                 checked={rssOn}
                 onChange={(event) => setRssOn(event.target.checked)}
               />
-              RSS items per day
+              RSS items per run
             </Label>
             <Input
               type="number"
               inputMode="numeric"
               min={1}
               max={10}
-              aria-label="Drafts per day from RSS"
+              aria-label="Drafts per run from RSS"
               disabled={!rssOn}
               className={number}
               value={rssCount}
@@ -657,12 +792,24 @@ function AutoDrafts({
         </div>
         </div>
 
-        {dirty ? (
-          <Button size="sm" disabled={busy} onClick={() => void save()}>
-            {busy ? <Loader2 className="size-4 animate-spin" /> : null}
-            Save
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={running || busy || !(competitorOn || rssOn)}
+            onClick={() => void runNow()}
+            title="Runs this Page now, whatever its times say. Unsaved settings are saved first."
+          >
+            {running ? <Loader2 className="size-4 animate-spin" /> : null}
+            Run now
           </Button>
-        ) : null}
+          {dirty ? (
+            <Button size="sm" disabled={busy || running} onClick={() => void save()}>
+              {busy ? <Loader2 className="size-4 animate-spin" /> : null}
+              Save
+            </Button>
+          ) : null}
+        </div>
       </div>
     </Block>
   );
