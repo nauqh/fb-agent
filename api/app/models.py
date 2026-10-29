@@ -1126,8 +1126,8 @@ class Draft(SQLModel, table=True):
     text_size_px: int | None = None
     """The overlay's font size for this draft. Null takes the Page's
     (`page_layout.text_font_size_px`). Set on the review page, where the
-    operator sees the hook against its picture (client, 2026-10-29). Not used
-    by the quote card, which sizes its own type."""
+    operator sees the hook against its picture (client, 2026-10-29). On a
+    quote card it is the quote's size, `quote.body_px` (client, 2026-10-30)."""
 
     inset_size_px: int | None = None
     """Diameter of the disc. Null takes `layout.portrait.size_px`.

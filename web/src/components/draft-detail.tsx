@@ -45,6 +45,7 @@ import {
   regenerateField,
   regenerateHero,
   rejectDraft,
+  removeHero,
   removeInset,
   rescheduleDraft,
   returnToReview,
@@ -682,6 +683,20 @@ export function DraftDetail({
    * card from the row, so an unsaved hook would be baked into the PNG while the
    * preview kept showing the new one.
    */
+  /** Back to the plain quote card. */
+  async function dropHero() {
+    setImageWork("hero-upload");
+    try {
+      if (dirty && form) await updateDraft(draftId, form);
+      await removeHero(draftId);
+      await refresh();
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Remove failed");
+    } finally {
+      setImageWork(null);
+    }
+  }
+
   async function changeHero(file: File) {
     setImageWork("hero-upload");
     try {
@@ -753,7 +768,7 @@ export function DraftDetail({
     draft.composed_image_url !== null &&
     draft.hero_image_path === null &&
     (draft.template ?? layout.template) !== "quote";
-  /** Type on a drawn ground: no hero and no circle, so neither control shows. */
+  /** Type on a drawn ground or an optional photo: no circle, and a hero is never bought. */
   const quoteCard = (form?.template ?? draft.template ?? layout.template) === "quote";
 
   /**
@@ -987,12 +1002,16 @@ export function DraftDetail({
               picture. The Page's `image_prompt` - the systematic fix, and the
               right place for "this Page is about exercise form" - is on the
               Settings screen and applies to every draft after it. */}
-          {form && !published && !quoteCard ? (
+          {form && !published ? (
             // Flat sections, not bordered boxes: a heading and spacing group
             // these, and the drawer is already the container. Absent on a
             // repost, where nothing here can reach the picture - and Regenerate
             // is the one button that spends money.
             <section className="space-y-2">
+              {quoteCard ? (
+                <SectionHead title="Photo" meta="optional · quote moves to the bottom" />
+              ) : (
+              <>
               <SectionHead
                 title="Hero"
                 htmlFor="image-prompt"
@@ -1008,7 +1027,23 @@ export function DraftDetail({
                 className="text-xs leading-relaxed"
                 placeholder="What the picture should show, sent as written. Empty uses the Page's image prompt."
               />
+              </>
+              )}
               <div className="flex gap-2">
+                {quoteCard ? (
+                  draft.hero_image_path ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      disabled={imageWork !== null}
+                      onClick={() => void dropHero()}
+                    >
+                      <X className="size-3.5" />
+                      Remove
+                    </Button>
+                  ) : null
+                ) : (
                 <Button
                   variant="outline"
                   size="sm"
@@ -1025,6 +1060,7 @@ export function DraftDetail({
                   )}
                   Regenerate
                 </Button>
+                )}
                 <Button
                   variant="outline"
                   size="sm"
@@ -1215,7 +1251,7 @@ export function DraftDetail({
               </Tabs>
             </section>
           ) : null}
-          {form && !quoteCard && (form.template ?? layout.template) !== "photo" ? (
+          {form && (form.template ?? layout.template) !== "photo" ? (
             <section className="space-y-2">
               <SectionHead
                 title="Text size"
@@ -1235,9 +1271,9 @@ export function DraftDetail({
               />
               {(() => {
                 // The Page's size for the form this draft is drawn in.
-                const base = (
-                  layoutResult?.forms[form.template ?? layout.template]?.layout ?? layout
-                ).text.font_size_px;
+                const formLayout =
+                  layoutResult?.forms[form.template ?? layout.template]?.layout ?? layout;
+                const base = quoteCard ? formLayout.quote.body_px : formLayout.text.font_size_px;
                 const size = form.text_size_px ?? base;
                 return (
                   <SliderRow label="Size" value={`${size}px`}>
@@ -2483,9 +2519,14 @@ function toForm(draft: Draft): Form {
 }
 
 /** The layout with this draft's text size in place of the Page's. */
-function withTextSize<T extends { text: { font_size_px: number } }>(
-  layout: T,
-  size: number | null,
-): T {
-  return size === null ? layout : { ...layout, text: { ...layout.text, font_size_px: size } };
+function withTextSize<
+  T extends { text: { font_size_px: number }; quote: { body_px: number } },
+>(layout: T, size: number | null): T {
+  return size === null
+    ? layout
+    : {
+        ...layout,
+        text: { ...layout.text, font_size_px: size },
+        quote: { ...layout.quote, body_px: size },
+      };
 }

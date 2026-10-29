@@ -364,10 +364,11 @@ async def create_manual_draft(
         None, description="Optional. Becomes the hero the card is drawn around."
     ),
     template: Template | None = Form(
-        None, description="The card form. `quote` is drawn with no picture at all."
+        None, description="The card form. On `quote` the picture is optional."
     ),
     attribution: str = Form("", description="Quote card only: who said it."),
     quote_marks: bool = Form(True, description="Quote card only: draw the quotation marks."),
+    text_size_px: int | None = Form(None, description="Omitted takes the Page's size."),
     session: Session = Depends(get_session),
 ) -> Draft:
     """A draft the operator wrote. No model call, unless it asks for an inset.
@@ -415,6 +416,9 @@ async def create_manual_draft(
         template=template,
         attribution=attribution.strip() or None,
         quote_marks=quote_marks,
+        text_size_px=None
+        if text_size_px is None
+        else min(MAX_TEXT_PX, max(MIN_TEXT_PX, text_size_px)),
         progress_step="written by hand",
         progress_pct=100,
     )
@@ -435,10 +439,7 @@ async def create_manual_draft(
         # Read from the operator's own text; there is no writer to name a subject.
         warnings += generate.find_inset(draft, source=inset_source or page.inset_source)
 
-    if quote:
-        # The whole card is drawn from the hook: nothing to upload.
-        warnings += generate.build_image(session, draft, page)
-    elif file is not None and file.filename:
+    if file is not None and file.filename:
         data = await file.read(MAX_HERO_BYTES + 1)
         if len(data) > MAX_HERO_BYTES:
             raise HTTPException(
@@ -457,6 +458,9 @@ async def create_manual_draft(
         generate.store_image(draft, "hero_image_path", data, "hero")
         # Reuses the generate path wholesale, so a hand-written card and a
         # generated one cannot drift apart in how they are drawn.
+        warnings += generate.build_image(session, draft, page)
+    elif quote:
+        # The whole card is drawn from the hook; a photo is optional.
         warnings += generate.build_image(session, draft, page)
     else:
         warnings.append(
@@ -1082,6 +1086,23 @@ def _set_hero(session: Session, draft: Draft, page: Page, png: bytes, how: str) 
     return _redrawn(session, draft, page)
 
 
+@router.delete("/drafts/{draft_id}/hero")
+def remove_hero(draft_id: int, session: Session = Depends(get_session)) -> Draft:
+    """Take the photo off a quote card, which then draws on its plain ground.
+
+    Quote cards only: every other form needs a hero to draw at all. The file is
+    left on disk, as `remove_inset` leaves its own.
+    """
+    draft = _editable(session, draft_id)
+    page = session.get(Page, draft.page_id)
+    if page is None:
+        raise HTTPException(status_code=404, detail=f"No page {draft.page_id}")
+    if not generate.is_quote(session, draft):
+        raise HTTPException(status_code=409, detail="Only a quote card can drop its picture.")
+    draft.hero_image_path = None
+    return _redrawn(session, draft, page)
+
+
 class SearchHero(BaseModel):
     query: str = Field(min_length=1, max_length=100)
     source: Literal["google", "unsplash"]
@@ -1336,7 +1357,7 @@ def _redrawn(session: Session, draft: Draft, page: Page) -> Draft:
     there is nothing to weigh and no button to press. Same rule as `PATCH`:
     the stored PNG always matches the stored row.
     """
-    if draft.hero_image_path:
+    if draft.hero_image_path or generate.is_quote(session, draft):
         fresh = generate.build_image(session, draft, page)
         kept = [w for w in draft.warnings if not w.startswith(generate.IMAGE_WARNING)]
         draft.warnings = kept + fresh

@@ -157,6 +157,8 @@ export async function createManualDraft(input: {
   template?: CardForm;
   /** Quote card only: who said it. */
   attribution?: string;
+  /** Omitted takes the Page's size. */
+  text_size_px?: number | null;
 }): Promise<Draft> {
   const body = new FormData();
   body.append("page_id", String(input.page_id));
@@ -171,6 +173,7 @@ export async function createManualDraft(input: {
   if (input.file) body.append("file", input.file);
   if (input.template) body.append("template", input.template);
   if (input.attribution) body.append("attribution", input.attribution);
+  if (input.text_size_px != null) body.append("text_size_px", String(input.text_size_px));
   return postForm<Draft>("/drafts/manual", body);
 }
 
@@ -211,6 +214,11 @@ export async function uploadInset(id: number, file: File): Promise<Draft> {
  */
 export async function uploadHero(id: number, file: File): Promise<Draft> {
   return upload<Draft>(`/drafts/${id}/hero`, file);
+}
+
+/** Take the photo off a quote card. Answers with the redrawn draft. */
+export async function removeHero(id: number): Promise<Draft> {
+  return delJson<Draft>(`/drafts/${id}/hero`);
 }
 
 /** Pictures for the hero, from the inset's searches. Returned, not stored. */

@@ -11,6 +11,11 @@ Highlight phrases are set in bold italic, the sample's emphasis. The marks are
 the draft's choice (`Draft.quote_marks`): off, the same text reads as a
 statement.
 
+With a photograph (client, 2026-10-30) the photo fills the card and fades to
+the ground over the full overlay's `panel.fade_ratio`, reaching solid at the
+middle of the quote, as in the client's sample; the quote, rules and marks sit
+at the bottom. The Page's name is dropped there: no room for it.
+
 No autofit, as on the panel (`text.plan`): a quote too long for the card is
 refused rather than shrunk, so the preview and the PNG agree on the type size.
 """
@@ -21,7 +26,7 @@ from dataclasses import dataclass
 import resvg_py
 from PIL import Image
 
-from app.image.compositor import JPEG_QUALITY, CompositeError, _escape
+from app.image.compositor import JPEG_QUALITY, CompositeError, _cover, _escape
 from app.image.text import WIDTH_SAFETY, Measurer, Segment, _merge, get_measurer, segment
 from app.settings import API_DIR, Layout
 
@@ -106,6 +111,8 @@ class QuotePlan:
     attribution: list[str]
     marks: bool
     name: str | None
+    middle_y: int
+    """The middle of the quote. A photograph is solid ground from here down."""
     open_mark_y: int
     top_rule_y: int
     body_y: int
@@ -125,10 +132,13 @@ def plan(
     marks: bool = True,
     attribution: str | None = None,
     name: str | None = None,
+    photo: bool = False,
 ) -> QuotePlan:
     quote = layout.quote
     width, height = layout.image.width, layout.image.height
     margin = round(width * quote.margin_ratio)
+    if photo:
+        name = None
     available = (width - margin * 2) * WIDTH_SAFETY
     regular = get_measurer(str(API_DIR / quote.font_path))
     italic = get_measurer(str(API_DIR / quote.italic_path))
@@ -171,7 +181,7 @@ def plan(
             "shorten it"
         )
 
-    top = round((height - total) / 2)
+    top = height - margin - total if photo else round((height - total) / 2)
     top_rule = top + mark
     body_top = top_rule + quote.rule_px + inside
     credit_top = body_top + body_height + round(quote.body_px * 0.7)
@@ -184,6 +194,7 @@ def plan(
         attribution=credit_lines,
         marks=marks,
         name=name,
+        middle_y=body_top + body_height // 2,
         open_mark_y=top + round(quote.mark_px * MARK_ASCENT),
         top_rule_y=top_rule,
         body_y=body_top + round(quote.body_px * 0.8),
@@ -272,14 +283,23 @@ def compose(
     *,
     marks: bool = True,
     attribution: str | None = None,
+    hero: bytes | None = None,
+    hero_x_ratio: float = 0.5,
+    hero_y_ratio: float = 0.5,
+    hero_zoom: float = 1.0,
 ) -> bytes:
     """The finished JPEG.
 
     `name` is the Page's, as text, never its logo (client, 2026-10-25): the
     watermark's fallback text, null when the Page has opted out of a mark.
+    `hero` is the optional photograph behind the quote.
     """
     quote = layout.quote
-    quote_plan = plan(hook, phrases, layout, marks=marks, attribution=attribution, name=name)
+    width, height = layout.image.width, layout.image.height
+    quote_plan = plan(
+        hook, phrases, layout,
+        marks=marks, attribution=attribution, name=name, photo=hero is not None,
+    )
     png = resvg_py.svg_to_bytes(
         svg_string=card_svg(quote_plan, layout),
         font_files=[
@@ -289,7 +309,23 @@ def compose(
             str(API_DIR / quote.emphasis_path),
         ],
     )
-    canvas = Image.new("RGBA", (layout.image.width, layout.image.height), quote.background)
+    canvas = Image.new("RGBA", (width, height), quote.background)
+    if hero is not None:
+        try:
+            picture = Image.open(io.BytesIO(hero)).convert("RGBA")
+        except OSError as error:
+            raise CompositeError(f"the photo did not decode ({error})") from error
+        canvas = _cover(picture, width, height, hero_x_ratio, hero_y_ratio, hero_zoom)
+        # Clear above the fade, a ramp through it, solid from mid-quote down.
+        fade = max(1, round(height * layout.panel.fade_ratio))
+        alpha = Image.new("L", (width, height), 0)
+        alpha.paste(
+            Image.linear_gradient("L").resize((width, fade)), (0, quote_plan.middle_y - fade)
+        )
+        alpha.paste(255, (0, quote_plan.middle_y, width, height))
+        ground = Image.new("RGBA", (width, height), quote.background)
+        ground.putalpha(alpha)
+        canvas.alpha_composite(ground)
     canvas.alpha_composite(Image.open(io.BytesIO(bytes(png))).convert("RGBA"))
 
     out = io.BytesIO()

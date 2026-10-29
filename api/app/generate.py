@@ -620,13 +620,18 @@ def build_image(
         # the space it was measured for.
         layout = layout_for.resolve_draft(session, page.id, draft.template)
         if draft.text_size_px:
+            # On a quote card it is the quote's own size; the panel's is unused there.
             layout = layout.model_copy(
-                update={"text": layout.text.model_copy(update={"font_size_px": draft.text_size_px})}
+                update={
+                    "text": layout.text.model_copy(update={"font_size_px": draft.text_size_px}),
+                    "quote": layout.quote.model_copy(update={"body_px": draft.text_size_px}),
+                }
             )
 
         if layout.template == "quote":
-            # Type on a drawn ground: no hero to buy, fetch or reuse. One kept
-            # from another form stays on the row, so switching back is free.
+            # Type on a drawn ground, or on the hero when there is one: never
+            # bought, fetched or searched for, only uploaded or kept from
+            # another form.
             _store_composite(
                 session,
                 draft,
@@ -637,6 +642,12 @@ def build_image(
                     (page.watermark_text or page.name) if page.watermark_enabled else None,
                     marks=draft.quote_marks,
                     attribution=draft.attribution,
+                    hero=media.store.read(draft.hero_image_path)
+                    if draft.hero_image_path
+                    else None,
+                    hero_x_ratio=draft.hero_x_ratio,
+                    hero_y_ratio=draft.hero_y_ratio,
+                    hero_zoom=draft.hero_zoom,
                 ),
             )
             return []

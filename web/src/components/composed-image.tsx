@@ -152,6 +152,10 @@ export function ComposedImage({
         phrases={highlightPhrases}
         marks={quoteMarks}
         attribution={attribution}
+        heroSrc={heroSrc}
+        heroXRatio={heroXRatio}
+        heroYRatio={heroYRatio}
+        heroZoom={heroZoom}
         className={className}
       />
     );
@@ -388,6 +392,9 @@ export function ComposedImage({
  * the quote and the Page's name under everything. Centred halfway, as the
  * compositor places it. Line breaks are the browser's, so they can differ from
  * the PNG's by a word.
+ *
+ * With a photo the block sits at the bottom on solid ground, the photo fading
+ * into it above, and the Page's name is dropped.
  */
 function QuoteCard({
   layout,
@@ -396,6 +403,10 @@ function QuoteCard({
   phrases,
   marks,
   attribution,
+  heroSrc,
+  heroXRatio,
+  heroYRatio,
+  heroZoom,
   className,
 }: {
   layout: ResolvedLayout;
@@ -404,6 +415,10 @@ function QuoteCard({
   phrases: string[];
   marks: boolean;
   attribution: string | null;
+  heroSrc?: string | null;
+  heroXRatio: number;
+  heroYRatio: number;
+  heroZoom: number;
   className?: string;
 }) {
   const quote = layout.quote;
@@ -412,10 +427,13 @@ function QuoteCard({
   const body = marks ? collapsed.replace(/^["“”]+|["“”]+$/g, "").trim() : collapsed;
   // The class holds en and em dashes as data: what an operator may type.
   const credit = (attribution ?? "").replace(/^[\s\-–—]+|[\s\-–—]+$/g, "");
-  const name = page.watermark_enabled ? page.watermark_text || page.name : null;
+  const name = page.watermark_enabled && !heroSrc ? page.watermark_text || page.name : null;
+  const cropX = Math.min(1, Math.max(0, heroXRatio));
+  const cropY = Math.min(1, Math.max(0, heroYRatio));
   const face = `"card ${quote.font_family}"`;
   const serif = { fontFamily: `${face}, sans-serif`, color: quote.color };
   const gap = px(quote.body_px * 0.35);
+  const margin = px(layout.image.width * quote.margin_ratio);
   const rule = (
     <div style={{ height: px(quote.rule_px), backgroundColor: quote.color }} />
   );
@@ -448,20 +466,74 @@ function QuoteCard({
     >
       <CardFont font={layout.font} />
       <style>{`@font-face{font-family:${face};font-weight:400;font-style:normal;src:url(/api/${quote.font_path})}@font-face{font-family:${face};font-weight:400;font-style:italic;src:url(/api/${quote.italic_path})}@font-face{font-family:${face};font-weight:700;font-style:italic;src:url(/api/${quote.emphasis_path})}`}</style>
+      {heroSrc ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={heroSrc}
+          alt=""
+          data-hero-image
+          className="absolute inset-0 size-full object-cover"
+          style={{
+            objectPosition: `${cropX * 100}% ${cropY * 100}%`,
+            transform: `scale(${Math.min(3, Math.max(1, heroZoom))})`,
+            transformOrigin: `${cropX * 100}% ${cropY * 100}%`,
+          }}
+        />
+      ) : null}
+      {/* `isolate`, so the fade below can sit behind the type and still above the photo. */}
       <div
-        className="relative flex h-full flex-col justify-center"
-        style={{ paddingInline: px(layout.image.width * quote.margin_ratio) }}
+        className={cn(
+          "relative isolate flex h-full flex-col",
+          heroSrc ? "justify-end" : "justify-center",
+        )}
+      >
+      <div
+        style={{
+          paddingInline: margin,
+          paddingBottom: heroSrc ? margin : 0,
+        }}
       >
         {mark("“", "left")}
         {rule}
+        <div
+          className="relative"
+          style={{
+            marginTop: px(quote.body_px),
+            marginBottom: credit ? 0 : px(quote.body_px),
+          }}
+        >
+        {heroSrc ? (
+          <>
+            {/* Solid from the middle of the quote down, fading in above it,
+                as `quote.compose` draws it. */}
+            <div
+              className="absolute -z-10"
+              style={{
+                left: `-${margin}`,
+                right: `-${margin}`,
+                bottom: "50%",
+                height: px(layout.panel.fade_ratio * layout.image.height),
+                backgroundImage: `linear-gradient(transparent, ${quote.background})`,
+              }}
+            />
+            <div
+              className="absolute -z-10"
+              style={{
+                left: `-${margin}`,
+                right: `-${margin}`,
+                top: "50%",
+                height: "200cqw",
+                backgroundColor: quote.background,
+              }}
+            />
+          </>
+        ) : null}
         <p
           className="text-center"
           style={{
             ...serif,
             fontSize: px(quote.body_px),
             lineHeight: quote.line_height_ratio,
-            marginBlock: px(quote.body_px),
-            marginBottom: credit ? 0 : px(quote.body_px),
           }}
         >
           {body ? (
@@ -477,6 +549,7 @@ function QuoteCard({
             <span className="opacity-25">No quote yet</span>
           )}
         </p>
+        </div>
         {credit ? (
           <p
             className="text-center italic"
@@ -506,6 +579,7 @@ function QuoteCard({
             {name}
           </p>
         ) : null}
+      </div>
       </div>
     </div>
   );

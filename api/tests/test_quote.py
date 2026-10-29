@@ -106,6 +106,52 @@ def test_a_quote_card_is_the_card_size_and_black():
     assert max(card.getpixel((10, 10))) < 20, "the corner is the black ground"
 
 
+def test_a_photo_quote_sits_at_the_bottom_on_black_with_no_page_name():
+    white = io.BytesIO()
+    Image.new("RGB", (800, 1000), "white").save(white, format="PNG")
+    centred = quote.plan(PSALM, EMPHASIS, layout, name="Golden Years")
+    low = quote.plan(PSALM, EMPHASIS, layout, name="Golden Years", photo=True)
+
+    assert low.middle_y > centred.middle_y and low.name is None
+    card = _card(quote.compose(PSALM, EMPHASIS, layout, "Golden Years", hero=white.getvalue()))
+    assert min(card.getpixel((10, 10))) > 235, "the photo shows at the top"
+    assert max(card.getpixel((10, low.middle_y + 5))) < 20, "black from mid-quote down"
+    assert min(card.getpixel((10, low.top_rule_y))) > 20, "the top rule is still on the photo"
+
+
+def test_a_quote_card_takes_an_optional_photo_and_can_drop_it(client):
+    picture = io.BytesIO()
+    Image.new("RGB", (800, 1000), "white").save(picture, format="PNG")
+    client.post("/drafts/manual", data={"page_id": "1", "hook": PSALM, "template": "quote"})
+
+    withphoto = client.post(
+        "/drafts/1/hero", files={"file": ("a.png", picture.getvalue(), "image/png")}
+    ).json()
+    assert withphoto["hero_image_path"] and withphoto["composed_image_path"]
+
+    plain = client.delete("/drafts/1/hero").json()
+    assert plain["hero_image_path"] is None
+    assert plain["composed_image_path"] != withphoto["composed_image_path"]
+
+
+def test_a_quote_cards_text_size_is_the_quotes_own(client):
+    made = client.post(
+        "/drafts/manual",
+        data={"page_id": "1", "hook": PSALM, "template": "quote", "text_size_px": "200"},
+    ).json()
+    assert made["text_size_px"] == 72, "clamped to the slider's range"
+    before = made["composed_image_path"]
+
+    after = client.patch("/drafts/1", json={"text_size_px": 30}).json()
+
+    assert after["composed_image_path"] != before
+    assert after["warnings"] == []
+    with pytest.raises(CompositeError, match="shorten"):
+        quote.plan(PSALM * 3, [], layout.model_copy(
+            update={"quote": layout.quote.model_copy(update={"body_px": 72})}
+        ))
+
+
 def test_a_quote_too_long_for_the_card_is_refused_rather_than_cut():
     with pytest.raises(CompositeError, match="shorten"):
         quote.plan("Heading\n" + "Peace be with you always. " * 60, [], layout)

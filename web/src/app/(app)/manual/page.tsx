@@ -49,7 +49,7 @@ import { useQuery } from "@/lib/use-query";
  * the story except the words typed here.
  *
  * Both can make a **quote card** (client, 2026-10-22): the hook set as type on
- * a black ground, with no picture to upload or buy. A post's form, not a Page's,
+ * a black ground, or on an uploaded photo; never one bought. A post's form, not a Page's,
  * because a Page mixes formats.
  */
 export default function ManualScreen() {
@@ -101,6 +101,8 @@ function WriteItYourself() {
   const [preview, setPreview] = useState<string | null>(null);
   const [quote, setQuote] = useState(false);
   const [attribution, setAttribution] = useState("");
+  /** Null takes the Page's size for the chosen form. */
+  const [textSize, setTextSize] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const picker = useRef<HTMLInputElement>(null);
 
@@ -108,6 +110,17 @@ function WriteItYourself() {
     enabled: pageId !== null,
   });
   const layout = layoutResult?.layout ?? null;
+  const formLayout = quote ? layoutResult?.forms.quote.layout : layout;
+  const baseSize = quote ? formLayout?.quote.body_px : formLayout?.text.font_size_px;
+  // Same swap the server makes in `build_image`.
+  const sized =
+    formLayout && textSize !== null
+      ? {
+          ...formLayout,
+          text: { ...formLayout.text, font_size_px: textSize },
+          quote: { ...formLayout.quote, body_px: textSize },
+        }
+      : formLayout;
 
   // Any one of the three is enough, matching the server. A picture alone is not
   // a post, and the server refuses that case rather than storing an image with
@@ -162,9 +175,10 @@ function WriteItYourself() {
         highlight_phrases: phrases,
         find_inset: findInset && !quote,
         inset_source: insetSource ?? page.inset_source,
-        file: quote ? null : file,
+        file,
         template: quote ? "quote" : undefined,
         attribution: quote ? attribution : undefined,
+        text_size_px: textSize,
       });
       toast.success("Draft created.", {
         description: quote
@@ -194,15 +208,22 @@ function WriteItYourself() {
       {/* Sticky, like the drawer's: the card has to stay in view while the copy
           beside it scrolls, or the preview is not a preview. */}
       <div className="space-y-3 lg:sticky lg:top-0 lg:self-start">
-        <Tabs value={quote ? "quote" : "card"} onValueChange={(next) => setQuote(next === "quote")}>
+        <Tabs
+          value={quote ? "quote" : "card"}
+          onValueChange={(next) => {
+            setQuote(next === "quote");
+            // Each form has its own default size.
+            setTextSize(null);
+          }}
+        >
           <TabsList className="w-full *:flex-1">
             <TabsTrigger value="card">Card</TabsTrigger>
             <TabsTrigger value="quote">Quote</TabsTrigger>
           </TabsList>
         </Tabs>
-        {layout && page ? (
+        {sized && page ? (
           <ComposedImage
-            layout={quote ? layoutResult!.forms.quote.layout : layout}
+            layout={sized}
             page={page}
             overlayText={hook}
             highlightPhrases={phrases}
@@ -212,13 +233,32 @@ function WriteItYourself() {
         ) : (
           <Loading className="aspect-896/1120 rounded-2xl border" />
         )}
-        {quote ? (
-          <p className="text-xs text-muted-foreground">
-            No picture needed. Highlights are set in bold italic.
-          </p>
-        ) : (
-          <>
-
+        {baseSize !== undefined ? (
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            <span className="shrink-0">Text size</span>
+            {/* The drawer's range; the server clamps to it. */}
+            <input
+              type="range"
+              aria-label="Text size"
+              className="w-full accent-foreground"
+              min={20}
+              max={72}
+              step={1}
+              value={textSize ?? baseSize}
+              onChange={(event) => setTextSize(Number(event.target.value))}
+            />
+            <span className="w-10 shrink-0 text-right tabular-nums">{textSize ?? baseSize}px</span>
+            {textSize !== null ? (
+              <button
+                type="button"
+                className="shrink-0 hover:text-foreground"
+                onClick={() => setTextSize(null)}
+              >
+                Reset
+              </button>
+            ) : null}
+          </div>
+        ) : null}
         <input
           ref={picker}
           id="manual-image"
@@ -255,13 +295,18 @@ function WriteItYourself() {
             </Button>
           ) : null}
         </div>
-        {file ? null : (
+        {quote ? (
+          <p className="text-xs text-muted-foreground">
+            Photo optional. Highlights are set in bold italic.
+          </p>
+        ) : file ? null : (
           <p className="text-xs text-muted-foreground">
             Optional. The gradient is only a placeholder.
           </p>
         )}
         {/* Beside the picture it adds to. Reads the text typed on the right,
             once the draft is created. */}
+        {quote ? null : (
         <div className="flex flex-wrap items-center gap-2">
           <label className="flex w-fit cursor-pointer items-center gap-2 text-xs text-muted-foreground">
             <input
@@ -279,7 +324,6 @@ function WriteItYourself() {
             />
           ) : null}
         </div>
-          </>
         )}
       </div>
 
