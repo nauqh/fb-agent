@@ -136,6 +136,10 @@ class QuoteLayout(QuoteFont):
     """The quote, the rules, the marks, the attribution and the Page's name."""
     margin_ratio: float
     """× width → the left and right margin, and the floor above and below."""
+    photo_margin_ratio: float
+    """× width → the left and right margin when there is a photo."""
+    photo_bottom_ratio: float
+    """× width → the gap under the closing mark when there is a photo."""
     body_px: int
     line_height_ratio: float
     attribution_px: int

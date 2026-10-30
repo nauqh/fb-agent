@@ -433,7 +433,9 @@ function QuoteCard({
   const face = `"card ${quote.font_family}"`;
   const serif = { fontFamily: `${face}, sans-serif`, color: quote.color };
   const gap = px(quote.body_px * 0.35);
-  const margin = px(layout.image.width * quote.margin_ratio);
+  const margin = px(
+    layout.image.width * (heroSrc ? quote.photo_margin_ratio : quote.margin_ratio),
+  );
   const rule = (
     <div style={{ height: px(quote.rule_px), backgroundColor: quote.color }} />
   );
@@ -490,7 +492,7 @@ function QuoteCard({
       <div
         style={{
           paddingInline: margin,
-          paddingBottom: heroSrc ? margin : 0,
+          paddingBottom: heroSrc ? px(layout.image.width * quote.photo_bottom_ratio) : 0,
         }}
       >
         {mark("“", "left")}

@@ -127,6 +127,10 @@ quote:
     background: "#000000"
     color: "#FFFFFF"
     margin_ratio: 0.08
+    # With a photo the quote sits low and wide, to leave room for longer
+    # quotes (client, 2026-10-30): × width → the side and bottom margins.
+    photo_margin_ratio: 0.025
+    photo_bottom_ratio: 0.015
     body_px: 50
     line_height_ratio: 1.36
     attribution_px: 34

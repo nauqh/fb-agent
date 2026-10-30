@@ -69,6 +69,8 @@ export interface ResolvedLayout {
     background: string;
     color: string;
     margin_ratio: number;
+    photo_margin_ratio: number;
+    photo_bottom_ratio: number;
     body_px: number;
     line_height_ratio: number;
     attribution_px: number;

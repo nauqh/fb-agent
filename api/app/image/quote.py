@@ -111,6 +111,8 @@ class QuotePlan:
     attribution: list[str]
     marks: bool
     name: str | None
+    margin: int
+    """Left and right, in card pixels."""
     middle_y: int
     """The middle of the quote. A photograph is solid ground from here down."""
     open_mark_y: int
@@ -136,7 +138,7 @@ def plan(
 ) -> QuotePlan:
     quote = layout.quote
     width, height = layout.image.width, layout.image.height
-    margin = round(width * quote.margin_ratio)
+    margin = round(width * (quote.photo_margin_ratio if photo else quote.margin_ratio))
     if photo:
         name = None
     available = (width - margin * 2) * WIDTH_SAFETY
@@ -175,13 +177,14 @@ def plan(
         + credit_height
         + name_height
     )
-    if total > height - margin * 2:
+    bottom = round(width * quote.photo_bottom_ratio) if photo else margin
+    if total > height - margin - bottom:
         raise CompositeError(
-            f"the quote needs {total}px and the card has {height - margin * 2}px; "
+            f"the quote needs {total}px and the card has {height - margin - bottom}px; "
             "shorten it"
         )
 
-    top = height - margin - total if photo else round((height - total) / 2)
+    top = height - bottom - total if photo else round((height - total) / 2)
     top_rule = top + mark
     body_top = top_rule + quote.rule_px + inside
     credit_top = body_top + body_height + round(quote.body_px * 0.7)
@@ -194,6 +197,7 @@ def plan(
         attribution=credit_lines,
         marks=marks,
         name=name,
+        margin=margin,
         middle_y=body_top + body_height // 2,
         open_mark_y=top + round(quote.mark_px * MARK_ASCENT),
         top_rule_y=top_rule,
@@ -215,7 +219,7 @@ def _text(content: str) -> str:
 def card_svg(quote_plan: QuotePlan, layout: Layout) -> str:
     quote = layout.quote
     width, height = layout.image.width, layout.image.height
-    margin = round(width * quote.margin_ratio)
+    margin = quote_plan.margin
     centre = width // 2
     colour = quote.color
     family = f'font-family="{quote.font_family}"'
