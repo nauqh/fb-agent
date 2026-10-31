@@ -12,10 +12,13 @@ The agent helps manage several Facebook Pages. It gathers material worth
 posting, writes a draft in the Page's voice, and produces the image that goes
 with it. A person reviews the draft, edits as needed, and either publishes it or
 discards it. Metricool handles the actual posting and adds the first comment.
+Each morning it also shortlists the day's best material per Page, and it can
+fill Review on its own at set times.
 
 For one Page, House of Common Sense, it also writes a full article for the
 client's WordPress site and links it from the post's first comment. The same
-app hosts a separate Shorts tool for YouTube videos.
+app hosts a separate Shorts tool that cuts YouTube Shorts and schedules them
+to YouTube and Instagram.
 
 ## Pages
 
@@ -39,7 +42,8 @@ One meaning each, in the code and on screen.
 | Word | What it means | Avoid |
 |---|---|---|
 | **Page** | An owned Facebook Page. Owns its watermark, feeds, competitor assignments, and any layout overrides. Adding one is an insert | brand, blog, `hr`/`tff` |
-| **Source Item** | A piece of outside material chosen as input. Four kinds: competitor post, RSS item, tweet, web link | inspiration post |
+| **Source Item** | A piece of outside material chosen as input. Four kinds: competitor post, RSS item, tweet, web link. An RSS item may come from a news site's section page rather than a feed | inspiration post |
+| **Shortlist** | A Page's daily pick of its best unused material, chosen by the model. It never generates; the operator still ticks | |
 | **Competitor** | A Page not ours, synced from Metricool. Metricool owns the list; we store their *posts*. The word is Metricool's own, its endpoint is `/analytics/competitors` | rival |
 | **Binding subject** | Every Source Item's subject binds: the post is about that same story. Competitor posts used to be the exception | Style Source, Factual Source |
 | **Cart** | Source Items ticked for the next run | selection, basket |
@@ -48,7 +52,8 @@ One meaning each, in the code and on screen.
 | **Draft** | A generated post awaiting review: hook, caption, first comment, highlighted phrases, image. One Source Item yields one Draft per Page | post, candidate |
 | **Approve** | A legacy status nothing new writes, kept only for rows that already carry it. Publishing is its own decision | schedule, publish |
 | **Warning** | A style rule the writer still broke after its retries. Residue, not advice, never blocks Approve | |
-| **Composed Image** | The finished 896×1120 image: hero photograph, text panel, gold highlights, watermark. Two forms, `card` and `full_overlay` | overlay, composite |
+| **Composed Image** | The finished 896×1120 image: hero photograph, text panel, gold highlights, watermark | overlay, composite |
+| **Form** | The shape of a Composed Image: `card`, `full_overlay`, `full_overlay_2`, `photo` or `quote`. Each has its own layout settings per Page | template (in the UI) |
 | **Highlight Phrase** | An exact substring of the panel text, copied verbatim, rendered in gold | |
 
 ## Background
@@ -69,11 +74,12 @@ kind of thing live and stores none of it.
 | | |
 |---|---|
 | Competitor posts | Synced from Metricool, a week back, sorted by reactions with newest kept beside it. Reach shown per competitor |
-| RSS | Per-Page feeds, added and removed on Settings. Seven-day window, newest first |
+| RSS and news sites | Per-Page feeds, added and removed on Settings. A news site's section page works too: its article links are read as items, with each article's own picture and date. Seven-day window, newest first |
+| Shortlisted | The first Sources tab. Once a day per Page, the model picks its best unused competitor posts and feed items, skipping stories already drafted in the last two days. Size and time per Page on Settings, or **Run again** |
 | Tweets | Paste an X link |
 | Web links | Paste any article link. Our reader extracts the story; Gemini reads it when ours cannot |
 | Cart | Tick across all four kinds; one run yields one Draft per ticked item per Page |
-| Auto-drafts | Every morning at 06:00 GMT+7, a set number of Drafts per Page from its best competitor posts and its feeds, so Review is full when the day starts. Per-Page counts and instructions on Settings |
+| Auto-drafts | A set number of Drafts per Page from its best competitor posts and its feeds, at the times each Page sets (06:00 GMT+7 by default), so Review is full when the shift starts. **Run now** for an extra run. Per-Page counts, times and instructions on Settings |
 
 **Writing.**
 
@@ -85,10 +91,10 @@ kind of thing live and stores none of it.
 | Highlight phrases | Exact substrings of the panel text, chosen by the writer, drawn in gold |
 | Vision input | A competitor post's picture is sent to the writer, not just its words |
 | Rewrite one field | Re-ask for the hook, caption or first comment while the rest is held. Optional instruction ("too short", "mention the year"). **A proposal, not a save** |
-| Manual | A Draft with no source: type it whole, or give a topic. Typed text calls no model, and its rule breaks are recorded as warnings |
-| Website article | House of Common Sense only. Written from the story's full text beside the post, from the cart, an auto-draft, or **Write article** on a Draft. Reviewed and edited in the Draft's Article tab |
+| No source | A Draft with no source behind it. **Write it yourself**: type it whole, or paste an article or a link and have it written from that, with an AI rewrite on each field grounded in the pasted text. **From a topic**: give a subject. Typed text calls no model, and its rule breaks are recorded as warnings |
+| Website article | House of Common Sense only. Written from the story's full text beside the post, from the cart, an auto-draft, **Write article** on any Draft, pasted text, or by hand. Filed in a WordPress category, with the source photo at the top and a caption. Reviewed and edited in the Draft's Article tab |
 
-**The picture.** 896×1120, `card` (hero above panel) or `full_overlay`.
+**The picture.** 896×1120, in one of five forms: `card` (hero above panel), two `full_overlay` forms (hero behind a panel it fades into), `photo` (the picture alone) and `quote` (the hook set as type, with an optional photo).
 
 | | |
 |---|---|
@@ -96,7 +102,8 @@ kind of thing live and stores none of it.
 | Upload your own | For subjects the model never gets right - the panel, highlights and watermark are still drawn on top |
 | Image prompt | Editable per Draft, so the next hero is drawn from your words |
 | Panel | Grows to fit the text, gold highlights, Page watermark, optional circular inset with its own size, border and placement. The AI can find the inset on Google or Unsplash |
-| Layout | Form, panel size, type size, colours, capitals - defaults in `layout.yml`, per-Page overrides on Settings with a sample render and a reset |
+| Layout | Panel size, type size, font, colours, capitals - defaults in `layout.yml`, overrides per Page **and per form** on Settings, previewed on one of the Page's own pictures, with a reset |
+| Per Draft | Form, text size, hero crop and zoom, each changed in the drawer and redrawn as you go |
 | Text-only | `no_image` is a deliberate choice, distinct from a picture that failed |
 
 **Review and publish.**
@@ -105,7 +112,7 @@ kind of thing live and stores none of it.
 |---|---|
 | Queue | The Draft, its Facebook preview, the source it came from, its warnings |
 | Three ways out | Now, at a time, or the Page's next free slot - free measured against Metricool's planner, never a local mirror |
-| Article first | A Draft with an article publishes it to WordPress before Metricool gets the post, and its first comment becomes the Page's call to action with the link. If WordPress refuses, nothing is scheduled |
+| Article first | A Draft with an article publishes it to WordPress before Metricool gets the post, and its first comment becomes the Page's call to action with the link. If WordPress refuses, nothing is scheduled. An article can also be published on its own |
 | Rehearsal | The screen says whether Publish reaches an audience before it is pressed |
 | Queued stays yours | Caption and first comment edit in place and push to Metricool. Anything **drawn** needs the post removed first. Move it, or remove it and it returns to review |
 | Frozen | A published Draft takes no edits and no image rebuild |
@@ -114,7 +121,7 @@ kind of thing live and stores none of it.
 
 | | |
 |---|---|
-| Overview | How the Page's posts did, read live from Metricool |
+| Overview | How the Page's posts did, read live from Metricool. Charted as a 7-day average, with median reach |
 | Save | Keep a top performer with its metrics as they were |
 | Write again | The same story back through the writer - fresh hook, copy and picture |
 | Repost | The original caption, first comment and picture as published, put back in the queue as a Draft |
@@ -151,8 +158,9 @@ flowchart LR
 
 Two deployables. The **frontend** holds no data and can only ask the backend for
 things. The **backend** owns the database, the pictures, the AI calls and every
-outside connection. Two GitHub Actions schedules call the backend: auto-drafts
-daily, auto-repost weekly.
+outside connection. Three GitHub Actions schedules call the backend: auto-drafts
+and the shortlist hourly, each running only the Pages whose time has come, and
+auto-repost weekly.
 
 ## Workflow
 
@@ -175,7 +183,7 @@ the subject: the post is about that story.
 | Kind | Source |
 |---|---|
 | Competitor post | Metricool's tracking. Its picture is sent to the writer too |
-| RSS item | Feeds chosen for the Page |
+| RSS item | Feeds or news site pages chosen for the Page |
 | Tweet | An X link the operator pastes |
 | Web link | Any page the operator pastes |
 
@@ -221,12 +229,14 @@ stateDiagram-v2
 erDiagram
     PAGE ||--o{ FEED : "draws from"
     PAGE ||--o{ PAGE_COMPETITOR : "accepts"
-    PAGE ||--o| PAGE_LAYOUT : "reads"
+    PAGE ||--o{ PAGE_LAYOUT : "one per form"
     PAGE ||--o{ DRAFT : "posts to"
     PAGE ||--o{ SAVED_POST : "keeps"
     PAGE ||--o{ PAGE_TIME_SLOT : "publishes at"
     PAGE ||--o{ PROMPT_TEMPLATE : "its styles"
     PAGE ||--o{ AUTO_DRAFT_RUN : "ran for"
+    PAGE ||--o{ PAGE_AUTO_DRAFT_TIME : "drafts at"
+    PAGE ||--o| SHORTLIST : "today's pick"
     SOURCE_ITEM ||--o{ DRAFT : "written from"
     PROMPT_TEMPLATE ||--o{ DRAFT : "written under"
     AUTO_DRAFT_RUN ||--o{ DRAFT : "made"
@@ -234,16 +244,18 @@ erDiagram
 
 | Table | Holds |
 |---|---|
-| **page** | Name, Facebook and Metricool ids, watermark and avatar files, its own prompts and limits, auto-draft and repost settings |
+| **page** | Name, Facebook and Metricool ids, watermark and avatar files, its chosen form, its own prompts and limits, auto-draft, shortlist and repost settings |
 | **feed** | One RSS feed a Page reads. Added and removed on screen |
 | **saved_post** | A published post the operator kept for reference, with its metrics as saved |
 | **page_time_slot** | A Page's standing publishing times. Policy, not schedule state, so no contradiction with the "no schedule table" rule |
 | **page_competitor** | Which competitors each Page reads. **Not a copy of Metricool's list** - a decision on top of it |
-| **page_layout** | Per-Page overrides: which of the two forms, panel size, text size, colours, watermark and inset placement. **Only what that Page changed** - the rest tracks the defaults file, so resetting a Page is deleting its row |
+| **page_layout** | One row per Page per form: panel size, text size, font, colours, watermark and inset placement. **Only what that Page changed** - the rest tracks the defaults file, so resetting a form is deleting its row |
+| **page_auto_draft_time** | One time of day a Page's auto-drafts run. Same shape as `page_time_slot`; none means manual only |
+| **shortlist** | A Page's current shortlist, replaced on each run. Stored so the hourly run makes it before the tab is opened and a deploy does not drop it |
 | **source_item** | Material actually chosen. One table for all four kinds, with an RSS item's full text once read |
 | **prompt_template** | A post style: one Page's named prompts, each replacing the Page's |
 | **auto_draft_run** | One auto-draft run for one Page and source: how much was available, how many Drafts it made, and a note when it made none |
-| **draft** | The post: words, pictures, progress, warnings, its website article, and Metricool's id once sent |
+| **draft** | The post: words, pictures, form and text size, progress, warnings, its website article, and Metricool's id once sent |
 | **youtube_job** · **cta_template** | The Shorts tool's queue and its call-to-action clips |
 
 Three absences, each deliberate:
@@ -269,6 +281,12 @@ so changing bucket or project is configuration rather than a migration.
 | Generated photographs | Page watermarks |
 | Finished cards (JPEG) | Page avatars |
 | Operator-uploaded inset photos | The font |
+| Small thumbnails of finished cards | |
+
+Every upload is served with a one-year cache header, safe because no file name
+is ever reused. Without it the bucket answers `no-cache` and browsers download
+each picture again on every visit. The Schedule list draws from the thumbnails,
+about 6KB each against roughly 240KB for a card.
 
 ## Screens
 
@@ -276,14 +294,14 @@ so changing bucket or project is configuration rather than a migration.
 |---|---|
 | **Sign in** | Email and password. Everything else is behind it |
 | **Overview** | How the Page's posts did, read live from Metricool, and the posts worth keeping |
-| **Sources** | Browse material and gather what is worth writing |
-| **Auto-drafts** | Each Page's morning runs and the Drafts they made |
-| **Manual** | Start a post with no source behind it: write it by hand, or from a topic |
+| **Sources** | The day's shortlist, then competitor posts, tweets, web links and RSS: gather what is worth writing |
+| **Auto-drafts** | Each Page's runs, the Drafts they made, and when the next one is due |
+| **No source** | Start a post with no source behind it: write it yourself, from a pasted article or link, or from a topic |
 | **Review** | The queue of Drafts, and the decision on each |
 | **Schedule** | What is actually planned, read live from Metricool |
-| **Settings** | This Page: publishing times, automation, competitors, feeds, writing (prompts, post styles, limits, article link) and the image layout |
+| **Settings** | This Page: publishing times, automation times and Run now, the shortlist, competitors, feeds, writing (prompts, post styles, limits, article link) and the layout of each form |
 | **Global** | The whole account: the competitor pool and its budget |
-| **Shorts** | A separate tool: pick a channel's YouTube Shorts, add a call-to-action clip, download the video |
+| **Shorts** | A separate tool: pick a channel's YouTube Shorts, add a call-to-action clip, then download the video or schedule it to YouTube and Instagram |
 
 Every screen after sign-in is scoped to the selected Page, remembered between
 visits - except Global, which is the whole account.
@@ -425,9 +443,9 @@ the chain - a retired id 404s and errors rather than silently spending attempts.
 
 | | |
 |---|---|
-| **Gemini** | One text call per Draft, one more for a website article, and one image call when the hero is generated - the expensive half. A source or searched photo costs no image call. Re-composing a card after an edit is free |
+| **Gemini** | One text call per Draft, one more for a website article, one per Page per day for the shortlist, and one image call when the hero is generated - the expensive half. A source or searched photo costs no image call. Re-composing a card after an edit is free |
 | **SerpAPI** | Google image searches, on a monthly quota Settings shows |
 | **Metricool** | Flat plan, hard allowance of **100 competitors per account** on Starter and Advanced. The Global screen shows how much is used |
-| **Supabase** | Database and bucket. Storage grows with every image; superseded cards are deleted by exact path |
+| **Supabase** | Database and bucket, on the free plan's egress limit. Storage grows with every image; superseded cards are deleted by exact path, old months are purged, and long cache headers keep repeat views from downloading again |
 | **X** | One tweet at a time, on paste |
 | **WordPress** | The client's own site. Nothing per article |
