@@ -386,6 +386,9 @@ export function ComposedImage({
   );
 }
 
+/** `INSIDE_RATIO` in `image/quote.py`: the gap between each rule and the quote. */
+const QUOTE_INSIDE_RATIO = 0.4;
+
 /**
  * The `quote` card, mirroring `image/quote.py`: the quote centred between two
  * rules, an opening mark above them and a closing mark below, who said it under
@@ -500,8 +503,8 @@ function QuoteCard({
         <div
           className="relative"
           style={{
-            marginTop: px(quote.body_px),
-            marginBottom: credit ? 0 : px(quote.body_px),
+            marginTop: px(quote.body_px * QUOTE_INSIDE_RATIO),
+            marginBottom: credit ? 0 : px(quote.body_px * QUOTE_INSIDE_RATIO),
           }}
         >
         {heroSrc ? (
@@ -560,7 +563,7 @@ function QuoteCard({
               fontSize: px(quote.attribution_px),
               lineHeight: quote.line_height_ratio,
               marginTop: px(quote.body_px * 0.7),
-              marginBottom: px(quote.body_px),
+              marginBottom: px(quote.body_px * QUOTE_INSIDE_RATIO),
             }}
           >
             - {credit} -

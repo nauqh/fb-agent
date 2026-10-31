@@ -34,6 +34,8 @@ MARK_INK = 0.4
 """A quotation mark's ink, as a share of its em: about the top third."""
 MARK_ASCENT = 0.72
 """How far above the baseline a quotation mark's ink starts, in ems."""
+INSIDE_RATIO = 0.4
+"""The gap between each rule and the quote, in body sizes. Mirrored in `ComposedImage`."""
 QUOTES = "\"“”"
 
 
@@ -166,7 +168,8 @@ def plan(
     # Heights as the eye sees them: a mark is its ink, a line of text is its
     # size plus the leading of every line after the first.
     mark = round(quote.mark_px * MARK_INK) + round(quote.body_px * 0.35) if marks else 0
-    inside = quote.body_px
+    # Rule to quote, top and bottom. A full line read as loose (client, 2026-11-01).
+    inside = round(quote.body_px * INSIDE_RATIO)
     name_height = round(quote.body_px * 1.1) + quote.name_px if name else 0
 
     total = (
