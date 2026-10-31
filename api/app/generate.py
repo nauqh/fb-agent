@@ -779,7 +779,7 @@ def build_image(
 
 def _store_composite(session: Session, draft: Draft, composed: bytes) -> None:
     superseded = draft.composed_image_path
-    draft.composed_image_path = media.store.save(
+    draft.composed_image_path = media.save_with_thumb(
         composed, media.filename(draft.id or 0, "composed", "jpg")
     )
     session.add(draft)

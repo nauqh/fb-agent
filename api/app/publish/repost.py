@@ -270,4 +270,4 @@ def copy_original_image(source_url: str, draft_id: int) -> str:
         )
 
     suffix = "png" if "png" in kind else "jpg"
-    return media.store.save(response.content, media.filename(draft_id, "repost", suffix))
+    return media.save_with_thumb(response.content, media.filename(draft_id, "repost", suffix))

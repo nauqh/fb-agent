@@ -364,6 +364,8 @@ export interface ScheduledPost {
   text: string;
   first_comment: string | null;
   image_url: string | null;
+  /** A small copy of `image_url`, when the picture is ours. Absent on older posts. */
+  thumb_url: string | null;
   network: string;
   /** Metricool's word: `PUBLISHED`, `PENDING`, `ERROR`, `DRAFT`. */
   status: string;

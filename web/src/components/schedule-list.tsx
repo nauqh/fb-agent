@@ -74,7 +74,7 @@ function Row({ post }: { post: ScheduledPost }) {
         {post.published_at.slice(11, 16)}
       </div>
 
-      <Thumb src={post.image_url} />
+      <Thumb src={post.thumb_url ?? post.image_url} fallback={post.image_url} />
 
       <div className="min-w-0 flex-1 space-y-1.5">
         <div className="flex items-start gap-2">
@@ -177,19 +177,20 @@ function parse(text: string): { title: string; points: string[]; tags: string[] 
  * resolve. A placeholder icon on every single row is noise pretending to be
  * information, so a failed load collapses the space instead.
  */
-function Thumb({ src }: { src: string | null }) {
-  const [broken, setBroken] = useState(false);
+function Thumb({ src, fallback }: { src: string | null; fallback: string | null }) {
+  const [current, setCurrent] = useState(src);
 
-  if (!src || broken) return null;
+  if (!current) return null;
 
   return (
     <div className="aspect-square w-12 shrink-0 overflow-hidden rounded-2xl border bg-muted">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src={src}
+        src={current}
         alt=""
         className="size-full object-cover"
-        onError={() => setBroken(true)}
+        // A post saved before thumbnails existed has none: try the original once.
+        onError={() => setCurrent(current === fallback ? null : fallback)}
       />
     </div>
   );

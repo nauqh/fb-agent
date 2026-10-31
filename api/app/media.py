@@ -57,6 +57,14 @@ PICTURE_KEEP_DAYS = 14
 LIST_LIMIT = 1000
 """The list endpoint's own page cap."""
 
+CACHE_CONTROL = "max-age=31536000"
+"""A year. Without it the bucket serves `no-cache` (measured 2026-10-31), so a
+browser asks again for every picture on every visit. Safe because `filename`
+makes every name unique and nothing is rewritten under one."""
+
+THUMB_PX = 160
+"""The longest side of a list thumbnail: 48 CSS pixels at up to 3x."""
+
 
 class MediaError(RuntimeError):
     """The bytes did not reach the bucket, or did not come back out of it.
@@ -130,7 +138,11 @@ class SupabaseMediaStore:
             "POST",
             stored,
             content=data,
-            headers={"Content-Type": _content_type(name), "x-upsert": "true"},
+            headers={
+                "Content-Type": _content_type(name),
+                "x-upsert": "true",
+                "cache-control": CACHE_CONTROL,
+            },
         )
         return stored
 
@@ -313,6 +325,43 @@ def public_url(stored: str) -> str:
     """
     root = settings.supabase_url.rstrip("/")
     return f"{root}/storage/v1/object/public/{settings.supabase_bucket}/{stored}"
+
+
+def thumb_name(name: str) -> str:
+    """`12-composed-x.jpg` -> `12-composed-x-thumb.jpg`, the same for a stored path."""
+    return f"{name.rsplit('.', 1)[0]}-thumb.jpg"
+
+
+def thumb_url(url: str | None) -> str | None:
+    """The small copy of a picture in our bucket, or None for anyone else's.
+
+    Derived, not stored: Metricool holds only the image link. A post saved
+    before thumbnails existed has none, and the client falls back to `url`.
+    """
+    if not url or not url.startswith(public_url("")):
+        return None
+    return thumb_name(url)
+
+
+def save_with_thumb(data: bytes, name: str) -> str:
+    """Save a picture that goes to Metricool, and a small copy beside it.
+
+    The Schedule list drew each 48px thumbnail from the ~240KB original, which
+    made it the bulk of the bucket's egress. A failed thumbnail is a warning:
+    the list falls back to the original.
+    """
+    stored = store.save(data, name)
+    try:
+        buffer = io.BytesIO()
+        with Image.open(io.BytesIO(data)) as picture:
+            picture = picture.convert("RGB")
+            picture.thumbnail((THUMB_PX, THUMB_PX))
+            picture.save(buffer, format="JPEG", quality=80)
+        store.save(buffer.getvalue(), thumb_name(name))
+    except Exception as error:  # noqa: BLE001 - the original is saved
+        logger.warning(f"No thumbnail for {stored}: {error}")
+    # ponytail: a replaced composite's thumbnail is left for the monthly purge, ~6KB each
+    return stored
 
 
 def _shift_month(now: datetime, months: int) -> str:

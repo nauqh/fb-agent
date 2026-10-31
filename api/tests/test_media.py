@@ -72,6 +72,19 @@ def test_a_save_overwrites_its_own_name_rather_than_failing():
     assert seen["headers"]["authorization"] == "Bearer service-key"
 
 
+def test_a_save_lets_browsers_keep_the_file():
+    """Without it the bucket answers `no-cache` and every visit downloads again."""
+    seen: dict = {}
+
+    def handler(request):
+        seen["headers"] = request.headers
+        return httpx.Response(200, json={})
+
+    _store(handler).save(b"pixels", "12-hero-x.png")
+
+    assert seen["headers"]["cache-control"] == "max-age=31536000"
+
+
 @pytest.mark.parametrize(
     "name, expected",
     [("a.png", "image/png"), ("a.jpg", "image/jpeg"), ("a.jpeg", "image/jpeg")],
@@ -272,6 +285,30 @@ def test_purge_spares_a_file_it_was_told_to_keep():
 
     assert deleted == 1
     assert seen == ["42-hero-x-a1b2c3.png"]
+
+
+def test_a_picture_for_metricool_gets_a_small_copy_beside_it(media_root):
+    import io
+
+    from PIL import Image
+
+    buffer = io.BytesIO()
+    Image.new("RGB", (896, 1120), (200, 120, 40)).save(buffer, format="JPEG")
+
+    stored = media.save_with_thumb(buffer.getvalue(), "12-composed-a3f9c1.jpg")
+
+    thumb = media.store.read(media.thumb_name(stored))
+    with Image.open(io.BytesIO(thumb)) as picture:
+        assert picture.size == (128, 160)
+    assert media.thumb_url(media.public_url(stored)) == media.public_url(
+        stored.removesuffix(".jpg") + "-thumb.jpg"
+    )
+
+
+def test_a_picture_outside_our_bucket_has_no_thumbnail():
+    """The old app's posts and anything else in the planner keep their own link."""
+    assert media.thumb_url("https://old.example/media/open?path=x") is None
+    assert media.thumb_url(None) is None
 
 
 def test_jpeg_turns_a_png_into_a_jpeg():

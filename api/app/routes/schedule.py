@@ -21,6 +21,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
+from app import media as app_media
 from app.db import get_session
 from app.models import Draft, Page, PageTimeSlot
 from app.publish import metricool as publisher
@@ -49,6 +50,7 @@ class ScheduledPost(BaseModel):
     text: str
     first_comment: str | None = None
     image_url: str | None = None
+    thumb_url: str | None = None
     network: str = "facebook"
     status: str
     """`PUBLISHED`, `PENDING`, `ERROR` - Metricool's word, not ours."""
@@ -73,6 +75,7 @@ def _flatten(row: dict, ours: dict[str, int]) -> ScheduledPost:
         text=row.get("text") or "",
         first_comment=row.get("firstCommentText") or None,
         image_url=media[0] if media else None,
+        thumb_url=app_media.thumb_url(media[0]) if media else None,
         network=provider.get("network") or "facebook",
         # A draft in the planner has no provider status at all, and reporting
         # that as blank makes it look broken rather than unsent.
