@@ -167,6 +167,57 @@ def test_a_refused_key_and_a_spent_plan_say_so(status, words):
         inset.candidates("hand washing", client)
 
 
+def test_a_spent_key_passes_the_search_to_the_next(monkeypatch):
+    monkeypatch.setattr(settings, "serp_api_key", "spent, fresh")
+    monkeypatch.setattr(inset, "_serp_key_index", 0)
+    tried = []
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        if request.url.path != "/search.json":
+            return httpx.Response(200, content=_png(), headers={"content-type": "image/png"})
+        tried.append(request.url.params["api_key"])
+        if request.url.params["api_key"] == "spent":
+            return httpx.Response(429, json={"error": "Your account has run out of searches."})
+        return httpx.Response(200, json={"images_results": RESULTS})
+
+    client = httpx.Client(transport=httpx.MockTransport(answer))
+    assert inset.candidates("hand washing", client)
+    assert inset.candidates("hand washing", client)
+
+    assert tried == ["spent", "fresh", "fresh"], "the spent key is not asked again first"
+
+
+def test_every_key_spent_says_the_plan_is_used_up(monkeypatch):
+    monkeypatch.setattr(settings, "serp_api_key", "one,two")
+    client, seen = _serpapi(status=429)
+
+    with pytest.raises(inset.InsetError, match="used up"):
+        inset.candidates("hand washing", client)
+    assert len(seen) == 2
+
+
+def test_the_quota_adds_up_every_key(client, monkeypatch):
+    from app.routes import drafts
+
+    monkeypatch.setattr(settings, "serp_api_key", "a,b,dead")
+    accounts = {
+        "a": {"total_searches_left": 0, "searches_per_month": 250, "plan_renewal_date": "2026-11-20"},
+        "b": {"total_searches_left": 180, "searches_per_month": 250, "plan_renewal_date": "2026-11-05"},
+    }
+
+    def fake_get(url, params, timeout):
+        body = accounts.get(params["api_key"])
+        return httpx.Response(200 if body else 401, json=body or {}, request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(drafts.httpx, "get", fake_get)
+
+    assert client.get("/inset/quota").json() == {
+        "searches_left": 180,
+        "searches_per_month": 500,
+        "renews_on": "2026-11-05",
+    }
+
+
 def test_an_error_inside_a_200_is_still_an_error():
     """SerpAPI answers 200 with an `error` field for a search that found nothing."""
     client, _ = _serpapi(body={"error": "Google has not returned any results"})

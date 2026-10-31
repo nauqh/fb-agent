@@ -216,7 +216,7 @@ def _require_key(source: str) -> None:
     if source == "unsplash":
         if not settings.unsplash_access_key:
             raise InsetError("UNSPLASH_ACCESS_KEY is not set, so there is nothing to search")
-    elif not settings.serp_api_key:
+    elif not settings.serp_api_keys:
         raise InsetError("SERP_API_KEY is not set, so there is nothing to search")
 
 
@@ -266,19 +266,32 @@ def _wanted(row: dict) -> bool:
     return _public_https(row.get("thumbnail") or "") and _public_https(row.get("original") or "")
 
 
+_serp_key_index = 0
+"""The key that answered last, so a spent one is not asked first on every search."""
+
+
 def _google(query: str, client: httpx.Client) -> tuple[int, list[Candidate]]:
-    try:
-        response = client.get(
-            SERPAPI_URL,
-            params={
-                "engine": "google_images",
-                "q": query,
-                "safe": "active",
-                "api_key": settings.serp_api_key,
-            },
-        )
-    except httpx.HTTPError as error:
-        raise InsetError(f"SerpAPI did not answer ({type(error).__name__})") from error
+    global _serp_key_index
+    keys = settings.serp_api_keys
+    for step in range(len(keys)):
+        index = (_serp_key_index + step) % len(keys)
+        try:
+            response = client.get(
+                SERPAPI_URL,
+                params={
+                    "engine": "google_images",
+                    "q": query,
+                    "safe": "active",
+                    "api_key": keys[index],
+                },
+            )
+        except httpx.HTTPError as error:
+            raise InsetError(f"SerpAPI did not answer ({type(error).__name__})") from error
+        # 429 is a spent account (or the hourly cap), 401 a dead key. Neither is
+        # billed as a search, so the next key costs only the round trip.
+        if response.status_code not in (401, 429):
+            _serp_key_index = index
+            break
     if response.status_code == 401:
         raise InsetError("SerpAPI refused the key - check SERP_API_KEY")
     if response.status_code == 429:

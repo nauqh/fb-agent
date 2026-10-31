@@ -1452,22 +1452,27 @@ def article_categories() -> list[dict]:
 def inset_quota() -> dict:
     """SerpAPI searches left this month, for Settings. Each Google inset find spends one.
 
-    Server-side because the key is a secret. SerpAPI's Account API is not billed
-    as a search.
+    Summed over every key, since a search moves on when one is spent. The
+    soonest renewal is shown. Server-side because the keys are secret.
+    SerpAPI's Account API is not billed as a search.
     """
-    response = httpx.get(
-        "https://serpapi.com/account.json",
-        params={"api_key": settings.serp_api_key},
-        timeout=20,
-    )
-    if response.is_error:
-        # Not `raise_for_status`: its message carries the URL, and the key with it.
-        raise HTTPException(status_code=502, detail=f"SerpAPI answered {response.status_code}")
-    body = response.json()
+    accounts = []
+    status = 0
+    for key in settings.serp_api_keys:
+        response = httpx.get(
+            "https://serpapi.com/account.json", params={"api_key": key}, timeout=20
+        )
+        if response.is_error:
+            # Not `raise_for_status`: its message carries the URL, and the key with it.
+            status = response.status_code
+            continue
+        accounts.append(response.json())
+    if not accounts:
+        raise HTTPException(status_code=502, detail=f"SerpAPI answered {status or 'nothing'}")
     return {
-        "searches_left": body["total_searches_left"],
-        "searches_per_month": body["searches_per_month"],
-        "renews_on": body["plan_renewal_date"],
+        "searches_left": sum(body["total_searches_left"] for body in accounts),
+        "searches_per_month": sum(body["searches_per_month"] for body in accounts),
+        "renews_on": min(body["plan_renewal_date"] for body in accounts),
     }
 
 

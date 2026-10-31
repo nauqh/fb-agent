@@ -577,10 +577,15 @@ class Settings(BaseSettings):
 
     serp_api_key: str = ""
     """Google Images for the circular inset, through SerpAPI (`image.inset`).
-    Blank makes Find with AI answer that it is not configured - deliberately not
-    in `missing_secrets`, which /health reports."""
+    Comma-separated for more than one account: a search moves to the next key
+    when one is spent. Blank makes Find with AI answer that it is not
+    configured - deliberately not in `missing_secrets`, which /health reports."""
 
     x_bearer_token: str = ""
+
+    @property
+    def serp_api_keys(self) -> list[str]:
+        return [key.strip() for key in self.serp_api_key.split(",") if key.strip()]
 
     @property
     def image_fallback_chain(self) -> tuple[str, ...]:
