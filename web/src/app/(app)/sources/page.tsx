@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { AlertTriangle, Loader2, RefreshCw, Search } from "lucide-react";
 import { toast } from "sonner";
@@ -18,6 +18,7 @@ import {
   getCompetitorReach,
   getRss,
   getCompetitorPosts,
+  getDiscover,
   getShortlist,
   getTweet,
   getWeb,
@@ -486,12 +487,103 @@ function RssTab() {
 }
 
 /**
+ * Two lists by the same instructions: the best of this Page's feeds, or what
+ * Gemini finds on Google Search (client, 2026-11-04: without supplying URLs or
+ * RSS feeds).
+ */
+function ShortlistTab() {
+  const [from, setFrom] = useState<"rss" | "gemini">("rss");
+  const toggle = (
+    <Tabs value={from} onValueChange={(next) => setFrom(next as "rss" | "gemini")}>
+      <TabsList className="w-fit" aria-label="Shortlist from">
+        <TabsTrigger value="rss">RSS</TabsTrigger>
+        <TabsTrigger value="gemini">Gemini</TabsTrigger>
+      </TabsList>
+    </Tabs>
+  );
+  return from === "rss" ? <RssShortlist toggle={toggle} /> : <GeminiShortlist toggle={toggle} />;
+}
+
+/** Last search per Page, so switching tabs does not throw away a 30s answer. */
+const discovered = new Map<number, LiveSourceItem[]>();
+
+/**
+ * Searched only on the button: each search is a paid model call of about 30s,
+ * and the list is not stored, so opening the tab must not start one.
+ */
+function GeminiShortlist({ toggle }: { toggle: ReactNode }) {
+  const cart = useCart();
+  const { pageId } = usePageScope();
+  const [byPage, setByPage] = useState(() => new Map(discovered));
+  const items = pageId === null ? null : (byPage.get(pageId) ?? null);
+  const [searching, setSearching] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function search() {
+    if (pageId === null) return;
+    setSearching(true);
+    setError(null);
+    try {
+      const found = await getDiscover(pageId);
+      discovered.set(pageId, found);
+      setByPage(new Map(discovered));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not search");
+    } finally {
+      setSearching(false);
+    }
+  }
+
+  return (
+    <>
+      <div className="flex items-center justify-between gap-3 pb-3">
+        <p className="text-xs text-muted-foreground">
+          Recent stories Gemini finds on Google, by this Page&rsquo;s instructions.
+        </p>
+        <div className="flex shrink-0 items-center gap-2">
+          {toggle}
+          <Button variant="outline" size="sm" className="h-7" disabled={searching} onClick={() => void search()}>
+            {searching ? <Loader2 className="size-3.5 animate-spin" /> : <Search className="size-3.5" />}
+            Search
+          </Button>
+        </div>
+      </div>
+
+      {searching ? <SyncProgress label="Searching Google" /> : null}
+
+      {error ? (
+        <QueryError error={error} onRetry={search} />
+      ) : items === null ? (
+        <p className="rounded-2xl border border-dashed p-10 text-center text-sm text-muted-foreground">
+          Press Search to find recent stories.
+        </p>
+      ) : items.length === 0 ? (
+        <p className="rounded-2xl border border-dashed p-10 text-center text-sm text-muted-foreground">
+          Nothing new found. Search again, or widen the instructions.
+        </p>
+      ) : (
+        <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(360px,1fr))]">
+          {items.map((item) => (
+            <SourceCard
+              key={item.external_id}
+              {...item}
+              selected={cart.has(item)}
+              onToggle={() => cart.toggle(item)}
+            />
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
+/**
  * The ten unused sources that best fit this Page, competitor posts and feed
  * items together, so the operator picks from ten rather than scrolling hundreds
  * (client, 2026-10-28). Made at the Page's daily time (Settings); Run again
  * asks the model afresh, on what is available now.
  */
-function ShortlistTab() {
+function RssShortlist({ toggle }: { toggle: ReactNode }) {
   const cart = useCart();
   const { pageId } = usePageScope();
   const { data, loading, error, refresh } = useQuery(() => getShortlist(pageId!), [pageId], {
@@ -529,15 +621,19 @@ function ShortlistTab() {
             <>The best fits from this Page&rsquo;s feeds, by its instructions.</>
           )}
         </p>
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={running || loading || needsInstructions}
-          onClick={() => void runAgain()}
-        >
-          {running ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
-          Run again
-        </Button>
+        <div className="flex shrink-0 items-center gap-2">
+          {toggle}
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7"
+            disabled={running || loading || needsInstructions}
+            onClick={() => void runAgain()}
+          >
+            {running ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
+            Run again
+          </Button>
+        </div>
       </div>
 
       {running || (loading && !data) ? <SyncProgress label="Shortlisting" /> : null}

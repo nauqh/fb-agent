@@ -717,6 +717,47 @@ def test_the_hourly_run_makes_only_due_pages_with_instructions(
     assert [item["external_id"] for item in stored.items] == [feed[0].external_id]
 
 
+
+def test_discover_reads_each_url_and_drops_dead_and_used_ones(client, session, page, monkeypatch):
+    from app.models import SourceItemBase
+    from app.sources import web
+
+    assert client.get("/sources/discover", params={"page_id": page.id}).status_code == 422
+
+    page.auto_draft_rss_instructions = "Good news"
+    session.add(page)
+    session.commit()
+    asked = {}
+
+    def fake_ask(prompt, output_type, instructions, *args, **kwargs):
+        asked.update(kwargs)
+        return SimpleNamespace(
+            output=output_type(
+                stories=[
+                    {"url": f"https://news.example/{name}", "headline": name}
+                    for name in ("a", "dead", "a-redirect", "used")
+                ]
+            )
+        )
+
+    def lookup(url):
+        if url.endswith("dead"):
+            raise web.WebError("The page did not answer (404).")
+        final = url.removesuffix("-redirect")
+        return SourceItemBase(kind=SourceKind.WEB, external_id=final, text="Story", url=final)
+
+    monkeypatch.setattr(writer, "ask", fake_ask)
+    monkeypatch.setattr(web, "lookup", lookup)
+    used = SourceItem(kind=SourceKind.WEB, external_id="https://news.example/used", text="used")
+    session.add(used)
+    session.commit()
+    _draft(session, page.id, DraftStatus.REVIEW, used.id)
+
+    found = client.get("/sources/discover", params={"page_id": page.id}).json()
+
+    assert asked == {"web_search": True}
+    assert [item["external_id"] for item in found] == ["https://news.example/a"]
+
 # --- per-Page run times -------------------------------------------------------
 
 

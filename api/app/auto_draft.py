@@ -9,6 +9,7 @@ whose configured time has passed. There is no scheduler here and no queue table
 beyond `generate.sweep_stranded`.
 """
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
@@ -30,7 +31,7 @@ from app.models import (
 from app.routes.sources import _feeds_for, _visible_to
 from app.settings import settings
 from app.settings import sources as sources_config
-from app.sources import rss
+from app.sources import rss, web
 from app.writer import agent as writer
 
 
@@ -349,6 +350,68 @@ def shortlist(session: Session, page: Page) -> Shortlist:
         considered=len(pool),
         failed_feeds=failed,
     )
+
+
+DISCOVER_DAYS = 2
+"""How recent a story Gemini is asked to find."""
+
+DISCOVER_INSTRUCTIONS = """\
+You find news stories for a Facebook Page, with Google Search.
+
+You are given the Page's criteria and the stories it has covered recently.
+Search for stories published in the last {days} days that fit the criteria and
+return each one's article URL and headline, best fit first, at most {size}. Only
+return URLs your searches found, one article per story, and leave out anything
+the criteria exclude or a recently covered story.
+"""
+
+
+class _Story(BaseModel):
+    url: str
+    headline: str
+
+
+class _Stories(BaseModel):
+    stories: list[_Story]
+
+
+def _resolve(url: str) -> SourceItemBase | None:
+    """The article behind a URL Gemini named. A dead URL is dropped: the model
+    writes these out itself, so one may not exist."""
+    try:
+        return web.lookup(url)
+    except web.WebError as error:
+        logger.info("Discovered URL dropped, {}: {}", url, error)
+        return None
+
+
+def discover(session: Session, page: Page) -> list[SourceItemBase]:
+    """Up to `shortlist_size` recent stories Gemini finds with Google Search,
+    judged by the same instructions as `shortlist`. Unsaved.
+
+    The client's ask (2026-11-04): find articles without supplying URLs or RSS
+    feeds. Each URL is read here like a pasted one, which also follows Google's
+    redirects to the publisher's own address.
+
+    Raises:
+        ValueError: the Page has no instructions to judge by.
+    """
+    criteria = (page.auto_draft_rss_instructions or "").strip()
+    if not criteria:
+        raise ValueError("Write which stories fit this Page in Settings first.")
+
+    covered = "\n".join(f"- {headline}" for headline in _covered(session, page)) or "(none)"
+    answer = writer.ask(
+        f"CRITERIA:\n{criteria}\n\nCOVERED RECENTLY:\n{covered}",
+        _Stories,
+        DISCOVER_INSTRUCTIONS.format(days=DISCOVER_DAYS, size=page.shortlist_size),
+        web_search=True,
+    ).output
+    urls = list(dict.fromkeys(story.url for story in answer.stories))[: page.shortlist_size]
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        found = [item for item in pool.map(_resolve, urls) if item]
+    # Two URLs can redirect to one article.
+    return list({item.external_id: item for item in found}.values())
 
 
 def save_shortlist(session: Session, page: Page) -> Shortlist:

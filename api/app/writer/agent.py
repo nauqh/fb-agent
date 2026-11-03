@@ -11,7 +11,7 @@ from urllib.parse import urlsplit
 import httpx
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent, ModelRetry, RunContext
-from pydantic_ai.capabilities.web_fetch import WebFetch
+from pydantic_ai.capabilities import WebFetch, WebSearch
 from pydantic_ai.messages import BinaryImage, NativeToolReturnPart
 from pydantic_ai.models.google import GoogleModel, GoogleModelSettings
 from pydantic_ai.native_tools import WebFetchTool
@@ -601,6 +601,7 @@ def ask(
     model=None,
     validator=None,
     fetch_url: str | None = None,
+    web_search: bool = False,
 ):
     """One structured answer from the text model, down the fallback chain.
 
@@ -616,7 +617,8 @@ def ask(
     `fetch_url` turns on Gemini URL context and fails the run with
     `SourceUnreadable` if that page was not retrieved. It needs a Gemini 3
     model: 2.x cannot combine a built-in tool with the function call that
-    carries the structured output.
+    carries the structured output. `web_search` turns on Google Search the same
+    way, under the same timeout.
     """
 
     def run(chosen, model_settings):
@@ -626,7 +628,7 @@ def ask(
             instructions=instructions,
             model_settings=model_settings,
             retries=MAX_RETRIES,
-            capabilities=[WebFetch()] if fetch_url else None,
+            capabilities=([WebFetch()] if fetch_url else []) + ([WebSearch()] if web_search else []),
         )
         unreadable = SourceUnreadable(
             f"Could not read the article at {fetch_url}. The site may block "
@@ -650,7 +652,8 @@ def ask(
             # An unreadable BBC page kept one request looping server-side for
             # 211-354s until TOO_MANY_TOOL_CALLS; readable articles took 26-40s.
             result = agent.run_sync(
-                prompt, model_settings={"timeout": FETCH_TIMEOUT} if fetch_url else None
+                prompt,
+                model_settings={"timeout": FETCH_TIMEOUT} if fetch_url or web_search else None,
             )
             result._read_live = True
             return result

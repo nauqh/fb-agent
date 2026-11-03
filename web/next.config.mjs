@@ -20,6 +20,9 @@ const config = {
     // (src/proxy.ts), and everything above that comes back 413 from Next -
     // not from FastAPI, whose own cap is 200MB. CTA clips are videos.
     proxyClientMaxBodySize: "200mb",
+    // Next's default is 30s, and a Gemini search (`/sources/discover`) took
+    // 59s: a 90s model timeout plus 20s reading the articles it found.
+    proxyTimeout: 120_000,
   },
 };
 

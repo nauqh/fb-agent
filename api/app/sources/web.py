@@ -180,7 +180,7 @@ def fetch_article(url: str, client: httpx.Client | None = None) -> SourceItemBas
     return SourceItemBase(
         kind=SourceKind.WEB,
         external_id=final_url,
-        author=page.meta.get("og:site_name") or parts.netloc,
+        author=page.meta.get("og:site_name") or urlsplit(final_url).netloc,
         text="\n\n".join(
             part
             for part in (title, page.meta.get("og:description"), body)

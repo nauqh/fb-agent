@@ -757,13 +757,7 @@ def get_shortlist(
         except ValueError as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
 
-    spent = set(
-        session.exec(
-            select(SourceItem.kind, SourceItem.external_id).where(
-                col(SourceItem.id).in_(auto_draft._spent())
-            )
-        ).all()
-    )
+    spent = _spent_keys(session)
     return Shortlist(
         page_id=stored.page_id,
         made_at=stored.made_at,
@@ -776,6 +770,39 @@ def get_shortlist(
             if item["kind"] == SourceKind.RSS
             and (SourceKind(item["kind"]), item["external_id"]) not in spent
         ],
+    )
+
+
+@router.get("/discover")
+def get_discover(
+    page_id: int = Query(...),
+    session: Session = Depends(get_session),
+) -> list[SourceItemBase]:
+    """Recent stories Gemini finds with Google Search, by the shortlist's
+    instructions. Live and unstored: each call is a search, about 30s."""
+    from app import auto_draft
+
+    page = session.get(Page, page_id)
+    if page is None:
+        raise HTTPException(status_code=404, detail=f"No page {page_id}")
+    try:
+        found = auto_draft.discover(session, page)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    spent = _spent_keys(session)
+    return [item for item in found if (item.kind, item.external_id) not in spent]
+
+
+def _spent_keys(session: Session) -> set[tuple[SourceKind, str]]:
+    """`(kind, external_id)` of every source a draft has used."""
+    from app import auto_draft
+
+    return set(
+        session.exec(
+            select(SourceItem.kind, SourceItem.external_id).where(
+                col(SourceItem.id).in_(auto_draft._spent())
+            )
+        ).all()
     )
 
 
