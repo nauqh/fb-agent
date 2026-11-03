@@ -615,10 +615,10 @@ def test_no_auto_draft_reads_for_an_article(session, page, feed, monkeypatch):
 # --- Shortlist ---------------------------------------------------------------
 
 
-def test_the_shortlist_mixes_posts_and_news_and_knows_what_is_covered(
+def test_the_shortlist_takes_only_feed_items_and_knows_what_is_covered(
     session, page, pool, feed, monkeypatch
 ):
-    seen = _answer(monkeypatch, [5, 1, 99])
+    seen = _answer(monkeypatch, [3, 1, 99])
     page.auto_draft_rss_instructions = "UK politics"
     covered = SourceItem(
         kind=SourceKind.RSS, external_id="https://x/old", text="Budget leaked\n\nsummary"
@@ -629,10 +629,13 @@ def test_the_shortlist_mixes_posts_and_news_and_knows_what_is_covered(
 
     result = auto_draft.shortlist(session, page)
 
-    # Three feed items first, then the posts loudest first: 5 is post-b.
-    assert [item["external_id"] for item in result.items] == ["post-b", feed[0].external_id]
-    assert result.considered == 6
-    assert "[post, 200 reactions]" in seen[0]
+    # The competitor posts in `pool` are not candidates.
+    assert [item["external_id"] for item in result.items] == [
+        feed[2].external_id,
+        feed[0].external_id,
+    ]
+    assert result.considered == 3
+    assert "post-" not in seen[0]
     assert "- Budget leaked" in seen[0]
 
 
@@ -641,18 +644,29 @@ def test_the_shortlist_route_stores_it_and_drops_what_was_used_since(
 ):
     assert client.get("/sources/shortlist", params={"page_id": page.id}).status_code == 422
 
-    _answer(monkeypatch, [4, 5])
+    _answer(monkeypatch, [1, 2])
     page.auto_draft_rss_instructions = "Anything"
     session.add(page)
     session.commit()
     first = client.get("/sources/shortlist", params={"page_id": page.id}).json()
-    assert [item["external_id"] for item in first["items"]] == ["post-a", "post-b"]
+    assert [item["external_id"] for item in first["items"]] == [
+        feed[0].external_id,
+        feed[1].external_id,
+    ]
 
-    # Stored: the model is not asked again, and a used post leaves the list.
+    # A list stored before the shortlist went RSS-only: its posts are dropped.
+    stored = session.get(Shortlist, page.id)
+    stored.items = [*stored.items, {"kind": SourceKind.COMPETITOR_POST.value, "external_id": "post-a"}]
+    session.add(stored)
+    used = SourceItem(kind=SourceKind.RSS, external_id=feed[0].external_id, text="used")
+    session.add(used)
+    session.commit()
+
+    # Stored: the model is not asked again, and a used item leaves the list.
     monkeypatch.setattr(writer, "ask", lambda *a, **k: pytest.fail("asked twice"))
-    _draft(session, page.id, DraftStatus.REVIEW, pool["loudest"].id)
+    _draft(session, page.id, DraftStatus.REVIEW, used.id)
     second = client.get("/sources/shortlist", params={"page_id": page.id}).json()
-    assert [item["external_id"] for item in second["items"]] == ["post-b"]
+    assert [item["external_id"] for item in second["items"]] == [feed[1].external_id]
 
 
 @pytest.mark.parametrize(

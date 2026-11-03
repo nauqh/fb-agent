@@ -75,7 +75,7 @@ kind of thing live and stores none of it.
 |---|---|
 | Competitor posts | Synced from Metricool, a week back, sorted by reactions with newest kept beside it. Reach shown per competitor |
 | RSS and news sites | Per-Page feeds, added and removed on Settings. A news site's section page works too: its article links are read as items, with each article's own picture and date. Seven-day window, newest first |
-| Shortlisted | The first Sources tab. Once a day per Page, the model picks its best unused competitor posts and feed items, skipping stories already drafted in the last two days. Size and time per Page on Settings, or **Run again** |
+| Shortlisted | The first Sources tab. Once a day per Page, the model picks its best unused feed items, skipping stories already drafted in the last two days. Size and time per Page on Settings, or **Run again** |
 | Tweets | Paste an X link |
 | Web links | Paste any article link. Our reader extracts the story; Gemini reads it when ours cannot |
 | Cart | Tick across all four kinds; one run yields one Draft per ticked item per Page |

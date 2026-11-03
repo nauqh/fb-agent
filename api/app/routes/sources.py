@@ -772,7 +772,9 @@ def get_shortlist(
         items=[
             item
             for item in stored.items
-            if (SourceKind(item["kind"]), item["external_id"]) not in spent
+            # Lists stored before the shortlist went RSS-only still hold posts.
+            if item["kind"] == SourceKind.RSS
+            and (SourceKind(item["kind"]), item["external_id"]) not in spent
         ],
     )
 

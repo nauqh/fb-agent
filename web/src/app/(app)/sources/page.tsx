@@ -526,7 +526,7 @@ function ShortlistTab() {
               {` from ${data.considered} unused sources, by this Page’s instructions.`}
             </>
           ) : (
-            <>The best fits from competitor posts and feeds, by this Page&rsquo;s instructions.</>
+            <>The best fits from this Page&rsquo;s feeds, by its instructions.</>
           )}
         </p>
         <Button

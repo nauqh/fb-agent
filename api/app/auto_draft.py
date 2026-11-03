@@ -292,8 +292,8 @@ SHORTLIST_INSTRUCTIONS = """\
 You shortlist what a Facebook Page should post about next.
 
 You are given the Page's criteria, the stories it has covered recently, and a
-numbered list of candidates: news stories, and posts from other Facebook Pages
-with their reaction counts. Return the numbers of the best fits, best first,
+numbered list of candidate news stories. Return the numbers of the best fits,
+best first,
 at most {size}. Leave out anything the criteria exclude, anything about the
 same story as a recently covered one, and all but the best candidate on any
 one story. An empty list is the right answer when nothing fits.
@@ -313,12 +313,11 @@ def _covered(session: Session, page: Page) -> list[str]:
 
 
 def shortlist(session: Session, page: Page) -> Shortlist:
-    """The Page's `shortlist_size` best-fit unused sources, best first. Unsaved.
+    """The Page's `shortlist_size` best-fit unused feed items, best first. Unsaved.
 
-    Competitor posts and RSS items in one list, judged by the Page's
-    instructions: the operator picks from ten rather than scrolling hundreds
-    (client, 2026-10-28). Each pool is cut to `RSS_POOL` - the newest feed
-    items, the loudest competitor posts - so one call sees both.
+    Judged by the Page's instructions: the operator picks from ten rather than
+    scrolling hundreds (client, 2026-10-28). RSS only: competitor posts were in
+    the pool at first and were taken out (2026-11-04).
 
     Raises:
         ValueError: the Page has no instructions to judge by.
@@ -328,19 +327,13 @@ def shortlist(session: Session, page: Page) -> Shortlist:
         raise ValueError("Write which stories fit this Page in Settings first.")
 
     news, failed = rss_candidates(session, page)
-    posts = [SourceItemBase.model_validate(row.model_dump()) for row in pick(session, page, RSS_POOL)]
-    pool = news[:RSS_POOL] + posts
-
-    def line(number: int, item: SourceItemBase) -> str:
-        label = (
-            f"post, {item.reactions or 0} reactions"
-            if item.kind is SourceKind.COMPETITOR_POST
-            else "news"
-        )
-        return f"{number}. [{label}] {item.text[:300].replace(chr(10), ' ')}"
+    pool = news[:RSS_POOL]
 
     covered = "\n".join(f"- {headline}" for headline in _covered(session, page)) or "(none)"
-    listing = "\n".join(line(number, item) for number, item in enumerate(pool, start=1))
+    listing = "\n".join(
+        f"{number}. {item.text[:300].replace(chr(10), ' ')}"
+        for number, item in enumerate(pool, start=1)
+    )
     picks: list[int] = []
     if pool:
         answer = writer.ask(
