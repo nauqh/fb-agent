@@ -27,6 +27,13 @@ FETCH_TIMEOUT = 20.0
 _META_KEYS = ("og:title", "og:description", "og:site_name", "og:image")
 # Text of these never reads as article prose.
 _SKIP_TAGS = frozenset({"script", "style", "nav", "header", "footer", "aside", "form"})
+# `</p>` is optional in HTML: these open or close a block and end the paragraph.
+# Crosswalk ships minified pages with no `</p>` at all and read as empty.
+_ENDS_P = frozenset(
+    {"p", "div", "section", "article", "blockquote", "figure", "ul", "ol", "table"}
+    | {"h1", "h2", "h3", "h4", "h5", "h6"}
+    | _SKIP_TAGS - {"script", "style"}
+)
 # A paragraph shorter than this is a byline, a caption or a menu item.
 _MIN_PARAGRAPH = 40
 # Story prose ends a sentence. Related-story headlines and captions do not, and
@@ -36,7 +43,9 @@ _SENTENCE_END = (".", "!", "?", ":", "…")
 _CLOSERS = "\"'”’)]"
 # Sign-up and consent text that does end a sentence. The Express ran "You agree
 # you are 18 or over ... You can unsubscribe at any time." mid-article.
-_FURNITURE = re.compile(r"\b(newsletter|unsubscribe|privacy policy|enable javascript)\b", re.I)
+_FURNITURE = re.compile(
+    r"\b(newsletter|unsubscribe|privacy policy|enable javascript|sign up today)\b", re.I
+)
 # The writer's prompt carries this; a full longread is past 40k characters and
 # the model needs the story, not every sentence of it.
 _MAX_BODY_CHARS = 12_000
@@ -75,6 +84,8 @@ class _Page(HTMLParser):
         self._chunks: list[str] = []
 
     def handle_starttag(self, tag, attrs):
+        if self._in_p and tag in _ENDS_P:
+            self._end_p()
         if tag == "meta":
             pairs = dict(attrs)
             key = pairs.get("property") or pairs.get("name")
@@ -91,20 +102,23 @@ class _Page(HTMLParser):
             self._chunks = []
 
     def handle_endtag(self, tag):
+        if self._in_p and tag in _ENDS_P:
+            self._end_p()
         if tag == "title":
             self._in_title = False
         elif tag in _SKIP_TAGS:
             self._skip_depth = max(0, self._skip_depth - 1)
-        elif tag == "p" and self._in_p:
-            self._in_p = False
-            # Collapse whitespace the HTML carries; the writer reads this text.
-            text = " ".join("".join(self._chunks).split())
-            if (
-                len(text) >= _MIN_PARAGRAPH
-                and text.rstrip(_CLOSERS).endswith(_SENTENCE_END)
-                and not _FURNITURE.search(text)
-            ):
-                self.paragraphs.append(text)
+
+    def _end_p(self):
+        self._in_p = False
+        # Collapse whitespace the HTML carries; the writer reads this text.
+        text = " ".join("".join(self._chunks).split())
+        if (
+            len(text) >= _MIN_PARAGRAPH
+            and text.rstrip(_CLOSERS).endswith(_SENTENCE_END)
+            and not _FURNITURE.search(text)
+        ):
+            self.paragraphs.append(text)
 
     def handle_data(self, data):
         if self._in_title:

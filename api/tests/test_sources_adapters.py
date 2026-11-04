@@ -497,6 +497,25 @@ def test_the_title_tag_fills_in_for_a_missing_og_title(page_fetch):
     assert web.fetch_article("https://a/x").text.startswith("Just a Title\n\n")
 
 
+def test_paragraphs_without_a_closing_tag_are_read(page_fetch):
+    """Crosswalk's minified pages never close a `<p>`; a browser ends one at
+    the next block, and so must the reader, or the page reads as empty."""
+    story = "A man quietly paid a stranger's car repair bill at the shop."
+    page_fetch(
+        "<html><head><title>Kindness</title></head><body>"
+        "<p>Log in to your existing account or sign up today!<div>x</div>"
+        + f"<p>{story}" * 10
+        + "<footer><p>Copyright notice for the whole site goes here.</footer>"
+        "</body></html>",
+        "https://a/x",
+    )
+
+    text = web.fetch_article("https://a/x").text
+
+    assert text.count(story) == 10
+    assert "sign up" not in text and "Copyright" not in text
+
+
 def test_a_page_without_article_text_is_refused(page_fetch):
     """A JS shell or a cookie notice answers 200 with a title and nothing else;
     the writer would invent a post around the headline."""
