@@ -516,6 +516,7 @@ function GeminiShortlist({ toggle }: { toggle: ReactNode }) {
   const { pageId } = usePageScope();
   const [byPage, setByPage] = useState(() => new Map(discovered));
   const items = pageId === null ? null : (byPage.get(pageId) ?? null);
+  const [topic, setTopic] = useState("");
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -524,7 +525,7 @@ function GeminiShortlist({ toggle }: { toggle: ReactNode }) {
     setSearching(true);
     setError(null);
     try {
-      const found = await getDiscover(pageId);
+      const found = await getDiscover(pageId, topic);
       discovered.set(pageId, found);
       setByPage(new Map(discovered));
     } catch (cause) {
@@ -538,15 +539,29 @@ function GeminiShortlist({ toggle }: { toggle: ReactNode }) {
     <>
       <div className="flex items-center justify-between gap-3 pb-3">
         <p className="text-xs text-muted-foreground">
-          Recent stories Gemini finds on Google, by this Page&rsquo;s instructions.
+          Stories Gemini finds on Google, by this Page&rsquo;s instructions and any topic.
         </p>
-        <div className="flex shrink-0 items-center gap-2">
+        <form
+          className="flex shrink-0 items-center gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void search();
+          }}
+        >
           {toggle}
-          <Button variant="outline" size="sm" className="h-7" disabled={searching} onClick={() => void search()}>
+          <Input
+            value={topic}
+            onChange={(event) => setTopic(event.target.value)}
+            placeholder="Topic (optional)"
+            aria-label="Topic"
+            maxLength={200}
+            className="h-7 w-56 text-xs"
+          />
+          <Button type="submit" variant="outline" size="sm" className="h-7" disabled={searching}>
             {searching ? <Loader2 className="size-3.5 animate-spin" /> : <Search className="size-3.5" />}
             Search
           </Button>
-        </div>
+        </form>
       </div>
 
       {searching ? <SyncProgress label="Searching Google" /> : null}
@@ -555,7 +570,7 @@ function GeminiShortlist({ toggle }: { toggle: ReactNode }) {
         <QueryError error={error} onRetry={search} />
       ) : items === null ? (
         <p className="rounded-2xl border border-dashed p-10 text-center text-sm text-muted-foreground">
-          Press Search to find recent stories.
+          Press Search to find stories.
         </p>
       ) : items.length === 0 ? (
         <p className="rounded-2xl border border-dashed p-10 text-center text-sm text-muted-foreground">

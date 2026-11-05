@@ -139,12 +139,12 @@ export async function getShortlist(pageId: number, refresh = false): Promise<Sho
 }
 
 /**
- * Recent stories Gemini finds with Google Search, by the shortlist's
- * instructions. Live and unstored, about 30s a call. A 422 means the Page has
- * no instructions.
+ * Stories Gemini finds with Google Search, by the shortlist's instructions and
+ * an optional topic. Live and unstored, about 30s a call. A 422 means the Page
+ * has no instructions.
  */
-export async function getDiscover(pageId: number): Promise<LiveSourceItem[]> {
-  return get<LiveSourceItem[]>("/sources/discover", { page_id: pageId });
+export async function getDiscover(pageId: number, topic = ""): Promise<LiveSourceItem[]> {
+  return get<LiveSourceItem[]>("/sources/discover", { page_id: pageId, topic });
 }
 
 /** One tweet resolved from a pasted URL. Never a browsable list. */

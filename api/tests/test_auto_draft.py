@@ -730,7 +730,7 @@ def test_discover_reads_each_url_and_drops_dead_and_used_ones(client, session, p
     asked = {}
 
     def fake_ask(prompt, output_type, instructions, *args, **kwargs):
-        asked.update(kwargs)
+        asked.update(kwargs, prompt=prompt)
         return SimpleNamespace(
             output=output_type(
                 stories=[
@@ -755,8 +755,12 @@ def test_discover_reads_each_url_and_drops_dead_and_used_ones(client, session, p
 
     found = client.get("/sources/discover", params={"page_id": page.id}).json()
 
-    assert asked == {"web_search": True}
+    assert asked["web_search"] is True
+    assert "TOPIC" not in asked["prompt"]
     assert [item["external_id"] for item in found] == ["https://news.example/a"]
+
+    client.get("/sources/discover", params={"page_id": page.id, "topic": " NHS waiting lists "})
+    assert asked["prompt"].endswith("TOPIC:\nNHS waiting lists")
 
 # --- per-Page run times -------------------------------------------------------
 

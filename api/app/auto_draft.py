@@ -352,17 +352,14 @@ def shortlist(session: Session, page: Page) -> Shortlist:
     )
 
 
-DISCOVER_DAYS = 2
-"""How recent a story Gemini is asked to find."""
-
 DISCOVER_INSTRUCTIONS = """\
 You find news stories for a Facebook Page, with Google Search.
 
-You are given the Page's criteria and the stories it has covered recently.
-Search for stories published in the last {days} days that fit the criteria and
-return each one's article URL and headline, best fit first, at most {size}. Only
-return URLs your searches found, one article per story, and leave out anything
-the criteria exclude or a recently covered story.
+You are given the Page's criteria, the stories it has covered recently, and
+sometimes a topic. Search for stories that fit the criteria, and are on the
+topic when one is given, and return each one's article URL and headline, best
+fit first, at most {size}. Only return URLs your searches found, one article per
+story, and leave out a recently covered story.
 """
 
 
@@ -385,13 +382,16 @@ def _resolve(url: str) -> SourceItemBase | None:
         return None
 
 
-def discover(session: Session, page: Page) -> list[SourceItemBase]:
-    """Up to `shortlist_size` recent stories Gemini finds with Google Search,
-    judged by the same instructions as `shortlist`. Unsaved.
+def discover(session: Session, page: Page, topic: str = "") -> list[SourceItemBase]:
+    """Up to `shortlist_size` stories Gemini finds with Google Search, judged
+    by the same instructions as `shortlist`. Unsaved.
 
     The client's ask (2026-11-04): find articles without supplying URLs or RSS
-    feeds. Each URL is read here like a pasted one, which also follows Google's
-    redirects to the publisher's own address.
+    feeds. The criteria are the only steer: a Page that wants recent stories or
+    one region says so there, since the search tool takes neither. `topic`
+    narrows one search without changing them (client, 2026-11-05). Each URL is
+    read here like a pasted one, which also follows Google's redirects to the
+    publisher's own address.
 
     Raises:
         ValueError: the Page has no instructions to judge by.
@@ -401,10 +401,13 @@ def discover(session: Session, page: Page) -> list[SourceItemBase]:
         raise ValueError("Write which stories fit this Page in Settings first.")
 
     covered = "\n".join(f"- {headline}" for headline in _covered(session, page)) or "(none)"
+    prompt = f"CRITERIA:\n{criteria}\n\nCOVERED RECENTLY:\n{covered}"
+    if topic.strip():
+        prompt += f"\n\nTOPIC:\n{topic.strip()}"
     answer = writer.ask(
-        f"CRITERIA:\n{criteria}\n\nCOVERED RECENTLY:\n{covered}",
+        prompt,
         _Stories,
-        DISCOVER_INSTRUCTIONS.format(days=DISCOVER_DAYS, size=page.shortlist_size),
+        DISCOVER_INSTRUCTIONS.format(size=page.shortlist_size),
         web_search=True,
     ).output
     urls = list(dict.fromkeys(story.url for story in answer.stories))[: page.shortlist_size]

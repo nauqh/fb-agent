@@ -776,17 +776,18 @@ def get_shortlist(
 @router.get("/discover")
 def get_discover(
     page_id: int = Query(...),
+    topic: str = Query("", max_length=200),
     session: Session = Depends(get_session),
 ) -> list[SourceItemBase]:
-    """Recent stories Gemini finds with Google Search, by the shortlist's
-    instructions. Live and unstored: each call is a search, about 30s."""
+    """Stories Gemini finds with Google Search, by the shortlist's instructions
+    and an optional topic. Live and unstored: each call is a search, about 30s."""
     from app import auto_draft
 
     page = session.get(Page, page_id)
     if page is None:
         raise HTTPException(status_code=404, detail=f"No page {page_id}")
     try:
-        found = auto_draft.discover(session, page)
+        found = auto_draft.discover(session, page, topic)
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
     spent = _spent_keys(session)
