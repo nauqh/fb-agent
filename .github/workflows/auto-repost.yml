@@ -15,7 +15,7 @@ on:
 permissions: {}
 
 env:
-  API: https://fb-agent.up.railway.app
+  API: ${{ vars.FB_AGENT_API }}
 
 jobs:
   run:

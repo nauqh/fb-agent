@@ -25,7 +25,7 @@ on:
 permissions: {}
 
 env:
-  API: https://fb-agent.up.railway.app
+  API: ${{ vars.FB_AGENT_API }}
   # The hero is the only variable cost in an unattended run. true reuses the
   # competitor's own picture instead of buying one.
   HERO_FROM_SOURCE: "false"
