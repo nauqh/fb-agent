@@ -178,11 +178,15 @@ def _record(
 
 # --- RSS -----------------------------------------------------------------------
 
-RSS_POOL = 100
+RSS_POOL = 500
 """How many of the newest unused items the model is shown.
 
-ponytail: a flat cap, so only a Page's newest 100 unused items are considered.
-Raise it if a Page's criteria are narrow enough to miss what is further down."""
+Was 100, which on House of Common Sense reached back 8.3h of the 7-day window:
+457 unused items from 16 feeds (2026-11-06). At 500 the shortlist call took
+21s against 33s at 100, so the model's latency is noise next to the input.
+
+ponytail: still a flat cap, as a guard on prompt size. Raise it if a Page's
+feeds outgrow it."""
 
 CHOOSE_INSTRUCTIONS = """\
 You choose which news items a Facebook Page should write posts about.
