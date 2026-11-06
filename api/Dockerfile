@@ -33,7 +33,7 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 
 # Install uv.
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.12.20 /uv /uvx /bin/
 
 # Copy the application into the container.
 COPY . /app
@@ -59,7 +59,7 @@ COPY --from=pot-server /bgutil/server /opt/bgutil-server
 #
 # 8000, not 80: ports below 1024 are privileged, so 80 works only as root and
 # fails with a bare PermissionError the day this grows a non-root user.
-# Railway must be told this port - set PORT=8000 in the service variables.
+# Railway's own PORT wins when it sets one; 8000 is the fallback.
 #
 # --workers 1 is a correctness requirement, not a default worth inheriting.
 # `generate.sweep_stranded` marks *every* row at `generating` as failed on
@@ -67,4 +67,4 @@ COPY --from=pot-server /bgutil/server /opt/bgutil-server
 # booting would kill a live run mid-generate. `init_db()` also runs
 # `alembic upgrade head` here, which wants one process migrating, not four.
 EXPOSE 8000
-CMD ["sh", "-c", "node /opt/bgutil-server/build/main.js --port 4416 & exec /app/.venv/bin/fastapi run app/main.py --host 0.0.0.0 --port 8000 --workers 1"]
+CMD ["sh", "-c", "node /opt/bgutil-server/build/main.js --port 4416 & exec /app/.venv/bin/fastapi run app/main.py --host 0.0.0.0 --port ${PORT:-8000} --workers 1"]
