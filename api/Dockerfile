@@ -59,9 +59,7 @@ COPY --from=pot-server /bgutil/server /opt/bgutil-server
 #
 # 8000, not 80: ports below 1024 are privileged, so 80 works only as root and
 # fails with a bare PermissionError the day this grows a non-root user.
-# Fixed, not $PORT: the Railway domain targets 8000, and Railway injects a
-# PORT of its own when none is set. Following it took production down for
-# 20h (2026-11-06). Change this and the domain's target port together.
+# Fixed 8000: the Railway domain targets it, not $PORT.
 #
 # --workers 1 is a correctness requirement, not a default worth inheriting.
 # `generate.sweep_stranded` marks *every* row at `generating` as failed on
