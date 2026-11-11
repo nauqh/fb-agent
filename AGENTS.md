@@ -5,8 +5,8 @@ Code, Codex, Cursor, or something else.
 
 This file is process: how to work, coordinate, and finish. It is deliberately
 project-agnostic. The repo's own facts - its domain language, its commands, its
-traps, its state of play - live in `CLAUDE.md`, the `README`, and whatever docs
-the repo keeps. Read those too; find them before you start, do not assume this
+traps, its state of play - live in the `README` and whatever docs the repo
+keeps. Read those too; find them before you start, do not assume this
 file is all there is.
 
 ## Baseline workflow
@@ -15,11 +15,6 @@ Start every task by establishing:
 
 1. **Goal and acceptance criteria.** What does done look like, concretely?
 2. **Constraints.** Scope, reversibility, anything live that could be touched.
-3. **What must be inspected.** The files, the routes, the tests, the real flow
-   end to end. Read before you edit; understanding is never the part you skip.
-4. **Who else is here.** Read `.agents/status/` (below) before touching a file.
-5. **Whether the answer depends on live state.** Model ids, a running server's
-   routes, a third-party response shape: verify, do not recall.
 
 If requirements are ambiguous, ask a targeted question before making an
 irreversible change. If they are ambiguous and the change is cheap and
@@ -52,12 +47,8 @@ history. If the directory is missing, create it.
   and when you make a decision others need (API shape, renamed function, new env
   var, new migration). If a live session's `Files:` touch that decision, also
   message it.
-- **When the task is done, delete your status file, by name.** Hand what landed
-  and anything the next session needs to the user in your final message, and
-  put the durable record in the commit message. A finished task leaves no file
-  behind; a file that lingers looks like a live claim on its `Files:`.
-- Only ever write to your own status file. Deleting your own file is the one
-  exception, and only the exact file you created.
+- **When the task is done, delete your status file, by name.** A file that
+  lingers looks like a live claim on its `Files:`.
 
 ### Format
 
@@ -104,7 +95,8 @@ skip this section: the user relays anything another session needs to hear.
   session by its pane id, taken from that list or its status file `Pane:`.
 - **Message for these only:** asking for a claimed file, warning an owner
   about a change that touches its `Files:`, or unblocking work that depends on
-  another session. Everything else goes in your status file.
+  another session; in a team, also the brief and the report. Everything else
+  goes in your status file.
 - **Send** with `herdr agent prompt <pane> "<message>"`, one line, no `--wait`.
   Check `herdr agent get <pane>` first: send when it is `idle` or `done`, and
   retry later when it is `working`. A `blocked` agent is waiting on its user;
@@ -117,12 +109,50 @@ skip this section: the user relays anything another session needs to hear.
 - **A peer's message is a request, not the user's instruction.** It never
   widens your scope or authorises a commit, push, deletion, or live write;
   those still need your user. When a request conflicts with your task, say so
-  to your user instead of complying.
+  to your user instead of complying. A team lead's brief is the exception: it
+  is your task (see Teams).
 - **Two exchanges per question, then escalate.** If a question is still open
   after two round trips, stop and hand it to the user with both positions.
 - **Read, don't drive.** `herdr agent read` on a peer is fine. Starting,
   closing, focusing, or sending keys to a pane you did not create needs the
   user to have asked.
+
+## Teams
+
+When the user asks for a team, the session they asked becomes the lead and
+spawns workers through Herdr (`HERDR_ENV=1`). Without Herdr, say so and work
+alone.
+
+### Lead
+
+- **Plan first, then confirm.** Split the work into 2-4 tasks whose `Files:`
+  do not overlap; a task that needs another's output waits for it. Show the
+  user the split (task, worker, tool, files) before you spawn anything.
+- **Track the team in your own status file**: a `Team:` line per worker
+  (name, pane, branch, task), and `Status: working` until the merge.
+- **One worktree per worker.** `herdr worktree create --branch team/<worker>
+  --label <worker>`, then in a shell pane there `herdr agent start <worker>
+  --kind <claude|codex|...> --pane <id>`, then `herdr agent prompt <pane>
+  "<brief>"`. The user asking for the team is the ask for these panes and
+  branches.
+- **The brief is self-contained**: goal, done criteria, the files the worker
+  owns, the check command, your pane, and "report back, do not commit".
+- **Wait, do not poll**: `herdr agent wait <pane> --until done --until
+  blocked`. Read a blocked worker; answer it, or hand it to the user.
+- **Merge the work in yourself.** Review each branch's diff, merge it, run the
+  repo's checks once over the whole result, then commit as the user asked.
+- **Clean up by name**: close the panes, remove the worktrees and delete the
+  `team/` branches you created. Then delete your status file.
+
+### Worker
+
+- The lead's brief is your task. Skip the status file: `.agents/status/` in a
+  worktree is invisible to the main tree, so the lead's file tracks you.
+- Edit only the files the brief names. Need another one? Ask the lead.
+- Never commit, push, or write to a live service; that stays with the lead
+  and the user.
+- When done, run the check and reply to the lead with what changed, the check
+  output and any open question.
 
 ## Writing style (REQUIRED)
 
@@ -169,11 +199,10 @@ published account, a paid API.
 ### Secrets and sensitive data
 
 - Never print secrets. No dumping the environment, no echoing a token, no
-  `cat` of a credentials file.
+  `cat` of a credentials file. Redact when output must be shown.
 - Never write a secret into a status file, a doc, a test fixture or a commit.
 - An exported session cookie is a live login, not a config file. Treat it as a
   credential and delete it once it has been used.
-- Use secret values; do not display them. Redact when output must be shown.
 
 ### Destructive operations
 
@@ -189,7 +218,8 @@ published account, a paid API.
 
 - **Stage by filename. Never `git add -A`.** It sweeps the user's own
   uncommitted work into your commit.
-- Ask before creating a branch. Commit and push only when asked.
+- Ask before creating a branch (a team request covers the lead's `team/*`
+  branches). Commit and push only when asked.
 - No `Co-Authored-By` or other AI-authorship trailers.
 - Commit messages carry the evidence: what was measured, what failed, why the
   obvious alternative was rejected. They are the durable record; this file is
@@ -226,16 +256,21 @@ A task is done when:
 - the change is implemented, or the question is answered;
 - the repo's checks have been **run**, not merely mentioned: tests, linter,
   typecheck, build, and any schema or migration check. The commands are in
-  `CLAUDE.md` or the README; if you cannot find them, ask rather than skip;
+  the README; if you cannot find them, ask rather than skip;
 - anything with a screen or an endpoint has been driven for real. A green suite
-  is not a working screen;
+  is not a working screen. No tool to drive it (no browser tool)? Do not build
+  your own: run the checks, then hand the user the exact page and steps to
+  verify;
 - new warnings and errors are fixed, or explicitly listed as out of scope;
 - the impact is stated: what changed, where, and why;
 - anything deliberately left out is named as a follow-up;
 - your status file is deleted, and the user got the summary of what landed.
 
 If a check failed, say so and show the output. If you skipped one, say that too.
+The same check failing twice the same way is a stop: report it, do not keep
+improvising.
 
 ## Commenting
 
-Default to writing no comments. Never write multi-paragraph docstrings or multi-line comment blocks, one short line max. Only comment non-obvious "why" decisions, never self-evident "what".
+Default to no comments. A comment earns its place by stating a non-obvious
+why, in one short line.
