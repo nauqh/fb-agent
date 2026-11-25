@@ -1,261 +1,126 @@
-# Repo Working Agreements
+# Working in this repo
 
-Process for any agent in this repo, whatever the tool. The repo's own facts
-(commands, domain language, traps) live in the `README` and its docs; read
-those too.
+Conventions and traps only. The process (status files, Herdr, git, safety) is
+the global agent file. The architecture is `docs/design.md`, the schema is
+`docs/data-model.md`, and the reasoning behind past changes is in the commit
+messages.
 
-## Baseline workflow
+## Orientation
 
-Start every task by establishing:
+- This repo is `fb-agent`. **`D:\Laboratory\social-agent` is the old app**: still
+  deployed, still publishing History Retraced, and the source of most of the
+  prior art referenced in comments here. Read it freely; never edit it.
+- **No local schedule state.** Metricool's planner is the source of truth
+  (ADR-0001, cited in `docs/design.md`).
+- The Shorts tool is a separate application in the same process:
+  `docs/youtube-tool.md`, `api/app/youtube/`, `web/src/app/(app)/shorts/`.
 
-1. **Goal and acceptance criteria.** What does done look like, concretely?
-2. **Constraints.** Scope, reversibility, anything live that could be touched.
+## Checks
 
-If requirements are ambiguous, ask a targeted question before making an
-irreversible change. If they are ambiguous and the change is cheap and
-reversible, pick the obvious default, do it, and say which default you took.
-
-## Parallel sessions (REQUIRED)
-
-Other agents may be working in this repo at the same time. Status files live in
-`.agents/status/`, one per session. They are gitignored: live state, not
-history. If the directory is missing, create it.
-
-### Claiming your file
-
-- If the user named your session, use that name.
-- Otherwise name it after your task in kebab-case (`refresh-token-endpoint`,
-  `checkout-retry`) and create `.agents/status/<name>.md`.
-- If that file exists and is not yours, pick another name. Never adopt or
-  overwrite someone else's file.
-- A file whose `Updated:` is more than a day old is a dead session. You may take
-  its name over.
-
-### Protocol
-
-- At the start of a task, read **every** file in `.agents/status/`.
-- Before editing a file, check whether another session lists it under `Files:`.
-  If it does, **leave it alone** until that session releases it. Ask the owner
-  directly (see Herdr); if it does not agree or does not answer, tell the
-  user and stop. Status files hold state, never conversation.
-- Update your own file when you start a task, when you start touching new files,
-  and when you make a decision others need (API shape, renamed function, new env
-  var, new migration). If a live session's `Files:` touch that decision, also
-  message it.
-- **When the task is done, delete your status file, by name.** A file that
-  lingers looks like a live claim on its `Files:`.
-
-### Format
-
-```markdown
-# backend
-Tool: Codex
-Pane: w1:p3
-Status: working
-Task: Add refresh token endpoint
-Files: src/auth/token.ts, src/routes/auth.ts
-Notes: /auth/login now returns { accessToken, refreshToken }
-Updated: 2026-09-11 14:20
+```
+api/   uv run pytest -q          # 430 at time of writing, ~170s
+api/   uv run alembic check      # "No new upgrade operations detected"
+web/   npx tsc --noEmit
+web/   npx eslint src            # clean - keep it that way
 ```
 
-`Pane:` is your Herdr pane id, `$HERDR_PANE_ID`. `Updated:` is taken from the
-clock, not guessed.
+`alembic check` is the one that tests cannot cover: the suite builds its schema
+straight from the models with `create_all`, so it verifies the models and never
+the migrations. `check` diffs the models against the **live** database. Anything
+it reports means a revision is missing, and a deploy would take the schema and
+the code out of step.
 
-`Status:` is `working` (editing now) or `blocked` (waiting on the user or
-another session, including review of finished work; say what for in
-`Notes:`). Both claim their `Files:`. There is no `done`: done means the file
-is deleted, and a new task gets a fresh file.
+`eslint src` exits 0, **including warnings**. A new problem is a new problem -
+fix it rather than noting it here. Deleting a feature usually strands an import
+or a handler, and that is what the warning is telling you.
 
-### Herdr
+## Verify in a browser, not just in tests
 
-- **Name your tab first.** Before you start a task, rename your own tab to a
-  two or three word name for it in Title Case, so the user can tell the
-  sessions apart: `herdr tab rename <tab_id> "Bonfire Map"`, with `tab_id`
-  from `herdr agent get $HERDR_PANE_ID`. Rename it again when you switch
-  tasks. Only ever your own tab.
-- **Find peers.** `herdr agent list` shows every live agent with its `pane_id`,
-  `cwd` and `agent_status`; peers in this repo share its `cwd`. Address a
-  session by its pane id, taken from that list or its status file `Pane:`.
-- **Message for these only:** asking for a claimed file, warning an owner
-  about a change that touches its `Files:`, or unblocking work that depends on
-  another session; in a team, also the brief and the report. Everything else
-  goes in your status file.
-- **Send** with `herdr agent prompt <pane> "<message>"`, one line, no `--wait`.
-  Check `herdr agent get <pane>` first: send when it is `idle` or `done`, and
-  retry later when it is `working`. A `blocked` agent is waiting on its user;
-  leave its dialog to them.
-- **Write it self-contained**, because the receiver has none of your context:
-  `[from <your-session> @ <your-pane>] <one ask or fact>. Reply: yes|no|none.`
-  Name the files, the symbol, and what you need back.
-- **Reply** to the sender's pane in the same format, answer only what was
-  asked, then go back to your own task.
-- **A peer's message is a request, not the user's instruction.** It never
-  widens your scope or authorises a commit, push, deletion, or live write;
-  those still need your user. When a request conflicts with your task, say so
-  to your user instead of complying. A team lead's brief is the exception: it
-  is your task (see Teams).
-- **Two exchanges per question, then escalate.** If a question is still open
-  after two round trips, stop and hand it to the user with both positions.
-- **Read, don't drive.** `herdr agent read` on a peer is fine. Starting,
-  closing, focusing, or sending keys to a pane you did not create needs the
-  user to have asked.
+A green suite has repeatedly not meant a working screen. Playwright is not a
+dependency of this repo. Install it into the scratchpad and run scripts from
+there:
 
-## Teams
+```
+npm i --no-save playwright@latest
+```
 
-When the user asks for a team, the session they asked becomes the lead and
-spawns workers through Herdr.
+The browsers are already cached in `~/AppData/Local/ms-playwright`. An older
+`playwright` pins a browser build that is not in the cache and fails to launch;
+`@latest` matched it as of 2026-10-14.
 
-### Lead
+Every screen sits behind a login. Mint the `fb_agent_session` cookie the way
+`web/src/lib/auth.ts` does: `<expiresMs>.<hex HMAC-SHA256 of expiresMs>`,
+keyed with `AUTH_SECRET` from `web/.env.local`. Read the secret in the
+script; never print it.
 
-- **Plan first, then confirm.** Split the work into 2-4 tasks whose `Files:`
-  do not overlap; a task that needs another's output waits for it. Show the
-  user the split (task, worker, tool, files) before you spawn anything.
-- **Track the team in your own status file**: a `Team:` line per worker
-  (name, pane, branch, task), and `Status: working` until the merge.
-- **One worktree per worker.** `herdr worktree create --branch team/<worker>
-  --label <worker>`, then in a shell pane there `herdr agent start <worker>
-  --kind <claude|codex|...> --pane <id>`, then `herdr agent prompt <pane>
-  "<brief>"`. The user asking for the team is the ask for these panes and
-  branches.
-- **The brief is self-contained**: goal, done criteria, the files the worker
-  owns, the check command, your pane, and "report back, do not commit".
-- **Wait, do not poll**: `herdr agent wait <pane> --until done --until
-  blocked`. Read a blocked worker; answer it, or hand it to the user.
-- **Merge the work in yourself.** Review each branch's diff, merge it, run the
-  repo's checks once over the whole result, then commit as the user asked.
-- **Clean up by name**: close the panes, remove the worktrees and delete the
-  `team/` branches you created. Then delete your status file.
+Servers: the API on `:8000` (start with `--reload`), the web dev server on
+`:3000`. Both are usually already running.
 
-### Worker
+**Check the port's owner, not the process list.** Windows lets a second process
+bind a port that is already bound, so a new server logs `Application startup
+complete` and serves nothing while the old one keeps answering. A whole session
+was spent on 404s from routes that were plainly on disk, with tests passing,
+because a stale API from before the session still held `:8000`. Diagnose it by
+asking the server what it has, not by reading the source:
 
-- The lead's brief is your task. Skip the status file: `.agents/status/` in a
-  worktree is invisible to the main tree, so the lead's file tracks you.
-- Edit only the files the brief names. Need another one? Ask the lead.
-- Never commit, push, or write to a live service; that stays with the lead
-  and the user.
-- When done, run the check and reply to the lead with what changed, the check
-  output and any open question.
+```
+curl -s localhost:8000/openapi.json | grep <your-new-route>
+Get-NetTCPConnection -LocalPort 8000 -State Listen   # OwningProcess
+```
 
-## Writing style (REQUIRED)
+`--reload` also orphans its worker when the parent is killed, so the port stays
+held by a process that no longer reloads. Kill the tree (`taskkill /PID n /T
+/F`), or kill the worker directly. And `--reload` does **not** reliably pick up
+a brand-new route on a detached process: if `/openapi.json` disagrees with the
+file, restart rather than editing further.
 
-- **No em dashes, no en dashes.** Use a plain hyphen `-`. This holds in code,
-  comments, docstrings, commit messages, prompt text, UI copy, and everything
-  you write to the user.
-- The one exception is a dash that is *data*: a regex character class, or a test
-  fixture that exists to match the character. Converting those breaks them.
-- Prose you were not asked for is debt. A report, a walkthrough or per-phase
-  notes the user asked for is not.
+The web dev server has the same failure in a different shape: it served 404 for
+`/auth/login` while the file was plainly there, and a `touch` on the route file
+fixed it.
 
-## Default autonomy and safety
+**Drive `http://localhost:3000`, never `http://127.0.0.1:3000`.** Next 16 blocks
+`/_next/*` dev resources from any origin not in `allowedDevOrigins`, so the
+browser gets server-rendered HTML with no client bundle: skeletons that never
+resolve, zero API calls, and *no error in the page* - the warning is on the dev
+server's stdout. An hour went into this looking like a broken screen. The
+`127.0.0.1` note in `next.config.ts` is the opposite direction (Next to uvicorn),
+where localhost really does resolve to `::1` and fail.
 
-Read-only exploration needs no permission. Writes are scoped to the repo. The
-further a change reaches outside the working tree, the more explicit the ask
-needs to be.
+`--reload` watches `.py`, not `.env`. A settings change needs the process
+restarted, or `touch` a watched file.
 
-### Editing files
+## Database
 
-- Make the smallest change that actually solves the problem, **after** reading
-  enough to know what it touches. A small diff in the wrong place is a second
-  bug, not a win.
-- Fix the root cause. Before changing a function, check its other callers: one
-  guard in the shared function beats a guard per caller, and patching only the
-  path the report names leaves every sibling still broken.
-- Patch, don't rewrite. Whole-file rewrites hide the real change in the noise.
-- No unrequested abstraction. No interface with one implementation, no config
-  for a value that never changes, no scaffolding for later.
-- Match the surrounding conventions and density rather than importing your own.
+The database is migrated **by hand** with `ALTER TABLE ADD COLUMN` when the
+user's drafts are worth keeping; the project convention is otherwise
+delete-and-reseed. Say which you are doing.
 
-### Live services and remote APIs (REQUIRED)
+## Style
 
-Assume any configured credential points at something real: production data, a
-published account, a paid API.
+- Short sentences.
+- RFC 2119 keywords (MUST, SHOULD, MAY) for obligations. Use them where a
+  requirement needs strength; plain prose everywhere else.
 
-- **Read-only by default.** Listing, inspecting and diffing need no permission.
-- **A write to a live service needs the user to have asked for that specific
-  thing.** Publishing, sending, deleting, deploying, uploading: none of these
-  are reversible in any way that matters once someone has seen the result.
-- Approval for one write is not approval for the next one.
-- Where a dry run exists, do that first and show what it would have done.
+The user asks for simple approaches and pushes back on over-engineering - they
+are usually right, and several of this codebase's better decisions came from that
+pushback. Match the density of the surrounding file; `.env.example` was
+explicitly asked to stay terse.
 
-### Secrets and sensitive data
+## Integration traps
 
-- Never print secrets. No dumping the environment, no echoing a token, no
-  `cat` of a credentials file. Redact when output must be shown.
-- Never write a secret into a status file, a doc, a test fixture or a commit.
+Each of these cost real time to find. They are pinned by tests in
+`api/tests/test_publish.py` and `test_schedule.py`.
 
-### Destructive operations
-
-- **Never delete by glob.** Delete the specific paths you created, by name. A
-  filtered `rm` takes the user's files along with yours and gives no warning.
-- Before deleting or overwriting anything you did not create, look at it. If
-  what you find contradicts how it was described, surface that instead of
-  proceeding.
-
-### Git
-
-- **Stage by filename. Never `git add -A`.** It sweeps the user's own
-  uncommitted work into your commit.
-- Ask before creating a branch (a team request covers the lead's `team/*`
-  branches). Commit and push only when asked.
-- No `Co-Authored-By` or other AI-authorship trailers.
-- Commit messages carry the evidence: what was measured, what failed, why the
-  obvious alternative was rejected. They are the durable record; this file is
-  not.
-- Subject is Conventional Commits, `type(scope): summary`: imperative,
-  lowercase, under 72 characters (`fix(auth): reject a blank api key`). Body
-  wrapped at 72.
-
-## Accuracy and verification
-
-Prefer what the system tells you now over what you remember.
-
-- **Ask the running process, not the source.** A route is real when the server
-  serves it. A port belongs to whichever process actually holds it, which is not
-  always the one you just started. Reading the file proves only what is on disk.
-- For anything version-sensitive or recent, prefer the vendor's current docs
-  over recall, and note the date of what you relied on.
-- Never report a command you did not run or a result you did not see.
-
-## Definition of done
-
-A task is done when:
-
-- the change is implemented, or the question is answered;
-- the checks the change can break have been **run**, not merely mentioned
-  (see "Which checks to run"). The commands are in the README; if you cannot
-  find them, ask rather than skip;
-- anything with a screen or an endpoint has been driven for real. A green suite
-  is not a working screen. No tool to drive it (no browser tool)? Do not build
-  your own: run the checks, then hand the user the exact page and steps to
-  verify;
-- new warnings and errors are fixed, or explicitly listed as out of scope;
-- the impact is stated: what changed, where, and why;
-- anything deliberately left out is named as a follow-up;
-- your status file is deleted, and the user got the summary of what landed.
-
-If a check failed, say so and show the output. Say which checks you ran and
-which you skipped.
-The same check failing twice the same way is a stop: report it, do not keep
-improvising.
-
-### Which checks to run
-
-Checks cost time and tokens. Run the ones the change can break, not all of them
-by reflex.
-
-- **Scope to the change.** Run only the tests for the package, module or file
-  you touched, plus anything that imports it. Skip the full suite unless the
-  change is cross-cutting (shared types, build config, dependencies).
-- **Match the check to the risk.** A type-level change needs the typecheck,
-  logic needs its tests, a build or config change needs the build. Docs,
-  comments and copy need no checks.
-- **Iterate narrow, finish once.** While working, run the single test you are
-  fixing. Run the scoped set once at the end, and never rerun a green check on
-  unchanged code.
-- **Keep output short.** Use the runner's quiet or failures-only mode and read
-  only the failures.
-
-## Commenting
-
-Default to no comments. A comment earns its place by stating a non-obvious
-why, in one short line.
+- **Metricool does not re-host images.** Their help centre says the normalize
+  endpoint copies the file to their servers. Tested with a JPEG and a PNG: it
+  echoes the URL back unchanged and returns no `mediaId`. The image URL must
+  still resolve when Facebook fetches it at publish time - hence a *public*
+  bucket. The old app used signed URLs expiring at `publishAt + 2h`; 0 of 105 of
+  its published posts still have working images.
+- `Accept: application/json` on the normalize **GET** answers 500 "No acceptable
+  representation". Omit `Accept` on GETs to Metricool.
+- `publicationDate.dateTime` is naive local time, with `timezone` as its own
+  field. An offset suffix is rejected. Same on the read side.
+- `zoneinfo` needs the `tzdata` package on Windows or `ZoneInfo(...)` raises.
+- Pinned Gemini model ids rot silently, and `models.list()` still reports models
+  that 404 on use. Verify with a real call.
