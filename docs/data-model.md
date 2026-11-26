@@ -259,7 +259,7 @@ upload the hero.
 
 ### 4. Auto-drafts (daily)
 
-- **Trigger:** GitHub Actions, `auto-drafts.yml`, hourly. It POSTs
+- **Trigger:** the Railway cron service `scheduler`, hourly. It POSTs
   `/generate/auto/due`, which runs only Pages whose configured time has passed.
   The Settings **Run now** button POSTs `/generate/auto` and ignores the times.
 - **Reads:** each due Page with a source switched on. Competitor posts: the
@@ -313,7 +313,7 @@ from the bucket.
 
 ### 8. Auto-repost (weekly)
 
-- **Trigger:** GitHub Actions, `auto-repost.yml`, Monday 06:00 Ho Chi Minh
+- **Trigger:** the Railway cron service `scheduler`, Monday 06:00 Ho Chi Minh
   City. It POSTs `/pages/auto-repost`.
 - **Reads:** for each Page with `auto_save_min_reactions` set, the last 30 days
   of Metricool stats, and that Page's `saved_post` rows.

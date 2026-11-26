@@ -1,12 +1,10 @@
-# Shortlists, hourly. Each Page's list is made once its daily time has passed
-# (Settings > This Page > Automation); the route skips Pages that are not due,
-# so most runs make nothing. Hourly because the time is the operator's choice.
+# Shortlists, run by hand. Each Page's list is made once its daily time has
+# passed (Settings > This Page > Automation); the route skips Pages that are not
+# due. The hourly schedule is the Railway cron service `scheduler`.
 
 name: Shortlist
 
 on:
-  schedule:
-    - cron: "5 * * * *"
   workflow_dispatch:
 
 permissions: {}

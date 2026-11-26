@@ -7,7 +7,7 @@ for 30 days times... at first available slot." Per Page, from Settings:
 The requirements are web/content/PRDs/auto-repost.md; the design record is
 the commit that added this file.
 
-**The trigger is a weekly cron** (`.github/workflows/auto-repost.yml`), which
+**The trigger is a weekly cron** (the Railway cron service `scheduler`), which
 POSTs `/pages/auto-repost`. Nothing pushes "a post passed N reactions"
 (Metricool's webhooks and Facebook's Page feed webhook were both checked).
 Weekly is enough: a repost is scheduled weeks ahead, and the stats window is 30

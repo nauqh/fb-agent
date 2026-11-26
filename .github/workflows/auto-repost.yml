@@ -1,15 +1,12 @@
-# Auto save and repost, once a week. Requirements: the auto-repost PRD.
+# Auto save and repost, run by hand. Requirements: the auto-repost PRD.
 #
 # Which Pages and which thresholds is each Page's own setting, on Settings >
-# This Page. This file only says when. The route runs every Page with auto-save on.
+# This Page. The route runs every Page with auto-save on. The weekly schedule,
+# Monday 06:00 Ho Chi Minh City, is the Railway cron service `scheduler`.
 
 name: Auto-repost
 
 on:
-  schedule:
-    # Monday 06:00 in Ho Chi Minh City, which has no DST.
-    - cron: "0 23 * * 0"
-
   workflow_dispatch:
 
 permissions: {}

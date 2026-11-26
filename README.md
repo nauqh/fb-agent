@@ -158,7 +158,7 @@ flowchart LR
 
 Two deployables. The **frontend** holds no data and can only ask the backend for
 things. The **backend** owns the database, the pictures, the AI calls and every
-outside connection. Three GitHub Actions schedules call the backend: auto-drafts
+outside connection. A Railway cron service, `scheduler`, calls the backend: auto-drafts
 and the shortlist hourly, each running only the Pages whose time has come, and
 auto-repost weekly.
 
