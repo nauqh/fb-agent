@@ -13,7 +13,7 @@ when a run uses it.
 """
 
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from html.parser import HTMLParser
 from urllib.parse import urldefrag, urlsplit
 
@@ -177,6 +177,9 @@ def fetch_article(url: str, client: httpx.Client | None = None) -> SourceItemBas
             published_at = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
         except ValueError:
             pass
+        # Some sites omit the offset; a naive date breaks every comparison downstream.
+        if published_at and published_at.tzinfo is None:
+            published_at = published_at.replace(tzinfo=timezone.utc)
 
     body = "\n\n".join(page.paragraphs)
     # Refused on screen, not handed to the writer as a headline it would invent

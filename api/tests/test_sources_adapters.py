@@ -488,6 +488,17 @@ def test_a_page_maps_onto_the_shared_shape(page_fetch):
     assert item.published_at == datetime(2026, 8, 3, 9, 15, tzinfo=timezone.utc)
 
 
+def test_a_date_without_an_offset_is_read_as_utc(page_fetch):
+    """Naive, it crashed the RSS merge's comparison with an aware cutoff."""
+    page_fetch(
+        PAGE_HTML.replace("2026-08-03T09:15:00Z", "2026-08-03T09:15:00"), "https://a/x"
+    )
+
+    assert web.fetch_article("https://a/x").published_at == datetime(
+        2026, 8, 3, 9, 15, tzinfo=timezone.utc
+    )
+
+
 def test_the_title_tag_fills_in_for_a_missing_og_title(page_fetch):
     page_fetch(
         f"<html><head><title>Just a Title</title></head>{ARTICLE_BODY}</html>",
